@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { prisma } from "../config/database";
+import { prisma } from "../../config/database";
 
 export const userService = {
   async getProfile(userId: string) {

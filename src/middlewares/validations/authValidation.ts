@@ -1,13 +1,6 @@
-/**
- Author: Aka'aba Musa Akidi
- Git: kingakidi
- **/
-import { check, param, query, validationResult } from "express-validator";
-import { Request, Response, NextFunction } from "express";
-import { outJson } from "../../utils/renders";
+import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
 
-//validation on login
 const validateLoginRequest = [
   check("email").isEmail().withMessage("Enter a valid email"),
   check("password")
@@ -16,7 +9,6 @@ const validateLoginRequest = [
   handleValidation,
 ];
 
-//validation on login
 const validateEmailVerificationRequest = [
   check("email").isEmail().withMessage("Enter a valid email"),
   handleValidation,
@@ -35,7 +27,6 @@ const validateEmailVerificationOTPRequest = [
   handleValidation,
 ];
 
-// validation on business register
 const registerUserValidation = [
   check("email").isEmail().withMessage("Enter a valid email"),
   check("firstName")
@@ -68,7 +59,6 @@ const registerUserValidation = [
   handleValidation,
 ];
 
-// validation for refresh token
 const validateRefreshTokenRequest = [
   check("refreshToken")
     .notEmpty()
@@ -78,7 +68,6 @@ const validateRefreshTokenRequest = [
   handleValidation,
 ];
 
-// validation for logout
 const validateLogoutRequest = [
   check("refreshToken")
     .notEmpty()

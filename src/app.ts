@@ -8,8 +8,8 @@ import logger from "morgan";
 import express from "express";
 import http from "http";
 import { prisma } from "./config/database";
-import authRoutes from "./routes/authRoutes";
-import userRoutes from "./routes/userRoutes";
+import mobileRoutes from "./mobile/routes";
+import enterpriseRoutes from "./enterprise/routes";
 
 import * as process from "process";
 import { catchError, error404, errorHandler } from "./middlewares/errorHandler";
@@ -60,7 +60,6 @@ const corsOrigin = (
   cb(new Error("Not allowed by CORS"));
 };
 
-// CORS configuration - MUST be before other middleware
 app.use(
   cors({
     origin: corsOrigin,
@@ -68,7 +67,7 @@ app.use(
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     exposedHeaders: ["Set-Cookie"],
-    maxAge: 86400, // 24 hours
+    maxAge: 86400,
   }),
 );
 
@@ -78,16 +77,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 
-//set api version
 const API_VERSION = process.env.API_VERSION || "1";
 
-// Routes
-app.use(`/api/v${API_VERSION}/auth`, authRoutes);
-app.use(`/api/v${API_VERSION}/user`, userRoutes);
+app.use(`/api/v${API_VERSION}/mobile`, mobileRoutes);
+app.use(`/api/v${API_VERSION}/enterprise`, enterpriseRoutes);
 
-// End of routes
-
-// Centralized error-handling middleware
 app.use(error404);
 app.use(catchError);
 app.use(errorHandler);

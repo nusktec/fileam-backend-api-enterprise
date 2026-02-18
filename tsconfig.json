@@ -19,18 +19,11 @@
     "forceConsistentCasingInFileNames": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "baseUrl": "./src",
+    "baseUrl": ".",
     "outDir": "dist",
-    "types": ["node"],
-    "typeRoots": ["./src/types", "./node_modules/@types"]
+    "typeRoots": ["./node_modules/@types"],
+    "moduleResolution": "node"
   },
-  "include": [
-    "src/**/*",
-    "node_modules/@types/node/globals.d.ts",
-    "node_modules/@types/node/globals.d.ts",
-    "node_modules/@types/node/globals.d.ts",
-    "node_modules/@types/node/globals.d.ts",
-    "src/types/**/*.d.ts"
-  ],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "**/*.spec.ts"]
 }

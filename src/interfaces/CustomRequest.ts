@@ -7,7 +7,6 @@ export interface JWTUser {
   role?: string;
 }
 
-/** User shape attached by auth middleware (Prisma User with roles and permissions) */
 export type RequestUser = User & {
   userRoles?: Array<UserRole & { role: Role & { rolePermissions: Array<{ permission: Permission }> } }>;
 };

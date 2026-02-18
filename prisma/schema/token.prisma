@@ -1,0 +1,20 @@
+model Token {
+  id        String   @id @default(uuid())
+  token     String
+  type      TokenType
+  userId    String?  @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  status    Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum TokenType {
+  invite
+  reset_password
+  verify_email
+  custom
+  refresh
+}

@@ -1,14 +1,14 @@
 import { Request, Response } from "express";
-import { outJson } from "../utils/renders";
-import { PrintDebug } from "../utils/tools";
-import { HttpStatusCode } from "../interfaces/system";
-import { EmailVerificationService } from "../services/emailVerificationService";
+import { outJson } from "../../utils/renders";
+import { PrintDebug } from "../../utils/tools";
+import { HttpStatusCode } from "../../interfaces/system";
+import { EmailVerificationService } from "../../services/emailVerificationService";
 import {
   generateAccessToken,
   generateRefreshToken,
   saveRefreshToken,
   revokeRefreshToken,
-} from "../utils/jwt";
+} from "../../utils/jwt";
 import { authService } from "../services/authService";
 
 export const registerBusiness = async (

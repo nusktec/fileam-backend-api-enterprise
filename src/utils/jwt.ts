@@ -24,7 +24,7 @@ export const verifyToken = (token: string): TokenPayload => {
 export const saveRefreshToken = async (
   userId: string,
   refreshToken: string,
-  expiresIn: number = 7 * 24 * 60 * 60 * 1000 // 7 days in milliseconds
+  expiresIn: number = 7 * 24 * 60 * 60 * 1000
 ): Promise<void> => {
   const expiresAt = new Date(Date.now() + expiresIn);
   await prisma.token.create({

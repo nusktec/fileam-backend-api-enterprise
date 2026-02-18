@@ -9,11 +9,10 @@ import {
   refreshToken,
   logout,
 } from "../controllers/authController";
-import { validations } from "../middlewares/validations/authValidation";
+import { validations } from "../../middlewares/validations/authValidation";
 
 const router = express.Router();
 
-// Email Verification
 router.post(
   "/otp/send/email",
   validations.validateEmailVerificationRequest,
@@ -24,31 +23,19 @@ router.post(
   validations.validateEmailVerificationOTPRequest,
   verifyEmail
 );
-
-// Resend verification email
 router.post(
   "/resend-verification",
   validations.validateEmailVerificationRequest,
   resendVerificationEmail
 );
-
-// Login Route
 router.post("/login", validations.validateLoginRequest, login);
-
-// Business Register Route
 router.post(
   "/register-business",
   validations.registerUserValidation,
   registerBusiness
 );
-
-// User Register
 router.post("/register", validations.registerUserValidation, register);
-
-// Refresh Token Route
 router.post("/refresh", validations.validateRefreshTokenRequest, refreshToken);
-
-// Logout Route
 router.post("/logout", validations.validateLogoutRequest, logout);
 
 export default router;

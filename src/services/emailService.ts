@@ -31,7 +31,6 @@ const renderTemplate = (template: string, data: Record<string, any>): string => 
   });
 };
 
-// Helper function to sanitize tag values
 const sanitizeTag = (value: string): string => {
   return value
     .toLowerCase()
@@ -40,7 +39,6 @@ const sanitizeTag = (value: string): string => {
     .replace(/^_+|_+$/g, "");
 };
 
-// Base email sending function
 const sendEmail = async (
   to: string,
   subject: string,
@@ -49,7 +47,6 @@ const sendEmail = async (
   tags: Array<{ name: string; value: string }> = []
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
   try {
-    // Validate Resend configuration
     if (!validateResendConfig()) {
       throw new Error("Resend configuration is invalid");
     }
@@ -81,7 +78,6 @@ const sendEmail = async (
   }
 };
 
-// Send verification email
 const sendVerificationEmail = async (
   to: string,
   name: string,
@@ -113,7 +109,6 @@ const sendVerificationEmail = async (
   }
 };
 
-// Send OTP email
 const sendOtpEmail = async (
   to: string,
   name: string,
@@ -144,7 +139,6 @@ const sendOtpEmail = async (
   }
 };
 
-// Send welcome email
 const sendWelcomeEmail = async (
   to: string,
   name: string
@@ -173,7 +167,6 @@ const sendWelcomeEmail = async (
   }
 };
 
-// Legacy function for backward compatibility
 const SendMail = async (
   category: string,
   subject: string,
@@ -201,7 +194,6 @@ const SendMail = async (
   }
 };
 
-// Legacy function for backward compatibility
 const SendInviteMail = async (
   category: string,
   subject: string,
@@ -230,7 +222,6 @@ const SendInviteMail = async (
   }
 };
 
-//enumeration
 const EmailCategoryEnum: EmailCategoryInterface = Object.freeze({
   PASSWORD_RESET: "Password Reset",
   ORDER_CONFIRMATION: "Order Confirmation",
@@ -259,7 +250,6 @@ const EmailCategoryEnum: EmailCategoryInterface = Object.freeze({
   GENERAL: "General Information",
 });
 
-//Module
 export { 
   SendMail, 
   SendInviteMail, 

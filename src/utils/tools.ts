@@ -1,11 +1,6 @@
 import countries from "../constants/countries";
 import process from "process";
 
-/**
- * Generates a random string of numeric characters
- * @param length - Length of the random string to generate
- * @returns string - Random string containing only digits (0-9)
- */
 export const RandomAscii = (length: number) => {
   let charArray = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
   let code = [];
@@ -18,11 +13,6 @@ export const RandomAscii = (length: number) => {
   return code.join("");
 };
 
-/**
- * Generates a random string of uppercase alphabetic characters
- * @param length - Length of the random string to generate
- * @returns string - Random string containing only uppercase letters (A-Z, excluding O)
- */
 export const RandomAsciiAZ = function generateChar(length: number) {
   let charArray = [
     "A",
@@ -57,7 +47,6 @@ export const RandomAsciiAZ = function generateChar(length: number) {
   return code.join("");
 };
 
-//get timeZone offset
 export const GetTimeOffsetByZone = async (zone: string) => {
   try {
     const data = await fetch(
@@ -72,7 +61,6 @@ export const GetTimeOffsetByZone = async (zone: string) => {
       const combine = decimal > 0 ? main + 0.5 : main;
       return `${sign}${combine}`;
     };
-    //get timezone else put 0
     if (data && !data.error) {
       return Number(refactorSet(data?.utc_offset));
     } else {
@@ -83,21 +71,13 @@ export const GetTimeOffsetByZone = async (zone: string) => {
   }
 };
 
-//get global currency rate from coinbase
-/**
- *
- * @param country //pass full country name and not ISO-Name
- * @param getSym //determine if you want country currency symbol or just all finance info
- */
 export const getCurrencyRate = async (country: string, getSym = false) => {
   if (!country) return null;
   try {
-    //get parent country and return data
     const data = countries.find(
       (c) => c.countryName.toLowerCase() === country.toLowerCase()
     );
     if (getSym) return data;
-    //fetch currency rate
     const rates = await fetch(
       "https://api.coinbase.com/v2/exchange-rates?currency=NGN"
     ).then((r) => r.json());
@@ -107,10 +87,6 @@ export const getCurrencyRate = async (country: string, getSym = false) => {
   }
 };
 
-/**
- * Prints debug information to console when DEBUG environment variable is set
- * @param e - Any value to print for debugging purposes
- */
 export const PrintDebug = (e: any) => {
   if (process.env.DEBUG) {
     console.log(e);
