@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String    @id @default(uuid())
+  email                String    @unique
+  password             String
+  firstName            String    @map("first_name")
+  lastName             String    @map("last_name")
+  verified             Boolean   @default(false)
+  address              String?
+  state                String?
+  lga                  String?
+  purpose              String?
+  roleDescription      String?   @map("role_description")
+  teamSize             Int?
+  adminCount           Int?      @map("admin_count")
+  organizationName     String?   @map("organization_name")
+  organizationAddress String?   @map("organization_address")
+  logo                 String?
+  onboardingComplete   Boolean   @default(false) @map("onboarding_complete")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  tokens            Token[]
+  userRoles         UserRole[]
+}
+
+model Token {
+  id        String   @id @default(uuid())
+  token     String
+  type      TokenType
+  userId    String?  @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  status    Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum TokenType {
+  invite
+  reset_password
+  verify_email
+  custom
+  refresh
+}
+
+model Role {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  userRoles         UserRole[]
+  rolePermissions   RolePermission[]
+}
+
+model Permission {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  rolePermissions RolePermission[]
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  roleId    String   @map("role_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model EmailVerification {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  code       String
+  isVerified Boolean  @default(false) @map("is_verified")
+  createdAt  DateTime @default(now()) @map("created_at")
+  expiresAt  DateTime @map("expires_at")
+  attempts   Int      @default(0)
+  type       String?
+
+  @@map("email_verifications")
+}

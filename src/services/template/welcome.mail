@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Slant Menu!</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-bottom: 10px;
+        }
+        .title {
+            font-size: 24px;
+            color: #1f2937;
+            margin-bottom: 20px;
+        }
+        .welcome-message {
+            background-color: #ecfdf5;
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .welcome-text {
+            color: #065f46;
+            font-size: 18px;
+            font-weight: 500;
+        }
+        .features {
+            margin: 30px 0;
+        }
+        .feature-item {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f8fafc;
+            border-radius: 6px;
+        }
+        .feature-icon {
+            width: 24px;
+            height: 24px;
+            background-color: #2563eb;
+            border-radius: 50%;
+            margin-right: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .feature-text {
+            color: #4b5563;
+            font-size: 16px;
+        }
+        .cta-section {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .cta-button {
+            display: inline-block;
+            background-color: #2563eb;
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .cta-button:hover {
+            background-color: #1d4ed8;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-link {
+            display: inline-block;
+            margin: 0 10px;
+            color: #2563eb;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">Slant Menu</div>
+            <div class="title">Welcome to Slant Menu!</div>
+        </div>
+        
+        <div class="welcome-message">
+            <p class="welcome-text">🎉 Congratulations, <strong>{{name}}</strong>! Your account has been successfully verified.</p>
+        </div>
+        
+        <div class="message">
+            <p>Welcome to Slant Menu! We're excited to have you on board. Your account is now fully activated and ready to use.</p>
+        </div>
+        
+        <div class="features">
+            <h3 style="color: #1f2937; margin-bottom: 20px;">What you can do now:</h3>
+            
+            <div class="feature-item">
+                <div class="feature-icon">✓</div>
+                <div class="feature-text">Access your personalized dashboard</div>
+            </div>
+            
+            <div class="feature-item">
+                <div class="feature-icon">✓</div>
+                <div class="feature-text">Manage your profile and preferences</div>
+            </div>
+            
+            <div class="feature-item">
+                <div class="feature-icon">✓</div>
+                <div class="feature-text">Explore our services and features</div>
+            </div>
+            
+            <div class="feature-item">
+                <div class="feature-icon">✓</div>
+                <div class="feature-text">Connect with our support team</div>
+            </div>
+        </div>
+        
+        <div class="cta-section">
+            <a href="#" class="cta-button">Get Started Now</a>
+        </div>
+        
+        <div class="message">
+            <p>If you have any questions or need assistance, don't hesitate to reach out to our support team. We're here to help you make the most of your Slant Menu experience!</p>
+        </div>
+        
+        <div class="social-links">
+            <a href="#" class="social-link">Help Center</a>
+            <a href="#" class="social-link">Contact Support</a>
+            <a href="#" class="social-link">Documentation</a>
+        </div>
+        
+        <div class="footer">
+            <p>Thank you for choosing Slant Menu!</p>
+            <p>&copy; 2024 Slant Menu. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
