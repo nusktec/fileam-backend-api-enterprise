@@ -9,6 +9,7 @@ import {
   stepBusinessDetails,
   stepTaxJurisdiction,
   stepConsultantTerms,
+  getOnboardingProfile,
   inviteVerifyCode,
   inviteAcceptRequest,
   inviteRejectRequest,
@@ -16,6 +17,7 @@ import {
 
 const router = express.Router();
 
+router.get("/profile", requireOnboardingToken, getOnboardingProfile);
 router.post("/step/email", stepEmail);
 router.post("/step/email-verify", stepEmailVerify);
 

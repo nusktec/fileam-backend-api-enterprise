@@ -4,7 +4,6 @@ import {
   login,
   verifyEmail,
   sendOtpEmail,
-  registerBusiness,
   resendVerificationEmail,
   refreshToken,
   logout,
@@ -29,11 +28,6 @@ router.post(
   resendVerificationEmail
 );
 router.post("/login", validations.validateLoginRequest, login);
-router.post(
-  "/register-business",
-  validations.registerUserValidation,
-  registerBusiness
-);
 router.post("/register", validations.registerUserValidation, register);
 router.post("/refresh", validations.validateRefreshTokenRequest, refreshToken);
 router.post("/logout", validations.validateLogoutRequest, logout);

@@ -14,10 +14,10 @@ const ONBOARDING_VERIFICATION_TYPE = "onboarding_verification";
 export const onboardingService = {
   async stepEmail(email: string, firstName?: string, _invitationId?: string) {
     const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing)
+    if (existing?.onboardingComplete)
       return { success: false as const, message: "An account with this email already exists" };
 
-    const name = firstName ?? "User";
+    const name = firstName ?? existing?.firstName ?? "User";
     const result = await EmailVerificationService.generateAndSendVerification(
       email,
       name,
@@ -49,8 +49,8 @@ export const onboardingService = {
   async stepPassword(
     tokenPayload: OnboardingTokenPayload,
     password: string,
-    firstName: string,
-    lastName: string
+    firstName?: string,
+    lastName?: string
   ) {
     const { email } = tokenPayload;
     const existing = await prisma.user.findUnique({ where: { email } });
@@ -70,9 +70,10 @@ export const onboardingService = {
       data: {
         email,
         password: hashedPassword,
-        firstName,
-        lastName,
+        firstName: firstName?.trim() || "User",
+        lastName: lastName?.trim() || "",
         verified: true,
+        currentOnboardingStep: "income_type",
         userRoles: { create: { roleId: businessRole.id } },
       },
     });
@@ -107,6 +108,7 @@ export const onboardingService = {
     if (!user) return { success: false as const, message: "User not found. Complete password step first." };
 
     await this.getOrCreateBusinessForUser(user.id, incomeType);
+    await prisma.user.update({ where: { id: user.id }, data: { currentOnboardingStep: "tax_obligations" } });
     return { success: true as const, data: {} };
   },
 
@@ -120,6 +122,7 @@ export const onboardingService = {
       where: { id: business.id },
       data: { taxObligationsUnderstoodAndAccepted: true },
     });
+    await prisma.user.update({ where: { id: user.id }, data: { currentOnboardingStep: "business_details" } });
     return { success: true as const, data: {} };
   },
 
@@ -150,6 +153,7 @@ export const onboardingService = {
         primaryTaxOffice: data.primaryTaxOffice ?? null,
       },
     });
+    await prisma.user.update({ where: { id: user.id }, data: { currentOnboardingStep: "tax_jurisdiction" } });
     return { success: true as const, data: {} };
   },
 
@@ -169,6 +173,7 @@ export const onboardingService = {
         ...(data.stateOfResidence != null && { stateOfResidence: data.stateOfResidence }),
       },
     });
+    await prisma.user.update({ where: { id: user.id }, data: { currentOnboardingStep: "consultant_terms" } });
     return { success: true as const, data: {} };
   },
 
@@ -205,7 +210,7 @@ export const onboardingService = {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { onboardingComplete: true, onboardingCompletedAt: now },
+      data: { onboardingComplete: true, currentOnboardingStep: "complete", onboardingCompletedAt: now },
     });
 
     const fullUser = await this.getUserByEmail(user.email);
@@ -251,6 +256,56 @@ export const onboardingService = {
         business: businessData,
         acceptedConsultantConnections,
         tokens: { accessToken, refreshToken },
+      },
+    };
+  },
+
+  async getOnboardingProfile(tokenPayload: OnboardingTokenPayload) {
+    const user = await this.getUserByEmail(tokenPayload.email);
+    if (!user) {
+      return {
+        success: true as const,
+        data: {
+          email: tokenPayload.email,
+          currentOnboardingStep: "password",
+          onboardingComplete: false,
+          user: null,
+          business: null,
+        },
+      };
+    }
+    const business = user.businesses[0] ?? null;
+    const profile = {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      verified: user.verified,
+      onboardingComplete: user.onboardingComplete,
+      currentOnboardingStep: user.currentOnboardingStep ?? "income_type",
+    };
+    const businessData = business
+      ? {
+          id: business.id,
+          name: business.name,
+          incomeType: business.incomeType,
+          taxObligationsUnderstoodAndAccepted: business.taxObligationsUnderstoodAndAccepted,
+          businessIdNumber: business.businessIdNumber,
+          tin: business.tin,
+          streetAddress: business.streetAddress,
+          stateOfResidence: business.stateOfResidence,
+          primaryTaxOffice: business.primaryTaxOffice,
+        }
+      : null;
+    return {
+      success: true as const,
+      data: {
+        email: user.email,
+        currentOnboardingStep: user.currentOnboardingStep ?? "income_type",
+        onboardingComplete: user.onboardingComplete,
+        user: profile,
+        business: businessData,
       },
     };
   },

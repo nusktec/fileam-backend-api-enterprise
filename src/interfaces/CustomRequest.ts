@@ -10,6 +10,7 @@ export interface JWTUser {
 
 export type RequestUser = User & {
   userRoles?: Array<UserRole & { role: Role & { rolePermissions: Array<{ permission: Permission }> } }>;
+  currentOnboardingStep?: string | null;
 };
 
 export interface IRequest extends Request {

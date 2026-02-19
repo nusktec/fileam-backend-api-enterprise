@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import process from "process";
 import { outJson } from "../utils/renders";
 import { validationResult } from "express-validator";
 
@@ -18,13 +17,7 @@ const errorHandler = (
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";
 
-  res
-    .status(statusCode)
-    .json(
-      outJson(false, message, [
-        process.env.NODE_ENV === "production" ? null : err.stack,
-      ])
-    );
+  res.status(statusCode).json(outJson(false, message, null));
 };
 
 const catchError = (
@@ -36,13 +29,7 @@ const catchError = (
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";
 
-  res
-    .status(statusCode)
-    .json(
-      outJson(false, message, [
-        process.env.NODE_ENV === "production" ? null : err.stack,
-      ])
-    );
+  res.status(statusCode).json(outJson(false, message, null));
 };
 
 const error404 = (req: Request, res: Response, next: NextFunction) => {

@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 
-const ONBOARDING_TOKEN_EXPIRY = "1h";
+const ONBOARDING_TOKEN_EXPIRY = "7d";
 
 export interface OnboardingTokenPayload {
   email: string;

@@ -1,14 +1,3 @@
-// {
-//   "compilerOptions": {
-//     "target": "ES6",
-//     "module": "commonjs",
-//     "esModuleInterop": true,
-//     "forceConsistentCasingInFileNames": true,
-//     "strict": true,
-//     "skipLibCheck": true
-//   }
-// }
-
 {
   "compilerOptions": {
     "target": "es6",
@@ -21,7 +10,6 @@
     "emitDecoratorMetadata": true,
     "baseUrl": ".",
     "outDir": "dist",
-    "typeRoots": ["./node_modules/@types"],
     "moduleResolution": "node"
   },
   "include": ["src/**/*"],

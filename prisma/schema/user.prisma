@@ -17,6 +17,7 @@ model User {
   organizationAddress    String?   @map("organization_address")
   logo                   String?
   onboardingComplete     Boolean   @default(false) @map("onboarding_complete")
+  currentOnboardingStep  String?   @map("current_onboarding_step")
   onboardingCompletedAt  DateTime? @map("onboarding_completed_at")
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")

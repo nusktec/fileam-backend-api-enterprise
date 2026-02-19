@@ -1,0 +1,387 @@
+{
+  "info": {
+    "name": "file-am API",
+    "description": "Mobile and Enterprise API endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000" },
+    { "key": "apiVersion", "value": "1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "onboardingToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Mobile",
+      "item": [
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "Send OTP to email",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/otp/send/email"
+              }
+            },
+            {
+              "name": "Verify OTP",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"code\": \"123456\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/otp/verify/email"
+              }
+            },
+            {
+              "name": "Resend verification email",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/resend-verification"
+              }
+            },
+            {
+              "name": "Login",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/login"
+              }
+            },
+            {
+              "name": "Register",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"organizationName\": \"My Org\",\n  \"organizationAddress\": \"123 Main St\",\n  \"logo\": \"\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/register"
+              }
+            },
+            {
+              "name": "Refresh token",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/refresh"
+              }
+            },
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/logout"
+              }
+            }
+          ]
+        },
+        {
+          "name": "User",
+          "item": [
+            {
+              "name": "Get profile",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile"
+              }
+            },
+            {
+              "name": "Update profile",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"address\": \"\",\n  \"state\": \"\",\n  \"organizationName\": \"\",\n  \"organizationAddress\": \"\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile"
+              }
+            },
+            {
+              "name": "Change password",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currentPassword\": \"oldpassword123\",\n  \"newPassword\": \"newpassword123\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/password"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Onboarding",
+          "item": [
+            {
+              "name": "Get profile (onboarding token)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{onboardingToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/profile"
+              }
+            },
+            {
+              "name": "Step - Email (send OTP)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"firstName\": \"New\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/email"
+              }
+            },
+            {
+              "name": "Step - Email verify (get onboarding token)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"code\": \"123456\",\n  \"invitationId\": \"\",\n  \"companyId\": \"\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/email-verify"
+              }
+            },
+            {
+              "name": "Step - Password",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{onboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"password\": \"password123\",\n  \"firstName\": \"New\",\n  \"lastName\": \"User\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/password"
+              }
+            },
+            {
+              "name": "Step - Income type",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{onboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"incomeType\": \"business\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/income-type"
+              }
+            },
+            {
+              "name": "Step - Tax obligations",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{onboardingToken}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{}" },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/tax-obligations"
+              }
+            },
+            {
+              "name": "Step - Business details",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{onboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"My Business Ltd\",\n  \"businessIdNumber\": \"\",\n  \"tin\": \"\",\n  \"streetAddress\": \"123 Main St\",\n  \"stateOfResidence\": \"Lagos\",\n  \"primaryTaxOffice\": \"\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/business-details"
+              }
+            },
+            {
+              "name": "Step - Tax jurisdiction",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{onboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"primaryTaxOffice\": \"\",\n  \"stateOfResidence\": \"Lagos\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/tax-jurisdiction"
+              }
+            },
+            {
+              "name": "Step - Consultant terms (complete)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{onboardingToken}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{}" },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/consultant-terms"
+              }
+            },
+            {
+              "name": "Invite - Verify code",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"123456\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/invite/verify-code"
+              }
+            },
+            {
+              "name": "Invite - Accept request",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{onboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invitationId\": \"<invitation-uuid>\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/invite/accept-request"
+              }
+            },
+            {
+              "name": "Invite - Reject request",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{onboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invitationId\": \"<invitation-uuid>\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/invite/reject-request"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Enterprise",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/"
+          }
+        },
+        {
+          "name": "Create company",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Consulting Ltd\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company"
+          }
+        },
+        {
+          "name": "Create invitation",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyId\": \"<company-uuid>\",\n  \"invitedEmail\": \"invited@example.com\",\n  \"invitedBusinessName\": \"Invited Business Ltd\",\n  \"expiresInHours\": 168\n}"
+            },
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation"
+          }
+        },
+        {
+          "name": "Onboarding",
+          "item": [
+            {
+              "name": "Step - Email",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"firstName\": \"New\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/step/email"
+              }
+            },
+            {
+              "name": "Step - Email verify",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"code\": \"123456\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/step/email-verify"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -9,38 +9,8 @@ import {
   saveRefreshToken,
   revokeRefreshToken,
 } from "../../utils/jwt";
+import { generateOnboardingToken } from "../../utils/onboardingToken";
 import { authService } from "../services/authService";
-
-export const registerBusiness = async (
-  req: Request,
-  res: Response
-): Promise<void> => {
-  const { email, password, firstName, lastName } = req.body;
-
-  try {
-    const result = await authService.registerBusiness({
-      email,
-      password,
-      firstName,
-      lastName,
-    });
-
-    if (!result.success) {
-      res.status(HttpStatusCode.CONFLICT).json({ msg: result.message });
-      return;
-    }
-
-    res.status(HttpStatusCode.CREATED).json({
-      msg: "Business account created successfully. Please check your email for verification.",
-      data: result.data,
-    });
-  } catch (error) {
-    res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-      msg: "Error creating business account",
-      error,
-    });
-  }
-};
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   const {
@@ -65,19 +35,17 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     });
 
     if (!result.success) {
-      res.status(HttpStatusCode.CONFLICT).json({ msg: result.message });
+      res.status(HttpStatusCode.CONFLICT).json(outJson(false, result.message, null));
       return;
     }
 
-    res.status(HttpStatusCode.CREATED).json({
-      msg: "Account created successfully. Please check your email for verification.",
-      data: result.data,
-    });
+    res
+      .status(HttpStatusCode.CREATED)
+      .json(outJson(true, "Account created successfully. Please check your email for verification.", result.data));
   } catch (error) {
-    res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-      msg: "Error creating account",
-      error,
-    });
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Error creating account", null));
   }
 };
 
@@ -87,20 +55,18 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await authService.findUserByEmail(email);
     if (!user) {
-      res.status(HttpStatusCode.NOT_FOUND).json({ msg: "User not found" });
+      res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "User not found", null));
       return;
     }
 
     const isMatch = await authService.validatePassword(password, user.password);
     if (!isMatch) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json({ msg: "Invalid credentials" });
+      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Invalid credentials", null));
       return;
     }
 
     if (!user.verified) {
-      res.status(HttpStatusCode.FORBIDDEN).json({
-        msg: "Kindly verify your email address",
-      });
+      res.status(HttpStatusCode.FORBIDDEN).json(outJson(false, "Kindly verify your email address", null));
       return;
     }
 
@@ -109,17 +75,23 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     await saveRefreshToken(user.id, refreshToken);
 
     const payload = authService.buildAuthUserPayload(user);
-
-    res.status(HttpStatusCode.OK).json({
+    const data: { accessToken: string; refreshToken: string; user: typeof payload; onboardingToken?: string } = {
       accessToken,
       refreshToken,
       user: payload,
-    });
+    };
+    if (!user.onboardingComplete) {
+      data.onboardingToken = generateOnboardingToken({
+        email: user.email,
+        acceptedInvitationIds: [],
+      });
+    }
+
+    res.status(HttpStatusCode.OK).json(outJson(true, "Login successful", data));
   } catch (error) {
-    res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-      msg: "Server error",
-      error,
-    });
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Server error", null));
   }
 };
 
@@ -163,20 +135,11 @@ export const verifyEmail = async (
   try {
     const { email, code } = req.body;
 
-    const result = await EmailVerificationService.verifyOtp(email, code);
-
-    if (!result.success) {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(outJson(false, result.message, null));
-      return;
-    }
-
     const user = await authService.findUserByEmail(email);
     if (!user) {
       res
         .status(HttpStatusCode.NOT_FOUND)
-        .json(outJson(false, "User not found.", null));
+        .json(outJson(false, "User not found. Complete registration first.", null));
       return;
     }
 
@@ -187,6 +150,14 @@ export const verifyEmail = async (
       return;
     }
 
+    const result = await EmailVerificationService.verifyOtp(email, code);
+    if (!result.success) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, result.message, null));
+      return;
+    }
+
     await authService.setUserVerified(email);
     await EmailVerificationService.sendWelcomeEmail(email, user.firstName);
 
@@ -194,7 +165,7 @@ export const verifyEmail = async (
       outJson(true, "Email verified successfully. Welcome email sent.", {
         email,
         verified: true,
-        message: "Welcome to Slant Menu!",
+        message: "Welcome to file-am!",
       })
     );
   } catch (error) {
@@ -212,9 +183,7 @@ export const refreshToken = async (
   const { refreshToken: token } = req.body;
 
   if (!token) {
-    res.status(HttpStatusCode.BAD_REQUEST).json({
-      msg: "Refresh token is required",
-    });
+    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Refresh token is required", null));
     return;
   }
 
@@ -222,16 +191,12 @@ export const refreshToken = async (
     const tokenRecord = await authService.findValidRefreshToken(token);
 
     if (!tokenRecord?.user) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json({
-        msg: "Invalid or expired refresh token",
-      });
+      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Invalid or expired refresh token", null));
       return;
     }
 
     if (!tokenRecord.user.verified) {
-      res.status(HttpStatusCode.FORBIDDEN).json({
-        msg: "User account is not verified",
-      });
+      res.status(HttpStatusCode.FORBIDDEN).json(outJson(false, "User account is not verified", null));
       return;
     }
 
@@ -240,25 +205,28 @@ export const refreshToken = async (
     await revokeRefreshToken(token, tokenRecord.user.id);
     await saveRefreshToken(tokenRecord.user.id, newRefreshToken);
 
-    res.status(HttpStatusCode.OK).json({
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
-      user: {
-        id: tokenRecord.user.id,
-        firstName: tokenRecord.user.firstName,
-        lastName: tokenRecord.user.lastName,
-        email: tokenRecord.user.email,
-        verified: tokenRecord.user.verified,
-        organizationName: tokenRecord.user.organizationName,
-        organizationAddress: tokenRecord.user.organizationAddress,
-        logo: tokenRecord.user.logo,
-      },
-    });
+    const userPayload = {
+      id: tokenRecord.user.id,
+      firstName: tokenRecord.user.firstName,
+      lastName: tokenRecord.user.lastName,
+      email: tokenRecord.user.email,
+      verified: tokenRecord.user.verified,
+      organizationName: tokenRecord.user.organizationName,
+      organizationAddress: tokenRecord.user.organizationAddress,
+      logo: tokenRecord.user.logo,
+    };
+
+    res.status(HttpStatusCode.OK).json(
+      outJson(true, "Token refreshed", {
+        accessToken: newAccessToken,
+        refreshToken: newRefreshToken,
+        user: userPayload,
+      })
+    );
   } catch (error) {
-    res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-      msg: "Server error",
-      error,
-    });
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Server error", null));
   }
 };
 
@@ -266,9 +234,7 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   const { refreshToken: token } = req.body;
 
   if (!token) {
-    res.status(HttpStatusCode.BAD_REQUEST).json({
-      msg: "Refresh token is required",
-    });
+    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Refresh token is required", null));
     return;
   }
 
@@ -277,12 +243,11 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
     if (tokenRecord?.userId) {
       await revokeRefreshToken(token, tokenRecord.userId);
     }
-    res.status(HttpStatusCode.OK).json({ msg: "Logged out successfully" });
+    res.status(HttpStatusCode.OK).json(outJson(true, "Logged out successfully", null));
   } catch (error) {
-    res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
-      msg: "Server error",
-      error,
-    });
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Server error", null));
   }
 };
 

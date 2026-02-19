@@ -41,11 +41,15 @@ export class EmailVerificationService {
         },
       });
 
+      const templateType =
+        type === "onboarding_verification"
+          ? EMAIL_TEMPLATE_TYPES.ONBOARDING_VERIFICATION
+          : EMAIL_TEMPLATE_TYPES.ACCOUNT_VERIFICATION;
       const emailResult = await sendVerificationEmail(
         email,
         name,
         otpCode,
-        EMAIL_TEMPLATE_TYPES.ACCOUNT_VERIFICATION,
+        templateType,
       );
 
       if (!emailResult.success) {

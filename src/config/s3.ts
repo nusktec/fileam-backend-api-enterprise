@@ -53,7 +53,7 @@ export const MEDIA_CONFIG = {
     "video/avi",
     "video/mov",
   ],
-  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
+  MAX_FILE_SIZE: 10 * 1024 * 1024,
   UPLOAD_FOLDERS: {
     IMAGES: "images",
     VIDEOS: "videos",

@@ -1,3 +1,4 @@
+/// <reference types="nodemailer" />
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 
@@ -52,6 +53,7 @@ export const EMAIL_CATEGORIES = {
 
 export const EMAIL_TEMPLATE_TYPES = {
   ACCOUNT_VERIFICATION: "account_verification",
+  ONBOARDING_VERIFICATION: "onboarding_verification",
   WELCOME: "welcome",
   OTP: "otp",
   PASSWORD_RESET: "password_reset",

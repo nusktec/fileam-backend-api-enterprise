@@ -1,6 +1,4 @@
-import dotenv from "dotenv";
-
-dotenv.config({ path: [".env.dev"] });
+import "./config/env";
 import path from "path";
 import cors from "cors";
 import cookieParser from "cookie-parser";

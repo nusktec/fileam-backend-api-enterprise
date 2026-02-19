@@ -35,8 +35,8 @@ export async function stepEmailVerify(req: IRequest, res: Response): Promise<voi
 export async function stepPassword(req: IRequest, res: Response): Promise<void> {
   const payload = req.onboardingPayload!;
   const { password, firstName, lastName } = req.body;
-  if (!password || !firstName || !lastName) {
-    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Password, firstName and lastName are required", null));
+  if (!password) {
+    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Password is required", null));
     return;
   }
   const result = await onboardingService.stepPassword(payload, password, firstName, lastName);
@@ -116,6 +116,16 @@ export async function stepConsultantTerms(req: IRequest, res: Response): Promise
     return;
   }
   res.status(HttpStatusCode.OK).json(outJson(true, "Onboarding complete", result.data));
+}
+
+export async function getOnboardingProfile(req: IRequest, res: Response): Promise<void> {
+  const payload = req.onboardingPayload!;
+  const result = await onboardingService.getOnboardingProfile(payload);
+  if (!result.success) {
+    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Failed to get profile", null));
+    return;
+  }
+  res.status(HttpStatusCode.OK).json(outJson(true, "Profile retrieved", result.data));
 }
 
 export async function inviteVerifyCode(req: IRequest, res: Response): Promise<void> {
