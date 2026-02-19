@@ -1,15 +1,14 @@
 import fs from "fs";
 import path from "path";
-import { 
-  resend, 
-  emailSender, 
-  EMAIL_CATEGORIES, 
+import {
+  smtpTransporter,
+  emailSender,
+  EMAIL_CATEGORIES,
   EMAIL_TEMPLATE_TYPES,
-  validateResendConfig 
-} from "../config/resend";
+  validateEmailConfig,
+} from "../config/smtp";
 import {
   EmailCategoryInterface,
-  EmailCategoryType,
 } from "../interfaces/system";
 
 const getEmailTemplate = (templateName: string): string => {
@@ -31,47 +30,27 @@ const renderTemplate = (template: string, data: Record<string, any>): string => 
   });
 };
 
-const sanitizeTag = (value: string): string => {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, "_")
-    .replace(/_{2,}/g, "_")
-    .replace(/^_+|_+$/g, "");
-};
-
 const sendEmail = async (
   to: string,
   subject: string,
   htmlContent: string,
-  category: string = EMAIL_CATEGORIES.GENERAL,
-  tags: Array<{ name: string; value: string }> = []
+  _category: string = EMAIL_CATEGORIES.GENERAL,
+  _tags: Array<{ name: string; value: string }> = []
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
   try {
-    if (!validateResendConfig()) {
-      throw new Error("Resend configuration is invalid");
+    if (!validateEmailConfig()) {
+      throw new Error("SMTP configuration is invalid");
     }
 
-    const { data, error } = await resend.emails.send({
+    const info = await smtpTransporter.sendMail({
       from: `${emailSender.name} <${emailSender.email}>`,
-      to: [to],
+      to,
+      replyTo: emailSender.replyTo,
       subject,
       html: htmlContent,
-      replyTo: emailSender.replyTo,
-      tags: [
-        {
-          name: "category",
-          value: sanitizeTag(category),
-        },
-        ...tags,
-      ],
     });
 
-    if (error) {
-      console.error("Resend error:", error);
-      return { success: false, error };
-    }
-
-    return { success: true, data };
+    return { success: true, data: info };
   } catch (error) {
     console.error("Failed to send email:", error);
     return { success: false, error };
@@ -98,10 +77,9 @@ const sendVerificationEmail = async (
 
     return await sendEmail(
       to,
-      "Verify Your Email - Slant Menu",
+      "Verify Your Email - file-am",
       htmlContent,
-      EMAIL_CATEGORIES.ACCOUNT_VERIFICATION,
-      [{ name: "type", value: "verification" }]
+      EMAIL_CATEGORIES.ACCOUNT_VERIFICATION
     );
   } catch (error) {
     console.error("Failed to send verification email:", error);
@@ -128,10 +106,9 @@ const sendOtpEmail = async (
 
     return await sendEmail(
       to,
-      "Your Secure Access Code - Slant Menu",
+      "Your Secure Access Code - file-am",
       htmlContent,
-      EMAIL_CATEGORIES.ACCOUNT_VERIFICATION,
-      [{ name: "type", value: "otp" }]
+      EMAIL_CATEGORIES.ACCOUNT_VERIFICATION
     );
   } catch (error) {
     console.error("Failed to send OTP email:", error);
@@ -151,15 +128,14 @@ const sendWelcomeEmail = async (
 
     const htmlContent = renderTemplate(template, {
       name,
-      body: "Welcome to Slant Menu! Your account has been successfully created.",
+      body: "Welcome to file-am! Your account has been successfully created.",
     });
 
     return await sendEmail(
       to,
-      "Welcome to Slant Menu!",
+      "Welcome to file-am!",
       htmlContent,
-      EMAIL_CATEGORIES.WELCOME,
-      [{ name: "type", value: "welcome" }]
+      EMAIL_CATEGORIES.WELCOME
     );
   } catch (error) {
     console.error("Failed to send welcome email:", error);
@@ -182,12 +158,7 @@ const SendMail = async (
 
     const htmlContent = renderTemplate(template, { body, name });
 
-    return await sendEmail(
-      to,
-      subject,
-      htmlContent,
-      category
-    );
+    return await sendEmail(to, subject, htmlContent, category);
   } catch (error) {
     console.error("Failed to send legacy email:", error);
     return { success: false, error };
@@ -209,13 +180,7 @@ const SendInviteMail = async (
 
     const htmlContent = renderTemplate(template, { body, name });
 
-    return await sendEmail(
-      to,
-      subject,
-      htmlContent,
-      category,
-      [{ name: "type", value: "invitation" }]
-    );
+    return await sendEmail(to, subject, htmlContent, category);
   } catch (error) {
     console.error("Failed to send invite email:", error);
     return { success: false, error };
@@ -250,13 +215,13 @@ const EmailCategoryEnum: EmailCategoryInterface = Object.freeze({
   GENERAL: "General Information",
 });
 
-export { 
-  SendMail, 
-  SendInviteMail, 
+export {
+  SendMail,
+  SendInviteMail,
   EmailCategoryEnum,
   sendEmail,
   sendVerificationEmail,
   sendOtpEmail,
   sendWelcomeEmail,
-  validateResendConfig
+  validateEmailConfig as validateResendConfig,
 };

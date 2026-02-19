@@ -1,0 +1,18 @@
+model Business {
+  id                                String   @id @default(uuid())
+  userId                            String   @map("user_id")
+  name                              String
+  incomeType                        String   @map("income_type")
+  taxObligationsUnderstoodAndAccepted Boolean @default(false) @map("tax_obligations_understood_and_accepted")
+  businessIdNumber                  String?  @map("business_id_number")
+  tin                               String?  @map("tin")
+  streetAddress                     String?  @map("street_address")
+  stateOfResidence                  String?  @map("state_of_residence")
+  primaryTaxOffice                  String?  @map("primary_tax_office")
+  createdAt                         DateTime @default(now()) @map("created_at")
+  updatedAt                         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("businesses")
+}

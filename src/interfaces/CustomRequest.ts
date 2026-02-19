@@ -1,5 +1,6 @@
 import { Request } from "express";
 import type { User, Role, Permission, UserRole } from "@prisma/client";
+import type { OnboardingTokenPayload } from "../utils/onboardingToken";
 
 export interface JWTUser {
   id: string;
@@ -13,4 +14,5 @@ export type RequestUser = User & {
 
 export interface IRequest extends Request {
   user?: RequestUser;
+  onboardingPayload?: OnboardingTokenPayload;
 }

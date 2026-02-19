@@ -5,7 +5,7 @@ import {
   sendWelcomeEmail,
 } from "./emailService";
 import { RandomAscii } from "../utils/tools";
-import { EMAIL_TEMPLATE_TYPES } from "../config/resend";
+import { EMAIL_TEMPLATE_TYPES } from "../config/smtp";
 
 export interface VerificationResult {
   success: boolean;
@@ -22,7 +22,7 @@ export class EmailVerificationService {
   static async generateAndSendVerification(
     email: string,
     name: string,
-    type: string = "verification"
+    type: string = "verification",
   ): Promise<VerificationResult> {
     try {
       const otpCode = RandomAscii(this.OTP_LENGTH);
@@ -32,14 +32,20 @@ export class EmailVerificationService {
       await prisma.emailVerification.upsert({
         where: { email },
         create: { email, code: otpCode, type, expiresAt, attempts: 0 },
-        update: { code: otpCode, type, expiresAt, attempts: 0, isVerified: false },
+        update: {
+          code: otpCode,
+          type,
+          expiresAt,
+          attempts: 0,
+          isVerified: false,
+        },
       });
 
       const emailResult = await sendVerificationEmail(
         email,
         name,
         otpCode,
-        EMAIL_TEMPLATE_TYPES.ACCOUNT_VERIFICATION
+        EMAIL_TEMPLATE_TYPES.ACCOUNT_VERIFICATION,
       );
 
       if (!emailResult.success) {
@@ -64,7 +70,7 @@ export class EmailVerificationService {
   static async generateAndSendOtp(
     email: string,
     name: string,
-    type: string = "otp"
+    type: string = "otp",
   ): Promise<VerificationResult> {
     try {
       const otpCode = RandomAscii(this.OTP_LENGTH);
@@ -74,7 +80,13 @@ export class EmailVerificationService {
       await prisma.emailVerification.upsert({
         where: { email },
         create: { email, code: otpCode, type, expiresAt, attempts: 0 },
-        update: { code: otpCode, type, expiresAt, attempts: 0, isVerified: false },
+        update: {
+          code: otpCode,
+          type,
+          expiresAt,
+          attempts: 0,
+          isVerified: false,
+        },
       });
 
       const emailResult = await sendOtpEmail(email, name, otpCode);
@@ -98,7 +110,10 @@ export class EmailVerificationService {
     }
   }
 
-  static async verifyOtp(email: string, code: string): Promise<VerificationResult> {
+  static async verifyOtp(
+    email: string,
+    code: string,
+  ): Promise<VerificationResult> {
     try {
       const record = await prisma.emailVerification.findUnique({
         where: { email },
@@ -114,7 +129,10 @@ export class EmailVerificationService {
         return { success: false, message: "Verification code has expired" };
       }
       if (record.attempts >= this.MAX_ATTEMPTS) {
-        return { success: false, message: "Maximum verification attempts exceeded" };
+        return {
+          success: false,
+          message: "Maximum verification attempts exceeded",
+        };
       }
 
       await prisma.emailVerification.update({
@@ -145,7 +163,7 @@ export class EmailVerificationService {
   static async resendVerification(
     email: string,
     name: string,
-    type: string = "verification"
+    type: string = "verification",
   ): Promise<VerificationResult> {
     try {
       const existing = await prisma.emailVerification.findUnique({
@@ -163,7 +181,7 @@ export class EmailVerificationService {
 
   static async sendWelcomeEmail(
     email: string,
-    name: string
+    name: string,
   ): Promise<VerificationResult> {
     try {
       const emailResult = await sendWelcomeEmail(email, name);

@@ -1,24 +1,28 @@
 model User {
-  id                   String    @id @default(uuid())
-  email                String    @unique
-  password             String
-  firstName            String    @map("first_name")
-  lastName             String    @map("last_name")
-  verified             Boolean   @default(false)
-  address              String?
-  state                String?
-  lga                  String?
-  purpose              String?
-  roleDescription      String?   @map("role_description")
-  teamSize             Int?
-  adminCount           Int?      @map("admin_count")
-  organizationName     String?   @map("organization_name")
-  organizationAddress  String?   @map("organization_address")
-  logo                 String?
-  onboardingComplete   Boolean   @default(false) @map("onboarding_complete")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
+  id                     String    @id @default(uuid())
+  email                  String    @unique
+  password               String
+  firstName              String    @map("first_name")
+  lastName               String    @map("last_name")
+  phone                  String?
+  verified               Boolean   @default(false)
+  address                String?
+  state                  String?
+  lga                    String?
+  purpose                String?
+  roleDescription        String?   @map("role_description")
+  teamSize               Int?
+  adminCount             Int?      @map("admin_count")
+  organizationName      String?   @map("organization_name")
+  organizationAddress    String?   @map("organization_address")
+  logo                   String?
+  onboardingComplete     Boolean   @default(false) @map("onboarding_complete")
+  onboardingCompletedAt  DateTime? @map("onboarding_completed_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
-  tokens    Token[]
-  userRoles UserRole[]
+  tokens                 Token[]
+  userRoles              UserRole[]
+  businesses             Business[]
+  consultantConnections   ConsultantConnection[]
 }

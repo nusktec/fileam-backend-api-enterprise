@@ -1,0 +1,16 @@
+model Invitation {
+  id                  String   @id @default(uuid())
+  code                String   @unique
+  companyId           String   @map("company_id")
+  invitedEmail        String   @map("invited_email")
+  invitedBusinessName String?  @map("invited_business_name")
+  status              String   @default("pending")
+  expiresAt           DateTime @map("expires_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  consultantConnections ConsultantConnection[]
+
+  @@map("invitations")
+}
