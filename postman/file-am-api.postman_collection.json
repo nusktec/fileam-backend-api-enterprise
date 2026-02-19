@@ -67,18 +67,6 @@
               }
             },
             {
-              "name": "Register",
-              "request": {
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"organizationName\": \"My Org\",\n  \"organizationAddress\": \"123 Main St\",\n  \"logo\": \"\"\n}"
-                },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/register"
-              }
-            },
-            {
               "name": "Refresh token",
               "request": {
                 "method": "POST",
