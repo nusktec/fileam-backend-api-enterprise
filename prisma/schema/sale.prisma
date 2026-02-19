@@ -1,0 +1,22 @@
+model Sale {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  invoiceNumber  String   @unique @map("invoice_number")
+  description    String
+  customerName   String?  @map("customer_name")
+  amount         Decimal  @db.Decimal(14, 2)
+  vatRate        Decimal  @default(0) @map("vat_rate") @db.Decimal(5, 2)
+  vatAmount      Decimal  @default(0) @map("vat_amount") @db.Decimal(14, 2)
+  totalAmount    Decimal  @map("total_amount") @db.Decimal(14, 2)
+  paymentType    String   @map("payment_type")
+  saleDate       DateTime @map("sale_date") @db.Date
+  vatableIncome  Boolean  @default(false) @map("vatable_income")
+  serviceIncome  Boolean  @default(true) @map("service_income")
+  status         String   @default("Pending")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sales")
+}

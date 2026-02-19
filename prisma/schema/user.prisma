@@ -26,4 +26,6 @@ model User {
   userRoles              UserRole[]
   businesses             Business[]
   consultantConnections   ConsultantConnection[]
+  sales                  Sale[]
+  expenses               Expense[]
 }

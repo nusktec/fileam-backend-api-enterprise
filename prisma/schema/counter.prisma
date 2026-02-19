@@ -1,0 +1,7 @@
+model Counter {
+  id         String @id
+  lastNumber Int    @map("last_number")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("counters")
+}
