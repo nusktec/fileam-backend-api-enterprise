@@ -75,7 +75,13 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     await saveRefreshToken(user.id, refreshToken);
 
     const payload = authService.buildAuthUserPayload(user);
-    const data: { accessToken: string; refreshToken: string; user: typeof payload; onboardingToken?: string } = {
+    const data: {
+      accessToken: string;
+      refreshToken: string;
+      user: typeof payload;
+      onboardingToken?: string;
+      currentOnboardingStep?: string;
+    } = {
       accessToken,
       refreshToken,
       user: payload,
@@ -85,6 +91,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         email: user.email,
         acceptedInvitationIds: [],
       });
+      data.currentOnboardingStep = user.currentOnboardingStep ?? "income_type";
     }
 
     res.status(HttpStatusCode.OK).json(outJson(true, "Login successful", data));
