@@ -65,7 +65,7 @@ export const vatFilingService = {
         vatRegistrationNumber: params.vatRegistrationNumber ?? undefined,
       },
     });
-    return { id: draft.id, ...draft };
+    return draft;
   },
 
   async submit(
@@ -126,7 +126,7 @@ export const vatFilingService = {
       },
     });
 
-    const timelineData = [
+    const timelineData: Array<{ taxPayableId: string; event: string; description: string; eventDate: Date }> = [
       { taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.DRAFT_CREATED, description: "Draft created", eventDate: submittedAt },
       { taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.REVIEWED_VALIDATED, description: "Reviewed & validated", eventDate: submittedAt },
       { taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.SUBMITTED_TO_FIRS, description: "Submitted to FIRS", eventDate: submittedAt },

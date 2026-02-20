@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "file-am API",
-    "description": "file-am API: Mobile (auth, user, onboarding, sales, expenses, tax computation, tax payables, payments), Webhooks (payment confirmation), Enterprise (health, company, invitation, onboarding). Sign up via onboarding only (no register endpoint). Payment is handled by a third party; use tax-payables and payments to list due amounts and track payment records.",
+    "description": "file-am API: Mobile (auth, user, onboarding, sales, expenses, tax computation, tax payables, payments, filings, reports, analytics, evidence vault, employees, help, settings), Webhooks (payment confirmation), Enterprise (health, company, invitation, onboarding). Sign up via onboarding only (no register endpoint). Payment is handled by a third party; use tax-payables and payments to list due amounts and track payment records. All mobile endpoints under /api/v1/mobile except auth/onboarding; most require Authorization: Bearer {{accessToken}} and completed onboarding.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -15,7 +15,7 @@
   "item": [
     {
       "name": "Mobile",
-      "description": "Mobile app endpoints. Auth: OTP, login, refresh, logout (no register; use Onboarding to sign up). User, Onboarding, Sales, Expenses, Tax Computation, Tax Payables, Payments require auth + completed onboarding where noted.",
+      "description": "Mobile app endpoints. Base path: /api/v1/mobile. Auth: OTP, login, refresh, logout (no register; use Onboarding to sign up). User (profile, business profile, notification settings, consultant), Onboarding, Sales, Expenses, Tax Computation, Tax Payables, Payments, Filings (VAT/WHT), Reports, Analytics, Evidence Vault, Employees, Help (FAQs, about, contact) — all except Auth OTP/verify/resend and Help FAQs/About require Authorization: Bearer {{accessToken}} and (where noted) completed onboarding. Replace :id in paths with actual UUIDs or composite ids (e.g. evidence-vault documents use composite ids like sale-<uuid>).",
       "item": [
         {
           "name": "Auth",
@@ -74,6 +74,19 @@
               }
             },
             {
+              "name": "Register",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/register",
+                "description": "Register a new user. Body: email, password, firstName, lastName (required). Prefer Onboarding flow for sign-up where possible."
+              }
+            },
+            {
               "name": "Refresh token",
               "request": {
                 "method": "POST",
@@ -103,7 +116,7 @@
         },
         {
           "name": "User",
-          "description": "Profile and password. Requires authentication and completed onboarding.",
+          "description": "Profile, password, business profile, notification settings, consultant. All require Authorization: Bearer {{accessToken}} and completed onboarding.",
           "item": [
             {
               "name": "Get profile",
@@ -147,6 +160,90 @@
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/password",
                 "description": "Changes password. Body: currentPassword, newPassword (required)."
+              }
+            },
+            {
+              "name": "Get business profile",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/business-profile",
+                "description": "Returns business profile: businessName, tin, rcNumber, businessType, sector, stateOfResidence, bankAccount, address, logo. Auth + onboarding required."
+              }
+            },
+            {
+              "name": "Update business profile",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"businessName\": \"TechHub Solutions Ltd\",\n  \"tin\": \"12345678-0001\",\n  \"rcNumber\": \"RC1234567\",\n  \"businessType\": \"Business\",\n  \"sector\": \"Technology\",\n  \"stateOfResidence\": \"Lagos\",\n  \"bankAccount\": \"E-123456789-2311728\",\n  \"address\": \"123 Main St\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/business-profile",
+                "description": "Creates or updates business profile. Body: businessName, tin, rcNumber, businessType, sector, stateOfResidence, bankAccount, address (all optional)."
+              }
+            },
+            {
+              "name": "Get notification settings",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings",
+                "description": "Returns filingReminders, payersNotifications, complianceUpdates, twoFactorEnabled (booleans). Auth + onboarding required."
+              }
+            },
+            {
+              "name": "Update notification settings",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"filingReminders\": true,\n  \"payersNotifications\": true,\n  \"complianceUpdates\": false,\n  \"twoFactorEnabled\": false\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings",
+                "description": "Updates notification toggles. Body: filingReminders, payersNotifications, complianceUpdates, twoFactorEnabled (all optional booleans)."
+              }
+            },
+            {
+              "name": "Get consultant",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant",
+                "description": "Returns assigned consultant: id, name, managingTaxForms (array), status. Null if none assigned."
+              }
+            },
+            {
+              "name": "Revoke consultant access",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"connectionId\": \"<consultant-connection-uuid>\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/revoke",
+                "description": "Revokes consultant access. Body: connectionId (required). Sets connection status to revoked."
               }
             }
           ]
@@ -782,6 +879,185 @@
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/:id/vault-link",
                 "description": "Returns evidenceVaultId for View in Vault."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Analytics",
+          "description": "Reports & Analytics dashboard: KPIs (income, expenses, net profit, margin) with % vs previous period, P&L, 6-month income trend, expense breakdown by category, business health. Auth + onboarding required.",
+          "item": [
+            {
+              "name": "Get analytics dashboard",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/dashboard?period=2026-02&range=month",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "mobile", "analytics", "dashboard"],
+                  "query": [
+                    { "key": "period", "value": "2026-02", "description": "Optional. YYYY-MM. Default: current month." },
+                    { "key": "range", "value": "month", "description": "month | quarter | year. Default: month." }
+                  ]
+                },
+                "description": "Returns kpis (income, expenses, netProfit, margin, percentChange*), profitAndLoss, incomeTrend (last 6 months), expenseBreakdown (category, amount, percentageOfTotal), businessHealth (Profitability, Tax Compliance, Cash Flow)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Evidence Vault",
+          "description": "Secure document storage for audits. Aggregates from Sales (invoices), Expenses (receipts), Filings, Reports. List with search and category filter, get document detail, download URL. Auth + onboarding required.",
+          "item": [
+            {
+              "name": "List documents",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents?search=&category=all",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "mobile", "evidence-vault", "documents"],
+                  "query": [
+                    { "key": "search", "value": "", "description": "Optional. Search in document name." },
+                    { "key": "category", "value": "all", "description": "all | invoices | receipts | vat_schedules | wht_notes | filings" }
+                  ]
+                },
+                "description": "Returns documents array (id, documentId, name, category, source, date, fileSizeKb, documentUrl, evidenceVaultId) and categoryCounts. Use composite id (e.g. sale-xxx, expense-xxx) for get/download."
+              }
+            },
+            {
+              "name": "Get document by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/:id",
+                "description": "Path param id: composite id from list (e.g. sale-<uuid>, expense-<uuid>, payable-<uuid>, report-<uuid>). Returns document metadata and URLs."
+              }
+            },
+            {
+              "name": "Get document download URL",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/:id/download",
+                "description": "Returns { url } for document download. 404 if no documentUrl stored."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Employees",
+          "description": "Manage payroll and compliance. List employees with PAYE/pension obligations, get employee detail (salary structure, deductions, employer cost), add employee. Nigerian PAYE/pension (8%+10%)/NHF applied. Auth + onboarding required.",
+          "item": [
+            {
+              "name": "List employees",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
+                "description": "Returns totalEmployees, monthlyPayroll, obligations (paye, pension with amount/status/note), and employees array (id, fullName, jobTitle, employmentType, employeeId, grossPay, paye, netPay)."
+              }
+            },
+            {
+              "name": "Get employee obligations",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/obligations",
+                "description": "Returns paye (amount, status, dueDate, note) and pension (amount, status, note). Due 10th of next month for PAYE."
+              }
+            },
+            {
+              "name": "Get employee by ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/:id",
+                "description": "Returns full detail: salaryStructure (basicSalary, allowances, grossPay), deductions (pensionEmployee, nhf, paye, netPay), employerObligations (pensionEmployer, totalMonthlyCost), startDate, stateOfResidence, tin, pensionRsa."
+              }
+            },
+            {
+              "name": "Add employee",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullName\": \"Chinedu Okafor\",\n  \"jobTitle\": \"Senior Developer\",\n  \"employmentType\": \"Full-Time\",\n  \"basicSalary\": 450000,\n  \"housingAllowance\": 200000,\n  \"transportAllowance\": 50000,\n  \"mealAllowance\": 30000,\n  \"otherAllowances\": 20000,\n  \"stateOfResidence\": \"Lagos\",\n  \"startDate\": \"2023-01-15\",\n  \"tin\": \"TIN123456789\",\n  \"pensionRsa\": \"PEN987654321\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
+                "description": "Creates employee. EmployeeId (TH001, TH002...) auto-generated. Body: fullName, jobTitle, employmentType, basicSalary (required); housingAllowance, transportAllowance, mealAllowance, otherAllowances, stateOfResidence, startDate, tin, pensionRsa (optional). PAYE/pension/NHF calculated automatically."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Help",
+          "description": "Help Center FAQs (by category), About FileAm, Contact Support. FAQs and About are public; Contact requires auth + onboarding.",
+          "item": [
+            {
+              "name": "Get FAQs",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/faqs?category=All",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "mobile", "help", "faqs"],
+                  "query": [{ "key": "category", "value": "All", "description": "Optional. All | VAT | WHT | PIT | CIT | Filing | Other" }]
+                },
+                "description": "Returns categories array and faqs array (question, category). No auth required."
+              }
+            },
+            {
+              "name": "Get about",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/about",
+                "description": "Returns tagline, mission, taxCoverage (name, rate), footer. No auth required."
+              }
+            },
+            {
+              "name": "Submit contact",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"subject\": \"Issue with VAT filing\",\n  \"message\": \"Please provide details about your issue...\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/contact",
+                "description": "Submits support request. Body: subject, message (optional). Returns success and response time note. Auth + onboarding required."
               }
             }
           ]

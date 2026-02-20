@@ -1,0 +1,23 @@
+model Employee {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  employeeId          String   @unique @map("employee_id")
+  fullName            String   @map("full_name")
+  jobTitle            String   @map("job_title")
+  employmentType      String   @map("employment_type")
+  basicSalary         Decimal  @map("basic_salary") @db.Decimal(14, 2)
+  housingAllowance    Decimal  @default(0) @map("housing_allowance") @db.Decimal(14, 2)
+  transportAllowance  Decimal  @default(0) @map("transport_allowance") @db.Decimal(14, 2)
+  mealAllowance       Decimal  @default(0) @map("meal_allowance") @db.Decimal(14, 2)
+  otherAllowances     Decimal  @default(0) @map("other_allowances") @db.Decimal(14, 2)
+  stateOfResidence    String?  @map("state_of_residence")
+  tin                 String?  @map("tin")
+  pensionRsa          String?  @map("pension_rsa")
+  startDate           DateTime @map("start_date") @db.Date
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("employees")
+}

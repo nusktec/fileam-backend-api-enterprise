@@ -19,10 +19,15 @@ model User {
   onboardingComplete     Boolean   @default(false) @map("onboarding_complete")
   currentOnboardingStep  String?   @map("current_onboarding_step")
   onboardingCompletedAt  DateTime? @map("onboarding_completed_at")
+  filingRemindersEnabled Boolean   @default(true) @map("filing_reminders_enabled")
+  payersNotificationsEnabled Boolean @default(true) @map("payers_notifications_enabled")
+  complianceUpdatesEnabled Boolean  @default(false) @map("compliance_updates_enabled")
+  twoFactorEnabled       Boolean   @default(false) @map("two_factor_enabled")
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
 
   tokens                 Token[]
+  employees              Employee[]
   userRoles              UserRole[]
   businesses             Business[]
   consultantConnections   ConsultantConnection[]

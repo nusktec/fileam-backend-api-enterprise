@@ -1,6 +1,10 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../../config/database";
 
+type BusinessWithExtras = { rcNumber?: string | null; businessType?: string | null; sector?: string | null; bankAccount?: string | null; name?: string; tin?: string | null; stateOfResidence?: string | null; streetAddress?: string | null };
+type UserWithNotificationPrefs = { filingRemindersEnabled?: boolean; payersNotificationsEnabled?: boolean; complianceUpdatesEnabled?: boolean; twoFactorEnabled?: boolean };
+type ConsultantConnWithExtras = { managingTaxForms?: string | null; consultantDisplayName?: string | null };
+
 export const userService = {
   async getProfile(userId: string) {
     const user = await prisma.user.findUnique({
@@ -91,5 +95,156 @@ export const userService = {
       data: { password: hashed },
     });
     return { success: true as const };
+  },
+
+  async getBusinessProfile(userId: string) {
+    const [user, business] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          organizationName: true,
+          organizationAddress: true,
+          logo: true,
+          state: true,
+          address: true,
+        },
+      }),
+      prisma.business.findFirst({ where: { userId } }),
+    ]);
+    if (!user) return null;
+    const b = business as BusinessWithExtras | null | undefined;
+    return {
+      businessName: b?.name ?? user.organizationName ?? "",
+      tin: b?.tin ?? user.organizationName ?? "",
+      rcNumber: b?.rcNumber ?? null,
+      businessType: b?.businessType ?? "Business",
+      sector: b?.sector ?? null,
+      stateOfResidence: b?.stateOfResidence ?? user.state ?? null,
+      bankAccount: b?.bankAccount ?? null,
+      address: b?.streetAddress ?? user.organizationAddress ?? user.address ?? null,
+      logo: user.logo ?? null,
+    };
+  },
+
+  async updateBusinessProfile(
+    userId: string,
+    data: {
+      businessName?: string;
+      tin?: string;
+      rcNumber?: string;
+      businessType?: string;
+      sector?: string;
+      stateOfResidence?: string;
+      bankAccount?: string;
+      address?: string;
+    }
+  ) {
+    const business = await prisma.business.findFirst({ where: { userId } });
+    const payload = {
+      ...(data.businessName !== undefined && { name: data.businessName }),
+      ...(data.tin !== undefined && { tin: data.tin }),
+      ...(data.rcNumber !== undefined && { rcNumber: data.rcNumber }),
+      ...(data.businessType !== undefined && { businessType: data.businessType }),
+      ...(data.sector !== undefined && { sector: data.sector }),
+      ...(data.stateOfResidence !== undefined && { stateOfResidence: data.stateOfResidence }),
+      ...(data.bankAccount !== undefined && { bankAccount: data.bankAccount }),
+      ...(data.address !== undefined && { streetAddress: data.address }),
+    };
+    if (business) {
+      await prisma.business.update({
+        where: { id: business.id },
+        data: payload as never,
+      });
+    } else {
+      await prisma.business.create({
+        data: {
+          userId,
+          name: data.businessName ?? "Business",
+          incomeType: "employment",
+          ...(payload as Record<string, unknown>),
+        },
+      });
+    }
+    if (data.businessName !== undefined) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { organizationName: data.businessName },
+      });
+    }
+    return this.getBusinessProfile(userId);
+  },
+
+  async getNotificationSettings(userId: string) {
+    const user = (await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        filingRemindersEnabled: true,
+        payersNotificationsEnabled: true,
+        complianceUpdatesEnabled: true,
+        twoFactorEnabled: true,
+      } as unknown as Parameters<typeof prisma.user.findUnique>[0]["select"],
+    })) as UserWithNotificationPrefs | null;
+    return user
+      ? {
+          filingReminders: user.filingRemindersEnabled ?? true,
+          payersNotifications: user.payersNotificationsEnabled ?? true,
+          complianceUpdates: user.complianceUpdatesEnabled ?? false,
+          twoFactorEnabled: user.twoFactorEnabled ?? false,
+        }
+      : null;
+  },
+
+  async updateNotificationSettings(
+    userId: string,
+    data: {
+      filingReminders?: boolean;
+      payersNotifications?: boolean;
+      complianceUpdates?: boolean;
+      twoFactorEnabled?: boolean;
+    }
+  ) {
+    const updatePayload: Record<string, boolean> = {};
+    if (data.filingReminders !== undefined) updatePayload.filingRemindersEnabled = data.filingReminders;
+    if (data.payersNotifications !== undefined) updatePayload.payersNotificationsEnabled = data.payersNotifications;
+    if (data.complianceUpdates !== undefined) updatePayload.complianceUpdatesEnabled = data.complianceUpdates;
+    if (data.twoFactorEnabled !== undefined) updatePayload.twoFactorEnabled = data.twoFactorEnabled;
+    await prisma.user.update({
+      where: { id: userId },
+      data: updatePayload as never,
+    });
+    return this.getNotificationSettings(userId);
+  },
+
+  async getConsultant(userId: string) {
+    const conn = await prisma.consultantConnection.findFirst({
+      where: { userId, status: "active" },
+      include: {
+        company: true,
+        invitation: true,
+      },
+    });
+    if (!conn) return null;
+    const c = conn as typeof conn & ConsultantConnWithExtras;
+    const taxForms = c.managingTaxForms
+      ? c.managingTaxForms.split(",").map((s: string) => s.trim())
+      : ["VAT", "WHT", "PITT", "CIT"];
+    return {
+      id: conn.id,
+      name: c.consultantDisplayName ?? conn.invitation?.invitedBusinessName ?? conn.company?.name ?? "Consultant",
+      managingTaxForms: taxForms,
+      status: conn.status,
+    };
+  },
+
+  async revokeConsultant(userId: string, connectionId: string) {
+    const conn = await prisma.consultantConnection.findFirst({
+      where: { id: connectionId, userId },
+    });
+    if (!conn) return false;
+    await prisma.consultantConnection.update({
+      where: { id: connectionId },
+      data: { status: "revoked" },
+    });
+    return true;
   },
 };

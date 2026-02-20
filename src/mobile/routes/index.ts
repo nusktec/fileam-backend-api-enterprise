@@ -9,6 +9,10 @@ import taxPayablesRoutes from "./taxPayablesRoutes";
 import paymentRecordsRoutes from "./paymentRecordsRoutes";
 import filingsRoutes from "./filingsRoutes";
 import reportsRoutes from "./reportsRoutes";
+import analyticsRoutes from "./analyticsRoutes";
+import evidenceVaultRoutes from "./evidenceVaultRoutes";
+import employeesRoutes from "./employeesRoutes";
+import helpRoutes from "./helpRoutes";
 
 const router = express.Router();
 
@@ -22,5 +26,9 @@ router.use("/tax-payables", taxPayablesRoutes);
 router.use("/payments", paymentRecordsRoutes);
 router.use("/filings", filingsRoutes);
 router.use("/reports", reportsRoutes);
+router.use("/analytics", analyticsRoutes);
+router.use("/evidence-vault", evidenceVaultRoutes);
+router.use("/employees", employeesRoutes);
+router.use("/help", helpRoutes);
 
 export default router;

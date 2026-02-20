@@ -5,6 +5,8 @@ model ConsultantConnection {
   invitationId            String   @map("invitation_id")
   acceptedAt              DateTime @map("accepted_at")
   consultantTermsAccepted Boolean  @default(false) @map("consultant_terms_accepted")
+  managingTaxForms        String?  @map("managing_tax_forms")
+  consultantDisplayName   String?  @map("consultant_display_name")
   status                  String   @default("active")
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
