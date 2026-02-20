@@ -1,0 +1,19 @@
+model FilingDraft {
+  id                   String   @id @default(uuid())
+  userId               String   @map("user_id")
+  taxType              String   @map("tax_type")
+  periodYear           Int      @map("period_year")
+  periodMonth          Int      @map("period_month")
+  stateOfOperation     String?  @map("state_of_operation")
+  vatRegistrationNumber String? @map("vat_registration_number")
+  whtType              String?  @map("wht_type")
+  status               String   @default("draft")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  whtScheduleLines WhtScheduleLine[]
+
+  @@unique([userId, taxType, periodYear, periodMonth])
+  @@map("filing_drafts")
+}

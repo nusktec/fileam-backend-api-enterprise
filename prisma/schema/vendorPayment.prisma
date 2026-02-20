@@ -1,0 +1,18 @@
+model VendorPayment {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  periodYear   Int      @map("period_year")
+  periodMonth  Int      @map("period_month")
+  vendorName   String   @map("vendor_name")
+  description  String
+  category     String
+  grossAmount  Decimal  @map("gross_amount") @db.Decimal(14, 2)
+  whtRate      Decimal  @map("wht_rate") @db.Decimal(5, 2)
+  whtDeducted  Decimal  @map("wht_deducted") @db.Decimal(14, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("vendor_payments")
+}

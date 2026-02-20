@@ -1,0 +1,12 @@
+model FilingTimelineEvent {
+  id          String   @id @default(uuid())
+  taxPayableId String  @map("tax_payable_id")
+  event       String
+  description String?
+  eventDate   DateTime? @map("event_date") @db.Date
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  taxPayable TaxPayable @relation(fields: [taxPayableId], references: [id], onDelete: Cascade)
+
+  @@map("filing_timeline_events")
+}

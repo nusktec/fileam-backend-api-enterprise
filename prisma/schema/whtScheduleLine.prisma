@@ -1,0 +1,15 @@
+model WhtScheduleLine {
+  id           String   @id @default(uuid())
+  filingDraftId String  @map("filing_draft_id")
+  vendorName   String   @map("vendor_name")
+  description  String
+  category     String
+  grossAmount  Decimal  @map("gross_amount") @db.Decimal(14, 2)
+  whtRate      Decimal  @map("wht_rate") @db.Decimal(5, 2)
+  whtDeducted  Decimal  @map("wht_deducted") @db.Decimal(14, 2)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  filingDraft FilingDraft @relation(fields: [filingDraftId], references: [id], onDelete: Cascade)
+
+  @@map("wht_schedule_lines")
+}

@@ -1,0 +1,20 @@
+model PaymentRecord {
+  id                 String    @id @default(uuid())
+  taxPayableId       String    @map("tax_payable_id")
+  userId             String    @map("user_id")
+  amountPaid        Decimal   @map("amount_paid") @db.Decimal(14, 2)
+  currency           String    @default("NGN")
+  externalReference  String?   @map("external_reference")
+  externalPaymentId  String?   @map("external_payment_id")
+  method             String
+  status             String    @default("pending")
+  paidAt             DateTime? @map("paid_at")
+  metadata           Json?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  taxPayable TaxPayable @relation(fields: [taxPayableId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payment_records")
+}

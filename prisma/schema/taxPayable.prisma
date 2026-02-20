@@ -1,0 +1,28 @@
+model TaxPayable {
+  id               String    @id @default(uuid())
+  userId           String    @map("user_id")
+  taxType          String    @map("tax_type")
+  periodYear       Int       @map("period_year")
+  periodMonth      Int       @map("period_month")
+  amountDue        Decimal   @map("amount_due") @db.Decimal(14, 2)
+  penalties        Decimal   @default(0) @map("penalties") @db.Decimal(14, 2)
+  totalPayable     Decimal   @map("total_payable") @db.Decimal(14, 2)
+  filingDueDate    DateTime  @map("filing_due_date") @db.Date
+  status           String    @default("pending")
+  currency         String    @default("NGN")
+  submittedAt      DateTime? @map("submitted_at")
+  documentUrl      String?   @map("document_url")
+  evidenceVaultId  String?   @map("evidence_vault_id")
+  stateOfOperation String?  @map("state_of_operation")
+  vatRegistrationNumber String? @map("vat_registration_number")
+  receiptUrl       String?   @map("receipt_url")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments  PaymentRecord[]
+  timeline  FilingTimelineEvent[]
+
+  @@unique([userId, taxType, periodYear, periodMonth])
+  @@map("tax_payables")
+}

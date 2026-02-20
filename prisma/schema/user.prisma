@@ -28,4 +28,9 @@ model User {
   consultantConnections   ConsultantConnection[]
   sales                  Sale[]
   expenses               Expense[]
+  taxPayables            TaxPayable[]
+  paymentRecords         PaymentRecord[]
+  filingDrafts           FilingDraft[]
+  vendorPayments         VendorPayment[]
+  reports                Report[]
 }

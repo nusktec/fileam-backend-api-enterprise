@@ -1,0 +1,18 @@
+model Report {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  reportType       String   @map("report_type")
+  periodLabel      String   @map("period_label")
+  periodYear       Int      @map("period_year")
+  periodMonth      Int      @map("period_month")
+  generatedAt      DateTime @map("generated_at")
+  format           String   @default("PDF")
+  documentUrl      String?  @map("document_url")
+  evidenceVaultId  String?  @map("evidence_vault_id")
+  status           String   @default("stored") @map("status")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("reports")
+}
