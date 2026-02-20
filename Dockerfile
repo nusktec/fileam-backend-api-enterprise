@@ -22,11 +22,14 @@ FROM base AS runner
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Production deps only; Prisma client copied from builder (no prisma CLI in runner)
+# Production deps; Prisma client copied from builder. Install Prisma CLI only for migrate deploy at startup.
 COPY package.json pnpm-lock.yaml* ./
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Prisma schema + migrations (needed for migrate deploy at startup)
+COPY --from=builder /app/prisma ./prisma
 
 # App output and static assets (__dirname in app = dist/)
 COPY --from=builder /app/dist ./dist
@@ -38,4 +41,5 @@ EXPOSE 3000
 RUN chown -R node:node /app
 USER node
 
-CMD ["node", "dist/app.js"]
+# Run pending migrations then start the app (DATABASE_URL must be set at runtime)
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy --schema=prisma/schema && exec node dist/app.js"]

@@ -48,6 +48,7 @@
     "multer": "^2.0.2",
     "multer-s3": "^3.0.1",
     "nodemailer": "^6.9.16",
+    "prisma": "^7.4.1",
     "resend": "^4.7.0",
     "sequelize": "^6.37.3",
     "sequelize-typescript": "^2.1.6",
@@ -62,7 +63,7 @@
     "@types/node": "^22.7.4",
     "@types/nodemailer": "^6.4.17",
     "@types/sequelize": "^4.28.20",
-    "prisma": "^6.0.0",
+    "prisma": "^7.4.1",
     "ts-node-dev": "^2.0.0"
   }
 }
