@@ -20,27 +20,37 @@ async function nextExpenseNumber(): Promise<string> {
 
 export { EXPENSE_CATEGORIES };
 export const expensesService = {
-  async list(userId: string) {
-    const expenses = await prisma.expense.findMany({
-      where: { userId },
-      orderBy: { expenseDate: "desc" },
-    });
+  async list(
+    userId: string,
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+  ) {
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
 
-    const summary = await prisma.expense.aggregate({
-      where: { userId },
-      _sum: { totalAmount: true, vatAmount: true },
-    });
-
-    const byCategory = await prisma.expense.groupBy({
-      by: ["category"],
-      where: { userId },
-      _sum: { totalAmount: true },
-    });
-    const total = decimalToNumber(summary._sum.totalAmount);
+    const [expenses, total, summary, byCategory] = await Promise.all([
+      prisma.expense.findMany({
+        where: { userId },
+        orderBy: { expenseDate: order },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.expense.count({ where: { userId } }),
+      prisma.expense.aggregate({
+        where: { userId },
+        _sum: { totalAmount: true, vatAmount: true },
+      }),
+      prisma.expense.groupBy({
+        by: ["category"],
+        where: { userId },
+        _sum: { totalAmount: true },
+      }),
+    ]);
+    const totalAmount = decimalToNumber(summary._sum.totalAmount);
     const topCategories = byCategory.map((c) => ({
       category: c.category,
       amount: decimalToNumber(c._sum.totalAmount),
-      percentageOfTotal: total > 0 ? (decimalToNumber(c._sum.totalAmount) / total) * 100 : 0,
+      percentageOfTotal: totalAmount > 0 ? (decimalToNumber(c._sum.totalAmount) / totalAmount) * 100 : 0,
     })).sort((a, b) => b.amount - a.amount);
 
     return {
@@ -58,6 +68,10 @@ export const expensesService = {
         amount: decimalToNumber(e.totalAmount),
         vatTag: e.vatInclusive,
       })),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     };
   },
 

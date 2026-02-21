@@ -2,6 +2,7 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { helpService } from "../services/helpService";
 
 export const getFaqs = async (req: IRequest, res: Response): Promise<void> => {
@@ -29,11 +30,7 @@ export const getAbout = async (_req: IRequest, res: Response): Promise<void> => 
 
 export const submitContact = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const { subject, message } = req.body ?? {};
     const data = helpService.submitContact(userId, subject ?? "", message ?? "");
     res.status(HttpStatusCode.OK).json(outJson(true, data.message, data));

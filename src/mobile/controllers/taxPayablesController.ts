@@ -2,18 +2,20 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { taxPayablesService } from "../services/taxPayablesService";
 
 export const listPayables = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const status = req.query.status as string | undefined;
     const taxType = req.query.taxType as string | undefined;
-    const data = await taxPayablesService.list(userId, { status, taxType });
+    const pagination = req.pagination;
+    const data = await taxPayablesService.list(userId, { status, taxType }, {
+      page: pagination?.page,
+      limit: pagination?.limit,
+      sortOrder: pagination?.sortOrder,
+    });
     res.status(HttpStatusCode.OK).json(outJson(true, "Tax payables retrieved", data));
   } catch (error) {
     res
@@ -24,17 +26,9 @@ export const listPayables = async (req: IRequest, res: Response): Promise<void> 
 
 export const getPayableById = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const payableId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    if (!payableId) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Payable ID required", null));
-      return;
-    }
-    const data = await taxPayablesService.getById(userId, payableId);
+    const data = await taxPayablesService.getById(userId, payableId!);
     if (!data) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Tax payable not found", null));
       return;
@@ -49,17 +43,9 @@ export const getPayableById = async (req: IRequest, res: Response): Promise<void
 
 export const initiatePayment = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const payableId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    if (!payableId) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Payable ID required", null));
-      return;
-    }
-    const payable = await taxPayablesService.getById(userId, payableId);
+    const payable = await taxPayablesService.getById(userId, payableId!);
     if (!payable) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Tax payable not found", null));
       return;

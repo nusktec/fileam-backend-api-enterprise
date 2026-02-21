@@ -32,12 +32,24 @@ function grossMonthly(e: {
 }
 
 export const employeesService = {
-  async list(userId: string) {
-    const employees = await prisma.employee.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-    });
-    const totalEmployees = employees.length;
+  async list(
+    userId: string,
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+  ) {
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
+
+    const [employees, total, obligations] = await Promise.all([
+      prisma.employee.findMany({
+        where: { userId },
+        orderBy: { createdAt: order },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.employee.count({ where: { userId } }),
+      this.getObligations(userId),
+    ]);
     let monthlyPayroll = 0;
     const list = employees.map((e) => {
       const gross = grossMonthly(e);
@@ -57,12 +69,15 @@ export const employeesService = {
         netPay: net,
       };
     });
-    const obligations = await this.getObligations(userId);
     return {
-      totalEmployees,
+      totalEmployees: total,
       monthlyPayroll,
       obligations,
       employees: list,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     };
   },
 

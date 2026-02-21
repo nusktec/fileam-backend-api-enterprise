@@ -2,6 +2,7 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { userService } from "../services/userService";
 
 export const getProfile = async (
@@ -9,12 +10,7 @@ export const getProfile = async (
   res: Response
 ): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
-
+    const userId = getAuthUserId(req);
     const profile = await userService.getProfile(userId);
     if (!profile) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "User not found", null));
@@ -34,12 +30,7 @@ export const updateProfile = async (
   res: Response
 ): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
-
+    const userId = getAuthUserId(req);
     const {
       firstName,
       lastName,
@@ -90,12 +81,7 @@ export const changePassword = async (
   res: Response
 ): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
-
+    const userId = getAuthUserId(req);
     const { currentPassword, newPassword } = req.body;
     const result = await userService.changePassword(
       userId,
@@ -120,11 +106,7 @@ export const changePassword = async (
 
 export const getBusinessProfile = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const data = await userService.getBusinessProfile(userId);
     if (!data) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "User not found", null));
@@ -140,11 +122,7 @@ export const getBusinessProfile = async (req: IRequest, res: Response): Promise<
 
 export const updateBusinessProfile = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const data = await userService.updateBusinessProfile(userId, req.body ?? {});
     res.status(HttpStatusCode.OK).json(outJson(true, "Business profile updated", data));
   } catch (error) {
@@ -156,11 +134,7 @@ export const updateBusinessProfile = async (req: IRequest, res: Response): Promi
 
 export const getNotificationSettings = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const data = await userService.getNotificationSettings(userId);
     if (!data) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "User not found", null));
@@ -176,11 +150,7 @@ export const getNotificationSettings = async (req: IRequest, res: Response): Pro
 
 export const updateNotificationSettings = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const { filingReminders, payersNotifications, complianceUpdates, twoFactorEnabled } = req.body ?? {};
     const data = await userService.updateNotificationSettings(userId, {
       filingReminders,
@@ -198,11 +168,7 @@ export const updateNotificationSettings = async (req: IRequest, res: Response): 
 
 export const getConsultant = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const data = await userService.getConsultant(userId);
     res.status(HttpStatusCode.OK).json(outJson(true, "Consultant retrieved", data));
   } catch (error) {
@@ -214,11 +180,7 @@ export const getConsultant = async (req: IRequest, res: Response): Promise<void>
 
 export const revokeConsultant = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const connectionId = req.body?.connectionId ?? (Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
     if (!connectionId) {
       res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Connection ID required", null));

@@ -2,15 +2,27 @@ import { prisma } from "../../config/database";
 import { REPORT_TYPES } from "../../constants/filings";
 
 export const reportsService = {
-  async list(userId: string, filters?: { reportType?: string }) {
+  async list(
+    userId: string,
+    filters?: { reportType?: string },
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+  ) {
     const where: { userId: string; reportType?: string } = { userId };
     if (filters?.reportType) where.reportType = filters.reportType;
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
 
-    const reports = await prisma.report.findMany({
-      where,
-      orderBy: { generatedAt: "desc" },
-    });
-    return reports.map((r) => ({
+    const [reports, total] = await Promise.all([
+      prisma.report.findMany({
+        where,
+        orderBy: { generatedAt: order },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.report.count({ where }),
+    ]);
+    const data = reports.map((r) => ({
       id: r.id,
       name: `${r.reportType} - ${r.periodLabel}`,
       reportType: r.reportType,
@@ -21,6 +33,7 @@ export const reportsService = {
       format: r.format,
       status: r.status,
     }));
+    return { data, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
   },
 
   async getById(userId: string, reportId: string) {

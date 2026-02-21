@@ -20,25 +20,35 @@ async function nextInvoiceNumber(): Promise<string> {
 }
 
 export const salesService = {
-  async list(userId: string, status?: string) {
+  async list(
+    userId: string,
+    status?: string,
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+  ) {
     const where: { userId: string; status?: string } = { userId };
     if (status && status !== "all") where.status = status;
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
 
-    const sales = await prisma.sale.findMany({
-      where,
-      orderBy: { saleDate: "desc" },
-    });
-
-    const summary = await prisma.sale.aggregate({
-      where: { userId },
-      _sum: { totalAmount: true, vatAmount: true },
-    });
-
-    const counts = await prisma.sale.groupBy({
-      by: ["status"],
-      where: { userId },
-      _count: true,
-    });
+    const [sales, total, summary, counts] = await Promise.all([
+      prisma.sale.findMany({
+        where,
+        orderBy: { saleDate: order },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.sale.count({ where }),
+      prisma.sale.aggregate({
+        where: { userId },
+        _sum: { totalAmount: true, vatAmount: true },
+      }),
+      prisma.sale.groupBy({
+        by: ["status"],
+        where: { userId },
+        _count: true,
+      }),
+    ]);
     const countByStatus = counts.reduce(
       (acc, c) => {
         acc[c.status] = c._count;
@@ -67,6 +77,10 @@ export const salesService = {
         vatAmount: decimalToNumber(s.vatAmount),
         totalAmount: decimalToNumber(s.totalAmount),
       })),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
     };
   },
 

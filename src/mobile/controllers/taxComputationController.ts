@@ -2,15 +2,12 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { taxComputationService } from "../services/taxComputationService";
 
 export const getTaxComputation = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const period = (req.query.period as string) || "";
     const match = period.match(/^(\d{4})-(\d{2})$/);
     const now = new Date();

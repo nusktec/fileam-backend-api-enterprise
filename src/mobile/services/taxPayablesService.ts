@@ -117,22 +117,31 @@ export const taxPayablesService = {
 
   async list(
     userId: string,
-    filters?: { status?: string; taxType?: string }
+    filters?: { status?: string; taxType?: string },
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
   ) {
     await this.ensurePayablesForUser(userId);
     const where: { userId: string; status?: string; taxType?: string } = { userId };
     if (filters?.status) where.status = filters.status;
     if (filters?.taxType) where.taxType = filters.taxType;
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
 
-    const payables = await prisma.taxPayable.findMany({
-      where,
-      orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
-      include: {
-        payments: { where: { status: "completed" }, orderBy: { paidAt: "desc" } },
-      },
-    });
+    const [payables, total] = await Promise.all([
+      prisma.taxPayable.findMany({
+        where,
+        orderBy: [{ periodYear: order }, { periodMonth: order }],
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          payments: { where: { status: "completed" }, orderBy: { paidAt: "desc" } },
+        },
+      }),
+      prisma.taxPayable.count({ where }),
+    ]);
 
-    return payables.map((p) => ({
+    const data = payables.map((p) => ({
       id: p.id,
       taxType: p.taxType,
       periodYear: p.periodYear,
@@ -146,6 +155,7 @@ export const taxPayablesService = {
       currency: p.currency,
       totalPaid: p.payments.reduce((s, r) => s + decimalToNumber(r.amountPaid), 0),
     }));
+    return { data, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
   },
 
   async getById(userId: string, payableId: string) {

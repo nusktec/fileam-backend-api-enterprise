@@ -27,6 +27,7 @@ export const validatePaginationParams = (
 ): void => {
   const { page, limit, sortOrder } = req.query as PaginationQuery;
 
+  // Validate page
   const pageNum = Number(page);
   if (page && (isNaN(pageNum) || pageNum < 1)) {
     res.status(HttpStatusCode.BAD_REQUEST).json(
@@ -35,6 +36,7 @@ export const validatePaginationParams = (
     return;
   }
 
+  // Validate limit
   const limitNum = Number(limit);
   if (limit && (isNaN(limitNum) || limitNum < 1 || limitNum > 100)) {
     res.status(HttpStatusCode.BAD_REQUEST).json(
@@ -43,6 +45,7 @@ export const validatePaginationParams = (
     return;
   }
 
+  // Validate sortOrder
   if (sortOrder && !['ASC', 'DESC'].includes(sortOrder.toUpperCase())) {
     res.status(HttpStatusCode.BAD_REQUEST).json(
       outJson(false, "Sort order must be either 'ASC' or 'DESC'", null)
@@ -50,6 +53,7 @@ export const validatePaginationParams = (
     return;
   }
 
+  // Set default pagination parameters
   req.pagination = {
     page: pageNum || 1,
     limit: limitNum || 10,
@@ -61,14 +65,17 @@ export const validatePaginationParams = (
   next();
 };
 
+/**
+ * Single source of pagination middleware. Use on list routes to validate
+ * page, limit, sortOrder and set req.pagination. Optionally pass defaultSortBy.
+ */
 export const withPagination = (defaultSortBy?: string) => {
   return (req: PaginationRequest, res: Response, next: NextFunction) => {
-    validatePaginationParams(req, res, (err?: any) => {
+    validatePaginationParams(req, res, (err?: unknown) => {
       if (err) return next(err);
-      if (!req.pagination?.sortBy && defaultSortBy) {
-        req.pagination!.sortBy = defaultSortBy;
+      if (defaultSortBy && req.pagination && !req.pagination.sortBy) {
+        req.pagination.sortBy = defaultSortBy;
       }
-      
       next();
     });
   };

@@ -2,6 +2,7 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { vatFilingService } from "../services/vatFilingService";
 
 function parsePeriod(period?: string): { year: number; month: number } | null {
@@ -16,11 +17,7 @@ function parsePeriod(period?: string): { year: number; month: number } | null {
 
 export const getVatCalculation = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const period = req.query.period as string | undefined;
     const parsed = parsePeriod(period) ?? (req.query.year && req.query.month)
       ? { year: Number(req.query.year), month: Number(req.query.month) }
@@ -40,11 +37,7 @@ export const getVatCalculation = async (req: IRequest, res: Response): Promise<v
 
 export const createOrUpdateVatDraft = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const { periodYear, periodMonth, stateOfOperation, vatRegistrationNumber } = req.body ?? {};
     if (periodYear == null || periodMonth == null) {
       res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "periodYear and periodMonth required", null));
@@ -66,11 +59,7 @@ export const createOrUpdateVatDraft = async (req: IRequest, res: Response): Prom
 
 export const submitVatFiling = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const {
       periodYear,
       periodMonth,

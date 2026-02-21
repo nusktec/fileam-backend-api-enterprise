@@ -56,16 +56,26 @@ export const enterpriseEvidenceVaultService = {
     };
   },
 
-  async listDocuments(companyId: string, filters?: {
-    search?: string;
-    category?: string;
-    startDate?: string;
-    endDate?: string;
-    status?: string;
-  }) {
+  async listDocuments(
+    companyId: string,
+    filters?: {
+      search?: string;
+      category?: string;
+      startDate?: string;
+      endDate?: string;
+      status?: string;
+    },
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+  ) {
     const company = await prisma.company.findUnique({ where: { id: companyId } });
     if (!company) return null;
-    const where: { companyId: string; category?: string; status?: string; documentDate?: { gte?: Date; lte?: Date } } = { companyId };
+    const where: {
+      companyId: string;
+      category?: string;
+      status?: string;
+      documentDate?: { gte?: Date; lte?: Date };
+      OR?: Array<{ documentName?: { contains: string; mode: "insensitive" }; description?: { contains: string; mode: "insensitive" } }>;
+    } = { companyId };
     if (filters?.category && filters.category !== "all") where.category = filters.category;
     if (filters?.status) where.status = filters.status;
     if (filters?.startDate || filters?.endDate) {
@@ -73,15 +83,26 @@ export const enterpriseEvidenceVaultService = {
       if (filters.startDate) where.documentDate.gte = new Date(filters.startDate);
       if (filters.endDate) where.documentDate.lte = new Date(filters.endDate);
     }
-    let list = await prisma.enterpriseEvidenceDocument.findMany({
-      where,
-      orderBy: { documentDate: "desc" },
-    });
     if (filters?.search && filters.search.trim()) {
-      const q = filters.search.toLowerCase().trim();
-      list = list.filter((d) => d.documentName.toLowerCase().includes(q) || (d.description?.toLowerCase().includes(q)));
+      const q = filters.search.trim();
+      where.OR = [
+        { documentName: { contains: q, mode: "insensitive" } },
+        { description: { contains: q, mode: "insensitive" } },
+      ];
     }
-    return list.map((d) => ({
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
+    const [list, total] = await Promise.all([
+      prisma.enterpriseEvidenceDocument.findMany({
+        where,
+        orderBy: { documentDate: order },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.enterpriseEvidenceDocument.count({ where }),
+    ]);
+    const data = list.map((d) => ({
       id: d.id,
       documentName: d.documentName,
       category: d.category,
@@ -89,6 +110,7 @@ export const enterpriseEvidenceVaultService = {
       status: d.status,
       fileUrl: d.fileUrl,
     }));
+    return { data, total, page, limit };
   },
 
   async getDocument(companyId: string, documentId: string) {

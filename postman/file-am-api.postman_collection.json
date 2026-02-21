@@ -11,7 +11,8 @@
     { "key": "refreshToken", "value": "" },
     { "key": "onboardingToken", "value": "" },
     { "key": "webhookSecret", "value": "" },
-    { "key": "consultantOnboardingToken", "value": "" }
+    { "key": "consultantOnboardingToken", "value": "" },
+    { "key": "companyId", "value": "" }
   ],
   "item": [
     {
@@ -1125,6 +1126,343 @@
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
             "description": "Creates an invitation for a business. Body: companyId, invitedEmail, invitedBusinessName (optional), expiresInHours (optional)."
           }
+        },
+        {
+          "name": "Business profile (lookups)",
+          "item": [
+            {
+              "name": "Get business types",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/types",
+                "description": "Returns list of business types for dropdown. No companyId required."
+              }
+            },
+            {
+              "name": "Get industries",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/industries",
+                "description": "Returns list of industries for dropdown. No companyId required."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Company - Business profile",
+          "description": "All under /api/v1/enterprise/company/:companyId. Set collection variable companyId (e.g. from Create company response).",
+          "item": [
+            {
+              "name": "Get business profile",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile",
+                "description": "Returns company profile, subscription, compliance percent, activities."
+              }
+            },
+            {
+              "name": "Get compliance activities",
+              "request": {
+                "method": "GET",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile/activities",
+                "description": "Returns list of compliance activities."
+              }
+            },
+            {
+              "name": "Update business profile",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"companyName\": \"Bright Time Consulting\",\n  \"businessType\": \"Consulting\",\n  \"industry\": \"IT & Services\",\n  \"registrationDate\": \"2023-01-10\",\n  \"tin\": \"123-456-789\",\n  \"businessAddress\": \"123 Main Street, Anytown, USA\",\n  \"phoneNumber\": \"+1 (555) 123-4567\",\n  \"emailAddress\": \"info@brighttime.com\",\n  \"website\": \"www.brighttime.com\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile",
+                "description": "Updates business profile. All fields required."
+              }
+            },
+            {
+              "name": "Upgrade subscription",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"plan\": \"Enterprise Plan\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile/subscription/upgrade",
+                "description": "Initiates subscription upgrade. Body: plan (optional)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Company - Tax computation",
+          "item": [
+            {
+              "name": "Get VAT status",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/status" }
+            },
+            {
+              "name": "Initiate VAT setup",
+              "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/initiate-setup" }
+            },
+            {
+              "name": "Get VAT types",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/types" }
+            },
+            {
+              "name": "Get VAT periods",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/periods" }
+            },
+            {
+              "name": "Calculate VAT",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"vatType\": \"Standard Rate\",\n  \"vatPeriod\": \"Quarterly\",\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-03-31\",\n  \"salesAmountExclVat\": 100000,\n  \"purchaseAmountExclVat\": 50000,\n  \"vatRate\": 15\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/calculate"
+              }
+            },
+            {
+              "name": "Get VAT results",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/results" }
+            },
+            {
+              "name": "Download VAT report",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/report/download" }
+            },
+            {
+              "name": "Submit VAT return",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"computationId\": \"<computation-uuid>\"\n}" },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/submit-return"
+              }
+            },
+            {
+              "name": "Get monthly VAT payable",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/tax-computation/vat-payable/monthly?year=2024" }
+            },
+            {
+              "name": "Get threshold status",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/tax-computation/threshold-status" }
+            },
+            {
+              "name": "Get threshold info",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/tax-computation/threshold-info" }
+            }
+          ]
+        },
+        {
+          "name": "Company - Financials",
+          "item": [
+            {
+              "name": "Get document types",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/document-types" }
+            },
+            {
+              "name": "Get currencies",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/currencies" }
+            },
+            {
+              "name": "Get recent transactions",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/transactions/recent" }
+            },
+            {
+              "name": "Get all transactions",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/transactions" }
+            },
+            {
+              "name": "Get financial summary",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/summary" }
+            },
+            {
+              "name": "Get monthly cash flow",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/cash-flow/monthly?year=2024" }
+            },
+            {
+              "name": "Add transaction",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"date\": \"2024-03-01\",\n  \"description\": \"Consulting Fee\",\n  \"amount\": 1500,\n  \"status\": \"Received\",\n  \"type\": \"income\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/transactions"
+              }
+            },
+            {
+              "name": "Upload financial document",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"documentType\": \"Invoice\",\n  \"description\": \"Q1 invoice\",\n  \"documentDate\": \"2024-03-01\",\n  \"amount\": 1200,\n  \"currency\": \"USD\",\n  \"fileUrl\": \"https://example.com/doc.pdf\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/documents/upload"
+              }
+            },
+            {
+              "name": "Get document status",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/documents/:documentId/status" }
+            },
+            {
+              "name": "Get processing queue",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/processing-queue" }
+            },
+            {
+              "name": "List invoices",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices" }
+            },
+            {
+              "name": "Create invoice",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invoiceNumber\": \"INV-2024-001\",\n  \"clientName\": \"Acme Corp.\",\n  \"clientAddress\": \"456 Oak Ave\",\n  \"clientEmail\": \"billing@acme.com\",\n  \"dateIssued\": \"2024-03-01\",\n  \"dueDate\": \"2024-03-15\",\n  \"totalAmount\": 1200,\n  \"notes\": \"\",\n  \"lineItems\": [\n    { \"description\": \"Consulting Services\", \"quantity\": 10, \"unitPrice\": 100, \"total\": 1000 },\n    { \"description\": \"Software License\", \"quantity\": 1, \"unitPrice\": 200, \"total\": 200 }\n  ]\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices"
+              }
+            },
+            {
+              "name": "Get invoice",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices/:invoiceId" }
+            },
+            {
+              "name": "Update invoice",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"clientName\": \"Acme Corp.\",\n  \"paymentStatus\": \"Outstanding\",\n  \"lineItems\": []\n}" },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices/:invoiceId"
+              }
+            },
+            {
+              "name": "Mark invoice paid",
+              "request": { "method": "PATCH", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices/:invoiceId/mark-paid" }
+            },
+            {
+              "name": "Get invoice PDF",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices/:invoiceId/pdf" }
+            }
+          ]
+        },
+        {
+          "name": "Company - Evidence vault",
+          "item": [
+            {
+              "name": "Get categories",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/categories" }
+            },
+            {
+              "name": "Get recent documents",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/recent" }
+            },
+            {
+              "name": "Get storage usage",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/storage-usage" }
+            },
+            {
+              "name": "List documents",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents?search=&category=&status=" }
+            },
+            {
+              "name": "Get document categories",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/document-categories" }
+            },
+            {
+              "name": "Get document statuses",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/document-statuses" }
+            },
+            {
+              "name": "Get approvers",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/approvers" }
+            },
+            {
+              "name": "Upload document",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"documentName\": \"Contract_ABC.pdf\",\n  \"category\": \"Contracts\",\n  \"documentDate\": \"2024-03-10\",\n  \"description\": \"Client agreement\",\n  \"fileUrl\": \"https://example.com/contract.pdf\",\n  \"fileSizeKb\": 256\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/upload"
+              }
+            },
+            {
+              "name": "Get document",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId" }
+            },
+            {
+              "name": "Download document",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/download" }
+            },
+            {
+              "name": "Update document details",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"documentName\": \"Contract_ABC.pdf\",\n  \"category\": \"Contracts\",\n  \"description\": \"Updated\"\n}" },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/details"
+              }
+            },
+            {
+              "name": "Approve document",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"approverId\": \"approver-1\",\n  \"notes\": \"Approved\"\n}" },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/approve"
+              }
+            },
+            {
+              "name": "Reject document",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{\n  \"notes\": \"Rejected\"\n}" },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/reject"
+              }
+            },
+            {
+              "name": "Get signature report",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/signature-report" }
+            },
+            {
+              "name": "Get original file",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/original-file" }
+            },
+            {
+              "name": "Get document preview",
+              "request": { "method": "GET", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/preview" }
+            },
+            {
+              "name": "Sign document",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"signedBy\": \"Alice Johnson\",\n  \"signerEmail\": \"alice@example.com\",\n  \"ipAddress\": \"192.168.1.100\",\n  \"signatureMethod\": \"Electronic Signature\",\n  \"documentHash\": \"a1b2c3d4e5f6\",\n  \"signatureData\": \"base64-or-svg\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/sign"
+              }
+            }
+          ]
         },
         {
           "name": "Onboarding",

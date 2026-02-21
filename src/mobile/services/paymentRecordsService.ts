@@ -74,40 +74,55 @@ export const paymentRecordsService = {
 
   async list(
     userId: string,
-    filters?: { taxPayableId?: string; status?: string }
+    filters?: { taxPayableId?: string; status?: string },
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
   ) {
     const where: { userId: string; taxPayableId?: string; status?: string } = { userId };
     if (filters?.taxPayableId) where.taxPayableId = filters.taxPayableId;
     if (filters?.status) where.status = filters.status;
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
 
-    const records = await prisma.paymentRecord.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      include: {
-        taxPayable: {
-          select: {
-            id: true,
-            taxType: true,
-            periodYear: true,
-            periodMonth: true,
+    const [records, total] = await Promise.all([
+      prisma.paymentRecord.findMany({
+        where,
+        orderBy: { createdAt: order },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          taxPayable: {
+            select: {
+              id: true,
+              taxType: true,
+              periodYear: true,
+              periodMonth: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.paymentRecord.count({ where }),
+    ]);
 
-    return records.map((r) => ({
-      id: r.id,
-      taxPayableId: r.taxPayableId,
-      taxType: r.taxPayable.taxType,
-      periodLabel: `${new Date(r.taxPayable.periodYear, r.taxPayable.periodMonth - 1).toLocaleString("default", { month: "long" })} ${r.taxPayable.periodYear}`,
-      amountPaid: decimalToNumber(r.amountPaid),
-      currency: r.currency,
-      method: r.method,
-      status: r.status,
-      externalReference: r.externalReference,
-      paidAt: r.paidAt,
-      createdAt: r.createdAt,
-    }));
+    return {
+      data: records.map((r) => ({
+        id: r.id,
+        taxPayableId: r.taxPayableId,
+        taxType: r.taxPayable.taxType,
+        periodLabel: `${new Date(r.taxPayable.periodYear, r.taxPayable.periodMonth - 1).toLocaleString("default", { month: "long" })} ${r.taxPayable.periodYear}`,
+        amountPaid: decimalToNumber(r.amountPaid),
+        currency: r.currency,
+        method: r.method,
+        status: r.status,
+        externalReference: r.externalReference,
+        paidAt: r.paidAt,
+        createdAt: r.createdAt,
+      })),
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   },
 
   async getById(userId: string, recordId: string) {

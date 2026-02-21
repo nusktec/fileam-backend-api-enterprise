@@ -35,7 +35,6 @@ const getAllowedOriginsSet = (): Set<string> => {
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://172.26.32.1:3000",
-    "https://85b8-102-91-99-118.ngrok-free.app",
   ];
 
   return new Set([...fromEnv, ...devOrigins]);

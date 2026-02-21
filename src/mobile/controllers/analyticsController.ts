@@ -2,15 +2,12 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { analyticsService } from "../services/analyticsService";
 
 export const getDashboard = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const period = (req.query.period as string) || "";
     const range = ((req.query.range as string) || "month") as "month" | "quarter" | "year";
     if (!["month", "quarter", "year"].includes(range)) {

@@ -2,16 +2,18 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { employeesService } from "../services/employeesService";
 
 export const listEmployees = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
-    const data = await employeesService.list(userId);
+    const userId = getAuthUserId(req);
+    const pagination = req.pagination;
+    const data = await employeesService.list(userId, {
+      page: pagination?.page,
+      limit: pagination?.limit,
+      sortOrder: pagination?.sortOrder,
+    });
     res.status(HttpStatusCode.OK).json(outJson(true, "Employees retrieved", data));
   } catch (error) {
     res
@@ -22,11 +24,7 @@ export const listEmployees = async (req: IRequest, res: Response): Promise<void>
 
 export const getEmployeeObligations = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const data = await employeesService.getObligations(userId);
     res.status(HttpStatusCode.OK).json(outJson(true, "Obligations retrieved", data));
   } catch (error) {
@@ -38,17 +36,9 @@ export const getEmployeeObligations = async (req: IRequest, res: Response): Prom
 
 export const getEmployeeById = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    if (!id) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Employee ID required", null));
-      return;
-    }
-    const data = await employeesService.getById(userId, id);
+    const data = await employeesService.getById(userId, id!);
     if (!data) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Employee not found", null));
       return;
@@ -63,11 +53,7 @@ export const getEmployeeById = async (req: IRequest, res: Response): Promise<voi
 
 export const createEmployee = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const {
       fullName,
       jobTitle,

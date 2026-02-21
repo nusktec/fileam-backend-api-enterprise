@@ -2,17 +2,19 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { reportsService } from "../services/reportsService";
 
 export const listReports = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const reportType = req.query.reportType as string | undefined;
-    const data = await reportsService.list(userId, { reportType });
+    const pagination = req.pagination;
+    const data = await reportsService.list(userId, { reportType }, {
+      page: pagination?.page,
+      limit: pagination?.limit,
+      sortOrder: pagination?.sortOrder,
+    });
     res.status(HttpStatusCode.OK).json(outJson(true, "Reports retrieved", data));
   } catch (error) {
     res
@@ -23,17 +25,9 @@ export const listReports = async (req: IRequest, res: Response): Promise<void> =
 
 export const getReportById = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    if (!id) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Report ID required", null));
-      return;
-    }
-    const data = await reportsService.getById(userId, id);
+    const data = await reportsService.getById(userId, id!);
     if (!data) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Report not found", null));
       return;
@@ -59,11 +53,7 @@ export const getReportTypes = async (req: IRequest, res: Response): Promise<void
 
 export const getReportPeriods = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const reportType = req.query.reportType as string | undefined;
     const data = await reportsService.getPeriods(userId, reportType);
     res.status(HttpStatusCode.OK).json(outJson(true, "Periods retrieved", data));
@@ -76,11 +66,7 @@ export const getReportPeriods = async (req: IRequest, res: Response): Promise<vo
 
 export const generateReport = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const { reportType, periodYear, periodMonth, format } = req.body ?? {};
     if (!reportType || periodYear == null || periodMonth == null) {
       res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "reportType, periodYear and periodMonth required", null));
@@ -102,17 +88,9 @@ export const generateReport = async (req: IRequest, res: Response): Promise<void
 
 export const getReportDownload = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    if (!id) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Report ID required", null));
-      return;
-    }
-    const url = await reportsService.getDownloadUrl(userId, id);
+    const url = await reportsService.getDownloadUrl(userId, id!);
     if (!url) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Download not available for this report", null));
       return;
@@ -127,17 +105,9 @@ export const getReportDownload = async (req: IRequest, res: Response): Promise<v
 
 export const getReportVaultLink = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    if (!id) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Report ID required", null));
-      return;
-    }
-    const evidenceVaultId = await reportsService.getVaultLink(userId, id);
+    const evidenceVaultId = await reportsService.getVaultLink(userId, id!);
     if (!evidenceVaultId) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Vault link not found for this report", null));
       return;

@@ -31,21 +31,37 @@ export const enterpriseFinancialsService = {
     }));
   },
 
-  async getAllTransactions(companyId: string) {
+  async getAllTransactions(
+    companyId: string,
+    opts?: { page?: number; limit?: number; sortBy?: string; sortOrder?: "ASC" | "DESC" }
+  ) {
     const company = await prisma.company.findUnique({ where: { id: companyId } });
     if (!company) return null;
-    const list = await prisma.enterpriseTransaction.findMany({
-      where: { companyId },
-      orderBy: { date: "desc" },
-    });
-    return list.map((t) => ({
-      id: t.id,
-      date: t.date,
-      description: t.description,
-      amount: decimalToNumber(t.amount),
-      status: t.status,
-      type: t.type,
-    }));
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
+    const [list, total] = await Promise.all([
+      prisma.enterpriseTransaction.findMany({
+        where: { companyId },
+        orderBy: { date: order },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.enterpriseTransaction.count({ where: { companyId } }),
+    ]);
+    return {
+      data: list.map((t) => ({
+        id: t.id,
+        date: t.date,
+        description: t.description,
+        amount: decimalToNumber(t.amount),
+        status: t.status,
+        type: t.type,
+      })),
+      total,
+      page,
+      limit,
+    };
   },
 
   async getSummary(companyId: string) {
@@ -283,13 +299,25 @@ export const enterpriseFinancialsService = {
     });
   },
 
-  async listInvoices(companyId: string) {
+  async listInvoices(
+    companyId: string,
+    opts?: { page?: number; limit?: number; sortBy?: string; sortOrder?: "ASC" | "DESC" }
+  ) {
     const company = await prisma.company.findUnique({ where: { id: companyId } });
     if (!company) return null;
-    return prisma.enterpriseInvoice.findMany({
-      where: { companyId },
-      orderBy: { dateIssued: "desc" },
-      include: { lineItems: true },
-    });
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
+    const [list, total] = await Promise.all([
+      prisma.enterpriseInvoice.findMany({
+        where: { companyId },
+        orderBy: { dateIssued: order },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { lineItems: true },
+      }),
+      prisma.enterpriseInvoice.count({ where: { companyId } }),
+    ]);
+    return { data: list, total, page, limit };
   },
 };

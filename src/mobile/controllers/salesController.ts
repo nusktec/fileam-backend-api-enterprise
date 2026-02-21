@@ -2,17 +2,19 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { salesService } from "../services/salesService";
 
 export const listSales = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const status = (req.query.status as string) || "all";
-    const data = await salesService.list(userId, status);
+    const pagination = req.pagination;
+    const data = await salesService.list(userId, status, {
+      page: pagination?.page,
+      limit: pagination?.limit,
+      sortOrder: pagination?.sortOrder,
+    });
     res.status(HttpStatusCode.OK).json(outJson(true, "Sales retrieved", data));
   } catch (error) {
     res
@@ -23,17 +25,9 @@ export const listSales = async (req: IRequest, res: Response): Promise<void> => 
 
 export const getSaleById = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const saleId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    if (!saleId) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Sale ID required", null));
-      return;
-    }
-    const sale = await salesService.getById(userId, saleId);
+    const sale = await salesService.getById(userId, saleId!);
     if (!sale) {
       res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Sale not found", null));
       return;
@@ -48,11 +42,7 @@ export const getSaleById = async (req: IRequest, res: Response): Promise<void> =
 
 export const createSale = async (req: IRequest, res: Response): Promise<void> => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Unauthorized", null));
-      return;
-    }
+    const userId = getAuthUserId(req);
     const { amount, description, customerName, paymentType, date, vatableIncome, serviceIncome } =
       req.body;
     const sale = await salesService.create(userId, {

@@ -17,6 +17,8 @@ import {
 } from "../controllers/whtFilingController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
+import { validateIdParam } from "../../middlewares/validations/mobileValidation";
+import { withPagination } from "../../middlewares/paginationMiddleware";
 
 const router = express.Router();
 
@@ -33,9 +35,9 @@ router.post("/wht/draft", express.json(), createOrUpdateWhtDraft);
 router.post("/wht/submit", express.json(), submitWhtFiling);
 
 // Filings list and detail
-router.get("/", listFilings);
-router.get("/:id", getFilingById);
-router.get("/:id/document", getFilingDocument);
-router.get("/:id/vault-link", getFilingVaultLink);
+router.get("/", withPagination(), listFilings);
+router.get("/:id", validateIdParam, getFilingById);
+router.get("/:id/document", validateIdParam, getFilingDocument);
+router.get("/:id/vault-link", validateIdParam, getFilingVaultLink);
 
 export default router;

@@ -14,8 +14,17 @@ export type RequestUser = User & {
   currentOnboardingStep?: string | null;
 };
 
+export interface PaginationInfo {
+  page: number;
+  limit: number;
+  search?: string;
+  sortBy?: string;
+  sortOrder: "ASC" | "DESC";
+}
+
 export interface IRequest extends Request {
   user?: RequestUser;
   onboardingPayload?: OnboardingTokenPayload;
   consultantOnboardingSession?: ConsultantOnboardingSession;
+  pagination?: PaginationInfo;
 }

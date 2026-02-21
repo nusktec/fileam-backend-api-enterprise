@@ -35,24 +35,32 @@ function deriveDisplayStatus(
 export const filingsService = {
   async list(
     userId: string,
-    filters?: { status?: string; taxType?: string }
+    filters?: { status?: string; taxType?: string },
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
   ) {
-    await prisma.taxPayable.findFirst({ where: { userId } });
     const where: { userId: string; taxType?: string } = { userId };
     if (filters?.taxType) where.taxType = filters.taxType;
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
 
-    const payables = await prisma.taxPayable.findMany({
-      where,
-      orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
-      include: {
-        payments: { where: { status: "completed" }, orderBy: { paidAt: "desc" } },
-      },
-    });
+    const [payables, total] = await Promise.all([
+      prisma.taxPayable.findMany({
+        where,
+        orderBy: [{ periodYear: order }, { periodMonth: order }],
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          payments: { where: { status: "completed" }, orderBy: { paidAt: "desc" } },
+        },
+      }),
+      prisma.taxPayable.count({ where }),
+    ]);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const items = payables.map((p) => {
+    let items = payables.map((p) => {
       const totalPayable = decimalToNumber(p.totalPayable);
       const totalPaid = p.payments.reduce((s, r) => s + decimalToNumber(r.amountPaid), 0);
       const displayStatus = deriveDisplayStatus({
@@ -77,10 +85,9 @@ export const filingsService = {
 
     const statusFilter = (filters?.status || "").toLowerCase();
     if (statusFilter && statusFilter !== "all") {
-      const filtered = items.filter((i) => i.status === statusFilter);
-      return filtered;
+      items = items.filter((i) => i.status === statusFilter);
     }
-    return items;
+    return { data: items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
   },
 
   async getById(userId: string, filingId: string) {

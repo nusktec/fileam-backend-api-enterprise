@@ -4,15 +4,22 @@ import {
   getBusinessProfileActivities,
   updateBusinessProfile,
   upgradeSubscription,
-  getBusinessTypes,
-  getIndustries,
 } from "../controllers/enterpriseBusinessProfileController";
+import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 
 const router = express.Router({ mergeParams: true });
 
 router.get("/", getBusinessProfile);
 router.get("/activities", getBusinessProfileActivities);
-router.put("/", updateBusinessProfile);
-router.post("/subscription/upgrade", upgradeSubscription);
+router.put(
+  "/",
+  enterpriseValidations.validateUpdateBusinessProfile,
+  updateBusinessProfile,
+);
+router.post(
+  "/subscription/upgrade",
+  enterpriseValidations.validateUpgradeSubscription,
+  upgradeSubscription,
+);
 
 export default router;
