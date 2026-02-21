@@ -1,6 +1,15 @@
 import { prisma } from "../../config/database";
+import type { EvidenceVaultUploadInput, EvidenceVaultSignInput } from "../../interfaces/enterprise/evidenceVault";
 
-const EVIDENCE_CATEGORIES = ["Contracts", "Receipts", "Legal Documents", "Reports", "Invoices", "Tax Documents", "Other"];
+const EVIDENCE_CATEGORIES = [
+  "Contracts",
+  "Receipts",
+  "Legal Documents",
+  "Reports",
+  "Invoices",
+  "Tax Documents",
+  "Other",
+];
 const DOCUMENT_STATUSES = ["Pending", "Approved", "Rejected"];
 const STORAGE_LIMIT_GB = 5;
 
@@ -9,7 +18,9 @@ export const enterpriseEvidenceVaultService = {
   getStatuses: () => DOCUMENT_STATUSES,
 
   async getCategoriesWithCounts(companyId: string) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const docs = await prisma.enterpriseEvidenceDocument.findMany({
       where: { companyId },
@@ -19,11 +30,17 @@ export const enterpriseEvidenceVaultService = {
     for (const d of docs) {
       counts[d.category] = (counts[d.category] ?? 0) + 1;
     }
-    return Object.entries(counts).map(([name, count]) => ({ name, count, label: `${name}: ${count} Documents` }));
+    return Object.entries(counts).map(([name, count]) => ({
+      name,
+      count,
+      label: `${name}: ${count} Documents`,
+    }));
   },
 
   async getRecentDocuments(companyId: string, limit = 10) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const list = await prisma.enterpriseEvidenceDocument.findMany({
       where: { companyId },
@@ -40,7 +57,9 @@ export const enterpriseEvidenceVaultService = {
   },
 
   async getStorageUsage(companyId: string) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const docs = await prisma.enterpriseEvidenceDocument.findMany({
       where: { companyId },
@@ -65,22 +84,29 @@ export const enterpriseEvidenceVaultService = {
       endDate?: string;
       status?: string;
     },
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
   ) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const where: {
       companyId: string;
       category?: string;
       status?: string;
       documentDate?: { gte?: Date; lte?: Date };
-      OR?: Array<{ documentName?: { contains: string; mode: "insensitive" }; description?: { contains: string; mode: "insensitive" } }>;
+      OR?: Array<{
+        documentName?: { contains: string; mode: "insensitive" };
+        description?: { contains: string; mode: "insensitive" };
+      }>;
     } = { companyId };
-    if (filters?.category && filters.category !== "all") where.category = filters.category;
+    if (filters?.category && filters.category !== "all")
+      where.category = filters.category;
     if (filters?.status) where.status = filters.status;
     if (filters?.startDate || filters?.endDate) {
       where.documentDate = {};
-      if (filters.startDate) where.documentDate.gte = new Date(filters.startDate);
+      if (filters.startDate)
+        where.documentDate.gte = new Date(filters.startDate);
       if (filters.endDate) where.documentDate.lte = new Date(filters.endDate);
     }
     if (filters?.search && filters.search.trim()) {
@@ -128,7 +154,12 @@ export const enterpriseEvidenceVaultService = {
     ];
   },
 
-  async approveDocument(companyId: string, documentId: string, approverId: string, notes?: string) {
+  async approveDocument(
+    companyId: string,
+    documentId: string,
+    approverId: string,
+    notes?: string,
+  ) {
     const doc = await prisma.enterpriseEvidenceDocument.findFirst({
       where: { id: documentId, companyId },
     });
@@ -151,7 +182,9 @@ export const enterpriseEvidenceVaultService = {
         ipAddress: null,
       },
     });
-    return prisma.enterpriseEvidenceDocument.findUnique({ where: { id: documentId } });
+    return prisma.enterpriseEvidenceDocument.findUnique({
+      where: { id: documentId },
+    });
   },
 
   async rejectDocument(companyId: string, documentId: string, notes?: string) {
@@ -167,15 +200,21 @@ export const enterpriseEvidenceVaultService = {
         notes: notes ?? null,
       },
     });
-    return prisma.enterpriseEvidenceDocument.findUnique({ where: { id: documentId } });
+    return prisma.enterpriseEvidenceDocument.findUnique({
+      where: { id: documentId },
+    });
   },
 
-  async updateDocumentDetails(companyId: string, documentId: string, data: {
-    documentName?: string;
-    category?: string;
-    documentDate?: Date;
-    description?: string;
-  }) {
+  async updateDocumentDetails(
+    companyId: string,
+    documentId: string,
+    data: {
+      documentName?: string;
+      category?: string;
+      documentDate?: Date;
+      description?: string;
+    },
+  ) {
     const doc = await prisma.enterpriseEvidenceDocument.findFirst({
       where: { id: documentId, companyId },
     });
@@ -190,13 +229,18 @@ export const enterpriseEvidenceVaultService = {
       where: { id: documentId },
       data: update as never,
     });
-    return prisma.enterpriseEvidenceDocument.findUnique({ where: { id: documentId } });
+    return prisma.enterpriseEvidenceDocument.findUnique({
+      where: { id: documentId },
+    });
   },
 
   async getSignatureReport(companyId: string, documentId: string) {
     const doc = await prisma.enterpriseEvidenceDocument.findFirst({
       where: { id: documentId, companyId },
-      include: { signature: true, auditTrail: { orderBy: { timestamp: "asc" } } },
+      include: {
+        signature: true,
+        auditTrail: { orderBy: { timestamp: "asc" } },
+      },
     });
     if (!doc) return null;
     if (!doc.signature) {
@@ -230,16 +274,10 @@ export const enterpriseEvidenceVaultService = {
     };
   },
 
-  async uploadDocument(companyId: string, data: {
-    documentName: string;
-    category: string;
-    documentDate: Date;
-    description?: string;
-    fileUrl?: string;
-    fileSizeKb?: number;
-    uploaderId?: string;
-  }) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+  async uploadDocument(companyId: string, data: EvidenceVaultUploadInput) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     return prisma.enterpriseEvidenceDocument.create({
       data: {
@@ -264,14 +302,11 @@ export const enterpriseEvidenceVaultService = {
     return { previewUrl: doc.fileUrl ?? null, documentName: doc.documentName };
   },
 
-  async signDocument(companyId: string, documentId: string, data: {
-    signedBy: string;
-    signerEmail: string;
-    ipAddress: string;
-    signatureMethod: string;
-    documentHash: string;
-    signatureData?: string;
-  }) {
+  async signDocument(
+    companyId: string,
+    documentId: string,
+    data: EvidenceVaultSignInput,
+  ) {
     const doc = await prisma.enterpriseEvidenceDocument.findFirst({
       where: { id: documentId, companyId },
     });

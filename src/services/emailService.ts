@@ -7,13 +7,15 @@ import {
   EMAIL_TEMPLATE_TYPES,
   validateEmailConfig,
 } from "../config/smtp";
-import {
-  EmailCategoryInterface,
-} from "../interfaces/system";
+import { EmailCategoryInterface } from "../interfaces/system";
 
 const getEmailTemplate = (templateName: string): string => {
   try {
-    const templatePath = path.join(__dirname, "template", `${templateName}.mail`);
+    const templatePath = path.join(
+      __dirname,
+      "template",
+      `${templateName}.mail`,
+    );
     return fs.readFileSync(templatePath, "utf-8");
   } catch (error) {
     console.error(`Error reading template ${templateName}:`, error);
@@ -21,7 +23,10 @@ const getEmailTemplate = (templateName: string): string => {
   }
 };
 
-const renderTemplate = (template: string, data: Record<string, any>): string => {
+const renderTemplate = (
+  template: string,
+  data: Record<string, any>,
+): string => {
   return template.replace(/{{(.*?)}}/g, (match: string) => {
     const key = match.split(/{{|}}/).filter(Boolean)[0];
     const value = data[key];
@@ -35,7 +40,7 @@ const sendEmail = async (
   subject: string,
   htmlContent: string,
   _category: string = EMAIL_CATEGORIES.GENERAL,
-  _tags: Array<{ name: string; value: string }> = []
+  _tags: Array<{ name: string; value: string }> = [],
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
   try {
     if (!validateEmailConfig()) {
@@ -61,7 +66,7 @@ const sendVerificationEmail = async (
   to: string,
   name: string,
   verificationCode: string,
-  templateType: string = EMAIL_TEMPLATE_TYPES.ACCOUNT_VERIFICATION
+  templateType: string = EMAIL_TEMPLATE_TYPES.ACCOUNT_VERIFICATION,
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
   try {
     const template = getEmailTemplate(templateType);
@@ -79,7 +84,7 @@ const sendVerificationEmail = async (
       to,
       "Verify Your Email - file-am",
       htmlContent,
-      EMAIL_CATEGORIES.ACCOUNT_VERIFICATION
+      EMAIL_CATEGORIES.ACCOUNT_VERIFICATION,
     );
   } catch (error) {
     console.error("Failed to send verification email:", error);
@@ -90,7 +95,7 @@ const sendVerificationEmail = async (
 const sendOtpEmail = async (
   to: string,
   name: string,
-  otpCode: string
+  otpCode: string,
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
   try {
     const template = getEmailTemplate(EMAIL_TEMPLATE_TYPES.OTP);
@@ -108,7 +113,7 @@ const sendOtpEmail = async (
       to,
       "Your Secure Access Code - file-am",
       htmlContent,
-      EMAIL_CATEGORIES.ACCOUNT_VERIFICATION
+      EMAIL_CATEGORIES.ACCOUNT_VERIFICATION,
     );
   } catch (error) {
     console.error("Failed to send OTP email:", error);
@@ -118,7 +123,7 @@ const sendOtpEmail = async (
 
 const sendWelcomeEmail = async (
   to: string,
-  name: string
+  name: string,
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
   try {
     const template = getEmailTemplate(EMAIL_TEMPLATE_TYPES.WELCOME);
@@ -135,7 +140,7 @@ const sendWelcomeEmail = async (
       to,
       "Welcome to file-am!",
       htmlContent,
-      EMAIL_CATEGORIES.WELCOME
+      EMAIL_CATEGORIES.WELCOME,
     );
   } catch (error) {
     console.error("Failed to send welcome email:", error);
@@ -148,7 +153,7 @@ const SendMail = async (
   subject: string,
   name: string,
   body: string,
-  to: string
+  to: string,
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
   try {
     const template = getEmailTemplate("verification");
@@ -170,7 +175,7 @@ const SendInviteMail = async (
   subject: string,
   name: string,
   body: string,
-  to: string
+  to: string,
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
   try {
     const template = getEmailTemplate("verification");
@@ -223,5 +228,5 @@ export {
   sendVerificationEmail,
   sendOtpEmail,
   sendWelcomeEmail,
-  validateEmailConfig as validateResendConfig,
+  validateEmailConfig,
 };

@@ -40,7 +40,7 @@ export const vatFilingService = {
       periodMonth: number;
       stateOfOperation?: string;
       vatRegistrationNumber?: string;
-    }
+    },
   ) {
     const draft = await prisma.filingDraft.upsert({
       where: {
@@ -81,9 +81,12 @@ export const vatFilingService = {
       evidenceVaultId?: string;
       stateOfOperation?: string;
       vatRegistrationNumber?: string;
-    }
+    },
   ) {
-    const filingDueDate = params.dueDate instanceof Date ? params.dueDate : new Date(params.dueDate);
+    const filingDueDate =
+      params.dueDate instanceof Date
+        ? params.dueDate
+        : new Date(params.dueDate);
     const submittedAt = new Date();
     const status = params.paymentStatus === "paid" ? "paid" : "pending";
 
@@ -126,13 +129,38 @@ export const vatFilingService = {
       },
     });
 
-    const timelineData: Array<{ taxPayableId: string; event: string; description: string; eventDate: Date }> = [
-      { taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.DRAFT_CREATED, description: "Draft created", eventDate: submittedAt },
-      { taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.REVIEWED_VALIDATED, description: "Reviewed & validated", eventDate: submittedAt },
-      { taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.SUBMITTED_TO_FIRS, description: "Submitted to FIRS", eventDate: submittedAt },
+    const timelineData: Array<{
+      taxPayableId: string;
+      event: string;
+      description: string;
+      eventDate: Date;
+    }> = [
+      {
+        taxPayableId: taxPayable.id,
+        event: FILING_TIMELINE_EVENTS.DRAFT_CREATED,
+        description: "Draft created",
+        eventDate: submittedAt,
+      },
+      {
+        taxPayableId: taxPayable.id,
+        event: FILING_TIMELINE_EVENTS.REVIEWED_VALIDATED,
+        description: "Reviewed & validated",
+        eventDate: submittedAt,
+      },
+      {
+        taxPayableId: taxPayable.id,
+        event: FILING_TIMELINE_EVENTS.SUBMITTED_TO_FIRS,
+        description: "Submitted to FIRS",
+        eventDate: submittedAt,
+      },
     ];
     if (params.paymentStatus === "paid") {
-      timelineData.push({ taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.PAYMENT_CONFIRMED, description: "Payment confirmed", eventDate: submittedAt });
+      timelineData.push({
+        taxPayableId: taxPayable.id,
+        event: FILING_TIMELINE_EVENTS.PAYMENT_CONFIRMED,
+        description: "Payment confirmed",
+        eventDate: submittedAt,
+      });
     }
     await prisma.filingTimelineEvent.createMany({ data: timelineData });
 

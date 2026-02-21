@@ -22,7 +22,7 @@ export { EXPENSE_CATEGORIES };
 export const expensesService = {
   async list(
     userId: string,
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
   ) {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
@@ -47,11 +47,16 @@ export const expensesService = {
       }),
     ]);
     const totalAmount = decimalToNumber(summary._sum.totalAmount);
-    const topCategories = byCategory.map((c) => ({
-      category: c.category,
-      amount: decimalToNumber(c._sum.totalAmount),
-      percentageOfTotal: totalAmount > 0 ? (decimalToNumber(c._sum.totalAmount) / totalAmount) * 100 : 0,
-    })).sort((a, b) => b.amount - a.amount);
+    const topCategories = byCategory
+      .map((c) => ({
+        category: c.category,
+        amount: decimalToNumber(c._sum.totalAmount),
+        percentageOfTotal:
+          totalAmount > 0
+            ? (decimalToNumber(c._sum.totalAmount) / totalAmount) * 100
+            : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
 
     return {
       summary: {
@@ -90,7 +95,8 @@ export const expensesService = {
       receipt: expense.receiptUrl ? "Receipt uploaded" : "No receipt uploaded",
       receiptUrl: expense.receiptUrl,
       baseAmount: decimalToNumber(expense.amount),
-      vatAmount: expense.vatAmount != null ? decimalToNumber(expense.vatAmount) : null,
+      vatAmount:
+        expense.vatAmount != null ? decimalToNumber(expense.vatAmount) : null,
       total: decimalToNumber(expense.totalAmount),
       vatInclusive: expense.vatInclusive,
     };
@@ -106,10 +112,11 @@ export const expensesService = {
       vatInclusive: boolean;
       vatAmount?: number;
       receiptUrl?: string;
-    }
+    },
   ) {
     const amount = new Decimal(data.amount);
-    const vatAmount = data.vatAmount != null ? new Decimal(data.vatAmount) : null;
+    const vatAmount =
+      data.vatAmount != null ? new Decimal(data.vatAmount) : null;
     const totalAmount = vatAmount ? amount.add(vatAmount) : amount;
 
     const expenseNumber = await nextExpenseNumber();

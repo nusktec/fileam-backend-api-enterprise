@@ -26,15 +26,24 @@ export const taxComputationService = {
       }),
     ]);
 
-    const totalIncome = sales.reduce((s, x) => s + decimalToNumber(x.totalAmount), 0);
-    const outputVat = sales.reduce((s, x) => s + decimalToNumber(x.vatAmount), 0);
+    const totalIncome = sales.reduce(
+      (s, x) => s + decimalToNumber(x.totalAmount),
+      0,
+    );
+    const outputVat = sales.reduce(
+      (s, x) => s + decimalToNumber(x.vatAmount),
+      0,
+    );
     const serviceIncome = sales
       .filter((x) => x.serviceIncome)
       .reduce((s, x) => s + decimalToNumber(x.amount), 0);
-    const totalExpenses = expenses.reduce((s, x) => s + decimalToNumber(x.totalAmount), 0);
+    const totalExpenses = expenses.reduce(
+      (s, x) => s + decimalToNumber(x.totalAmount),
+      0,
+    );
     const inputVatClaimable = expenses.reduce(
       (s, x) => s + decimalToNumber(x.vatAmount),
-      0
+      0,
     );
     const netProfit = totalIncome - totalExpenses;
 
@@ -49,7 +58,11 @@ export const taxComputationService = {
     const percentOfCitThreshold = (annualizedProfit / CIT_THRESHOLD) * 100;
 
     return {
-      period: { year, month, label: `${new Date(year, month - 1).toLocaleString("default", { month: "long" })} ${year}` },
+      period: {
+        year,
+        month,
+        label: `${new Date(year, month - 1).toLocaleString("default", { month: "long" })} ${year}`,
+      },
       overview: {
         totalIncome,
         totalExpenses,

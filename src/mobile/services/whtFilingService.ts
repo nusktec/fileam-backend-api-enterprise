@@ -19,7 +19,7 @@ export const whtFilingService = {
     userId: string,
     periodYear: number,
     periodMonth: number,
-    _whtType?: string
+    _whtType?: string,
   ) {
     const vendors = await prisma.vendorPayment.findMany({
       where: { userId, periodYear, periodMonth },
@@ -60,7 +60,7 @@ export const whtFilingService = {
         whtRate: number;
         whtDeducted: number;
       }>;
-    }
+    },
   ) {
     const draft = await prisma.filingDraft.upsert({
       where: {
@@ -84,7 +84,9 @@ export const whtFilingService = {
       },
     });
 
-    await prisma.whtScheduleLine.deleteMany({ where: { filingDraftId: draft.id } });
+    await prisma.whtScheduleLine.deleteMany({
+      where: { filingDraftId: draft.id },
+    });
     if (params.lines?.length) {
       await prisma.whtScheduleLine.createMany({
         data: params.lines.map((l) => ({
@@ -116,7 +118,10 @@ export const whtFilingService = {
         whtRate: decimalToNumber(l.whtRate),
         whtDeducted: decimalToNumber(l.whtDeducted),
       })),
-      totalWht: linesOut.reduce((s, l) => s + decimalToNumber(l.whtDeducted), 0),
+      totalWht: linesOut.reduce(
+        (s, l) => s + decimalToNumber(l.whtDeducted),
+        0,
+      ),
     };
   },
 
@@ -131,9 +136,12 @@ export const whtFilingService = {
       receiptUrl?: string;
       documentUrl?: string;
       evidenceVaultId?: string;
-    }
+    },
   ) {
-    const filingDueDate = params.dueDate instanceof Date ? params.dueDate : new Date(params.dueDate);
+    const filingDueDate =
+      params.dueDate instanceof Date
+        ? params.dueDate
+        : new Date(params.dueDate);
     const submittedAt = new Date();
     const status = params.paymentStatus === "paid" ? "paid" : "pending";
 
@@ -185,13 +193,38 @@ export const whtFilingService = {
     });
     const vendorsCount = draft?.whtScheduleLines?.length ?? 0;
 
-    const timelineData: Array<{ taxPayableId: string; event: string; description: string; eventDate: Date }> = [
-      { taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.DRAFT_CREATED, description: "Draft created", eventDate: submittedAt },
-      { taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.REVIEWED_VALIDATED, description: "Reviewed & validated", eventDate: submittedAt },
-      { taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.SUBMITTED_TO_FIRS, description: "Submitted to FIRS", eventDate: submittedAt },
+    const timelineData: Array<{
+      taxPayableId: string;
+      event: string;
+      description: string;
+      eventDate: Date;
+    }> = [
+      {
+        taxPayableId: taxPayable.id,
+        event: FILING_TIMELINE_EVENTS.DRAFT_CREATED,
+        description: "Draft created",
+        eventDate: submittedAt,
+      },
+      {
+        taxPayableId: taxPayable.id,
+        event: FILING_TIMELINE_EVENTS.REVIEWED_VALIDATED,
+        description: "Reviewed & validated",
+        eventDate: submittedAt,
+      },
+      {
+        taxPayableId: taxPayable.id,
+        event: FILING_TIMELINE_EVENTS.SUBMITTED_TO_FIRS,
+        description: "Submitted to FIRS",
+        eventDate: submittedAt,
+      },
     ];
     if (params.paymentStatus === "paid") {
-      timelineData.push({ taxPayableId: taxPayable.id, event: FILING_TIMELINE_EVENTS.PAYMENT_CONFIRMED, description: "Payment confirmed", eventDate: submittedAt });
+      timelineData.push({
+        taxPayableId: taxPayable.id,
+        event: FILING_TIMELINE_EVENTS.PAYMENT_CONFIRMED,
+        description: "Payment confirmed",
+        eventDate: submittedAt,
+      });
     }
     await prisma.filingTimelineEvent.createMany({ data: timelineData });
 

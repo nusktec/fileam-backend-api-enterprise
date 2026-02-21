@@ -1,4 +1,10 @@
-export const FILING_STATUS = ["overdue", "submitted", "paid", "pending", "draft"] as const;
+export const FILING_STATUS = [
+  "overdue",
+  "submitted",
+  "paid",
+  "pending",
+  "draft",
+] as const;
 
 export const FILING_TIMELINE_EVENTS = {
   DRAFT_CREATED: "draft_created",

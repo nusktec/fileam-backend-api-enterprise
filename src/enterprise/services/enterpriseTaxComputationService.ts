@@ -15,33 +15,48 @@ export const enterpriseTaxComputationService = {
   getVatPeriods: () => VAT_PERIODS,
 
   async getVatStatus(companyId: string) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
-    const count = await prisma.enterpriseVatComputation.count({ where: { companyId } });
+    const count = await prisma.enterpriseVatComputation.count({
+      where: { companyId },
+    });
     return { hasVatData: count > 0 };
   },
 
   async initiateVatSetup(companyId: string) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     await prisma.enterpriseThresholdStatus.upsert({
       where: { companyId },
-      create: { companyId, status: "below", message: "Your monthly VAT liability is currently below the threshold." },
+      create: {
+        companyId,
+        status: "below",
+        message: "Your monthly VAT liability is currently below the threshold.",
+      },
       update: {},
     });
     return { initiated: true };
   },
 
-  async calculateVat(companyId: string, data: {
-    vatType: string;
-    vatPeriod: string;
-    startDate: Date;
-    endDate: Date;
-    salesAmountExclVat: number;
-    purchaseAmountExclVat: number;
-    vatRate: number;
-  }) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+  async calculateVat(
+    companyId: string,
+    data: {
+      vatType: string;
+      vatPeriod: string;
+      startDate: Date;
+      endDate: Date;
+      salesAmountExclVat: number;
+      purchaseAmountExclVat: number;
+      vatRate: number;
+    },
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const rate = data.vatRate / 100;
     const salesVat = data.salesAmountExclVat * rate;
@@ -93,7 +108,9 @@ export const enterpriseTaxComputationService = {
   },
 
   async getVatResults(companyId: string, computationId?: string) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     if (computationId) {
       const c = await prisma.enterpriseVatComputation.findFirst({
@@ -133,18 +150,26 @@ export const enterpriseTaxComputationService = {
   },
 
   async getMonthlyVatPayable(companyId: string, year?: number) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const y = year ?? new Date().getFullYear();
     const rows = await prisma.enterpriseVatMonthly.findMany({
       where: { companyId, year: y },
       orderBy: [{ year: "asc" }, { month: "asc" }],
     });
-    return rows.map((r) => ({ month: r.month, year: r.year, vatPayable: decimalToNumber(r.vatPayable) }));
+    return rows.map((r) => ({
+      month: r.month,
+      year: r.year,
+      vatPayable: decimalToNumber(r.vatPayable),
+    }));
   },
 
   async getThresholdStatus(companyId: string) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     let status = await prisma.enterpriseThresholdStatus.findUnique({
       where: { companyId },
@@ -154,7 +179,8 @@ export const enterpriseTaxComputationService = {
         data: {
           companyId,
           status: "below",
-          message: "Your monthly VAT liability is currently below the threshold.",
+          message:
+            "Your monthly VAT liability is currently below the threshold.",
         },
       });
     }

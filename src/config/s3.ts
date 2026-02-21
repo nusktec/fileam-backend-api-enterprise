@@ -52,9 +52,13 @@ export const MEDIA_CONFIG = {
     "video/mp4",
     "video/avi",
     "video/mov",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ],
-  MAX_FILE_SIZE: 10 * 1024 * 1024,
+  MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
   UPLOAD_FOLDERS: {
+    MEDIA: "media",
     IMAGES: "images",
     VIDEOS: "videos",
     DOCUMENTS: "documents",

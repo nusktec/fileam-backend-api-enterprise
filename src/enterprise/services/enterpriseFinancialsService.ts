@@ -1,7 +1,15 @@
 import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
+import type { FinancialDocumentUploadInput } from "../../interfaces/enterprise/financials";
 
-const DOCUMENT_TYPES = ["Invoice", "Receipt", "Bank Statement", "Tax Document", "Contract", "Other"];
+const DOCUMENT_TYPES = [
+  "Invoice",
+  "Receipt",
+  "Bank Statement",
+  "Tax Document",
+  "Contract",
+  "Other",
+];
 const CURRENCIES = ["USD", "NGN", "GBP", "EUR"];
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -14,7 +22,9 @@ export const enterpriseFinancialsService = {
   getCurrencies: () => CURRENCIES,
 
   async getRecentTransactions(companyId: string, limit = 10) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const list = await prisma.enterpriseTransaction.findMany({
       where: { companyId },
@@ -33,9 +43,16 @@ export const enterpriseFinancialsService = {
 
   async getAllTransactions(
     companyId: string,
-    opts?: { page?: number; limit?: number; sortBy?: string; sortOrder?: "ASC" | "DESC" }
+    opts?: {
+      page?: number;
+      limit?: number;
+      sortBy?: string;
+      sortOrder?: "ASC" | "DESC";
+    },
   ) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
@@ -65,7 +82,9 @@ export const enterpriseFinancialsService = {
   },
 
   async getSummary(companyId: string) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const transactions = await prisma.enterpriseTransaction.findMany({
       where: { companyId },
@@ -85,7 +104,9 @@ export const enterpriseFinancialsService = {
   },
 
   async getMonthlyCashFlow(companyId: string, year?: number) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const y = year ?? new Date().getFullYear();
     const transactions = await prisma.enterpriseTransaction.findMany({
@@ -97,20 +118,30 @@ export const enterpriseFinancialsService = {
       const d = new Date(t.date);
       if (d.getFullYear() !== y) continue;
       const amt = decimalToNumber(t.amount);
-      if (t.type === "income" || t.status === "Received") byMonth[d.getMonth() + 1] += amt;
+      if (t.type === "income" || t.status === "Received")
+        byMonth[d.getMonth() + 1] += amt;
       else byMonth[d.getMonth() + 1] -= Math.abs(amt);
     }
-    return Object.entries(byMonth).map(([month, value]) => ({ month: Number(month), year: y, value }));
+    return Object.entries(byMonth).map(([month, value]) => ({
+      month: Number(month),
+      year: y,
+      value,
+    }));
   },
 
-  async addTransaction(companyId: string, data: {
-    date: Date;
-    description: string;
-    amount: number;
-    status: string;
-    type: string;
-  }) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+  async addTransaction(
+    companyId: string,
+    data: {
+      date: Date;
+      description: string;
+      amount: number;
+      status: string;
+      type: string;
+    },
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     return prisma.enterpriseTransaction.create({
       data: {
@@ -124,15 +155,10 @@ export const enterpriseFinancialsService = {
     });
   },
 
-  async uploadDocument(companyId: string, data: {
-    documentType: string;
-    description?: string;
-    documentDate: Date;
-    amount: number;
-    currency: string;
-    fileUrl?: string;
-  }) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+  async uploadDocument(companyId: string, data: FinancialDocumentUploadInput) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     return prisma.enterpriseFinancialDocument.create({
       data: {
@@ -152,11 +178,18 @@ export const enterpriseFinancialsService = {
     const doc = await prisma.enterpriseFinancialDocument.findFirst({
       where: { id: documentId, companyId },
     });
-    return doc ? { documentName: doc.description || doc.documentType, status: doc.processingStatus } : null;
+    return doc
+      ? {
+          documentName: doc.description || doc.documentType,
+          status: doc.processingStatus,
+        }
+      : null;
   },
 
   async getProcessingQueue(companyId: string) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const list = await prisma.enterpriseFinancialDocument.findMany({
       where: { companyId, processingStatus: "pending" },
@@ -187,15 +220,24 @@ export const enterpriseFinancialsService = {
     };
   },
 
-  async updateInvoice(companyId: string, invoiceId: string, data: {
-    clientName?: string;
-    clientAddress?: string;
-    clientEmail?: string;
-    dateIssued?: Date;
-    dueDate?: Date;
-    notes?: string;
-    lineItems?: Array<{ description: string; quantity: number; unitPrice: number; total: number }>;
-  }) {
+  async updateInvoice(
+    companyId: string,
+    invoiceId: string,
+    data: {
+      clientName?: string;
+      clientAddress?: string;
+      clientEmail?: string;
+      dateIssued?: Date;
+      dueDate?: Date;
+      notes?: string;
+      lineItems?: Array<{
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        total: number;
+      }>;
+    },
+  ) {
     const invoice = await prisma.enterpriseInvoice.findFirst({
       where: { id: invoiceId, companyId },
       include: { lineItems: true },
@@ -203,7 +245,8 @@ export const enterpriseFinancialsService = {
     if (!invoice) return null;
     const updateData: Record<string, unknown> = {};
     if (data.clientName != null) updateData.clientName = data.clientName;
-    if (data.clientAddress != null) updateData.clientAddress = data.clientAddress;
+    if (data.clientAddress != null)
+      updateData.clientAddress = data.clientAddress;
     if (data.clientEmail != null) updateData.clientEmail = data.clientEmail;
     if (data.dateIssued != null) updateData.dateIssued = data.dateIssued;
     if (data.dueDate != null) updateData.dueDate = data.dueDate;
@@ -215,7 +258,9 @@ export const enterpriseFinancialsService = {
       });
     }
     if (data.lineItems && data.lineItems.length > 0) {
-      await prisma.enterpriseInvoiceLineItem.deleteMany({ where: { invoiceId } });
+      await prisma.enterpriseInvoiceLineItem.deleteMany({
+        where: { invoiceId },
+      });
       let totalAmount = 0;
       for (let i = 0; i < data.lineItems.length; i++) {
         const item = data.lineItems[i];
@@ -254,18 +299,28 @@ export const enterpriseFinancialsService = {
     return prisma.enterpriseInvoice.findUnique({ where: { id: invoiceId } });
   },
 
-  async createInvoice(companyId: string, data: {
-    invoiceNumber: string;
-    clientName: string;
-    clientAddress: string;
-    clientEmail: string;
-    dateIssued: Date;
-    dueDate: Date;
-    totalAmount: number;
-    notes?: string;
-    lineItems: Array<{ description: string; quantity: number; unitPrice: number; total: number }>;
-  }) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+  async createInvoice(
+    companyId: string,
+    data: {
+      invoiceNumber: string;
+      clientName: string;
+      clientAddress: string;
+      clientEmail: string;
+      dateIssued: Date;
+      dueDate: Date;
+      totalAmount: number;
+      notes?: string;
+      lineItems: Array<{
+        description: string;
+        quantity: number;
+        unitPrice: number;
+        total: number;
+      }>;
+    },
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const invoice = await prisma.enterpriseInvoice.create({
       data: {
@@ -301,9 +356,16 @@ export const enterpriseFinancialsService = {
 
   async listInvoices(
     companyId: string,
-    opts?: { page?: number; limit?: number; sortBy?: string; sortOrder?: "ASC" | "DESC" }
+    opts?: {
+      page?: number;
+      limit?: number;
+      sortBy?: string;
+      sortOrder?: "ASC" | "DESC";
+    },
   ) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);

@@ -9,12 +9,14 @@ WORKDIR /app
 # --- Dependencies (lockfile required for reproducible builds) ---
 FROM base AS deps
 COPY package.json pnpm-lock.yaml* ./
+COPY prisma ./prisma
 RUN pnpm install --frozen-lockfile
 
-# --- Builder: compile TS and generate Prisma client ---
+# --- Builder: generate Prisma client and compile TS ---
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN pnpm exec prisma generate --schema=prisma/schema
 RUN pnpm run build
 
 # --- Runner: minimal production image ---
@@ -42,4 +44,4 @@ RUN chown -R node:node /app
 USER node
 
 # Run pending migrations then start the app (DATABASE_URL must be set at runtime)
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy --schema=prisma/schema && exec node dist/app.js"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy --schema=prisma/schema/schema.prisma && exec node dist/app.js"]

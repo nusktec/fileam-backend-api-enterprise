@@ -23,7 +23,7 @@ export const salesService = {
   async list(
     userId: string,
     status?: string,
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
   ) {
     const where: { userId: string; status?: string } = { userId };
     if (status && status !== "all") where.status = status;
@@ -54,7 +54,7 @@ export const salesService = {
         acc[c.status] = c._count;
         return acc;
       },
-      {} as Record<string, number>
+      {} as Record<string, number>,
     );
     const paidCount = countByStatus["Paid"] ?? 0;
     const pendingCount = countByStatus["Pending"] ?? 0;
@@ -66,7 +66,12 @@ export const salesService = {
         totalIncome: decimalToNumber(summary._sum.totalAmount),
         vatCollected: decimalToNumber(summary._sum.vatAmount),
       },
-      counts: { all: totalCount, paid: paidCount, pending: pendingCount, overdue: overdueCount },
+      counts: {
+        all: totalCount,
+        paid: paidCount,
+        pending: pendingCount,
+        overdue: overdueCount,
+      },
       sales: sales.map((s) => ({
         id: s.id,
         invoiceNumber: s.invoiceNumber,
@@ -117,11 +122,13 @@ export const salesService = {
       date: string;
       vatableIncome: boolean;
       serviceIncome: boolean;
-    }
+    },
   ) {
     const amount = new Decimal(data.amount);
     const vatRate = data.vatableIncome ? new Decimal(VAT_RATE) : new Decimal(0);
-    const vatAmount = data.vatableIncome ? amount.mul(VAT_RATE / 100) : new Decimal(0);
+    const vatAmount = data.vatableIncome
+      ? amount.mul(VAT_RATE / 100)
+      : new Decimal(0);
     const totalAmount = amount.add(vatAmount);
 
     const invoiceNumber = await nextInvoiceNumber();

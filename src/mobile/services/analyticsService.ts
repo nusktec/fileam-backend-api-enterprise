@@ -11,7 +11,10 @@ function periodLabel(year: number, month: number): string {
   return `${new Date(year, month - 1).toLocaleString("default", { month: "long" })} ${year}`;
 }
 
-function prevPeriod(year: number, month: number): { year: number; month: number } {
+function prevPeriod(
+  year: number,
+  month: number,
+): { year: number; month: number } {
   if (month === 1) return { year: year - 1, month: 12 };
   return { year, month: month - 1 };
 }
@@ -22,7 +25,7 @@ export const analyticsService = {
   async getDashboard(
     userId: string,
     period: string,
-    range: DashboardRange = "month"
+    range: DashboardRange = "month",
   ) {
     const match = period.match(/^(\d{4})-(\d{1,2})$/);
     const now = new Date();
@@ -34,7 +37,12 @@ export const analyticsService = {
 
     const current = await this.getPeriodAggregates(userId, year, month, range);
     const prev = prevPeriod(year, month);
-    const previous = await this.getPeriodAggregates(userId, prev.year, prev.month, range);
+    const previous = await this.getPeriodAggregates(
+      userId,
+      prev.year,
+      prev.month,
+      range,
+    );
 
     const percentChangeIncome =
       previous.income > 0
@@ -46,14 +54,22 @@ export const analyticsService = {
         : 0;
     const percentChangeNetProfit =
       previous.netProfit !== 0
-        ? ((current.netProfit - previous.netProfit) / Math.abs(previous.netProfit)) * 100
+        ? ((current.netProfit - previous.netProfit) /
+            Math.abs(previous.netProfit)) *
+          100
         : 0;
-    const margin = current.income > 0 ? (current.netProfit / current.income) * 100 : 0;
-    const prevMargin = previous.income > 0 ? (previous.netProfit / previous.income) * 100 : 0;
+    const margin =
+      current.income > 0 ? (current.netProfit / current.income) * 100 : 0;
+    const prevMargin =
+      previous.income > 0 ? (previous.netProfit / previous.income) * 100 : 0;
     const percentChangeMargin = prevMargin !== 0 ? margin - prevMargin : 0;
 
     const incomeTrend = await this.getIncomeTrend(userId, year, month);
-    const expenseBreakdown = await this.getExpenseBreakdown(userId, year, month);
+    const expenseBreakdown = await this.getExpenseBreakdown(
+      userId,
+      year,
+      month,
+    );
     const businessHealth = await this.getBusinessHealth(userId);
 
     const label =
@@ -90,10 +106,14 @@ export const analyticsService = {
     userId: string,
     year: number,
     month: number,
-    range: DashboardRange
+    range: DashboardRange,
   ): Promise<{ income: number; expenses: number; netProfit: number }> {
     if (range === "month") {
-      const comp = await taxComputationService.getForPeriod(userId, year, month);
+      const comp = await taxComputationService.getForPeriod(
+        userId,
+        year,
+        month,
+      );
       return {
         income: comp.overview.totalIncome,
         expenses: comp.overview.totalExpenses,
@@ -119,7 +139,12 @@ export const analyticsService = {
   },
 
   async getIncomeTrend(userId: string, endYear: number, endMonth: number) {
-    const items: { label: string; year: number; month: number; income: number }[] = [];
+    const items: {
+      label: string;
+      year: number;
+      month: number;
+      income: number;
+    }[] = [];
     let y = endYear;
     let m = endMonth;
     for (let i = 0; i < 6; i++) {
@@ -147,11 +172,15 @@ export const analyticsService = {
       where: { userId, expenseDate: { gte: start, lte: end } },
       _sum: { totalAmount: true },
     });
-    const total = byCategory.reduce((s, c) => s + decimalToNumber(c._sum.totalAmount), 0);
+    const total = byCategory.reduce(
+      (s, c) => s + decimalToNumber(c._sum.totalAmount),
+      0,
+    );
     return byCategory.map((c) => ({
       category: c.category,
       amount: decimalToNumber(c._sum.totalAmount),
-      percentageOfTotal: total > 0 ? (decimalToNumber(c._sum.totalAmount) / total) * 100 : 0,
+      percentageOfTotal:
+        total > 0 ? (decimalToNumber(c._sum.totalAmount) / total) * 100 : 0,
     }));
   },
 
@@ -165,13 +194,22 @@ export const analyticsService = {
     let paidCount = 0;
     for (const p of payables) {
       const totalPayable = decimalToNumber(p.totalPayable);
-      const totalPaid = p.payments.reduce((s, r) => s + decimalToNumber(r.amountPaid), 0);
+      const totalPaid = p.payments.reduce(
+        (s, r) => s + decimalToNumber(r.amountPaid),
+        0,
+      );
       if (totalPaid >= totalPayable && totalPayable > 0) paidCount++;
       else if (p.filingDueDate < now) overdueCount++;
     }
     const total = payables.length;
     const taxCompliance =
-      total === 0 ? "On Track" : overdueCount === 0 ? "On Track" : overdueCount < total ? "At Risk" : "Overdue";
+      total === 0
+        ? "On Track"
+        : overdueCount === 0
+          ? "On Track"
+          : overdueCount < total
+            ? "At Risk"
+            : "Overdue";
     const profitability = "Strong";
     const cashFlow = overdueCount > 0 ? "Fair" : "Strong";
     return [

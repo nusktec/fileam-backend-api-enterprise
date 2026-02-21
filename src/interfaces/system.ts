@@ -122,4 +122,3 @@ const HttpStatusCode = Object.freeze({
 type HttpStatusCode = (typeof HttpStatusCode)[keyof typeof HttpStatusCode];
 
 export { EmailCategoryType, EmailCategoryInterface, HttpStatusCode };
-

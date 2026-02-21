@@ -2000,4 +2000,3 @@ export default [
     continentName: "Africa",
   },
 ];
-

@@ -34,7 +34,7 @@ function grossMonthly(e: {
 export const employeesService = {
   async list(
     userId: string,
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
   ) {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
@@ -88,13 +88,19 @@ export const employeesService = {
     for (const e of employees) {
       const gross = grossMonthly(e);
       totalPaye += computePayeMonthly(gross * 12);
-      totalPension += computePensionEmployee(gross) + computePensionEmployer(gross);
+      totalPension +=
+        computePensionEmployee(gross) + computePensionEmployer(gross);
     }
     const now = new Date();
     const dueDate = new Date(now.getFullYear(), now.getMonth(), PAYE_DUE_DAY);
     if (dueDate <= now) dueDate.setMonth(dueDate.getMonth() + 1);
     return {
-      paye: { amount: totalPaye, status: "Pending", dueDate, note: "Due 10th of next month" },
+      paye: {
+        amount: totalPaye,
+        status: "Pending",
+        dueDate,
+        note: "Due 10th of next month",
+      },
       pension: {
         amount: totalPension,
         status: "Pending",
@@ -162,7 +168,7 @@ export const employeesService = {
       startDate?: string;
       tin?: string;
       pensionRsa?: string;
-    }
+    },
   ) {
     const counter = await prisma.counter.upsert({
       where: { id: EMPLOYEE_COUNTER_ID },

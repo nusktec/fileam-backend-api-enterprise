@@ -15,17 +15,17 @@ const router = express.Router();
 router.post(
   "/otp/send/email",
   validations.validateEmailVerificationRequest,
-  sendOtpEmail
+  sendOtpEmail,
 );
 router.post(
   "/otp/verify/email",
   validations.validateEmailVerificationOTPRequest,
-  verifyEmail
+  verifyEmail,
 );
 router.post(
   "/resend-verification",
   validations.validateEmailVerificationRequest,
-  resendVerificationEmail
+  resendVerificationEmail,
 );
 router.post("/login", validations.validateLoginRequest, login);
 router.post("/register", validations.registerUserValidation, register);

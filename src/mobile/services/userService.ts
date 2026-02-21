@@ -1,9 +1,26 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../../config/database";
 
-type BusinessWithExtras = { rcNumber?: string | null; businessType?: string | null; sector?: string | null; bankAccount?: string | null; name?: string; tin?: string | null; stateOfResidence?: string | null; streetAddress?: string | null };
-type UserWithNotificationPrefs = { filingRemindersEnabled?: boolean; payersNotificationsEnabled?: boolean; complianceUpdatesEnabled?: boolean; twoFactorEnabled?: boolean };
-type ConsultantConnWithExtras = { managingTaxForms?: string | null; consultantDisplayName?: string | null };
+type BusinessWithExtras = {
+  rcNumber?: string | null;
+  businessType?: string | null;
+  sector?: string | null;
+  bankAccount?: string | null;
+  name?: string;
+  tin?: string | null;
+  stateOfResidence?: string | null;
+  streetAddress?: string | null;
+};
+type UserWithNotificationPrefs = {
+  filingRemindersEnabled?: boolean;
+  payersNotificationsEnabled?: boolean;
+  complianceUpdatesEnabled?: boolean;
+  twoFactorEnabled?: boolean;
+};
+type ConsultantConnWithExtras = {
+  managingTaxForms?: string | null;
+  consultantDisplayName?: string | null;
+};
 
 export const userService = {
   async getProfile(userId: string) {
@@ -55,7 +72,7 @@ export const userService = {
       organizationName?: string;
       organizationAddress?: string;
       logo?: string;
-    }
+    },
   ) {
     return prisma.user.update({
       where: { id: userId },
@@ -66,10 +83,14 @@ export const userService = {
         ...(data.state !== undefined && { state: data.state }),
         ...(data.lga !== undefined && { lga: data.lga }),
         ...(data.purpose !== undefined && { purpose: data.purpose }),
-        ...(data.roleDescription !== undefined && { roleDescription: data.roleDescription }),
+        ...(data.roleDescription !== undefined && {
+          roleDescription: data.roleDescription,
+        }),
         ...(data.teamSize !== undefined && { teamSize: data.teamSize }),
         ...(data.adminCount !== undefined && { adminCount: data.adminCount }),
-        ...(data.organizationName !== undefined && { organizationName: data.organizationName }),
+        ...(data.organizationName !== undefined && {
+          organizationName: data.organizationName,
+        }),
         ...(data.organizationAddress !== undefined && {
           organizationAddress: data.organizationAddress,
         }),
@@ -81,14 +102,22 @@ export const userService = {
     });
   },
 
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { password: true },
     });
     if (!user) return { success: false as const, message: "User not found" };
     const match = await bcrypt.compare(currentPassword, user.password);
-    if (!match) return { success: false as const, message: "Current password is incorrect" };
+    if (!match)
+      return {
+        success: false as const,
+        message: "Current password is incorrect",
+      };
     const hashed = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({
       where: { id: userId },
@@ -121,7 +150,8 @@ export const userService = {
       sector: b?.sector ?? null,
       stateOfResidence: b?.stateOfResidence ?? user.state ?? null,
       bankAccount: b?.bankAccount ?? null,
-      address: b?.streetAddress ?? user.organizationAddress ?? user.address ?? null,
+      address:
+        b?.streetAddress ?? user.organizationAddress ?? user.address ?? null,
       logo: user.logo ?? null,
     };
   },
@@ -137,16 +167,20 @@ export const userService = {
       stateOfResidence?: string;
       bankAccount?: string;
       address?: string;
-    }
+    },
   ) {
     const business = await prisma.business.findFirst({ where: { userId } });
     const payload = {
       ...(data.businessName !== undefined && { name: data.businessName }),
       ...(data.tin !== undefined && { tin: data.tin }),
       ...(data.rcNumber !== undefined && { rcNumber: data.rcNumber }),
-      ...(data.businessType !== undefined && { businessType: data.businessType }),
+      ...(data.businessType !== undefined && {
+        businessType: data.businessType,
+      }),
       ...(data.sector !== undefined && { sector: data.sector }),
-      ...(data.stateOfResidence !== undefined && { stateOfResidence: data.stateOfResidence }),
+      ...(data.stateOfResidence !== undefined && {
+        stateOfResidence: data.stateOfResidence,
+      }),
       ...(data.bankAccount !== undefined && { bankAccount: data.bankAccount }),
       ...(data.address !== undefined && { streetAddress: data.address }),
     };
@@ -201,13 +235,17 @@ export const userService = {
       payersNotifications?: boolean;
       complianceUpdates?: boolean;
       twoFactorEnabled?: boolean;
-    }
+    },
   ) {
     const updatePayload: Record<string, boolean> = {};
-    if (data.filingReminders !== undefined) updatePayload.filingRemindersEnabled = data.filingReminders;
-    if (data.payersNotifications !== undefined) updatePayload.payersNotificationsEnabled = data.payersNotifications;
-    if (data.complianceUpdates !== undefined) updatePayload.complianceUpdatesEnabled = data.complianceUpdates;
-    if (data.twoFactorEnabled !== undefined) updatePayload.twoFactorEnabled = data.twoFactorEnabled;
+    if (data.filingReminders !== undefined)
+      updatePayload.filingRemindersEnabled = data.filingReminders;
+    if (data.payersNotifications !== undefined)
+      updatePayload.payersNotificationsEnabled = data.payersNotifications;
+    if (data.complianceUpdates !== undefined)
+      updatePayload.complianceUpdatesEnabled = data.complianceUpdates;
+    if (data.twoFactorEnabled !== undefined)
+      updatePayload.twoFactorEnabled = data.twoFactorEnabled;
     await prisma.user.update({
       where: { id: userId },
       data: updatePayload as never,
@@ -230,7 +268,11 @@ export const userService = {
       : ["VAT", "WHT", "PITT", "CIT"];
     return {
       id: conn.id,
-      name: c.consultantDisplayName ?? conn.invitation?.invitedBusinessName ?? conn.company?.name ?? "Consultant",
+      name:
+        c.consultantDisplayName ??
+        conn.invitation?.invitedBusinessName ??
+        conn.company?.name ??
+        "Consultant",
       managingTaxForms: taxForms,
       status: conn.status,
     };

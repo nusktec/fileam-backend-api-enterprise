@@ -52,10 +52,7 @@ const registerUserValidation = [
     .optional()
     .isString()
     .withMessage("Organization address must be a string"),
-  check("logo")
-    .optional()
-    .isString()
-    .withMessage("Logo must be a string"),
+  check("logo").optional().isString().withMessage("Logo must be a string"),
   handleValidation,
 ];
 

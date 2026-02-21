@@ -5,7 +5,10 @@ import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { expensesService } from "../services/expensesService";
 
-export const listExpenses = async (req: IRequest, res: Response): Promise<void> => {
+export const listExpenses = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const pagination = req.pagination;
@@ -14,7 +17,9 @@ export const listExpenses = async (req: IRequest, res: Response): Promise<void> 
       limit: pagination?.limit,
       sortOrder: pagination?.sortOrder,
     });
-    res.status(HttpStatusCode.OK).json(outJson(true, "Expenses retrieved", data));
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Expenses retrieved", data));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -22,16 +27,25 @@ export const listExpenses = async (req: IRequest, res: Response): Promise<void> 
   }
 };
 
-export const getExpenseById = async (req: IRequest, res: Response): Promise<void> => {
+export const getExpenseById = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const expenseId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const expenseId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
     const expense = await expensesService.getById(userId, expenseId!);
     if (!expense) {
-      res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Expense not found", null));
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Expense not found", null));
       return;
     }
-    res.status(HttpStatusCode.OK).json(outJson(true, "Expense details retrieved", expense));
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Expense details retrieved", expense));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -39,10 +53,21 @@ export const getExpenseById = async (req: IRequest, res: Response): Promise<void
   }
 };
 
-export const createExpense = async (req: IRequest, res: Response): Promise<void> => {
+export const createExpense = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const { amount, description, category, date, vatInclusive, vatAmount, receiptUrl } = req.body;
+    const {
+      amount,
+      description,
+      category,
+      date,
+      vatInclusive,
+      vatAmount,
+      receiptUrl,
+    } = req.body;
     const expense = await expensesService.create(userId, {
       amount: Number(amount),
       description,
@@ -52,7 +77,9 @@ export const createExpense = async (req: IRequest, res: Response): Promise<void>
       vatAmount: vatAmount != null ? Number(vatAmount) : undefined,
       receiptUrl,
     });
-    res.status(HttpStatusCode.CREATED).json(outJson(true, "Expense added", expense));
+    res
+      .status(HttpStatusCode.CREATED)
+      .json(outJson(true, "Expense added", expense));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)

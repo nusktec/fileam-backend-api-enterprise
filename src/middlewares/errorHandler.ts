@@ -10,7 +10,7 @@ const errorHandler = (
   err: AppError,
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   console.error("Error:", err.message);
 
@@ -24,7 +24,7 @@ const catchError = (
   err: any,
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";
@@ -42,7 +42,7 @@ const handleValidation = (req: Request, res: Response, next: NextFunction) => {
     res.status(400).json(
       outJson(false, `Validation error. '${errors.array()[0].msg}'`, {
         errors: errors.array(),
-      })
+      }),
     );
     return;
   }

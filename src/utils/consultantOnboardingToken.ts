@@ -10,13 +10,18 @@ export function generateConsultantOnboardingToken(sessionId: string): string {
   return jwt.sign(
     { sessionId } as ConsultantOnboardingTokenPayload,
     process.env.JWT_SECRET!,
-    { expiresIn: CONSULTANT_ONBOARDING_TOKEN_EXPIRY }
+    { expiresIn: CONSULTANT_ONBOARDING_TOKEN_EXPIRY },
   );
 }
 
-export function verifyConsultantOnboardingToken(token: string): ConsultantOnboardingTokenPayload | null {
+export function verifyConsultantOnboardingToken(
+  token: string,
+): ConsultantOnboardingTokenPayload | null {
   try {
-    return jwt.verify(token, process.env.JWT_SECRET!) as ConsultantOnboardingTokenPayload;
+    return jwt.verify(
+      token,
+      process.env.JWT_SECRET!,
+    ) as ConsultantOnboardingTokenPayload;
   } catch {
     return null;
   }

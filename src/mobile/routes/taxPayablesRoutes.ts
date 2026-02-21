@@ -15,6 +15,11 @@ router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/", withPagination(), listPayables);
 router.get("/:id", validateIdParam, getPayableById);
-router.post("/:id/initiate-payment", validateIdParam, express.json(), initiatePayment);
+router.post(
+  "/:id/initiate-payment",
+  validateIdParam,
+  express.json(),
+  initiatePayment,
+);
 
 export default router;

@@ -17,14 +17,50 @@ const router = express.Router();
 
 router.post("/step/1", consultantOnboardingStep1);
 
-router.get("/profile", requireConsultantOnboardingToken, consultantOnboardingProfile);
-router.post("/step/2", requireConsultantOnboardingToken, consultantOnboardingStep2);
-router.post("/step/3", requireConsultantOnboardingToken, consultantOnboardingStep3);
-router.post("/step/4", requireConsultantOnboardingToken, consultantOnboardingStep4);
-router.post("/step/5", requireConsultantOnboardingToken, consultantOnboardingStep5);
-router.post("/step/6", requireConsultantOnboardingToken, consultantOnboardingStep6);
-router.post("/step/7", requireConsultantOnboardingToken, consultantOnboardingStep7);
-router.post("/review-submit", requireConsultantOnboardingToken, consultantOnboardingReviewSubmit);
-router.post("/activate", requireConsultantOnboardingToken, consultantOnboardingActivate);
+router.get(
+  "/profile",
+  requireConsultantOnboardingToken,
+  consultantOnboardingProfile,
+);
+router.post(
+  "/step/2",
+  requireConsultantOnboardingToken,
+  consultantOnboardingStep2,
+);
+router.post(
+  "/step/3",
+  requireConsultantOnboardingToken,
+  consultantOnboardingStep3,
+);
+router.post(
+  "/step/4",
+  requireConsultantOnboardingToken,
+  consultantOnboardingStep4,
+);
+router.post(
+  "/step/5",
+  requireConsultantOnboardingToken,
+  consultantOnboardingStep5,
+);
+router.post(
+  "/step/6",
+  requireConsultantOnboardingToken,
+  consultantOnboardingStep6,
+);
+router.post(
+  "/step/7",
+  requireConsultantOnboardingToken,
+  consultantOnboardingStep7,
+);
+router.post(
+  "/review-submit",
+  requireConsultantOnboardingToken,
+  consultantOnboardingReviewSubmit,
+);
+router.post(
+  "/activate",
+  requireConsultantOnboardingToken,
+  consultantOnboardingActivate,
+);
 
 export default router;

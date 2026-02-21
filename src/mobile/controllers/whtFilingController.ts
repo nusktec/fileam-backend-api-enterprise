@@ -15,20 +15,39 @@ function parsePeriod(period?: string): { year: number; month: number } | null {
   return { year, month };
 }
 
-export const getWhtSchedule = async (req: IRequest, res: Response): Promise<void> => {
+export const getWhtSchedule = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const period = req.query.period as string | undefined;
     const whtType = req.query.whtType as string | undefined;
-    const parsed = parsePeriod(period) ?? (req.query.year && req.query.month)
-      ? { year: Number(req.query.year), month: Number(req.query.month) }
-      : null;
+    const parsed =
+      (parsePeriod(period) ?? (req.query.year && req.query.month))
+        ? { year: Number(req.query.year), month: Number(req.query.month) }
+        : null;
     if (!parsed || !parsed.year || !parsed.month) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Query period (e.g. 2025-1) or year and month required", null));
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(
+            false,
+            "Query period (e.g. 2025-1) or year and month required",
+            null,
+          ),
+        );
       return;
     }
-    const data = await whtFilingService.getSchedule(userId, parsed.year, parsed.month, whtType);
-    res.status(HttpStatusCode.OK).json(outJson(true, "WHT schedule retrieved", data));
+    const data = await whtFilingService.getSchedule(
+      userId,
+      parsed.year,
+      parsed.month,
+      whtType,
+    );
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "WHT schedule retrieved", data));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -36,12 +55,17 @@ export const getWhtSchedule = async (req: IRequest, res: Response): Promise<void
   }
 };
 
-export const createOrUpdateWhtDraft = async (req: IRequest, res: Response): Promise<void> => {
+export const createOrUpdateWhtDraft = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const { periodYear, periodMonth, whtType, lines } = req.body ?? {};
     if (periodYear == null || periodMonth == null) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "periodYear and periodMonth required", null));
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "periodYear and periodMonth required", null));
       return;
     }
     const data = await whtFilingService.createOrUpdateDraft(userId, {
@@ -58,7 +82,10 @@ export const createOrUpdateWhtDraft = async (req: IRequest, res: Response): Prom
   }
 };
 
-export const submitWhtFiling = async (req: IRequest, res: Response): Promise<void> => {
+export const submitWhtFiling = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const {
@@ -72,7 +99,11 @@ export const submitWhtFiling = async (req: IRequest, res: Response): Promise<voi
       evidenceVaultId,
     } = req.body ?? {};
     if (periodYear == null || periodMonth == null || totalWht == null) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "periodYear, periodMonth and totalWht required", null));
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(false, "periodYear, periodMonth and totalWht required", null),
+        );
       return;
     }
     const paid = paymentStatus === "paid" || paymentStatus === "Paid";
@@ -80,13 +111,17 @@ export const submitWhtFiling = async (req: IRequest, res: Response): Promise<voi
       periodYear: Number(periodYear),
       periodMonth: Number(periodMonth),
       totalWht: Number(totalWht),
-      dueDate: dueDate ? new Date(dueDate) : new Date(Number(periodYear), Number(periodMonth), 21),
+      dueDate: dueDate
+        ? new Date(dueDate)
+        : new Date(Number(periodYear), Number(periodMonth), 21),
       paymentStatus: paid ? "paid" : "not_paid",
       receiptUrl,
       documentUrl,
       evidenceVaultId,
     });
-    res.status(HttpStatusCode.OK).json(outJson(true, "WHT filing submitted", data));
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "WHT filing submitted", data));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)

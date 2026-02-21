@@ -8,7 +8,7 @@ import { prisma } from "../../config/database";
 export async function requireConsultantOnboardingToken(
   req: IRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> {
   const token =
     req.header("Authorization")?.replace("Bearer ", "") ??
@@ -26,7 +26,9 @@ export async function requireConsultantOnboardingToken(
   if (!payload) {
     res
       .status(HttpStatusCode.UNAUTHORIZED)
-      .json(outJson(false, "Invalid or expired consultant onboarding token.", null));
+      .json(
+        outJson(false, "Invalid or expired consultant onboarding token.", null),
+      );
     return;
   }
 

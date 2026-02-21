@@ -17,7 +17,10 @@ export const getFaqs = async (req: IRequest, res: Response): Promise<void> => {
   }
 };
 
-export const getAbout = async (_req: IRequest, res: Response): Promise<void> => {
+export const getAbout = async (
+  _req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const data = helpService.getAbout();
     res.status(HttpStatusCode.OK).json(outJson(true, "About retrieved", data));
@@ -28,11 +31,18 @@ export const getAbout = async (_req: IRequest, res: Response): Promise<void> => 
   }
 };
 
-export const submitContact = async (req: IRequest, res: Response): Promise<void> => {
+export const submitContact = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const { subject, message } = req.body ?? {};
-    const data = helpService.submitContact(userId, subject ?? "", message ?? "");
+    const data = helpService.submitContact(
+      userId,
+      subject ?? "",
+      message ?? "",
+    );
     res.status(HttpStatusCode.OK).json(outJson(true, data.message, data));
   } catch (error) {
     res

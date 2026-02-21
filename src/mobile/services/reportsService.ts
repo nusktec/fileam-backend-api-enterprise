@@ -5,7 +5,7 @@ export const reportsService = {
   async list(
     userId: string,
     filters?: { reportType?: string },
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
   ) {
     const where: { userId: string; reportType?: string } = { userId };
     if (filters?.reportType) where.reportType = filters.reportType;
@@ -33,7 +33,13 @@ export const reportsService = {
       format: r.format,
       status: r.status,
     }));
-    return { data, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   },
 
   async getById(userId: string, reportId: string) {
@@ -77,7 +83,12 @@ export const reportsService = {
 
   async generate(
     userId: string,
-    params: { reportType: string; periodYear: number; periodMonth: number; format?: string }
+    params: {
+      reportType: string;
+      periodYear: number;
+      periodMonth: number;
+      format?: string;
+    },
   ) {
     const periodLabel = `${new Date(params.periodYear, params.periodMonth - 1).toLocaleString("default", { month: "long" })} ${params.periodYear}`;
     const report = await prisma.report.create({
@@ -102,7 +113,10 @@ export const reportsService = {
     };
   },
 
-  async getDownloadUrl(userId: string, reportId: string): Promise<string | null> {
+  async getDownloadUrl(
+    userId: string,
+    reportId: string,
+  ): Promise<string | null> {
     const r = await prisma.report.findFirst({
       where: { id: reportId, userId },
       select: { documentUrl: true },

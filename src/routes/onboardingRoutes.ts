@@ -23,13 +23,37 @@ router.post("/step/email-verify", stepEmailVerify);
 
 router.post("/step/password", requireOnboardingToken, stepPassword);
 router.post("/step/income-type", requireOnboardingToken, stepIncomeType);
-router.post("/step/tax-obligations", requireOnboardingToken, stepTaxObligations);
-router.post("/step/business-details", requireOnboardingToken, stepBusinessDetails);
-router.post("/step/tax-jurisdiction", requireOnboardingToken, stepTaxJurisdiction);
-router.post("/step/consultant-terms", requireOnboardingToken, stepConsultantTerms);
+router.post(
+  "/step/tax-obligations",
+  requireOnboardingToken,
+  stepTaxObligations,
+);
+router.post(
+  "/step/business-details",
+  requireOnboardingToken,
+  stepBusinessDetails,
+);
+router.post(
+  "/step/tax-jurisdiction",
+  requireOnboardingToken,
+  stepTaxJurisdiction,
+);
+router.post(
+  "/step/consultant-terms",
+  requireOnboardingToken,
+  stepConsultantTerms,
+);
 
 router.post("/invite/verify-code", inviteVerifyCode);
-router.post("/invite/accept-request", requireOnboardingToken, inviteAcceptRequest);
-router.post("/invite/reject-request", requireOnboardingToken, inviteRejectRequest);
+router.post(
+  "/invite/accept-request",
+  requireOnboardingToken,
+  inviteAcceptRequest,
+);
+router.post(
+  "/invite/reject-request",
+  requireOnboardingToken,
+  inviteRejectRequest,
+);
 
 export default router;

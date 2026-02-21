@@ -14,7 +14,7 @@ const authHandler = ({ roles = [], permissions = [] }: AuthOptions = {}) => {
   return async (
     req: IRequest,
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ): Promise<void> => {
     const token = req.header("Authorization")?.replace("Bearer ", "");
 
@@ -63,23 +63,23 @@ const authHandler = ({ roles = [], permissions = [] }: AuthOptions = {}) => {
         return next();
       }
 
-      const userRoles =
-        user.userRoles?.map((ur) => ur.role.name) ?? [];
+      const userRoles = user.userRoles?.map((ur) => ur.role.name) ?? [];
       const userPermissions =
-        user.userRoles?.flatMap((ur) =>
-          ur.role.rolePermissions?.map((rp) => rp.permission.name) ?? []
+        user.userRoles?.flatMap(
+          (ur) =>
+            ur.role.rolePermissions?.map((rp) => rp.permission.name) ?? [],
         ) ?? [];
 
       const hasRole = roles.some((r) => userRoles.includes(r));
       const hasPermission = permissions.some((p) =>
-        userPermissions.includes(p)
+        userPermissions.includes(p),
       );
 
       if (!hasRole && !hasPermission) {
         res
           .status(HttpStatusCode.FORBIDDEN)
           .json(
-            outJson(false, "Access denied. Insufficient role or permission.")
+            outJson(false, "Access denied. Insufficient role or permission."),
           );
         return;
       }

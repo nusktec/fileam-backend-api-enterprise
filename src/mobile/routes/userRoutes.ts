@@ -24,7 +24,11 @@ router.patch("/password", validations.changePasswordValidation, changePassword);
 router.get("/business-profile", getBusinessProfile);
 router.put("/business-profile", express.json(), updateBusinessProfile);
 router.get("/notification-settings", getNotificationSettings);
-router.put("/notification-settings", express.json(), updateNotificationSettings);
+router.put(
+  "/notification-settings",
+  express.json(),
+  updateNotificationSettings,
+);
 router.get("/consultant", getConsultant);
 router.post("/consultant/revoke", express.json(), revokeConsultant);
 

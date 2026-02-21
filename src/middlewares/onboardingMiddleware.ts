@@ -7,7 +7,7 @@ import { onboardingService } from "../services/onboardingService";
 export function requireOnboardingToken(
   req: IRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void {
   const token =
     req.header("Authorization")?.replace("Bearer ", "") ??

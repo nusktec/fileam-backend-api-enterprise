@@ -17,7 +17,10 @@ const PAYE_BRACKETS: { limit: number; rate: number }[] = [
 export function computePayeMonthly(grossAnnual: number): number {
   const consolidatedRelief = Math.max(grossAnnual * 0.01, 200_000);
   const pensionDeduction = grossAnnual * (PENSION_EMPLOYEE_RATE / 100);
-  const taxableAnnual = Math.max(0, grossAnnual - pensionDeduction - consolidatedRelief);
+  const taxableAnnual = Math.max(
+    0,
+    grossAnnual - pensionDeduction - consolidatedRelief,
+  );
   if (taxableAnnual <= 0) return 0;
   let tax = 0;
   let prevLimit = 0;

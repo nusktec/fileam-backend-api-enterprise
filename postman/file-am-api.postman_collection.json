@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "file-am API",
-    "description": "file-am API: Mobile (auth, user, onboarding, sales, expenses, tax computation, tax payables, payments, filings, reports, analytics, evidence vault, employees, help, settings), Webhooks (payment confirmation), Enterprise (health, company, invitation, onboarding). Sign up via onboarding only (no register endpoint). Payment is handled by a third party; use tax-payables and payments to list due amounts and track payment records. All mobile endpoints under /api/v1/mobile except auth/onboarding; most require Authorization: Bearer {{accessToken}} and completed onboarding.",
+    "description": "file-am API: Mobile (auth, user, onboarding, sales, expenses, tax computation, tax payables, payments, filings, reports, analytics, evidence vault, employees, help), Media (single file upload to S3), Webhooks (payment confirmation), Enterprise (health, company, invitation, business profile, tax computation, financials, evidence vault, onboarding, consultant onboarding). Sign up via onboarding only (no register endpoint). Payment is handled by a third party. All file-using endpoints (evidence vault, financials, expenses receiptUrl, filings documentUrl/receiptUrl, consultant onboarding docs) accept file URLs only — upload files first via POST /api/v1/media/upload, then send the returned url. Protected routes require Authorization: Bearer {{accessToken}}.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1067,6 +1067,30 @@
       ]
     },
     {
+      "name": "Media",
+      "description": "Single endpoint for all file uploads. Upload to S3 and get back a URL; use that URL in other endpoints (evidence vault fileUrl, financials fileUrl, expenses receiptUrl, filings documentUrl/receiptUrl, user logo, consultant onboarding document URLs). Requires Authorization: Bearer {{accessToken}}.",
+      "item": [
+        {
+          "name": "Upload file",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "description": "File to upload (required). Allowed: images, PDF, Word. Max 10MB." },
+                { "key": "folder", "value": "media", "type": "text", "description": "Optional S3 folder: media, images, videos, documents, menu-items, categories, branches, users." }
+              ]
+            },
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/media/upload",
+            "description": "Uploads file to S3. Returns { url, key }. Use url as fileUrl, receiptUrl, documentUrl, logo, or firmProfileUrl in other endpoints. Body: form-data with field 'file' (required), optional 'folder'."
+          }
+        }
+      ]
+    },
+    {
       "name": "Webhooks",
       "description": "Called by third-party payment provider to record payment results. Secure with X-Webhook-Secret or PAYMENT_WEBHOOK_SECRET.",
       "item": [
@@ -1090,7 +1114,7 @@
     },
     {
       "name": "Enterprise",
-      "description": "Enterprise endpoints: health check, company, invitation, onboarding (business flow), consultant onboarding (7-step firm flow).",
+      "description": "Enterprise endpoints: health check (no auth), company & invitation (auth required), business profile lookups (no auth), company-scoped routes (business profile, tax computation, financials, evidence vault — all require Authorization: Bearer {{accessToken}}; set companyId variable), onboarding (no auth), consultant onboarding (token in header).",
       "item": [
         {
           "name": "Health",
@@ -1105,26 +1129,32 @@
           "name": "Create company",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"name\": \"Acme Consulting Ltd\"\n}"
             },
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company",
-            "description": "Creates a company. Body: name (required). Returns company id."
+            "description": "Creates a company. Requires auth. Body: name (required). Returns company id."
           }
         },
         {
           "name": "Create invitation",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"companyId\": \"<company-uuid>\",\n  \"invitedEmail\": \"invited@example.com\",\n  \"invitedBusinessName\": \"Invited Business Ltd\",\n  \"expiresInHours\": 168\n}"
             },
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
-            "description": "Creates an invitation for a business. Body: companyId, invitedEmail, invitedBusinessName (optional), expiresInHours (optional)."
+            "description": "Creates an invitation for a business. Requires auth. Body: companyId, invitedEmail (required), invitedBusinessName (optional), expiresInHours (optional, 1-720)."
           }
         },
         {
@@ -1152,7 +1182,7 @@
         },
         {
           "name": "Company - Business profile",
-          "description": "All under /api/v1/enterprise/company/:companyId. Set collection variable companyId (e.g. from Create company response).",
+          "description": "All under /api/v1/enterprise/company/:companyId. Require Authorization: Bearer {{accessToken}}. Set collection variable companyId (e.g. from Create company response).",
           "item": [
             {
               "name": "Get business profile",

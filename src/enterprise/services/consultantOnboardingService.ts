@@ -4,84 +4,15 @@ import {
   generateConsultantOnboardingToken,
   verifyConsultantOnboardingToken,
 } from "../../utils/consultantOnboardingToken";
-
-export interface Step1Body {
-  businessStructure: string;
-  firmName: string;
-  registrationType: string;
-  rcNumber?: string;
-  yearOfIncorporation?: number;
-  countryOfRegistration: string;
-}
-
-export interface CertificationInput {
-  qualificationName: string;
-  issuingBody: string;
-  year?: number;
-  national?: string;
-}
-export interface Step2Body {
-  numberOfPartners: number;
-  principalPartner: {
-    fullName: string;
-    email: string;
-    phone: string;
-    yearsOfExperience?: number;
-    certifications: CertificationInput[];
-  };
-}
-
-export interface AdditionalPartnerInput {
-  partnerName: string;
-  role: string;
-  yearsOfExperience?: number;
-  certifications: Array<{
-    qualification: string;
-    issuingBody: string;
-    national?: string;
-    year?: number;
-  }>;
-}
-export interface Step3Body {
-  additionalPartners: AdditionalPartnerInput[];
-}
-
-export interface Step4Body {
-  primaryState: string;
-  additionalStates: string[];
-  taxTypesSpecializations: string[];
-  businessSizeServed: string;
-}
-
-export interface ReminderConfigItem {
-  filing: string;
-  frequency: string;
-  reminderDates: number[];
-}
-export interface Step5Body {
-  billingOption: string;
-  enableAutomatedComplianceReminders: boolean;
-  perFilingReminderConfig?: ReminderConfigItem[];
-}
-
-export interface Step6Body {
-  paymentMethod: string;
-  bankAccountNumber?: string;
-  warrantApproval?: string;
-  selfRemittance?: string;
-}
-
-export interface Step7Body {
-  cacDocumentUrl?: string;
-  principalPartnerIdUrl?: string;
-  professionalCertificateUrl?: string;
-  amlDocumentUrl?: string;
-  firmProfileUrl?: string;
-  declarationAccuracy: boolean;
-  declarationFirsCompliance: boolean;
-  declarationSuspensionPolicy: boolean;
-  saveAsDraft?: boolean;
-}
+import type {
+  Step1Body,
+  Step2Body,
+  Step3Body,
+  Step4Body,
+  Step5Body,
+  Step6Body,
+  Step7Body,
+} from "../../interfaces/enterprise/consultantOnboarding";
 
 function uniqueSessionToken(): string {
   return randomBytes(32).toString("hex");
@@ -97,7 +28,10 @@ export const consultantOnboardingService = {
       where: { id: sessionId },
       include: {
         firmIdentity: true,
-        partners: { include: { certifications: true }, orderBy: { sortOrder: "asc" } },
+        partners: {
+          include: { certifications: true },
+          orderBy: { sortOrder: "asc" },
+        },
         scope: true,
         subscription: true,
         paymentSetup: true,
@@ -135,8 +69,10 @@ export const consultantOnboardingService = {
       where: { id: sessionId },
       include: { partners: true },
     });
-    if (!session) return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft") return { success: false as const, message: "Session not in draft" };
+    if (!session)
+      return { success: false as const, message: "Session not found" };
+    if (session.status !== "draft")
+      return { success: false as const, message: "Session not in draft" };
 
     await prisma.$transaction(async (tx) => {
       await tx.consultantPartner.deleteMany({ where: { sessionId } });
@@ -175,8 +111,10 @@ export const consultantOnboardingService = {
       where: { id: sessionId },
       include: { partners: true },
     });
-    if (!session) return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft") return { success: false as const, message: "Session not in draft" };
+    if (!session)
+      return { success: false as const, message: "Session not found" };
+    if (session.status !== "draft")
+      return { success: false as const, message: "Session not in draft" };
 
     const principal = session.partners.find((p) => p.isPrincipal);
     await prisma.$transaction(async (tx) => {
@@ -215,9 +153,13 @@ export const consultantOnboardingService = {
   },
 
   async step4(sessionId: string, data: Step4Body) {
-    const session = await prisma.consultantOnboardingSession.findUnique({ where: { id: sessionId } });
-    if (!session) return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft") return { success: false as const, message: "Session not in draft" };
+    const session = await prisma.consultantOnboardingSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session)
+      return { success: false as const, message: "Session not found" };
+    if (session.status !== "draft")
+      return { success: false as const, message: "Session not in draft" };
 
     await prisma.consultantScope.upsert({
       where: { sessionId },
@@ -243,9 +185,13 @@ export const consultantOnboardingService = {
   },
 
   async step5(sessionId: string, data: Step5Body) {
-    const session = await prisma.consultantOnboardingSession.findUnique({ where: { id: sessionId } });
-    if (!session) return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft") return { success: false as const, message: "Session not in draft" };
+    const session = await prisma.consultantOnboardingSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session)
+      return { success: false as const, message: "Session not found" };
+    if (session.status !== "draft")
+      return { success: false as const, message: "Session not in draft" };
 
     const reminderConfig = data.perFilingReminderConfig
       ? (data.perFilingReminderConfig as object)
@@ -272,9 +218,13 @@ export const consultantOnboardingService = {
   },
 
   async step6(sessionId: string, data: Step6Body) {
-    const session = await prisma.consultantOnboardingSession.findUnique({ where: { id: sessionId } });
-    if (!session) return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft") return { success: false as const, message: "Session not in draft" };
+    const session = await prisma.consultantOnboardingSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session)
+      return { success: false as const, message: "Session not found" };
+    if (session.status !== "draft")
+      return { success: false as const, message: "Session not in draft" };
 
     await prisma.consultantPaymentSetup.upsert({
       where: { sessionId },
@@ -300,9 +250,13 @@ export const consultantOnboardingService = {
   },
 
   async step7(sessionId: string, data: Step7Body) {
-    const session = await prisma.consultantOnboardingSession.findUnique({ where: { id: sessionId } });
-    if (!session) return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft") return { success: false as const, message: "Session not in draft" };
+    const session = await prisma.consultantOnboardingSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session)
+      return { success: false as const, message: "Session not found" };
+    if (session.status !== "draft")
+      return { success: false as const, message: "Session not in draft" };
 
     const submittedAt = data.saveAsDraft ? null : new Date();
     const status = data.saveAsDraft ? "draft" : "submitted";
@@ -345,10 +299,18 @@ export const consultantOnboardingService = {
       where: { id: sessionId },
       include: { compliance: true },
     });
-    if (!session) return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft") return { success: false as const, message: "Already submitted or activated" };
+    if (!session)
+      return { success: false as const, message: "Session not found" };
+    if (session.status !== "draft")
+      return {
+        success: false as const,
+        message: "Already submitted or activated",
+      };
     if (!session.compliance?.submittedAt) {
-      return { success: false as const, message: "Complete step 7 and submit before review" };
+      return {
+        success: false as const,
+        message: "Complete step 7 and submit before review",
+      };
     }
     await prisma.consultantOnboardingSession.update({
       where: { id: sessionId },
@@ -358,9 +320,13 @@ export const consultantOnboardingService = {
   },
 
   async activate(sessionId: string) {
-    const session = await prisma.consultantOnboardingSession.findUnique({ where: { id: sessionId } });
-    if (!session) return { success: false as const, message: "Session not found" };
-    if (session.status === "activated") return { success: false as const, message: "Already activated" };
+    const session = await prisma.consultantOnboardingSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session)
+      return { success: false as const, message: "Session not found" };
+    if (session.status === "activated")
+      return { success: false as const, message: "Already activated" };
     await prisma.consultantOnboardingSession.update({
       where: { id: sessionId },
       data: { status: "activated", currentStep: 8 },

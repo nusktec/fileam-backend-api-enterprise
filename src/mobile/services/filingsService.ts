@@ -12,17 +12,16 @@ function periodLabel(year: number, month: number): string {
 
 export type FilingDisplayStatus = "overdue" | "submitted" | "paid" | "pending";
 
-function deriveDisplayStatus(
-  payable: {
-    status: string;
-    submittedAt: Date | null;
-    filingDueDate: Date;
-    totalPayable: number;
-    totalPaid: number;
-  }
-): FilingDisplayStatus {
+function deriveDisplayStatus(payable: {
+  status: string;
+  submittedAt: Date | null;
+  filingDueDate: Date;
+  totalPayable: number;
+  totalPaid: number;
+}): FilingDisplayStatus {
   if (payable.status === "paid" || payable.status === "overpaid") return "paid";
-  if (payable.totalPaid >= payable.totalPayable && payable.totalPayable > 0) return "paid";
+  if (payable.totalPaid >= payable.totalPayable && payable.totalPayable > 0)
+    return "paid";
   if (payable.submittedAt) return "submitted";
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -36,7 +35,7 @@ export const filingsService = {
   async list(
     userId: string,
     filters?: { status?: string; taxType?: string },
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
   ) {
     const where: { userId: string; taxType?: string } = { userId };
     if (filters?.taxType) where.taxType = filters.taxType;
@@ -51,7 +50,10 @@ export const filingsService = {
         skip: (page - 1) * limit,
         take: limit,
         include: {
-          payments: { where: { status: "completed" }, orderBy: { paidAt: "desc" } },
+          payments: {
+            where: { status: "completed" },
+            orderBy: { paidAt: "desc" },
+          },
         },
       }),
       prisma.taxPayable.count({ where }),
@@ -62,7 +64,10 @@ export const filingsService = {
 
     let items = payables.map((p) => {
       const totalPayable = decimalToNumber(p.totalPayable);
-      const totalPaid = p.payments.reduce((s, r) => s + decimalToNumber(r.amountPaid), 0);
+      const totalPaid = p.payments.reduce(
+        (s, r) => s + decimalToNumber(r.amountPaid),
+        0,
+      );
       const displayStatus = deriveDisplayStatus({
         status: p.status,
         submittedAt: p.submittedAt,
@@ -87,21 +92,33 @@ export const filingsService = {
     if (statusFilter && statusFilter !== "all") {
       items = items.filter((i) => i.status === statusFilter);
     }
-    return { data: items, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+    return {
+      data: items,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   },
 
   async getById(userId: string, filingId: string) {
     const p = await prisma.taxPayable.findFirst({
       where: { id: filingId, userId },
       include: {
-        payments: { where: { status: "completed" }, orderBy: { paidAt: "desc" } },
+        payments: {
+          where: { status: "completed" },
+          orderBy: { paidAt: "desc" },
+        },
         timeline: { orderBy: { eventDate: "asc" } },
       },
     });
     if (!p) return null;
 
     const totalPayable = decimalToNumber(p.totalPayable);
-    const totalPaid = p.payments.reduce((s, r) => s + decimalToNumber(r.amountPaid), 0);
+    const totalPaid = p.payments.reduce(
+      (s, r) => s + decimalToNumber(r.amountPaid),
+      0,
+    );
     const displayStatus = deriveDisplayStatus({
       status: p.status,
       submittedAt: p.submittedAt,
@@ -137,7 +154,10 @@ export const filingsService = {
     };
   },
 
-  async getDocumentUrl(userId: string, filingId: string): Promise<string | null> {
+  async getDocumentUrl(
+    userId: string,
+    filingId: string,
+  ): Promise<string | null> {
     const p = await prisma.taxPayable.findFirst({
       where: { id: filingId, userId },
       select: { documentUrl: true },

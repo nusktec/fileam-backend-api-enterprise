@@ -1,6 +1,18 @@
-export const HELP_FAQ_CATEGORIES = ["All", "VAT", "WHT", "PIT", "CIT", "Filing", "Other"] as const;
+export const HELP_FAQ_CATEGORIES = [
+  "All",
+  "VAT",
+  "WHT",
+  "PIT",
+  "CIT",
+  "Filing",
+  "Other",
+] as const;
 
-export const HELP_FAQS: { question: string; category: string; answer?: string }[] = [
+export const HELP_FAQS: {
+  question: string;
+  category: string;
+  answer?: string;
+}[] = [
   { question: "What do I need to know for VAT?", category: "VAT" },
   { question: "What is PITI tax in Nigeria?", category: "PIT" },
   { question: "How to CNC schedule for employee?", category: "Filing" },

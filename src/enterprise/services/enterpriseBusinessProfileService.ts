@@ -1,8 +1,26 @@
 import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
 
-const BUSINESS_TYPES = ["Consulting", "LLC", "Partnership", "Sole Proprietorship", "Corporation", "Non-Profit", "Other"];
-const INDUSTRIES = ["IT & Services", "Finance", "Healthcare", "Retail", "Manufacturing", "Legal", "Construction", "Education", "Other"];
+const BUSINESS_TYPES = [
+  "Consulting",
+  "LLC",
+  "Partnership",
+  "Sole Proprietorship",
+  "Corporation",
+  "Non-Profit",
+  "Other",
+];
+const INDUSTRIES = [
+  "IT & Services",
+  "Finance",
+  "Healthcare",
+  "Retail",
+  "Manufacturing",
+  "Legal",
+  "Construction",
+  "Education",
+  "Other",
+];
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -14,7 +32,9 @@ export const enterpriseBusinessProfileService = {
   getIndustries: () => INDUSTRIES,
 
   async getProfile(companyId: string) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const profile = await prisma.enterpriseBusinessProfile.findUnique({
       where: { companyId },
@@ -52,7 +72,10 @@ export const enterpriseBusinessProfileService = {
       monthlyPayment: decimalToNumber(profile.monthlyPayment),
       nextRenewalDate: profile.nextRenewalDate,
       compliancePercent: profile.compliancePercent,
-      activities: profile.activities.map((a) => ({ activity: a.activity, eventDate: a.eventDate })),
+      activities: profile.activities.map((a) => ({
+        activity: a.activity,
+        eventDate: a.eventDate,
+      })),
     };
   },
 
@@ -64,18 +87,23 @@ export const enterpriseBusinessProfileService = {
     return profile?.activities ?? [];
   },
 
-  async updateProfile(companyId: string, data: {
-    companyName: string;
-    businessType: string;
-    industry: string;
-    registrationDate: Date;
-    tin: string;
-    businessAddress: string;
-    phoneNumber: string;
-    emailAddress: string;
-    website: string;
-  }) {
-    const company = await prisma.company.findUnique({ where: { id: companyId } });
+  async updateProfile(
+    companyId: string,
+    data: {
+      companyName: string;
+      businessType: string;
+      industry: string;
+      registrationDate: Date;
+      tin: string;
+      businessAddress: string;
+      phoneNumber: string;
+      emailAddress: string;
+      website: string;
+    },
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
     if (!company) return null;
     const profile = await prisma.enterpriseBusinessProfile.upsert({
       where: { companyId },
@@ -111,7 +139,9 @@ export const enterpriseBusinessProfileService = {
   },
 
   async upgradeSubscription(companyId: string, plan?: string) {
-    const profile = await prisma.enterpriseBusinessProfile.findUnique({ where: { companyId } });
+    const profile = await prisma.enterpriseBusinessProfile.findUnique({
+      where: { companyId },
+    });
     if (!profile) return null;
     const nextRenewal = new Date(profile.nextRenewalDate);
     nextRenewal.setFullYear(nextRenewal.getFullYear() + 1);
@@ -123,6 +153,8 @@ export const enterpriseBusinessProfileService = {
         nextRenewalDate: nextRenewal,
       },
     });
-    return prisma.enterpriseBusinessProfile.findUnique({ where: { companyId } });
+    return prisma.enterpriseBusinessProfile.findUnique({
+      where: { companyId },
+    });
   },
 };

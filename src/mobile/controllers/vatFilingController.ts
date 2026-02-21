@@ -15,19 +15,37 @@ function parsePeriod(period?: string): { year: number; month: number } | null {
   return { year, month };
 }
 
-export const getVatCalculation = async (req: IRequest, res: Response): Promise<void> => {
+export const getVatCalculation = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const period = req.query.period as string | undefined;
-    const parsed = parsePeriod(period) ?? (req.query.year && req.query.month)
-      ? { year: Number(req.query.year), month: Number(req.query.month) }
-      : null;
+    const parsed =
+      (parsePeriod(period) ?? (req.query.year && req.query.month))
+        ? { year: Number(req.query.year), month: Number(req.query.month) }
+        : null;
     if (!parsed || !parsed.year || !parsed.month) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Query period (e.g. 2025-1) or year and month required", null));
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(
+            false,
+            "Query period (e.g. 2025-1) or year and month required",
+            null,
+          ),
+        );
       return;
     }
-    const data = await vatFilingService.getCalculation(userId, parsed.year, parsed.month);
-    res.status(HttpStatusCode.OK).json(outJson(true, "VAT calculation retrieved", data));
+    const data = await vatFilingService.getCalculation(
+      userId,
+      parsed.year,
+      parsed.month,
+    );
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "VAT calculation retrieved", data));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -35,12 +53,18 @@ export const getVatCalculation = async (req: IRequest, res: Response): Promise<v
   }
 };
 
-export const createOrUpdateVatDraft = async (req: IRequest, res: Response): Promise<void> => {
+export const createOrUpdateVatDraft = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const { periodYear, periodMonth, stateOfOperation, vatRegistrationNumber } = req.body ?? {};
+    const { periodYear, periodMonth, stateOfOperation, vatRegistrationNumber } =
+      req.body ?? {};
     if (periodYear == null || periodMonth == null) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "periodYear and periodMonth required", null));
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "periodYear and periodMonth required", null));
       return;
     }
     const data = await vatFilingService.createOrUpdateDraft(userId, {
@@ -57,7 +81,10 @@ export const createOrUpdateVatDraft = async (req: IRequest, res: Response): Prom
   }
 };
 
-export const submitVatFiling = async (req: IRequest, res: Response): Promise<void> => {
+export const submitVatFiling = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const {
@@ -73,7 +100,11 @@ export const submitVatFiling = async (req: IRequest, res: Response): Promise<voi
       vatRegistrationNumber,
     } = req.body ?? {};
     if (periodYear == null || periodMonth == null || amount == null) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "periodYear, periodMonth and amount required", null));
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(false, "periodYear, periodMonth and amount required", null),
+        );
       return;
     }
     const paid = paymentStatus === "paid" || paymentStatus === "Paid";
@@ -81,7 +112,9 @@ export const submitVatFiling = async (req: IRequest, res: Response): Promise<voi
       periodYear: Number(periodYear),
       periodMonth: Number(periodMonth),
       amount: Number(amount),
-      dueDate: dueDate ? new Date(dueDate) : new Date(Number(periodYear), Number(periodMonth), 21),
+      dueDate: dueDate
+        ? new Date(dueDate)
+        : new Date(Number(periodYear), Number(periodMonth), 21),
       paymentStatus: paid ? "paid" : "not_paid",
       receiptUrl,
       documentUrl,
@@ -89,7 +122,9 @@ export const submitVatFiling = async (req: IRequest, res: Response): Promise<voi
       stateOfOperation,
       vatRegistrationNumber,
     });
-    res.status(HttpStatusCode.OK).json(outJson(true, "VAT filing submitted", data));
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "VAT filing submitted", data));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)

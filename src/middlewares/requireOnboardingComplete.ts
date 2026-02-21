@@ -6,7 +6,7 @@ import { IRequest } from "../interfaces/CustomRequest";
 export function requireOnboardingComplete(
   req: IRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void {
   const user = req.user;
   if (!user) {
@@ -19,7 +19,7 @@ export function requireOnboardingComplete(
     res.status(HttpStatusCode.FORBIDDEN).json(
       outJson(false, "Complete onboarding to continue.", {
         currentOnboardingStep: user.currentOnboardingStep ?? "income_type",
-      })
+      }),
     );
     return;
   }

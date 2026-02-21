@@ -11,12 +11,18 @@ import {
 import { sendPaginated } from "../../utils/responseHelpers";
 import { enterpriseFinancialsService } from "../services/enterpriseFinancialsService";
 
-export async function getRecentTransactions(req: IRequest, res: Response): Promise<void> {
+export async function getRecentTransactions(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const limit = req.query.limit ? Number(req.query.limit) : 10;
   try {
-    const list = await enterpriseFinancialsService.getRecentTransactions(companyId, limit);
+    const list = await enterpriseFinancialsService.getRecentTransactions(
+      companyId,
+      limit,
+    );
     if (!list) {
       sendNotFound(res, "Company not found");
       return;
@@ -27,21 +33,34 @@ export async function getRecentTransactions(req: IRequest, res: Response): Promi
   }
 }
 
-export async function getAllTransactions(req: IRequest, res: Response): Promise<void> {
+export async function getAllTransactions(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const pagination = req.pagination;
   try {
-    const result = await enterpriseFinancialsService.getAllTransactions(companyId, {
-      page: pagination?.page,
-      limit: pagination?.limit,
-      sortOrder: pagination?.sortOrder,
-    });
+    const result = await enterpriseFinancialsService.getAllTransactions(
+      companyId,
+      {
+        page: pagination?.page,
+        limit: pagination?.limit,
+        sortOrder: pagination?.sortOrder,
+      },
+    );
     if (!result) {
       sendNotFound(res, "Company not found");
       return;
     }
-    sendPaginated(res, "Transactions", result.data, result.total, result.page, result.limit);
+    sendPaginated(
+      res,
+      "Transactions",
+      result.data,
+      result.total,
+      result.page,
+      result.limit,
+    );
   } catch {
     sendServerError(res, "Failed to get transactions");
   }
@@ -62,12 +81,18 @@ export async function getSummary(req: IRequest, res: Response): Promise<void> {
   }
 }
 
-export async function getMonthlyCashFlow(req: IRequest, res: Response): Promise<void> {
+export async function getMonthlyCashFlow(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const year = req.query.year ? Number(req.query.year) : undefined;
   try {
-    const data = await enterpriseFinancialsService.getMonthlyCashFlow(companyId, year);
+    const data = await enterpriseFinancialsService.getMonthlyCashFlow(
+      companyId,
+      year,
+    );
     if (!data) {
       sendNotFound(res, "Company not found");
       return;
@@ -78,11 +103,15 @@ export async function getMonthlyCashFlow(req: IRequest, res: Response): Promise<
   }
 }
 
-export async function addTransaction(req: IRequest, res: Response): Promise<void> {
+export async function addTransaction(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const body = req.body || {};
-  const description = body.description != null ? String(body.description).trim() : "";
+  const description =
+    body.description != null ? String(body.description).trim() : "";
   const date = body.date ? new Date(body.date) : new Date();
   const amount = Number(body.amount ?? 0);
   const status = body.status != null ? String(body.status).trim() : "Pending";
@@ -105,7 +134,10 @@ export async function addTransaction(req: IRequest, res: Response): Promise<void
   }
 }
 
-export async function getDocumentTypes(_req: IRequest, res: Response): Promise<void> {
+export async function getDocumentTypes(
+  _req: IRequest,
+  res: Response,
+): Promise<void> {
   try {
     const types = enterpriseFinancialsService.getDocumentTypes();
     sendResult(res, "Document types", types);
@@ -114,7 +146,10 @@ export async function getDocumentTypes(_req: IRequest, res: Response): Promise<v
   }
 }
 
-export async function getCurrencies(_req: IRequest, res: Response): Promise<void> {
+export async function getCurrencies(
+  _req: IRequest,
+  res: Response,
+): Promise<void> {
   try {
     const currencies = enterpriseFinancialsService.getCurrencies();
     sendResult(res, "Currencies", currencies);
@@ -123,16 +158,19 @@ export async function getCurrencies(_req: IRequest, res: Response): Promise<void
   }
 }
 
-export async function uploadDocument(req: IRequest, res: Response): Promise<void> {
+export async function uploadDocument(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
-  const body = req.body || {};
+  const body = req.body as Record<string, unknown>;
   const documentType = body.documentType != null ? String(body.documentType).trim() : "";
   const description = body.description != null ? String(body.description).trim() : undefined;
-  const documentDate = body.documentDate ? new Date(body.documentDate) : new Date();
+  const documentDate = body.documentDate ? new Date(body.documentDate as string) : new Date();
   const amount = Number(body.amount ?? 0);
   const currency = body.currency != null ? String(body.currency).trim() : "USD";
-  const fileUrl = body.fileUrl ?? (req.file ? (req as unknown as { file: { path: string } }).file?.path : undefined);
+  const fileUrl = body.fileUrl != null ? String(body.fileUrl).trim() || undefined : undefined;
   try {
     const doc = await enterpriseFinancialsService.uploadDocument(companyId, {
       documentType,
@@ -152,12 +190,18 @@ export async function uploadDocument(req: IRequest, res: Response): Promise<void
   }
 }
 
-export async function getDocumentStatus(req: IRequest, res: Response): Promise<void> {
+export async function getDocumentStatus(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const documentId = getParam(req.params, "documentId");
   try {
-    const status = await enterpriseFinancialsService.getDocumentStatus(companyId, documentId);
+    const status = await enterpriseFinancialsService.getDocumentStatus(
+      companyId,
+      documentId,
+    );
     if (!status) {
       sendNotFound(res, "Document not found");
       return;
@@ -168,11 +212,15 @@ export async function getDocumentStatus(req: IRequest, res: Response): Promise<v
   }
 }
 
-export async function getProcessingQueue(req: IRequest, res: Response): Promise<void> {
+export async function getProcessingQueue(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   try {
-    const queue = await enterpriseFinancialsService.getProcessingQueue(companyId);
+    const queue =
+      await enterpriseFinancialsService.getProcessingQueue(companyId);
     if (!queue) {
       sendNotFound(res, "Company not found");
       return;
@@ -188,7 +236,10 @@ export async function getInvoice(req: IRequest, res: Response): Promise<void> {
   if (companyId === null) return;
   const invoiceId = getParam(req.params, "invoiceId");
   try {
-    const invoice = await enterpriseFinancialsService.getInvoice(companyId, invoiceId);
+    const invoice = await enterpriseFinancialsService.getInvoice(
+      companyId,
+      invoiceId,
+    );
     if (!invoice) {
       sendNotFound(res, "Invoice not found");
       return;
@@ -199,7 +250,10 @@ export async function getInvoice(req: IRequest, res: Response): Promise<void> {
   }
 }
 
-export async function updateInvoice(req: IRequest, res: Response): Promise<void> {
+export async function updateInvoice(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const invoiceId = getParam(req.params, "invoiceId");
@@ -211,24 +265,43 @@ export async function updateInvoice(req: IRequest, res: Response): Promise<void>
     dateIssued?: Date;
     dueDate?: Date;
     notes?: string;
-    lineItems?: Array<{ description: string; quantity: number; unitPrice: number; total: number }>;
+    lineItems?: Array<{
+      description: string;
+      quantity: number;
+      unitPrice: number;
+      total: number;
+    }>;
   } = {};
-  if (body.clientName != null) update.clientName = String(body.clientName).trim();
-  if (body.clientAddress != null) update.clientAddress = String(body.clientAddress).trim();
-  if (body.clientEmail != null) update.clientEmail = String(body.clientEmail).trim();
+  if (body.clientName != null)
+    update.clientName = String(body.clientName).trim();
+  if (body.clientAddress != null)
+    update.clientAddress = String(body.clientAddress).trim();
+  if (body.clientEmail != null)
+    update.clientEmail = String(body.clientEmail).trim();
   if (body.dateIssued) update.dateIssued = new Date(body.dateIssued);
   if (body.dueDate) update.dueDate = new Date(body.dueDate);
   if (body.notes != null) update.notes = String(body.notes).trim();
   if (Array.isArray(body.lineItems)) {
-    update.lineItems = body.lineItems.map((item: { description?: string; quantity?: number; unitPrice?: number; total?: number }) => ({
-      description: String(item.description ?? ""),
-      quantity: Number(item.quantity ?? 0),
-      unitPrice: Number(item.unitPrice ?? 0),
-      total: Number(item.total ?? 0),
-    }));
+    update.lineItems = body.lineItems.map(
+      (item: {
+        description?: string;
+        quantity?: number;
+        unitPrice?: number;
+        total?: number;
+      }) => ({
+        description: String(item.description ?? ""),
+        quantity: Number(item.quantity ?? 0),
+        unitPrice: Number(item.unitPrice ?? 0),
+        total: Number(item.total ?? 0),
+      }),
+    );
   }
   try {
-    const invoice = await enterpriseFinancialsService.updateInvoice(companyId, invoiceId, update);
+    const invoice = await enterpriseFinancialsService.updateInvoice(
+      companyId,
+      invoiceId,
+      update,
+    );
     if (!invoice) {
       sendNotFound(res, "Invoice not found");
       return;
@@ -239,12 +312,18 @@ export async function updateInvoice(req: IRequest, res: Response): Promise<void>
   }
 }
 
-export async function markInvoicePaid(req: IRequest, res: Response): Promise<void> {
+export async function markInvoicePaid(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const invoiceId = getParam(req.params, "invoiceId");
   try {
-    const invoice = await enterpriseFinancialsService.markInvoicePaid(companyId, invoiceId);
+    const invoice = await enterpriseFinancialsService.markInvoicePaid(
+      companyId,
+      invoiceId,
+    );
     if (!invoice) {
       sendNotFound(res, "Invoice not found");
       return;
@@ -255,12 +334,18 @@ export async function markInvoicePaid(req: IRequest, res: Response): Promise<voi
   }
 }
 
-export async function getInvoicePdf(req: IRequest, res: Response): Promise<void> {
+export async function getInvoicePdf(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const invoiceId = getParam(req.params, "invoiceId");
   try {
-    const invoice = await enterpriseFinancialsService.getInvoice(companyId, invoiceId);
+    const invoice = await enterpriseFinancialsService.getInvoice(
+      companyId,
+      invoiceId,
+    );
     if (!invoice) {
       sendNotFound(res, "Invoice not found");
       return;
@@ -274,7 +359,10 @@ export async function getInvoicePdf(req: IRequest, res: Response): Promise<void>
   }
 }
 
-export async function listInvoices(req: IRequest, res: Response): Promise<void> {
+export async function listInvoices(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const pagination = req.pagination;
@@ -288,31 +376,52 @@ export async function listInvoices(req: IRequest, res: Response): Promise<void> 
       sendNotFound(res, "Company not found");
       return;
     }
-    sendPaginated(res, "Invoices", result.data, result.total, result.page, result.limit);
+    sendPaginated(
+      res,
+      "Invoices",
+      result.data,
+      result.total,
+      result.page,
+      result.limit,
+    );
   } catch {
     sendServerError(res, "Failed to list invoices");
   }
 }
 
-export async function createInvoice(req: IRequest, res: Response): Promise<void> {
+export async function createInvoice(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
   const companyId = requireCompanyId(req, res);
   if (companyId === null) return;
   const body = req.body || {};
-  const invoiceNumber = body.invoiceNumber != null ? String(body.invoiceNumber).trim() : "";
-  const clientName = body.clientName != null ? String(body.clientName).trim() : "";
-  const clientAddress = body.clientAddress != null ? String(body.clientAddress).trim() : "";
-  const clientEmail = body.clientEmail != null ? String(body.clientEmail).trim() : "";
+  const invoiceNumber =
+    body.invoiceNumber != null ? String(body.invoiceNumber).trim() : "";
+  const clientName =
+    body.clientName != null ? String(body.clientName).trim() : "";
+  const clientAddress =
+    body.clientAddress != null ? String(body.clientAddress).trim() : "";
+  const clientEmail =
+    body.clientEmail != null ? String(body.clientEmail).trim() : "";
   const dateIssued = body.dateIssued ? new Date(body.dateIssued) : new Date();
   const dueDate = body.dueDate ? new Date(body.dueDate) : new Date();
   const totalAmount = Number(body.totalAmount ?? 0);
   const notes = body.notes != null ? String(body.notes).trim() : undefined;
   const lineItems = Array.isArray(body.lineItems)
-    ? body.lineItems.map((item: { description?: string; quantity?: number; unitPrice?: number; total?: number }) => ({
-        description: String(item.description ?? ""),
-        quantity: Number(item.quantity ?? 0),
-        unitPrice: Number(item.unitPrice ?? 0),
-        total: Number(item.total ?? 0),
-      }))
+    ? body.lineItems.map(
+        (item: {
+          description?: string;
+          quantity?: number;
+          unitPrice?: number;
+          total?: number;
+        }) => ({
+          description: String(item.description ?? ""),
+          quantity: Number(item.quantity ?? 0),
+          unitPrice: Number(item.unitPrice ?? 0),
+          total: Number(item.total ?? 0),
+        }),
+      )
     : [];
   try {
     const invoice = await enterpriseFinancialsService.createInvoice(companyId, {

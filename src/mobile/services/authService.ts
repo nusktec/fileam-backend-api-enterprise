@@ -30,8 +30,11 @@ export const authService = {
     firstName: string;
     lastName: string;
   }) {
-    const existing = await prisma.user.findUnique({ where: { email: data.email } });
-    if (existing) return { success: false as const, message: "Email already exists" };
+    const existing = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+    if (existing)
+      return { success: false as const, message: "Email already exists" };
 
     const [businessRole] = await Promise.all([
       prisma.role.upsert({
@@ -52,11 +55,12 @@ export const authService = {
       },
     });
 
-    const verificationResult = await EmailVerificationService.generateAndSendVerification(
-      data.email,
-      data.firstName,
-      "business_verification"
-    );
+    const verificationResult =
+      await EmailVerificationService.generateAndSendVerification(
+        data.email,
+        data.firstName,
+        "business_verification",
+      );
 
     if (!verificationResult.success) {
       await prisma.user.delete({ where: { id: user.id } });
@@ -69,7 +73,10 @@ export const authService = {
 
     return {
       success: true as const,
-      data: { email: data.email, message: "Verification email sent successfully" },
+      data: {
+        email: data.email,
+        message: "Verification email sent successfully",
+      },
     };
   },
 
@@ -82,8 +89,11 @@ export const authService = {
     organizationAddress?: string;
     logo?: string;
   }) {
-    const existing = await prisma.user.findUnique({ where: { email: data.email } });
-    if (existing) return { success: false as const, message: "Email already exists" };
+    const existing = await prisma.user.findUnique({
+      where: { email: data.email },
+    });
+    if (existing)
+      return { success: false as const, message: "Email already exists" };
 
     const [userRole] = await Promise.all([
       prisma.role.upsert({
@@ -107,11 +117,12 @@ export const authService = {
       },
     });
 
-    const verificationResult = await EmailVerificationService.generateAndSendVerification(
-      data.email,
-      data.firstName,
-      "user_verification"
-    );
+    const verificationResult =
+      await EmailVerificationService.generateAndSendVerification(
+        data.email,
+        data.firstName,
+        "user_verification",
+      );
 
     if (!verificationResult.success) {
       await prisma.user.delete({ where: { id: user.id } });
@@ -124,7 +135,10 @@ export const authService = {
 
     return {
       success: true as const,
-      data: { email: data.email, message: "Verification email sent successfully" },
+      data: {
+        email: data.email,
+        message: "Verification email sent successfully",
+      },
     };
   },
 
@@ -166,7 +180,11 @@ export const authService = {
     };
   },
 
-  async saveRefreshToken(userId: string, token: string, expiresIn = REFRESH_TOKEN_EXPIRY_MS) {
+  async saveRefreshToken(
+    userId: string,
+    token: string,
+    expiresIn = REFRESH_TOKEN_EXPIRY_MS,
+  ) {
     const expiresAt = new Date(Date.now() + expiresIn);
     await prisma.token.create({
       data: { userId, token, type: "refresh", expiresAt },

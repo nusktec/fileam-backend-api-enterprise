@@ -10,16 +10,9 @@ export const SMTP_CONFIG = {
   secure: process.env.SMTP_SECURE === "true",
   user: process.env.SMTP_USER || "",
   pass: process.env.SMTP_PASS || "",
-  from:
-    process.env.SMTP_FROM_EMAIL ||
-    process.env.RESEND_FROM_EMAIL ||
-    "noreply@file-am.com",
-  fromName:
-    process.env.SMTP_FROM_NAME || process.env.RESEND_FROM_NAME || "file-am",
-  replyTo:
-    process.env.SMTP_REPLY_TO ||
-    process.env.RESEND_REPLY_TO ||
-    "support@file-am.com",
+  from: process.env.SMTP_FROM_EMAIL ?? "",
+  fromName: process.env.SMTP_FROM_NAME ?? "",
+  replyTo: process.env.SMTP_REPLY_TO ?? "",
 };
 
 const createTransporter = () => {

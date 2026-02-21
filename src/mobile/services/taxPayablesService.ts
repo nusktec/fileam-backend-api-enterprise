@@ -15,9 +15,13 @@ function getFilingDueDate(year: number, month: number): Date {
   return new Date(nextYear, nextMonth - 1, VAT_FILING_DAY);
 }
 
-function derivePayableStatus(totalPayable: number, totalPaid: number): PayableStatus {
+function derivePayableStatus(
+  totalPayable: number,
+  totalPaid: number,
+): PayableStatus {
   if (totalPaid <= 0) return "pending";
-  if (totalPaid >= totalPayable) return totalPaid > totalPayable ? "overpaid" : "paid";
+  if (totalPaid >= totalPayable)
+    return totalPaid > totalPayable ? "overpaid" : "paid";
   return "partially_paid";
 }
 
@@ -36,7 +40,11 @@ export const taxPayablesService = {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const year = d.getFullYear();
       const month = d.getMonth() + 1;
-      const computation = await taxComputationService.getForPeriod(userId, year, month);
+      const computation = await taxComputationService.getForPeriod(
+        userId,
+        year,
+        month,
+      );
 
       if (computation.vat.netVatPayable > 0) {
         payablesToUpsert.push({
@@ -104,7 +112,10 @@ export const taxPayablesService = {
     });
     for (const tp of updated) {
       const totalPayable = decimalToNumber(tp.totalPayable);
-      const totalPaid = tp.payments.reduce((s, r) => s + decimalToNumber(r.amountPaid), 0);
+      const totalPaid = tp.payments.reduce(
+        (s, r) => s + decimalToNumber(r.amountPaid),
+        0,
+      );
       const status = derivePayableStatus(totalPayable, totalPaid);
       if (tp.status !== status) {
         await prisma.taxPayable.update({
@@ -118,10 +129,12 @@ export const taxPayablesService = {
   async list(
     userId: string,
     filters?: { status?: string; taxType?: string },
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" }
+    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
   ) {
     await this.ensurePayablesForUser(userId);
-    const where: { userId: string; status?: string; taxType?: string } = { userId };
+    const where: { userId: string; status?: string; taxType?: string } = {
+      userId,
+    };
     if (filters?.status) where.status = filters.status;
     if (filters?.taxType) where.taxType = filters.taxType;
     const page = opts?.page ?? 1;
@@ -135,7 +148,10 @@ export const taxPayablesService = {
         skip: (page - 1) * limit,
         take: limit,
         include: {
-          payments: { where: { status: "completed" }, orderBy: { paidAt: "desc" } },
+          payments: {
+            where: { status: "completed" },
+            orderBy: { paidAt: "desc" },
+          },
         },
       }),
       prisma.taxPayable.count({ where }),
@@ -153,9 +169,18 @@ export const taxPayablesService = {
       filingDueDate: p.filingDueDate,
       status: p.status,
       currency: p.currency,
-      totalPaid: p.payments.reduce((s, r) => s + decimalToNumber(r.amountPaid), 0),
+      totalPaid: p.payments.reduce(
+        (s, r) => s + decimalToNumber(r.amountPaid),
+        0,
+      ),
     }));
-    return { data, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
   },
 
   async getById(userId: string, payableId: string) {

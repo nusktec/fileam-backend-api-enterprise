@@ -35,13 +35,21 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     });
 
     if (!result.success) {
-      res.status(HttpStatusCode.CONFLICT).json(outJson(false, result.message, null));
+      res
+        .status(HttpStatusCode.CONFLICT)
+        .json(outJson(false, result.message, null));
       return;
     }
 
     res
       .status(HttpStatusCode.CREATED)
-      .json(outJson(true, "Account created successfully. Please check your email for verification.", result.data));
+      .json(
+        outJson(
+          true,
+          "Account created successfully. Please check your email for verification.",
+          result.data,
+        ),
+      );
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -55,18 +63,24 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await authService.findUserByEmail(email);
     if (!user) {
-      res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "User not found", null));
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "User not found", null));
       return;
     }
 
     const isMatch = await authService.validatePassword(password, user.password);
     if (!isMatch) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Invalid credentials", null));
+      res
+        .status(HttpStatusCode.UNAUTHORIZED)
+        .json(outJson(false, "Invalid credentials", null));
       return;
     }
 
     if (!user.verified) {
-      res.status(HttpStatusCode.FORBIDDEN).json(outJson(false, "Kindly verify your email address", null));
+      res
+        .status(HttpStatusCode.FORBIDDEN)
+        .json(outJson(false, "Kindly verify your email address", null));
       return;
     }
 
@@ -104,7 +118,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
 export const sendOtpEmail = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const { email } = req.body;
@@ -112,7 +126,7 @@ export const sendOtpEmail = async (
     const result = await EmailVerificationService.generateAndSendOtp(
       email,
       email.split("@")[0],
-      "otp_request"
+      "otp_request",
     );
 
     if (result.success) {
@@ -120,7 +134,7 @@ export const sendOtpEmail = async (
         outJson(true, "OTP sent successfully", {
           message: "OTP sent to your email",
           expiresIn: "10 minutes",
-        })
+        }),
       );
     } else {
       res
@@ -137,7 +151,7 @@ export const sendOtpEmail = async (
 
 export const verifyEmail = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const { email, code } = req.body;
@@ -146,7 +160,9 @@ export const verifyEmail = async (
     if (!user) {
       res
         .status(HttpStatusCode.NOT_FOUND)
-        .json(outJson(false, "User not found. Complete registration first.", null));
+        .json(
+          outJson(false, "User not found. Complete registration first.", null),
+        );
       return;
     }
 
@@ -173,7 +189,7 @@ export const verifyEmail = async (
         email,
         verified: true,
         message: "Welcome to file-am!",
-      })
+      }),
     );
   } catch (error) {
     PrintDebug(error);
@@ -185,12 +201,14 @@ export const verifyEmail = async (
 
 export const refreshToken = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   const { refreshToken: token } = req.body;
 
   if (!token) {
-    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Refresh token is required", null));
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, "Refresh token is required", null));
     return;
   }
 
@@ -198,12 +216,16 @@ export const refreshToken = async (
     const tokenRecord = await authService.findValidRefreshToken(token);
 
     if (!tokenRecord?.user) {
-      res.status(HttpStatusCode.UNAUTHORIZED).json(outJson(false, "Invalid or expired refresh token", null));
+      res
+        .status(HttpStatusCode.UNAUTHORIZED)
+        .json(outJson(false, "Invalid or expired refresh token", null));
       return;
     }
 
     if (!tokenRecord.user.verified) {
-      res.status(HttpStatusCode.FORBIDDEN).json(outJson(false, "User account is not verified", null));
+      res
+        .status(HttpStatusCode.FORBIDDEN)
+        .json(outJson(false, "User account is not verified", null));
       return;
     }
 
@@ -228,7 +250,7 @@ export const refreshToken = async (
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
         user: userPayload,
-      })
+      }),
     );
   } catch (error) {
     res
@@ -241,7 +263,9 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   const { refreshToken: token } = req.body;
 
   if (!token) {
-    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Refresh token is required", null));
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, "Refresh token is required", null));
     return;
   }
 
@@ -250,7 +274,9 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
     if (tokenRecord?.userId) {
       await revokeRefreshToken(token, tokenRecord.userId);
     }
-    res.status(HttpStatusCode.OK).json(outJson(true, "Logged out successfully", null));
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Logged out successfully", null));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -260,7 +286,7 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
 
 export const resendVerificationEmail = async (
   req: Request,
-  res: Response
+  res: Response,
 ): Promise<void> => {
   try {
     const { email } = req.body;
@@ -283,7 +309,7 @@ export const resendVerificationEmail = async (
     const result = await EmailVerificationService.resendVerification(
       email,
       user.firstName,
-      "verification"
+      "verification",
     );
 
     if (result.success) {
@@ -291,7 +317,7 @@ export const resendVerificationEmail = async (
         outJson(true, "Verification email resent successfully", {
           message: "New verification code sent to your email",
           expiresIn: "10 minutes",
-        })
+        }),
       );
     } else {
       res

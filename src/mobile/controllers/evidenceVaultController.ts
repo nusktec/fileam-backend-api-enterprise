@@ -5,7 +5,10 @@ import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { evidenceVaultService } from "../services/evidenceVaultService";
 
-export const listDocuments = async (req: IRequest, res: Response): Promise<void> => {
+export const listDocuments = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const search = req.query.search as string | undefined;
@@ -14,7 +17,12 @@ export const listDocuments = async (req: IRequest, res: Response): Promise<void>
       evidenceVaultService.listDocuments(userId, { search, category }),
       evidenceVaultService.getCategoryCounts(userId),
     ]);
-    res.status(HttpStatusCode.OK).json(outJson(true, "Documents retrieved", { documents, categoryCounts: counts }));
+    res.status(HttpStatusCode.OK).json(
+      outJson(true, "Documents retrieved", {
+        documents,
+        categoryCounts: counts,
+      }),
+    );
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -22,16 +30,23 @@ export const listDocuments = async (req: IRequest, res: Response): Promise<void>
   }
 };
 
-export const getDocumentById = async (req: IRequest, res: Response): Promise<void> => {
+export const getDocumentById = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const doc = await evidenceVaultService.getDocumentById(userId, id!);
     if (!doc) {
-      res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Document not found", null));
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Document not found", null));
       return;
     }
-    res.status(HttpStatusCode.OK).json(outJson(true, "Document retrieved", doc));
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Document retrieved", doc));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -39,13 +54,18 @@ export const getDocumentById = async (req: IRequest, res: Response): Promise<voi
   }
 };
 
-export const getDocumentDownload = async (req: IRequest, res: Response): Promise<void> => {
+export const getDocumentDownload = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const url = await evidenceVaultService.getDownloadUrl(userId, id!);
     if (!url) {
-      res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Download not available for this document", null));
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Download not available for this document", null));
       return;
     }
     res.status(HttpStatusCode.OK).json(outJson(true, "Download URL", { url }));

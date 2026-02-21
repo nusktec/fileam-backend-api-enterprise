@@ -32,7 +32,7 @@ interface VaultDocument {
 export const evidenceVaultService = {
   async listDocuments(
     userId: string,
-    filters?: { search?: string; category?: string }
+    filters?: { search?: string; category?: string },
   ): Promise<VaultDocument[]> {
     const docs: VaultDocument[] = [];
     const searchLower = filters?.search?.toLowerCase().trim();
@@ -95,7 +95,8 @@ export const evidenceVaultService = {
       if (p.documentUrl || p.evidenceVaultId || p.receiptUrl) {
         if (p.receiptUrl) {
           const name = `Receipt - ${p.taxType} ${periodLabel}`;
-          if (searchLower && !name.toLowerCase().includes(searchLower)) continue;
+          if (searchLower && !name.toLowerCase().includes(searchLower))
+            continue;
           docs.push({
             id: `payable-receipt-${p.id}`,
             documentId: `DOC-${p.id.slice(0, 8).toUpperCase()}`,
@@ -109,8 +110,14 @@ export const evidenceVaultService = {
           });
         }
         const filingName = `${p.taxType} Filing ${periodLabel}`;
-        const cat = p.taxType === "VAT" ? "VAT Schedules" : p.taxType === "WHT" ? "WHT Notes" : "Filings";
-        if (searchLower && !filingName.toLowerCase().includes(searchLower)) continue;
+        const cat =
+          p.taxType === "VAT"
+            ? "VAT Schedules"
+            : p.taxType === "WHT"
+              ? "WHT Notes"
+              : "Filings";
+        if (searchLower && !filingName.toLowerCase().includes(searchLower))
+          continue;
         docs.push({
           id: `payable-${p.id}`,
           documentId: `DOC-${p.id.slice(0, 8).toUpperCase()}`,
@@ -172,12 +179,18 @@ export const evidenceVaultService = {
     return counts;
   },
 
-  async getDocumentById(userId: string, compositeId: string): Promise<VaultDocument | null> {
+  async getDocumentById(
+    userId: string,
+    compositeId: string,
+  ): Promise<VaultDocument | null> {
     const list = await this.listDocuments(userId, {});
     return list.find((d) => d.id === compositeId) ?? null;
   },
 
-  async getDownloadUrl(userId: string, compositeId: string): Promise<string | null> {
+  async getDownloadUrl(
+    userId: string,
+    compositeId: string,
+  ): Promise<string | null> {
     const doc = await this.getDocumentById(userId, compositeId);
     if (!doc || !doc.documentUrl) return null;
     return doc.documentUrl;

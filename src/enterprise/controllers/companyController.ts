@@ -5,31 +5,36 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { RandomAscii } from "../../utils/tools";
 
-export async function createCompany(req: IRequest, res: Response): Promise<void> {
-  const { name } = req.body;
-  if (!name || typeof name !== "string" || !name.trim()) {
-    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "Company name is required", null));
-    return;
-  }
+export async function createCompany(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const name = (req.body?.name as string)?.trim();
   try {
     const company = await prisma.company.create({
-      data: { name: name.trim() },
+      data: { name: name! },
     });
-    res.status(HttpStatusCode.CREATED).json(outJson(true, "Company created", company));
+    res
+      .status(HttpStatusCode.CREATED)
+      .json(outJson(true, "Company created", company));
   } catch (e) {
-    res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json(outJson(false, "Failed to create company", null));
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to create company", null));
   }
 }
 
-export async function createInvitation(req: IRequest, res: Response): Promise<void> {
-  const { companyId, invitedEmail, invitedBusinessName, expiresInHours } = req.body;
-  if (!companyId || !invitedEmail) {
-    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, "companyId and invitedEmail are required", null));
-    return;
-  }
+export async function createInvitation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const { companyId, invitedEmail, invitedBusinessName, expiresInHours } =
+    req.body;
   const company = await prisma.company.findUnique({ where: { id: companyId } });
   if (!company) {
-    res.status(HttpStatusCode.NOT_FOUND).json(outJson(false, "Company not found", null));
+    res
+      .status(HttpStatusCode.NOT_FOUND)
+      .json(outJson(false, "Company not found", null));
     return;
   }
   const hours = Math.min(Math.max(Number(expiresInHours) || 168, 1), 720);
@@ -46,13 +51,19 @@ export async function createInvitation(req: IRequest, res: Response): Promise<vo
         code,
         companyId,
         invitedEmail: String(invitedEmail).trim().toLowerCase(),
-        invitedBusinessName: invitedBusinessName ? String(invitedBusinessName).trim() : null,
+        invitedBusinessName: invitedBusinessName
+          ? String(invitedBusinessName).trim()
+          : null,
         status: "pending",
         expiresAt,
       },
     });
-    res.status(HttpStatusCode.CREATED).json(outJson(true, "Invitation created", invitation));
+    res
+      .status(HttpStatusCode.CREATED)
+      .json(outJson(true, "Invitation created", invitation));
   } catch (e) {
-    res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json(outJson(false, "Failed to create invitation", null));
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to create invitation", null));
   }
 }

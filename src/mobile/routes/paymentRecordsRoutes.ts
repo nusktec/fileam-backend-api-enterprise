@@ -1,5 +1,8 @@
 import express from "express";
-import { listPayments, getPaymentById } from "../controllers/paymentRecordsController";
+import {
+  listPayments,
+  getPaymentById,
+} from "../controllers/paymentRecordsController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
 import { validateIdParam } from "../../middlewares/validations/mobileValidation";
