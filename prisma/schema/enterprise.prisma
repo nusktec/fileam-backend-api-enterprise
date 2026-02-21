@@ -1,0 +1,214 @@
+model EnterpriseBusinessProfile {
+  id                  String    @id @default(uuid())
+  companyId           String    @unique @map("company_id")
+  companyName         String    @map("company_name")
+  businessType        String    @map("business_type")
+  industry            String    @map("industry")
+  registrationDate    DateTime  @map("registration_date") @db.Date
+  tin                 String    @map("tin")
+  businessAddress     String    @map("business_address")
+  phoneNumber         String    @map("phone_number")
+  emailAddress        String    @map("email_address")
+  website             String    @map("website")
+  subscriptionPlan    String    @map("subscription_plan")
+  monthlyPayment      Decimal   @map("monthly_payment") @db.Decimal(14, 2)
+  nextRenewalDate     DateTime  @map("next_renewal_date") @db.Date
+  compliancePercent   Int       @default(0) @map("compliance_percent")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  company   Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  activities EnterpriseComplianceActivity[]
+
+  @@map("enterprise_business_profiles")
+}
+
+model EnterpriseComplianceActivity {
+  id        String   @id @default(uuid())
+  profileId String   @map("profile_id")
+  activity  String   @map("activity")
+  eventDate DateTime @map("event_date")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  profile EnterpriseBusinessProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_compliance_activities")
+}
+
+model EnterpriseVatComputation {
+  id                   String    @id @default(uuid())
+  companyId            String    @map("company_id")
+  vatType              String    @map("vat_type")
+  vatPeriod            String    @map("vat_period")
+  startDate            DateTime  @map("start_date") @db.Date
+  endDate              DateTime  @map("end_date") @db.Date
+  salesAmountExclVat   Decimal   @map("sales_amount_excl_vat") @db.Decimal(14, 2)
+  purchaseAmountExclVat Decimal   @map("purchase_amount_excl_vat") @db.Decimal(14, 2)
+  vatRate              Decimal   @map("vat_rate") @db.Decimal(5, 2)
+  salesVat             Decimal   @map("sales_vat") @db.Decimal(14, 2)
+  purchaseVat          Decimal   @map("purchase_vat") @db.Decimal(14, 2)
+  netVatPayable        Decimal   @map("net_vat_payable") @db.Decimal(14, 2)
+  status               String    @default("draft")
+  submittedAt          DateTime? @map("submitted_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_vat_computations")
+}
+
+model EnterpriseVatMonthly {
+  id         String   @id @default(uuid())
+  companyId  String   @map("company_id")
+  month      Int      @map("month")
+  year       Int      @map("year")
+  vatPayable Decimal  @map("vat_payable") @db.Decimal(14, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, year, month])
+  @@map("enterprise_vat_monthly")
+}
+
+model EnterpriseThresholdStatus {
+  id        String   @id @default(uuid())
+  companyId String   @unique @map("company_id")
+  status    String   @map("status")
+  message   String   @map("message")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_threshold_statuses")
+}
+
+model EnterpriseTransaction {
+  id          String   @id @default(uuid())
+  companyId   String   @map("company_id")
+  date        DateTime @map("date") @db.Date
+  description String   @map("description")
+  amount      Decimal  @map("amount") @db.Decimal(14, 2)
+  status      String   @map("status")
+  type        String   @map("type")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_transactions")
+}
+
+model EnterpriseFinancialDocument {
+  id               String    @id @default(uuid())
+  companyId        String    @map("company_id")
+  documentType     String    @map("document_type")
+  description      String?   @map("description")
+  documentDate     DateTime  @map("document_date") @db.Date
+  amount           Decimal   @map("amount") @db.Decimal(14, 2)
+  currency         String    @map("currency")
+  fileUrl          String?   @map("file_url")
+  processingStatus String    @default("pending") @map("processing_status")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_financial_documents")
+}
+
+model EnterpriseInvoice {
+  id             String    @id @default(uuid())
+  companyId      String    @map("company_id")
+  invoiceNumber  String    @map("invoice_number")
+  clientName     String    @map("client_name")
+  clientAddress  String    @map("client_address")
+  clientEmail    String    @map("client_email")
+  dateIssued     DateTime  @map("date_issued") @db.Date
+  dueDate        DateTime  @map("due_date") @db.Date
+  paymentStatus  String    @default("Outstanding") @map("payment_status")
+  totalAmount    Decimal   @map("total_amount") @db.Decimal(14, 2)
+  notes          String?   @map("notes")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  company    Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lineItems  EnterpriseInvoiceLineItem[]
+
+  @@unique([companyId, invoiceNumber])
+  @@map("enterprise_invoices")
+}
+
+model EnterpriseInvoiceLineItem {
+  id          String   @id @default(uuid())
+  invoiceId   String   @map("invoice_id")
+  description String   @map("description")
+  quantity    Int      @map("quantity")
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(14, 2)
+  total       Decimal  @map("total") @db.Decimal(14, 2)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  invoice EnterpriseInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_invoice_line_items")
+}
+
+model EnterpriseEvidenceDocument {
+  id            String    @id @default(uuid())
+  companyId     String    @map("company_id")
+  documentName  String    @map("document_name")
+  category      String    @map("category")
+  documentDate  DateTime  @map("document_date") @db.Date
+  description   String?   @map("description")
+  fileUrl       String?   @map("file_url")
+  fileSizeKb    Int?      @map("file_size_kb")
+  status        String    @default("Pending") @map("status")
+  uploaderId    String?   @map("uploader_id")
+  approverId    String?   @map("approver_id")
+  approvedAt    DateTime? @map("approved_at")
+  rejectedAt    DateTime? @map("rejected_at")
+  notes         String?   @map("notes")
+  lastModified  DateTime  @updatedAt @map("last_modified")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  company     Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  signature   EnterpriseDocumentSignature?
+  auditTrail  EnterpriseDocumentAudit[]
+
+  @@map("enterprise_evidence_documents")
+}
+
+model EnterpriseDocumentSignature {
+  id              String   @id @default(uuid())
+  documentId      String   @unique @map("document_id")
+  documentName    String   @map("document_name")
+  documentType    String   @map("document_type")
+  dateSigned      DateTime @map("date_signed")
+  signedBy        String   @map("signed_by")
+  signerEmail     String   @map("signer_email")
+  ipAddress       String   @map("ip_address")
+  signatureMethod String   @map("signature_method")
+  documentHash    String   @map("document_hash")
+  signatureData   String?  @map("signature_data")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  document EnterpriseEvidenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_document_signatures")
+}
+
+model EnterpriseDocumentAudit {
+  id        String   @id @default(uuid())
+  documentId String  @map("document_id")
+  timestamp DateTime @map("timestamp")
+  event     String   @map("event")
+  userId    String   @map("user_id")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  document EnterpriseEvidenceDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("enterprise_document_audits")
+}

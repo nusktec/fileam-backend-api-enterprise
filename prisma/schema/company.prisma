@@ -4,8 +4,16 @@ model Company {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  invitations            Invitation[]
-  consultantConnections   ConsultantConnection[]
+  invitations                  Invitation[]
+  consultantConnections         ConsultantConnection[]
+  enterpriseBusinessProfile     EnterpriseBusinessProfile?
+  enterpriseVatComputations     EnterpriseVatComputation[]
+  enterpriseVatMonthly          EnterpriseVatMonthly[]
+  enterpriseThresholdStatus     EnterpriseThresholdStatus?
+  enterpriseTransactions       EnterpriseTransaction[]
+  enterpriseFinancialDocuments  EnterpriseFinancialDocument[]
+  enterpriseInvoices           EnterpriseInvoice[]
+  enterpriseEvidenceDocuments  EnterpriseEvidenceDocument[]
 
   @@map("companies")
 }
