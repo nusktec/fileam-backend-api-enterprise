@@ -10,7 +10,8 @@
     { "key": "accessToken", "value": "" },
     { "key": "refreshToken", "value": "" },
     { "key": "onboardingToken", "value": "" },
-    { "key": "webhookSecret", "value": "" }
+    { "key": "webhookSecret", "value": "" },
+    { "key": "consultantOnboardingToken", "value": "" }
   ],
   "item": [
     {
@@ -1088,7 +1089,7 @@
     },
     {
       "name": "Enterprise",
-      "description": "Enterprise endpoints: health check, create company, create invitation, onboarding (step email, step email-verify).",
+      "description": "Enterprise endpoints: health check, company, invitation, onboarding (business flow), consultant onboarding (7-step firm flow).",
       "item": [
         {
           "name": "Health",
@@ -1153,6 +1154,157 @@
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/step/email-verify",
                 "description": "Verifies OTP. Body: email, code (required)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultant onboarding",
+          "description": "Enterprise consultant onboarding (7 steps + review & activate). Base path: /api/v1/enterprise/consultant-onboarding. Step 1 returns consultantOnboardingToken; use X-Consultant-Onboarding-Token or body.consultantOnboardingToken for steps 2–7, profile, review-submit, activate.",
+          "item": [
+            {
+              "name": "Step 1 - Firm identity",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"businessStructure\": \"LLP\",\n  \"firmName\": \"Acme Tax Advisory LLP\",\n  \"registrationType\": \"RC\",\n  \"rcNumber\": \"RC123456\",\n  \"yearOfIncorporation\": 2018,\n  \"countryOfRegistration\": \"Nigeria\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/1",
+                "description": "Creates session and firm identity. Body: businessStructure, firmName, registrationType, countryOfRegistration (required); rcNumber, yearOfIncorporation (optional). Returns consultantOnboardingToken and session."
+              }
+            },
+            {
+              "name": "Get profile",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Consultant-Onboarding-Token", "value": "{{consultantOnboardingToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/profile",
+                "description": "Returns full onboarding session (firm identity, partners, scope, subscription, payment, compliance). Requires consultant onboarding token."
+              }
+            },
+            {
+              "name": "Step 2 - Partners & ownership",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Consultant-Onboarding-Token", "value": "{{consultantOnboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"numberOfPartners\": 2,\n  \"principalPartner\": {\n    \"fullName\": \"Jane Doe\",\n    \"email\": \"jane@acme.com\",\n    \"phone\": \"+2348012345678\",\n    \"yearsOfExperience\": 12,\n    \"certifications\": [\n      { \"qualificationName\": \"ACCA\", \"issuingBody\": \"ACCA\", \"year\": 2015 },\n      { \"qualificationName\": \"CITN\", \"issuingBody\": \"CITN\", \"year\": 2018 }\n    ]\n  }\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/2",
+                "description": "Principal partner and certifications. Body: numberOfPartners, principalPartner (fullName, email, phone, yearsOfExperience, certifications[] with qualificationName, issuingBody, year, national)."
+              }
+            },
+            {
+              "name": "Step 3 - Additional partners",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Consultant-Onboarding-Token", "value": "{{consultantOnboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"additionalPartners\": [\n    {\n      \"partnerName\": \"John Smith\",\n      \"role\": \"Partner\",\n      \"yearsOfExperience\": 8,\n      \"certifications\": [\n        { \"qualification\": \"ICAN\", \"issuingBody\": \"ICAN\", \"national\": \"Nigeria\", \"year\": 2016 }\n      ]\n    }\n  ]\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/3",
+                "description": "Additional partners. Body: additionalPartners[] (partnerName, role, yearsOfExperience, certifications[] with qualification, issuingBody, national, year)."
+              }
+            },
+            {
+              "name": "Step 4 - Scope of practice",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Consultant-Onboarding-Token", "value": "{{consultantOnboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"primaryState\": \"Lagos\",\n  \"additionalStates\": [\"Abuja\", \"Rivers\"],\n  \"taxTypesSpecializations\": [\"VAT\", \"PAYE\", \"WHT\", \"CIT\"],\n  \"businessSizeServed\": \"Medium\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/4",
+                "description": "Body: primaryState, businessSizeServed (required); additionalStates[], taxTypesSpecializations[] (optional). businessSizeServed: Micro | Small | Medium | Large | Multinational."
+              }
+            },
+            {
+              "name": "Step 5 - Subscription & reminders",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Consultant-Onboarding-Token", "value": "{{consultantOnboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"billingOption\": \"annual\",\n  \"enableAutomatedComplianceReminders\": true,\n  \"perFilingReminderConfig\": [\n    { \"filing\": \"VAT\", \"frequency\": \"monthly\", \"reminderDates\": [1, 15] },\n    { \"filing\": \"PAYE\", \"frequency\": \"monthly\", \"reminderDates\": [5, 10] }\n  ]\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/5",
+                "description": "Body: billingOption (required); enableAutomatedComplianceReminders (boolean); perFilingReminderConfig[] (filing, frequency, reminderDates[])."
+              }
+            },
+            {
+              "name": "Step 6 - Payment collection",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Consultant-Onboarding-Token", "value": "{{consultantOnboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paymentMethod\": \"bank_transfer\",\n  \"bankAccountNumber\": \"1234567890\",\n  \"warrantApproval\": \"\",\n  \"selfRemittance\": \"\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/6",
+                "description": "Body: paymentMethod (required); bankAccountNumber, warrantApproval, selfRemittance (optional). paymentMethod: direct_debit | bank_transfer | card | custom_invoice."
+              }
+            },
+            {
+              "name": "Step 7 - Compliance & verification",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Consultant-Onboarding-Token", "value": "{{consultantOnboardingToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cacDocumentUrl\": \"https://example.com/cac.pdf\",\n  \"principalPartnerIdUrl\": \"https://example.com/id.pdf\",\n  \"professionalCertificateUrl\": \"https://example.com/cert.pdf\",\n  \"amlDocumentUrl\": \"https://example.com/aml.pdf\",\n  \"firmProfileUrl\": \"https://example.com/profile.pdf\",\n  \"declarationAccuracy\": true,\n  \"declarationFirsCompliance\": true,\n  \"declarationSuspensionPolicy\": true,\n  \"saveAsDraft\": false\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/7",
+                "description": "Document URLs (optional): cacDocumentUrl, principalPartnerIdUrl, professionalCertificateUrl, amlDocumentUrl, firmProfileUrl. Declarations (required booleans): declarationAccuracy, declarationFirsCompliance, declarationSuspensionPolicy. saveAsDraft: true to save without submitting."
+              }
+            },
+            {
+              "name": "Review & submit",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Consultant-Onboarding-Token", "value": "{{consultantOnboardingToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/review-submit",
+                "description": "Marks submission for review (documents reviewed in 24–48 hours). Requires step 7 submitted (saveAsDraft false)."
+              }
+            },
+            {
+              "name": "Activate account",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "X-Consultant-Onboarding-Token", "value": "{{consultantOnboardingToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/activate",
+                "description": "Activates the consultant onboarding account. Sets status to activated and currentStep to 8."
               }
             }
           ]
