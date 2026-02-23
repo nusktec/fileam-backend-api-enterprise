@@ -82,7 +82,7 @@ const sendVerificationEmail = async (
 
     return await sendEmail(
       to,
-      "Verify Your Email - file-am",
+      "Verify Your Email - Fileam",
       htmlContent,
       EMAIL_CATEGORIES.ACCOUNT_VERIFICATION,
     );
@@ -111,7 +111,7 @@ const sendOtpEmail = async (
 
     return await sendEmail(
       to,
-      "Your Secure Access Code - file-am",
+      "Your Secure Access Code - Fileam",
       htmlContent,
       EMAIL_CATEGORIES.ACCOUNT_VERIFICATION,
     );
@@ -133,12 +133,12 @@ const sendWelcomeEmail = async (
 
     const htmlContent = renderTemplate(template, {
       name,
-      body: "Welcome to file-am! Your account has been successfully created.",
+      body: "Welcome to Fileam! Your account has been successfully created.",
     });
 
     return await sendEmail(
       to,
-      "Welcome to file-am!",
+      "Welcome to Fileam!",
       htmlContent,
       EMAIL_CATEGORIES.WELCOME,
     );
