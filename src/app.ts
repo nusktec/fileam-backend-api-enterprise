@@ -97,8 +97,19 @@ async function startServer() {
     const shouldSeed =
       process.argv.includes("--seed") || process.env.RUN_SEED !== "false";
     if (shouldSeed) {
-      console.log("Running database seed...");
-      await runSeed();
+      try {
+        console.log("Running database seed...");
+        await runSeed();
+        console.log("Database seed completed successfully.");
+      } catch (seedError) {
+        console.warn(
+          "Database seed failed (app will continue):",
+          seedError instanceof Error ? seedError.message : seedError,
+        );
+        console.warn(
+          "Tip: Run migrations first with `prisma migrate deploy` if tables are missing.",
+        );
+      }
     }
 
     const server = http.createServer(app);
