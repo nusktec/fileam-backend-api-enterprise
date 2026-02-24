@@ -388,7 +388,6 @@ export async function createInvoice(
 ): Promise<void> {
   const companyId = req.companyId!;
   const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
-    invoiceNumber: string;
     clientName: string;
     clientAddress: string;
     clientEmail: string;
@@ -415,7 +414,6 @@ export async function createInvoice(
     : [];
   try {
     const invoice = await enterpriseFinancialsService.createInvoice(companyId, {
-      invoiceNumber: data.invoiceNumber,
       clientName: data.clientName,
       clientAddress: data.clientAddress,
       clientEmail: data.clientEmail,

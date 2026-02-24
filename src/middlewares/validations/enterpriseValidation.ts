@@ -151,10 +151,6 @@ const validateUploadFinancialDocument = [
 ];
 
 const validateCreateInvoice = [
-  check("invoiceNumber")
-    .trim()
-    .notEmpty()
-    .withMessage("invoiceNumber is required"),
   check("clientName").trim().notEmpty().withMessage("clientName is required"),
   check("clientAddress")
     .trim()

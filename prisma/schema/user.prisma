@@ -23,6 +23,7 @@ model User {
   payersNotificationsEnabled Boolean @default(true) @map("payers_notifications_enabled")
   complianceUpdatesEnabled Boolean  @default(false) @map("compliance_updates_enabled")
   twoFactorEnabled       Boolean   @default(false) @map("two_factor_enabled")
+  nextSaleNumber         Int       @default(1) @map("next_sale_number")
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
 

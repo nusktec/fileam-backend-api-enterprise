@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import type { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import type { FinancialDocumentUploadInput } from "../../interfaces/enterprise/financials";
 
@@ -302,7 +303,6 @@ export const enterpriseFinancialsService = {
   async createInvoice(
     companyId: string,
     data: {
-      invoiceNumber: string;
       clientName: string;
       clientAddress: string;
       clientEmail: string;
@@ -322,36 +322,52 @@ export const enterpriseFinancialsService = {
       where: { id: companyId },
     });
     if (!company) return null;
-    const invoice = await prisma.enterpriseInvoice.create({
-      data: {
-        companyId,
-        invoiceNumber: data.invoiceNumber,
-        clientName: data.clientName,
-        clientAddress: data.clientAddress,
-        clientEmail: data.clientEmail,
-        dateIssued: data.dateIssued,
-        dueDate: data.dueDate,
-        totalAmount: new Decimal(data.totalAmount),
-        notes: data.notes ?? null,
-      },
-    });
-    for (let i = 0; i < data.lineItems.length; i++) {
-      const item = data.lineItems[i];
-      await prisma.enterpriseInvoiceLineItem.create({
+    const invoice = await prisma.$transaction(async (tx) => {
+      const companyRow = await tx.company.findUnique({
+        where: { id: companyId },
+      });
+      if (!companyRow) return null;
+      const nextNum =
+        Number((companyRow as { nextInvoiceNumber?: number }).nextInvoiceNumber) || 1;
+      const invoiceNumber = String(nextNum);
+      await tx.company.update({
+        where: { id: companyId },
         data: {
-          invoiceId: invoice.id,
-          description: item.description,
-          quantity: item.quantity,
-          unitPrice: new Decimal(item.unitPrice),
-          total: new Decimal(item.total),
-          sortOrder: i,
+          nextInvoiceNumber: nextNum + 1,
+        } as Prisma.CompanyUpdateInput,
+      });
+      const created = await tx.enterpriseInvoice.create({
+        data: {
+          companyId,
+          invoiceNumber,
+          clientName: data.clientName,
+          clientAddress: data.clientAddress,
+          clientEmail: data.clientEmail,
+          dateIssued: data.dateIssued,
+          dueDate: data.dueDate,
+          totalAmount: new Decimal(data.totalAmount),
+          notes: data.notes ?? null,
         },
       });
-    }
-    return prisma.enterpriseInvoice.findUnique({
-      where: { id: invoice.id },
-      include: { lineItems: true },
+      for (let i = 0; i < data.lineItems.length; i++) {
+        const item = data.lineItems[i];
+        await tx.enterpriseInvoiceLineItem.create({
+          data: {
+            invoiceId: created.id,
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: new Decimal(item.unitPrice),
+            total: new Decimal(item.total),
+            sortOrder: i,
+          },
+        });
+      }
+      return tx.enterpriseInvoice.findUnique({
+        where: { id: created.id },
+        include: { lineItems: true },
+      });
     });
+    return invoice;
   },
 
   async listInvoices(

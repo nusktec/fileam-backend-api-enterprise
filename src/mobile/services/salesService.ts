@@ -2,21 +2,11 @@ import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const VAT_RATE = 7.5;
-const SALE_COUNTER_ID = "sale_invoice";
 const EXPENSE_COUNTER_ID = "expense_number";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
-}
-
-async function nextInvoiceNumber(): Promise<string> {
-  const counter = await prisma.counter.upsert({
-    where: { id: SALE_COUNTER_ID },
-    create: { id: SALE_COUNTER_ID, lastNumber: 1 },
-    update: { lastNumber: { increment: 1 } },
-  });
-  return `INV-${String(counter.lastNumber).padStart(3, "0")}`;
 }
 
 export const salesService = {
@@ -131,25 +121,37 @@ export const salesService = {
       : new Decimal(0);
     const totalAmount = amount.add(vatAmount);
 
-    const invoiceNumber = await nextInvoiceNumber();
-
-    const sale = await prisma.sale.create({
-      data: {
-        userId,
-        invoiceNumber,
-        description: data.description,
-        customerName: data.customerName ?? null,
-        amount,
-        vatRate,
-        vatAmount,
-        totalAmount,
-        paymentType: data.paymentType,
-        saleDate: new Date(data.date),
-        vatableIncome: data.vatableIncome,
-        serviceIncome: data.serviceIncome,
-        status: "Pending",
-      },
+    const sale = await prisma.$transaction(async (tx) => {
+      const userRow = await tx.user.findUnique({
+        where: { id: userId },
+      });
+      if (!userRow) return null;
+      const nextNum =
+        Number((userRow as { nextSaleNumber?: number }).nextSaleNumber) || 1;
+      const invoiceNumber = String(nextNum);
+      await tx.$executeRaw`
+        UPDATE "User" SET next_sale_number = ${nextNum + 1} WHERE id = ${userId}
+      `;
+      return tx.sale.create({
+        data: {
+          userId,
+          invoiceNumber,
+          description: data.description,
+          customerName: data.customerName ?? null,
+          amount,
+          vatRate,
+          vatAmount,
+          totalAmount,
+          paymentType: data.paymentType,
+          saleDate: new Date(data.date),
+          vatableIncome: data.vatableIncome,
+          serviceIncome: data.serviceIncome,
+          status: "Pending",
+        },
+      });
     });
+
+    if (!sale) return null;
 
     return {
       id: sale.id,

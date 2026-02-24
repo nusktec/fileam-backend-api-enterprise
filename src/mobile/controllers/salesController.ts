@@ -76,6 +76,12 @@ export const createSale = async (
       vatableIncome: Boolean(vatableIncome),
       serviceIncome: serviceIncome !== false,
     });
+    if (!sale) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "User not found", null));
+      return;
+    }
     res.status(HttpStatusCode.CREATED).json(outJson(true, "Sale added", sale));
   } catch (error) {
     res
