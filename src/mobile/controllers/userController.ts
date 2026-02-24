@@ -36,7 +36,10 @@ export const updateProfile = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    const data = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as {
       firstName?: string;
       lastName?: string;
       address?: string;

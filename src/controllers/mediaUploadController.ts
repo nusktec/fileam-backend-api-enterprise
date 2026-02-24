@@ -3,14 +3,8 @@ import { IRequest } from "../interfaces/CustomRequest";
 import { outJson } from "../utils/renders";
 import { HttpStatusCode } from "../interfaces/system";
 import { uploadToS3 } from "../services/mediaUploadService";
-import { MEDIA_CONFIG } from "../config/s3";
+import { MEDIA_CONFIG, getPresignedUrl } from "../config/s3";
 
-/**
- * Single endpoint for all file uploads. Uploads file to S3 and returns the URL.
- * All other endpoints that need a file (evidence vault, financials, expenses receiptUrl,
- * consultant onboarding docs, etc.) accept fileUrl in the request body — the client
- * should call this endpoint first, then send the returned url to those endpoints.
- */
 export async function uploadMedia(req: IRequest, res: Response): Promise<void> {
   const file = req.file;
   if (!file || !file.buffer) {
@@ -46,7 +40,76 @@ export async function uploadMedia(req: IRequest, res: Response): Promise<void> {
       .json(outJson(false, "Upload failed. S3 may not be configured.", null));
     return;
   }
+  const origin = `${req.protocol}://${req.get("host") ?? ""}`;
+  const basePath = (req.baseUrl ?? "").replace(/\/$/, "");
+  const url = `${origin}${basePath}/view?key=${encodeURIComponent(result.key)}`;
   res
     .status(HttpStatusCode.CREATED)
-    .json(outJson(true, "File uploaded", { url: result.url, key: result.key }));
+    .json(outJson(true, "File uploaded", { url, key: result.key }));
+}
+
+const PRESIGNED_EXPIRY_DEFAULT = 3600;
+const PRESIGNED_EXPIRY_MAX = 604800;
+
+export async function getPresignedUrlForView(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const key = (req.query.key as string)?.trim();
+  if (!key) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, "Query parameter 'key' is required", null));
+    return;
+  }
+  const rawExpires = req.query.expiresIn;
+  let expiresIn = PRESIGNED_EXPIRY_DEFAULT;
+  if (rawExpires !== undefined && rawExpires !== "") {
+    const n = parseInt(String(rawExpires), 10);
+    if (Number.isNaN(n) || n < 60 || n > PRESIGNED_EXPIRY_MAX) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(
+            false,
+            `expiresIn must be a number between 60 and ${PRESIGNED_EXPIRY_MAX}`,
+            null,
+          ),
+        );
+      return;
+    }
+    expiresIn = n;
+  }
+  const url = await getPresignedUrl(key, expiresIn);
+  if (!url) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to generate media URL", null));
+    return;
+  }
+  res.status(HttpStatusCode.OK).json(outJson(true, "OK", { url }));
+}
+
+export async function viewMedia(req: IRequest, res: Response): Promise<void> {
+  const key = (req.query.key as string)?.trim();
+  if (!key) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, "Query parameter 'key' is required", null));
+    return;
+  }
+  const rawExpires = req.query.expiresIn;
+  let expiresIn = PRESIGNED_EXPIRY_DEFAULT;
+  if (rawExpires !== undefined && rawExpires !== "") {
+    const n = parseInt(String(rawExpires), 10);
+    if (!Number.isNaN(n) && n >= 60 && n <= PRESIGNED_EXPIRY_MAX) expiresIn = n;
+  }
+  const url = await getPresignedUrl(key, expiresIn);
+  if (!url) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to generate media URL", null));
+    return;
+  }
+  res.redirect(302, url);
 }

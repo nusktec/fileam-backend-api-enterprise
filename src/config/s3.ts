@@ -100,3 +100,17 @@ export const generateFileKey = (folder: string, filename: string): string => {
 
   return `${folder}/${nameWithoutExt}-${timestamp}-${randomString}.${extension}`;
 };
+
+const DEFAULT_PRESIGNED_EXPIRY_SECONDS = 3600;
+
+export async function getPresignedUrl(
+  key: string,
+  expiresInSeconds: number = DEFAULT_PRESIGNED_EXPIRY_SECONDS,
+): Promise<string | null> {
+  if (!validateS3Config()) return null;
+  const command = new GetObjectCommand({
+    Bucket: s3Bucket.Bucket,
+    Key: key,
+  });
+  return getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
+}

@@ -10,7 +10,6 @@ export const uploadSingle = multer({
   limits: { fileSize: MEDIA_CONFIG.MAX_FILE_SIZE },
 }).single("file");
 
-/** Handle multer errors (e.g. LIMIT_FILE_SIZE) and return 400. */
 export function handleUploadError(
   err: unknown,
   req: Request,
@@ -23,19 +22,23 @@ export function handleUploadError(
   }
   const multerErr = err as multer.MulterError;
   if (multerErr.code === "LIMIT_FILE_SIZE") {
-    res.status(400).json(
-      outJson(
-        false,
-        `File too large. Max size: ${MEDIA_CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB`,
-        null,
-      ),
-    );
+    res
+      .status(400)
+      .json(
+        outJson(
+          false,
+          `File too large. Max size: ${MEDIA_CONFIG.MAX_FILE_SIZE / 1024 / 1024}MB`,
+          null,
+        ),
+      );
     return;
   }
   if (multerErr.code === "LIMIT_UNEXPECTED_FILE") {
-    res.status(400).json(
-      outJson(false, "Unexpected field. Use form field name 'file'.", null),
-    );
+    res
+      .status(400)
+      .json(
+        outJson(false, "Unexpected field. Use form field name 'file'.", null),
+      );
     return;
   }
   next(err);
