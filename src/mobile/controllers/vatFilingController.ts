@@ -27,7 +27,13 @@ export const getVatCalculation = async (
       (req.query.year && req.query.month
         ? { year: Number(req.query.year), month: Number(req.query.month) }
         : null);
-    if (!parsed || !parsed.year || !parsed.month || parsed.month < 1 || parsed.month > 12) {
+    if (
+      !parsed ||
+      !parsed.year ||
+      !parsed.month ||
+      parsed.month < 1 ||
+      parsed.month > 12
+    ) {
       res
         .status(HttpStatusCode.BAD_REQUEST)
         .json(
