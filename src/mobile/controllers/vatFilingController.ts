@@ -23,10 +23,11 @@ export const getVatCalculation = async (
     const userId = getAuthUserId(req);
     const period = req.query.period as string | undefined;
     const parsed =
-      (parsePeriod(period) ?? (req.query.year && req.query.month))
+      parsePeriod(period) ??
+      (req.query.year && req.query.month
         ? { year: Number(req.query.year), month: Number(req.query.month) }
-        : null;
-    if (!parsed || !parsed.year || !parsed.month) {
+        : null);
+    if (!parsed || !parsed.year || !parsed.month || parsed.month < 1 || parsed.month > 12) {
       res
         .status(HttpStatusCode.BAD_REQUEST)
         .json(
