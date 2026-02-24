@@ -10,6 +10,7 @@ model EnterpriseBusinessProfile {
   phoneNumber         String    @map("phone_number")
   emailAddress        String    @map("email_address")
   website             String    @map("website")
+  logo                String?   @map("logo")
   subscriptionPlan    String    @map("subscription_plan")
   monthlyPayment      Decimal   @map("monthly_payment") @db.Decimal(14, 2)
   nextRenewalDate     DateTime  @map("next_renewal_date") @db.Date

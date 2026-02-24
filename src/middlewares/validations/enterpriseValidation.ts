@@ -66,8 +66,14 @@ const validateUpdateBusinessProfile = [
     .notEmpty()
     .withMessage("emailAddress is required"),
   check("website").trim().notEmpty().withMessage("website is required"),
+  check("logo")
+    .optional()
+    .trim()
+    .isString()
+    .withMessage("logo must be a valid URL string"),
   check("registrationDate")
     .optional()
+    .trim()
     .isISO8601()
     .withMessage("registrationDate must be a valid ISO date"),
   handleValidation,

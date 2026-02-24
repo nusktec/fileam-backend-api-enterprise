@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { matchedData } from "express-validator";
 import { prisma } from "../../config/database";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
@@ -9,10 +10,10 @@ export async function createCompany(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const name = (req.body?.name as string)?.trim();
+  const data = matchedData(req, { locations: ["body"] }) as { name: string };
   try {
     const company = await prisma.company.create({
-      data: { name: name! },
+      data: { name: data.name },
     });
     res
       .status(HttpStatusCode.CREATED)
@@ -28,8 +29,16 @@ export async function createInvitation(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const { companyId, invitedEmail, invitedBusinessName, expiresInHours } =
-    req.body;
+  const data = matchedData(req, {
+    locations: ["body"],
+    includeOptionals: true,
+  }) as {
+    companyId: string;
+    invitedEmail: string;
+    invitedBusinessName?: string;
+    expiresInHours?: number;
+  };
+  const { companyId, invitedEmail, invitedBusinessName, expiresInHours } = data;
   const company = await prisma.company.findUnique({ where: { id: companyId } });
   if (!company) {
     res
@@ -50,10 +59,8 @@ export async function createInvitation(
       data: {
         code,
         companyId,
-        invitedEmail: String(invitedEmail).trim().toLowerCase(),
-        invitedBusinessName: invitedBusinessName
-          ? String(invitedBusinessName).trim()
-          : null,
+        invitedEmail: invitedEmail.trim().toLowerCase(),
+        invitedBusinessName: invitedBusinessName ? invitedBusinessName.trim() : null,
         status: "pending",
         expiresAt,
       },

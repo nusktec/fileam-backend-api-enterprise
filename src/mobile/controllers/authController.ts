@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { matchedData } from "express-validator";
 import { outJson } from "../../utils/renders";
 import { PrintDebug } from "../../utils/tools";
 import { HttpStatusCode } from "../../interfaces/system";
@@ -13,25 +14,25 @@ import { generateOnboardingToken } from "../../utils/onboardingToken";
 import { authService } from "../services/authService";
 
 export const register = async (req: Request, res: Response): Promise<void> => {
-  const {
-    email,
-    password,
-    firstName,
-    lastName,
-    organizationName,
-    organizationAddress,
-    logo,
-  } = req.body;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    organizationName?: string;
+    organizationAddress?: string;
+    logo?: string;
+  };
 
   try {
     const result = await authService.registerUser({
-      email,
-      password,
-      firstName,
-      lastName,
-      organizationName,
-      organizationAddress,
-      logo,
+      email: data.email,
+      password: data.password,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      organizationName: data.organizationName,
+      organizationAddress: data.organizationAddress,
+      logo: data.logo,
     });
 
     if (!result.success) {
@@ -58,10 +59,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 };
 
 export const login = async (req: Request, res: Response): Promise<void> => {
-  const { email, password } = req.body;
+  const data = matchedData(req, { locations: ["body"] }) as { email: string; password: string };
 
   try {
-    const user = await authService.findUserByEmail(email);
+    const user = await authService.findUserByEmail(data.email);
     if (!user) {
       res
         .status(HttpStatusCode.NOT_FOUND)
@@ -69,7 +70,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isMatch = await authService.validatePassword(password, user.password);
+    const isMatch = await authService.validatePassword(data.password, user.password);
     if (!isMatch) {
       res
         .status(HttpStatusCode.UNAUTHORIZED)
@@ -89,7 +90,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     await saveRefreshToken(user.id, refreshToken);
 
     const payload = authService.buildAuthUserPayload(user);
-    const data: {
+    const responseData: {
       accessToken: string;
       refreshToken: string;
       user: typeof payload;
@@ -101,14 +102,14 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       user: payload,
     };
     if (!user.onboardingComplete) {
-      data.onboardingToken = generateOnboardingToken({
+      responseData.onboardingToken = generateOnboardingToken({
         email: user.email,
         acceptedInvitationIds: [],
       });
-      data.currentOnboardingStep = user.currentOnboardingStep ?? "income_type";
+      responseData.currentOnboardingStep = user.currentOnboardingStep ?? "income_type";
     }
 
-    res.status(HttpStatusCode.OK).json(outJson(true, "Login successful", data));
+    res.status(HttpStatusCode.OK).json(outJson(true, "Login successful", responseData));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -121,7 +122,8 @@ export const sendOtpEmail = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { email } = req.body;
+    const data = matchedData(req, { locations: ["body"] }) as { email: string };
+    const { email } = data;
 
     const result = await EmailVerificationService.generateAndSendOtp(
       email,
@@ -154,7 +156,8 @@ export const verifyEmail = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { email, code } = req.body;
+    const data = matchedData(req, { locations: ["body"] }) as { email: string; code: string };
+    const { email, code } = data;
 
     const user = await authService.findUserByEmail(email);
     if (!user) {
@@ -203,14 +206,8 @@ export const refreshToken = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
-  const { refreshToken: token } = req.body;
-
-  if (!token) {
-    res
-      .status(HttpStatusCode.BAD_REQUEST)
-      .json(outJson(false, "Refresh token is required", null));
-    return;
-  }
+  const data = matchedData(req, { locations: ["body"] }) as { refreshToken: string };
+  const token = data.refreshToken;
 
   try {
     const tokenRecord = await authService.findValidRefreshToken(token);
@@ -260,14 +257,8 @@ export const refreshToken = async (
 };
 
 export const logout = async (req: Request, res: Response): Promise<void> => {
-  const { refreshToken: token } = req.body;
-
-  if (!token) {
-    res
-      .status(HttpStatusCode.BAD_REQUEST)
-      .json(outJson(false, "Refresh token is required", null));
-    return;
-  }
+  const data = matchedData(req, { locations: ["body"] }) as { refreshToken: string };
+  const token = data.refreshToken;
 
   try {
     const tokenRecord = await authService.findRefreshTokenRecord(token);
@@ -289,7 +280,8 @@ export const resendVerificationEmail = async (
   res: Response,
 ): Promise<void> => {
   try {
-    const { email } = req.body;
+    const data = matchedData(req, { locations: ["body"] }) as { email: string };
+    const { email } = data;
 
     const user = await authService.findUserByEmail(email);
     if (!user) {

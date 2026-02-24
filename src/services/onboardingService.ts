@@ -15,10 +15,35 @@ import { authService } from "../mobile/services/authService";
 
 const ONBOARDING_VERIFICATION_TYPE = "onboarding_verification";
 
+function shapeBusinessForResponse(business: {
+  id: string;
+  name: string;
+  incomeType: string;
+  taxObligationsUnderstoodAndAccepted: boolean;
+  businessIdNumber: string | null;
+  tin: string | null;
+  streetAddress: string | null;
+  stateOfResidence: string | null;
+  primaryTaxOffice: string | null;
+}) {
+  return {
+    id: business.id,
+    name: business.name,
+    incomeType: business.incomeType,
+    taxObligationsUnderstoodAndAccepted:
+      business.taxObligationsUnderstoodAndAccepted,
+    businessIdNumber: business.businessIdNumber,
+    tin: business.tin,
+    streetAddress: business.streetAddress,
+    stateOfResidence: business.stateOfResidence,
+    primaryTaxOffice: business.primaryTaxOffice,
+  };
+}
+
 export const onboardingService = {
   async stepEmail(email: string, firstName?: string, _invitationId?: string) {
     const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing?.onboardingComplete)
+    if (existing?.verified)
       return {
         success: false as const,
         message: "An account with this email already exists",
@@ -78,7 +103,7 @@ export const onboardingService = {
     ]);
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    await prisma.user.create({
+    const created = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
@@ -88,11 +113,20 @@ export const onboardingService = {
         currentOnboardingStep: "income_type",
         userRoles: { create: { roleId: businessRole.id } },
       },
+      include: { userRoles: { include: { role: true } } },
     });
-    return { success: true as const, data: {} };
+    const userPayload = authService.buildAuthUserPayload(created);
+    return {
+      success: true as const,
+      data: {
+        user: userPayload,
+        currentOnboardingStep: created.currentOnboardingStep ?? "income_type",
+      },
+    };
   },
 
   async getUserByEmail(email: string) {
+    if (!email || typeof email !== "string") return null;
     return prisma.user.findUnique({
       where: { email },
       include: { businesses: true, userRoles: { include: { role: true } } },
@@ -126,12 +160,19 @@ export const onboardingService = {
         message: "User not found. Complete password step first.",
       };
 
-    await this.getOrCreateBusinessForUser(user.id, incomeType);
-    await prisma.user.update({
+    const business = await this.getOrCreateBusinessForUser(user.id, incomeType);
+    const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { currentOnboardingStep: "tax_obligations" },
     });
-    return { success: true as const, data: {} };
+    return {
+      success: true as const,
+      data: {
+        business: business ? shapeBusinessForResponse(business) : null,
+        currentOnboardingStep:
+          updatedUser.currentOnboardingStep ?? "tax_obligations",
+      },
+    };
   },
 
   async stepTaxObligations(tokenPayload: OnboardingTokenPayload) {
@@ -146,15 +187,22 @@ export const onboardingService = {
         message: "Business not found. Complete income-type step first.",
       };
 
-    await prisma.business.update({
+    const updatedBusiness = await prisma.business.update({
       where: { id: business.id },
       data: { taxObligationsUnderstoodAndAccepted: true },
     });
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: { currentOnboardingStep: "business_details" },
     });
-    return { success: true as const, data: {} };
+    return {
+      success: true as const,
+      data: {
+        business: shapeBusinessForResponse(updatedBusiness),
+        currentOnboardingStep:
+          updatedUser.currentOnboardingStep ?? "business_details",
+      },
+    };
   },
 
   async stepBusinessDetails(
@@ -176,7 +224,7 @@ export const onboardingService = {
     if (!business)
       return { success: false as const, message: "Business not found." };
 
-    await prisma.business.update({
+    const updatedBusiness = await prisma.business.update({
       where: { id: business.id },
       data: {
         name: data.name,
@@ -191,7 +239,13 @@ export const onboardingService = {
       where: { id: user.id },
       data: { currentOnboardingStep: "tax_jurisdiction" },
     });
-    return { success: true as const, data: {} };
+    return {
+      success: true as const,
+      data: {
+        business: shapeBusinessForResponse(updatedBusiness),
+        currentOnboardingStep: "tax_jurisdiction",
+      },
+    };
   },
 
   async stepTaxJurisdiction(
@@ -206,7 +260,7 @@ export const onboardingService = {
     if (!business)
       return { success: false as const, message: "Business not found." };
 
-    await prisma.business.update({
+    const updatedBusiness = await prisma.business.update({
       where: { id: business.id },
       data: {
         ...(data.primaryTaxOffice != null && {
@@ -221,7 +275,13 @@ export const onboardingService = {
       where: { id: user.id },
       data: { currentOnboardingStep: "consultant_terms" },
     });
-    return { success: true as const, data: {} };
+    return {
+      success: true as const,
+      data: {
+        business: shapeBusinessForResponse(updatedBusiness),
+        currentOnboardingStep: "consultant_terms",
+      },
+    };
   },
 
   async stepConsultantTerms(tokenPayload: OnboardingTokenPayload) {
@@ -440,10 +500,13 @@ export const onboardingService = {
   },
 
   async rejectRequest(_payload: OnboardingTokenPayload, invitationId: string) {
-    await prisma.invitation.updateMany({
+    const result = await prisma.invitation.updateMany({
       where: { id: invitationId, status: "pending" },
       data: { status: "rejected" },
     });
-    return { success: true as const, data: {} };
+    return {
+      success: true as const,
+      data: { rejected: true, invitationId, count: result.count },
+    };
   },
 };

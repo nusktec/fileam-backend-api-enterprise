@@ -1,8 +1,8 @@
 import { Response } from "express";
+import { matchedData } from "express-validator";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getParam } from "../utils/paramHelpers";
 import {
-  requireCompanyId,
   sendNotFound,
   sendResult,
   sendCreated,
@@ -15,8 +15,7 @@ export async function getRecentTransactions(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const limit = req.query.limit ? Number(req.query.limit) : 10;
   try {
     const list = await enterpriseFinancialsService.getRecentTransactions(
@@ -37,8 +36,7 @@ export async function getAllTransactions(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const pagination = req.pagination;
   try {
     const result = await enterpriseFinancialsService.getAllTransactions(
@@ -67,8 +65,7 @@ export async function getAllTransactions(
 }
 
 export async function getSummary(req: IRequest, res: Response): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const summary = await enterpriseFinancialsService.getSummary(companyId);
     if (!summary) {
@@ -85,8 +82,7 @@ export async function getMonthlyCashFlow(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const year = req.query.year ? Number(req.query.year) : undefined;
   try {
     const data = await enterpriseFinancialsService.getMonthlyCashFlow(
@@ -107,22 +103,22 @@ export async function addTransaction(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
-  const body = req.body || {};
-  const description =
-    body.description != null ? String(body.description).trim() : "";
-  const date = body.date ? new Date(body.date) : new Date();
-  const amount = Number(body.amount ?? 0);
-  const status = body.status != null ? String(body.status).trim() : "Pending";
-  const type = body.type != null ? String(body.type).trim() : "expense";
+  const companyId = req.companyId!;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    description: string;
+    date?: string;
+    amount?: number;
+    status?: string;
+    type?: string;
+  };
+  const date = data.date ? new Date(data.date) : new Date();
   try {
     const t = await enterpriseFinancialsService.addTransaction(companyId, {
       date,
-      description,
-      amount,
-      status,
-      type,
+      description: data.description,
+      amount: Number(data.amount ?? 0),
+      status: (data.status ?? "Pending").trim(),
+      type: (data.type ?? "expense").trim(),
     });
     if (!t) {
       sendNotFound(res, "Company not found");
@@ -162,23 +158,24 @@ export async function uploadDocument(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
-  const body = req.body as Record<string, unknown>;
-  const documentType = body.documentType != null ? String(body.documentType).trim() : "";
-  const description = body.description != null ? String(body.description).trim() : undefined;
-  const documentDate = body.documentDate ? new Date(body.documentDate as string) : new Date();
-  const amount = Number(body.amount ?? 0);
-  const currency = body.currency != null ? String(body.currency).trim() : "USD";
-  const fileUrl = body.fileUrl != null ? String(body.fileUrl).trim() || undefined : undefined;
+  const companyId = req.companyId!;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    documentType: string;
+    description?: string;
+    documentDate?: string;
+    amount?: number;
+    currency?: string;
+    fileUrl?: string;
+  };
+  const documentDate = data.documentDate ? new Date(data.documentDate) : new Date();
   try {
     const doc = await enterpriseFinancialsService.uploadDocument(companyId, {
-      documentType,
-      description,
+      documentType: data.documentType,
+      description: data.description,
       documentDate,
-      amount,
-      currency,
-      fileUrl,
+      amount: Number(data.amount ?? 0),
+      currency: (data.currency ?? "USD").trim(),
+      fileUrl: data.fileUrl?.trim() || undefined,
     });
     if (!doc) {
       sendNotFound(res, "Company not found");
@@ -194,8 +191,7 @@ export async function getDocumentStatus(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
   try {
     const status = await enterpriseFinancialsService.getDocumentStatus(
@@ -216,8 +212,7 @@ export async function getProcessingQueue(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const queue =
       await enterpriseFinancialsService.getProcessingQueue(companyId);
@@ -232,8 +227,7 @@ export async function getProcessingQueue(
 }
 
 export async function getInvoice(req: IRequest, res: Response): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const invoiceId = getParam(req.params, "invoiceId");
   try {
     const invoice = await enterpriseFinancialsService.getInvoice(
@@ -254,10 +248,22 @@ export async function updateInvoice(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const invoiceId = getParam(req.params, "invoiceId");
-  const body = req.body || {};
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    clientName?: string;
+    clientAddress?: string;
+    clientEmail?: string;
+    dateIssued?: string;
+    dueDate?: string;
+    notes?: string;
+    lineItems?: Array<{
+      description?: string;
+      quantity?: number;
+      unitPrice?: number;
+      total?: number;
+    }>;
+  };
   const update: {
     clientName?: string;
     clientAddress?: string;
@@ -272,29 +278,19 @@ export async function updateInvoice(
       total: number;
     }>;
   } = {};
-  if (body.clientName != null)
-    update.clientName = String(body.clientName).trim();
-  if (body.clientAddress != null)
-    update.clientAddress = String(body.clientAddress).trim();
-  if (body.clientEmail != null)
-    update.clientEmail = String(body.clientEmail).trim();
-  if (body.dateIssued) update.dateIssued = new Date(body.dateIssued);
-  if (body.dueDate) update.dueDate = new Date(body.dueDate);
-  if (body.notes != null) update.notes = String(body.notes).trim();
-  if (Array.isArray(body.lineItems)) {
-    update.lineItems = body.lineItems.map(
-      (item: {
-        description?: string;
-        quantity?: number;
-        unitPrice?: number;
-        total?: number;
-      }) => ({
-        description: String(item.description ?? ""),
-        quantity: Number(item.quantity ?? 0),
-        unitPrice: Number(item.unitPrice ?? 0),
-        total: Number(item.total ?? 0),
-      }),
-    );
+  if (data.clientName != null) update.clientName = data.clientName.trim();
+  if (data.clientAddress != null) update.clientAddress = data.clientAddress.trim();
+  if (data.clientEmail != null) update.clientEmail = data.clientEmail.trim();
+  if (data.dateIssued) update.dateIssued = new Date(data.dateIssued);
+  if (data.dueDate) update.dueDate = new Date(data.dueDate);
+  if (data.notes != null) update.notes = data.notes.trim();
+  if (Array.isArray(data.lineItems)) {
+    update.lineItems = data.lineItems.map((item) => ({
+      description: String(item.description ?? ""),
+      quantity: Number(item.quantity ?? 0),
+      unitPrice: Number(item.unitPrice ?? 0),
+      total: Number(item.total ?? 0),
+    }));
   }
   try {
     const invoice = await enterpriseFinancialsService.updateInvoice(
@@ -316,8 +312,7 @@ export async function markInvoicePaid(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const invoiceId = getParam(req.params, "invoiceId");
   try {
     const invoice = await enterpriseFinancialsService.markInvoicePaid(
@@ -338,8 +333,7 @@ export async function getInvoicePdf(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const invoiceId = getParam(req.params, "invoiceId");
   try {
     const invoice = await enterpriseFinancialsService.getInvoice(
@@ -363,8 +357,7 @@ export async function listInvoices(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const pagination = req.pagination;
   try {
     const result = await enterpriseFinancialsService.listInvoices(companyId, {
@@ -393,46 +386,43 @@ export async function createInvoice(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
-  const body = req.body || {};
-  const invoiceNumber =
-    body.invoiceNumber != null ? String(body.invoiceNumber).trim() : "";
-  const clientName =
-    body.clientName != null ? String(body.clientName).trim() : "";
-  const clientAddress =
-    body.clientAddress != null ? String(body.clientAddress).trim() : "";
-  const clientEmail =
-    body.clientEmail != null ? String(body.clientEmail).trim() : "";
-  const dateIssued = body.dateIssued ? new Date(body.dateIssued) : new Date();
-  const dueDate = body.dueDate ? new Date(body.dueDate) : new Date();
-  const totalAmount = Number(body.totalAmount ?? 0);
-  const notes = body.notes != null ? String(body.notes).trim() : undefined;
-  const lineItems = Array.isArray(body.lineItems)
-    ? body.lineItems.map(
-        (item: {
-          description?: string;
-          quantity?: number;
-          unitPrice?: number;
-          total?: number;
-        }) => ({
-          description: String(item.description ?? ""),
-          quantity: Number(item.quantity ?? 0),
-          unitPrice: Number(item.unitPrice ?? 0),
-          total: Number(item.total ?? 0),
-        }),
-      )
+  const companyId = req.companyId!;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    invoiceNumber: string;
+    clientName: string;
+    clientAddress: string;
+    clientEmail: string;
+    dateIssued?: string;
+    dueDate?: string;
+    totalAmount?: number;
+    notes?: string;
+    lineItems?: Array<{
+      description?: string;
+      quantity?: number;
+      unitPrice?: number;
+      total?: number;
+    }>;
+  };
+  const dateIssued = data.dateIssued ? new Date(data.dateIssued) : new Date();
+  const dueDate = data.dueDate ? new Date(data.dueDate) : new Date();
+  const lineItems = Array.isArray(data.lineItems)
+    ? data.lineItems.map((item) => ({
+        description: String(item.description ?? ""),
+        quantity: Number(item.quantity ?? 0),
+        unitPrice: Number(item.unitPrice ?? 0),
+        total: Number(item.total ?? 0),
+      }))
     : [];
   try {
     const invoice = await enterpriseFinancialsService.createInvoice(companyId, {
-      invoiceNumber,
-      clientName,
-      clientAddress,
-      clientEmail,
+      invoiceNumber: data.invoiceNumber,
+      clientName: data.clientName,
+      clientAddress: data.clientAddress,
+      clientEmail: data.clientEmail,
       dateIssued,
       dueDate,
-      totalAmount,
-      notes,
+      totalAmount: Number(data.totalAmount ?? 0),
+      notes: data.notes,
       lineItems,
     });
     if (!invoice) {

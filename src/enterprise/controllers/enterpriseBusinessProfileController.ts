@@ -1,19 +1,31 @@
 import { Response } from "express";
+import { matchedData } from "express-validator";
 import { IRequest } from "../../interfaces/CustomRequest";
 import {
-  requireCompanyId,
   sendNotFound,
   sendResult,
   sendServerError,
 } from "../utils/controllerHelpers";
 import { enterpriseBusinessProfileService } from "../services/enterpriseBusinessProfileService";
 
+interface UpdateBusinessProfileBody {
+  companyName: string;
+  businessType: string;
+  industry: string;
+  tin: string;
+  businessAddress: string;
+  phoneNumber: string;
+  emailAddress: string;
+  website: string;
+  logo?: string;
+  registrationDate?: string;
+}
+
 export async function getBusinessProfile(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const profile =
       await enterpriseBusinessProfileService.getProfile(companyId);
@@ -31,8 +43,7 @@ export async function getBusinessProfileActivities(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const activities =
       await enterpriseBusinessProfileService.getActivities(companyId);
@@ -46,43 +57,32 @@ export async function updateBusinessProfile(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
-  const body = req.body || {};
-  const companyName =
-    body.companyName != null ? String(body.companyName).trim() : "";
-  const businessType =
-    body.businessType != null ? String(body.businessType).trim() : "";
-  const industry = body.industry != null ? String(body.industry).trim() : "";
-  const tin = body.tin != null ? String(body.tin).trim() : "";
-  const businessAddress =
-    body.businessAddress != null ? String(body.businessAddress).trim() : "";
-  const phoneNumber =
-    body.phoneNumber != null ? String(body.phoneNumber).trim() : "";
-  const emailAddress =
-    body.emailAddress != null ? String(body.emailAddress).trim() : "";
-  const website = body.website != null ? String(body.website).trim() : "";
-  let registrationDate: Date;
-  try {
-    registrationDate = body.registrationDate
-      ? new Date(body.registrationDate)
-      : new Date();
-  } catch {
-    registrationDate = new Date();
-  }
+  const companyId = req.companyId!;
+  const data = matchedData(req, {
+    locations: ["body"],
+    includeOptionals: true,
+  }) as UpdateBusinessProfileBody;
+
+  const registrationDate = data.registrationDate
+    ? new Date(data.registrationDate)
+    : new Date();
+  const logo =
+    data.logo !== undefined ? (data.logo === "" ? null : data.logo) : undefined;
+
   try {
     const profile = await enterpriseBusinessProfileService.updateProfile(
       companyId,
       {
-        companyName,
-        businessType,
-        industry,
+        companyName: data.companyName,
+        businessType: data.businessType,
+        industry: data.industry,
         registrationDate,
-        tin,
-        businessAddress,
-        phoneNumber,
-        emailAddress,
-        website,
+        tin: data.tin,
+        businessAddress: data.businessAddress,
+        phoneNumber: data.phoneNumber,
+        emailAddress: data.emailAddress,
+        website: data.website,
+        ...(logo !== undefined && { logo }),
       },
     );
     if (!profile) {
@@ -99,10 +99,12 @@ export async function upgradeSubscription(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
-  const plan =
-    req.body?.plan != null ? String(req.body.plan).trim() : undefined;
+  const companyId = req.companyId!;
+  const data = matchedData(req, {
+    locations: ["body"],
+    includeOptionals: true,
+  });
+  const plan = typeof data.plan === "string" ? data.plan : undefined;
   try {
     const profile = await enterpriseBusinessProfileService.upgradeSubscription(
       companyId,

@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { matchedData } from "express-validator";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
@@ -35,44 +36,39 @@ export const updateProfile = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const {
-      firstName,
-      lastName,
-      address,
-      state,
-      lga,
-      purpose,
-      roleDescription,
-      teamSize,
-      adminCount,
-      organizationName,
-      organizationAddress,
-      logo,
-    } = req.body;
+    const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+      firstName?: string;
+      lastName?: string;
+      address?: string;
+      state?: string;
+      lga?: string;
+      purpose?: string;
+      roleDescription?: string;
+      teamSize?: number;
+      adminCount?: number;
+      organizationName?: string;
+      organizationAddress?: string;
+      logo?: string;
+    };
 
     const updated = await userService.updateProfile(userId, {
-      firstName,
-      lastName,
-      address,
-      state,
-      lga,
-      purpose,
-      roleDescription,
-      teamSize,
-      adminCount,
-      organizationName,
-      organizationAddress,
-      logo,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      address: data.address,
+      state: data.state,
+      lga: data.lga,
+      purpose: data.purpose,
+      roleDescription: data.roleDescription,
+      teamSize: data.teamSize,
+      adminCount: data.adminCount,
+      organizationName: data.organizationName,
+      organizationAddress: data.organizationAddress,
+      logo: data.logo,
     });
 
-    const primaryRole = updated.userRoles?.[0]?.role;
-    res.status(HttpStatusCode.OK).json(
-      outJson(true, "Profile updated", {
-        ...updated,
-        role: primaryRole ?? null,
-        userRoles: undefined,
-      }),
-    );
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Profile updated", updated));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -86,11 +82,14 @@ export const changePassword = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const { currentPassword, newPassword } = req.body;
+    const data = matchedData(req, { locations: ["body"] }) as {
+      currentPassword: string;
+      newPassword: string;
+    };
     const result = await userService.changePassword(
       userId,
-      currentPassword,
-      newPassword,
+      data.currentPassword,
+      data.newPassword,
     );
 
     if (!result.success) {

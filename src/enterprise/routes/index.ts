@@ -13,25 +13,24 @@ import {
 } from "../controllers/enterpriseBusinessProfileController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
+import { requireCompanyId } from "../middlewares/requireCompanyId";
 
 const router = express.Router();
 
-// Public
 router.get("/", health);
 router.get("/business-profile/types", getBusinessTypes);
 router.get("/business-profile/industries", getIndustries);
 
-// Protected: require auth
 router.post("/company", authenticate(), ...enterpriseValidations.validateCreateCompany, createCompany);
 router.post("/invitation", authenticate(), ...enterpriseValidations.validateCreateInvitation, createInvitation);
 router.use(
   "/company/:companyId",
   authenticate(),
   ...enterpriseValidations.validateCompanyIdParam,
+  requireCompanyId,
   enterpriseCompanyRoutes,
 );
 
-// Onboarding flows (use their own token middleware)
 router.use("/onboarding", onboardingRoutes);
 router.use("/consultant-onboarding", consultantOnboardingRoutes);
 

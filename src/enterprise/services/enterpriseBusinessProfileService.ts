@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import type { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const BUSINESS_TYPES = [
@@ -51,28 +52,31 @@ export const enterpriseBusinessProfileService = {
         phoneNumber: "",
         emailAddress: "",
         website: "",
+        logo: null,
         subscriptionPlan: "",
         monthlyPayment: 0,
         nextRenewalDate: new Date(),
         compliancePercent: 0,
         activities: [],
       };
+    const p = profile as typeof profile & { logo?: string | null };
     return {
-      ...profile,
-      companyName: profile.companyName,
-      businessType: profile.businessType,
-      industry: profile.industry,
-      registrationDate: profile.registrationDate,
-      tin: profile.tin,
-      businessAddress: profile.businessAddress,
-      phoneNumber: profile.phoneNumber,
-      emailAddress: profile.emailAddress,
-      website: profile.website,
-      subscriptionPlan: profile.subscriptionPlan,
-      monthlyPayment: decimalToNumber(profile.monthlyPayment),
-      nextRenewalDate: profile.nextRenewalDate,
-      compliancePercent: profile.compliancePercent,
-      activities: profile.activities.map((a) => ({
+      ...p,
+      companyName: p.companyName,
+      businessType: p.businessType,
+      industry: p.industry,
+      registrationDate: p.registrationDate,
+      tin: p.tin,
+      businessAddress: p.businessAddress,
+      phoneNumber: p.phoneNumber,
+      emailAddress: p.emailAddress,
+      website: p.website,
+      logo: p.logo ?? null,
+      subscriptionPlan: p.subscriptionPlan,
+      monthlyPayment: decimalToNumber(p.monthlyPayment),
+      nextRenewalDate: p.nextRenewalDate,
+      compliancePercent: p.compliancePercent,
+      activities: p.activities.map((a) => ({
         activity: a.activity,
         eventDate: a.eventDate,
       })),
@@ -99,41 +103,46 @@ export const enterpriseBusinessProfileService = {
       phoneNumber: string;
       emailAddress: string;
       website: string;
+      logo?: string | null;
     },
   ) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
     if (!company) return null;
+    const createPayload = {
+      companyId,
+      companyName: data.companyName,
+      businessType: data.businessType,
+      industry: data.industry,
+      registrationDate: data.registrationDate,
+      tin: data.tin,
+      businessAddress: data.businessAddress,
+      phoneNumber: data.phoneNumber,
+      emailAddress: data.emailAddress,
+      website: data.website,
+      logo: data.logo ?? undefined,
+      subscriptionPlan: "Pro Plan",
+      monthlyPayment: new Decimal(99.99),
+      nextRenewalDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      compliancePercent: 0,
+    };
+    const updatePayload = {
+      companyName: data.companyName,
+      businessType: data.businessType,
+      industry: data.industry,
+      registrationDate: data.registrationDate,
+      tin: data.tin,
+      businessAddress: data.businessAddress,
+      phoneNumber: data.phoneNumber,
+      emailAddress: data.emailAddress,
+      website: data.website,
+      ...(data.logo !== undefined && { logo: data.logo }),
+    };
     const profile = await prisma.enterpriseBusinessProfile.upsert({
       where: { companyId },
-      create: {
-        companyId,
-        companyName: data.companyName,
-        businessType: data.businessType,
-        industry: data.industry,
-        registrationDate: data.registrationDate,
-        tin: data.tin,
-        businessAddress: data.businessAddress,
-        phoneNumber: data.phoneNumber,
-        emailAddress: data.emailAddress,
-        website: data.website,
-        subscriptionPlan: "Pro Plan",
-        monthlyPayment: new Decimal(99.99),
-        nextRenewalDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        compliancePercent: 0,
-      },
-      update: {
-        companyName: data.companyName,
-        businessType: data.businessType,
-        industry: data.industry,
-        registrationDate: data.registrationDate,
-        tin: data.tin,
-        businessAddress: data.businessAddress,
-        phoneNumber: data.phoneNumber,
-        emailAddress: data.emailAddress,
-        website: data.website,
-      },
+      create: createPayload as Prisma.EnterpriseBusinessProfileUncheckedCreateInput,
+      update: updatePayload as Prisma.EnterpriseBusinessProfileUncheckedUpdateInput,
     });
     return profile;
   },

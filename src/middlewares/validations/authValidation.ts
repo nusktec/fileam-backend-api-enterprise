@@ -2,7 +2,7 @@ import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
 
 const validateLoginRequest = [
-  check("email").isEmail().withMessage("Enter a valid email"),
+  check("email").trim().isEmail().withMessage("Enter a valid email"),
   check("password")
     .isLength({ min: 6 })
     .withMessage("Password must be at least 6 characters long"),
@@ -10,12 +10,12 @@ const validateLoginRequest = [
 ];
 
 const validateEmailVerificationRequest = [
-  check("email").isEmail().withMessage("Enter a valid email"),
+  check("email").trim().isEmail().withMessage("Enter a valid email"),
   handleValidation,
 ];
 
 const validateEmailVerificationOTPRequest = [
-  check("email").isEmail().withMessage("Enter a valid email"),
+  check("email").trim().isEmail().withMessage("Enter a valid email"),
   check("code")
     .notEmpty()
     .withMessage("Verification code must be present")
@@ -28,12 +28,14 @@ const validateEmailVerificationOTPRequest = [
 ];
 
 const registerUserValidation = [
-  check("email").isEmail().withMessage("Enter a valid email"),
+  check("email").trim().isEmail().withMessage("Enter a valid email"),
   check("firstName")
+    .trim()
     .isString()
     .isLength({ min: 2 })
     .withMessage("First name must be at least 2 characters long"),
   check("lastName")
+    .trim()
     .isString()
     .isLength({ min: 2 })
     .withMessage("Last name must be at least 2 characters long"),

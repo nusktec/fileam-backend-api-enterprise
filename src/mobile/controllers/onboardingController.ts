@@ -16,7 +16,7 @@ export async function stepEmail(req: IRequest, res: Response): Promise<void> {
   if (!result.success) {
     res
       .status(HttpStatusCode.BAD_REQUEST)
-      .json(outJson(false, result.message, null));
+      .json(outJson(false, result.message, result.data ?? null));
     return;
   }
   res
@@ -280,8 +280,8 @@ export async function inviteRejectRequest(
       .json(outJson(false, "invitationId is required", null));
     return;
   }
-  await onboardingService.rejectRequest(payload, invitationId);
+  const result = await onboardingService.rejectRequest(payload, invitationId);
   res
     .status(HttpStatusCode.OK)
-    .json(outJson(true, "Invitation rejected", null));
+    .json(outJson(true, "Invitation rejected", result.data));
 }

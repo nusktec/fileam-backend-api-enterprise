@@ -1,8 +1,8 @@
 import { Response } from "express";
+import { matchedData } from "express-validator";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getParam } from "../utils/paramHelpers";
 import {
-  requireCompanyId,
   sendNotFound,
   sendResult,
   sendCreated,
@@ -14,8 +14,7 @@ export async function getVatStatus(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const status =
       await enterpriseTaxComputationService.getVatStatus(companyId);
@@ -33,8 +32,7 @@ export async function initiateVatSetup(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const result =
       await enterpriseTaxComputationService.initiateVatSetup(companyId);
@@ -76,26 +74,27 @@ export async function calculateVat(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
-  const body = req.body || {};
-  const vatType = body.vatType != null ? String(body.vatType).trim() : "";
-  const vatPeriod = body.vatPeriod != null ? String(body.vatPeriod).trim() : "";
-  const startDate = new Date(body.startDate);
-  const endDate = new Date(body.endDate);
-  const salesAmountExclVat = Number(
-    body.salesAmountExclVat ?? body.salesAmount ?? 0,
-  );
-  const purchaseAmountExclVat = Number(
-    body.purchaseAmountExclVat ?? body.purchaseAmount ?? 0,
-  );
-  const vatRate = Number(body.vatRate ?? 15);
+  const companyId = req.companyId!;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    vatType: string;
+    vatPeriod: string;
+    startDate: string;
+    endDate: string;
+    salesAmountExclVat?: number;
+    purchaseAmountExclVat?: number;
+    vatRate?: number;
+  };
+  const startDate = new Date(data.startDate);
+  const endDate = new Date(data.endDate);
+  const salesAmountExclVat = Number(data.salesAmountExclVat ?? 0);
+  const purchaseAmountExclVat = Number(data.purchaseAmountExclVat ?? 0);
+  const vatRate = Number(data.vatRate ?? 15);
   try {
     const result = await enterpriseTaxComputationService.calculateVat(
       companyId,
       {
-        vatType,
-        vatPeriod,
+        vatType: data.vatType,
+        vatPeriod: data.vatPeriod,
         startDate,
         endDate,
         salesAmountExclVat: salesAmountExclVat || 0,
@@ -122,8 +121,7 @@ export async function getVatResults(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const computationId =
     (req.query.computationId as string | undefined) ?? undefined;
   try {
@@ -145,8 +143,7 @@ export async function downloadVatReport(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const computationId =
     (req.query.computationId as string | undefined) ?? undefined;
   try {
@@ -171,11 +168,9 @@ export async function submitVatReturn(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
-  const computationId =
-    getParam(req.params, "computationId") ||
-    (req.body?.computationId != null ? String(req.body.computationId) : "");
+  const companyId = req.companyId!;
+  const data = matchedData(req, { locations: ["body"] }) as { computationId: string };
+  const computationId = getParam(req.params, "computationId") || data.computationId || "";
   try {
     const result = await enterpriseTaxComputationService.submitVatReturn(
       companyId,
@@ -195,8 +190,7 @@ export async function getMonthlyVatPayable(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const year = req.query.year ? Number(req.query.year) : undefined;
   try {
     const data = await enterpriseTaxComputationService.getMonthlyVatPayable(
@@ -217,8 +211,7 @@ export async function getThresholdStatus(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const status =
       await enterpriseTaxComputationService.getThresholdStatus(companyId);

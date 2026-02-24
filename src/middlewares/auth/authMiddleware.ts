@@ -37,7 +37,32 @@ const authHandler = ({ roles = [], permissions = [] }: AuthOptions = {}) => {
 
       const user = await prisma.user.findUnique({
         where: { id: decoded.userId },
-        include: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          verified: true,
+          address: true,
+          state: true,
+          lga: true,
+          purpose: true,
+          roleDescription: true,
+          teamSize: true,
+          adminCount: true,
+          organizationName: true,
+          organizationAddress: true,
+          logo: true,
+          onboardingComplete: true,
+          currentOnboardingStep: true,
+          onboardingCompletedAt: true,
+          filingRemindersEnabled: true,
+          payersNotificationsEnabled: true,
+          complianceUpdatesEnabled: true,
+          twoFactorEnabled: true,
+          createdAt: true,
+          updatedAt: true,
           userRoles: {
             include: {
               role: {

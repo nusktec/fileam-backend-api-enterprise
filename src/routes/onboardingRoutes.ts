@@ -1,5 +1,5 @@
 import express from "express";
-import { requireOnboardingToken } from "../middlewares/onboardingMiddleware";
+import { requireOnboardingOrAccessToken } from "../middlewares/onboardingMiddleware";
 import {
   stepEmail,
   stepEmailVerify,
@@ -17,43 +17,19 @@ import {
 
 const router = express.Router();
 
-router.get("/profile", requireOnboardingToken, getOnboardingProfile);
+router.get("/profile", requireOnboardingOrAccessToken, getOnboardingProfile);
 router.post("/step/email", stepEmail);
 router.post("/step/email-verify", stepEmailVerify);
 
-router.post("/step/password", requireOnboardingToken, stepPassword);
-router.post("/step/income-type", requireOnboardingToken, stepIncomeType);
-router.post(
-  "/step/tax-obligations",
-  requireOnboardingToken,
-  stepTaxObligations,
-);
-router.post(
-  "/step/business-details",
-  requireOnboardingToken,
-  stepBusinessDetails,
-);
-router.post(
-  "/step/tax-jurisdiction",
-  requireOnboardingToken,
-  stepTaxJurisdiction,
-);
-router.post(
-  "/step/consultant-terms",
-  requireOnboardingToken,
-  stepConsultantTerms,
-);
+router.post("/step/password", requireOnboardingOrAccessToken, stepPassword);
+router.post("/step/income-type", requireOnboardingOrAccessToken, stepIncomeType);
+router.post("/step/tax-obligations", requireOnboardingOrAccessToken, stepTaxObligations);
+router.post("/step/business-details", requireOnboardingOrAccessToken, stepBusinessDetails);
+router.post("/step/tax-jurisdiction", requireOnboardingOrAccessToken, stepTaxJurisdiction);
+router.post("/step/consultant-terms", requireOnboardingOrAccessToken, stepConsultantTerms);
 
 router.post("/invite/verify-code", inviteVerifyCode);
-router.post(
-  "/invite/accept-request",
-  requireOnboardingToken,
-  inviteAcceptRequest,
-);
-router.post(
-  "/invite/reject-request",
-  requireOnboardingToken,
-  inviteRejectRequest,
-);
+router.post("/invite/accept-request", requireOnboardingOrAccessToken, inviteAcceptRequest);
+router.post("/invite/reject-request", requireOnboardingOrAccessToken, inviteRejectRequest);
 
 export default router;

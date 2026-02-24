@@ -74,7 +74,7 @@ export const userService = {
       logo?: string;
     },
   ) {
-    return prisma.user.update({
+    const updated = await prisma.user.update({
       where: { id: userId },
       data: {
         ...(data.firstName !== undefined && { firstName: data.firstName }),
@@ -96,10 +96,40 @@ export const userService = {
         }),
         ...(data.logo !== undefined && { logo: data.logo }),
       },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        verified: true,
+        address: true,
+        state: true,
+        lga: true,
+        purpose: true,
+        roleDescription: true,
+        teamSize: true,
+        adminCount: true,
+        organizationName: true,
+        organizationAddress: true,
+        logo: true,
+        onboardingComplete: true,
+        currentOnboardingStep: true,
+        onboardingCompletedAt: true,
+        filingRemindersEnabled: true,
+        payersNotificationsEnabled: true,
+        complianceUpdatesEnabled: true,
+        twoFactorEnabled: true,
+        createdAt: true,
+        updatedAt: true,
         userRoles: { include: { role: { select: { id: true, name: true } } } },
       },
     });
+    const primaryRole = updated.userRoles?.[0]?.role;
+    return {
+      ...updated,
+      role: primaryRole ?? null,
+      userRoles: undefined,
+    };
   },
 
   async changePassword(

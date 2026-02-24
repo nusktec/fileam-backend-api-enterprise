@@ -1,8 +1,8 @@
 import { Response } from "express";
+import { matchedData } from "express-validator";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getParam } from "../utils/paramHelpers";
 import {
-  requireCompanyId,
   sendNotFound,
   sendResult,
   sendCreated,
@@ -15,8 +15,7 @@ export async function getCategories(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const categories =
       await enterpriseEvidenceVaultService.getCategoriesWithCounts(companyId);
@@ -34,8 +33,7 @@ export async function getRecentDocuments(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const limit = req.query.limit ? Number(req.query.limit) : 10;
   try {
     const list = await enterpriseEvidenceVaultService.getRecentDocuments(
@@ -56,8 +54,7 @@ export async function getStorageUsage(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const usage =
       await enterpriseEvidenceVaultService.getStorageUsage(companyId);
@@ -75,8 +72,7 @@ export async function listDocuments(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const search = req.query.search as string | undefined;
   const category = req.query.category as string | undefined;
   const startDate = req.query.startDate as string | undefined;
@@ -111,8 +107,7 @@ export async function listDocuments(
 }
 
 export async function getDocument(req: IRequest, res: Response): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
   try {
     const doc = await enterpriseEvidenceVaultService.getDocument(
@@ -133,8 +128,7 @@ export async function getApprovers(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   try {
     const approvers =
       await enterpriseEvidenceVaultService.getApprovers(companyId);
@@ -148,19 +142,18 @@ export async function approveDocument(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
-  const approverId =
-    req.body?.approverId != null ? String(req.body.approverId).trim() : "";
-  const notes =
-    req.body?.notes != null ? String(req.body.notes).trim() : undefined;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    approverId: string;
+    notes?: string;
+  };
   try {
     const doc = await enterpriseEvidenceVaultService.approveDocument(
       companyId,
       documentId,
-      approverId,
-      notes,
+      data.approverId,
+      data.notes,
     );
     if (!doc) {
       sendNotFound(res, "Document not found");
@@ -176,16 +169,16 @@ export async function rejectDocument(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
-  const notes =
-    req.body?.notes != null ? String(req.body.notes).trim() : undefined;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    notes?: string;
+  };
   try {
     const doc = await enterpriseEvidenceVaultService.rejectDocument(
       companyId,
       documentId,
-      notes,
+      data.notes,
     );
     if (!doc) {
       sendNotFound(res, "Document not found");
@@ -201,8 +194,7 @@ export async function getDocumentDownload(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
   try {
     const doc = await enterpriseEvidenceVaultService.getDocument(
@@ -226,28 +218,24 @@ export async function updateDocumentDetails(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
-  const body = req.body || {};
-  const documentName =
-    body.documentName != null ? String(body.documentName).trim() : undefined;
-  const category =
-    body.category != null ? String(body.category).trim() : undefined;
-  const documentDate = body.documentDate
-    ? new Date(body.documentDate)
-    : undefined;
-  const description =
-    body.description != null ? String(body.description).trim() : undefined;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    documentName?: string;
+    category?: string;
+    documentDate?: string;
+    description?: string;
+  };
+  const documentDate = data.documentDate ? new Date(data.documentDate) : undefined;
   try {
     const doc = await enterpriseEvidenceVaultService.updateDocumentDetails(
       companyId,
       documentId,
       {
-        documentName,
-        category,
+        documentName: data.documentName,
+        category: data.category,
         documentDate,
-        description,
+        description: data.description,
       },
     );
     if (!doc) {
@@ -264,8 +252,7 @@ export async function getSignatureReport(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
   try {
     const report = await enterpriseEvidenceVaultService.getSignatureReport(
@@ -286,8 +273,7 @@ export async function getDocumentOriginal(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
   try {
     const doc = await enterpriseEvidenceVaultService.getDocument(
@@ -335,25 +321,26 @@ export async function uploadDocument(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
-  const body = req.body as Record<string, unknown>;
-  const documentName = body.documentName != null ? String(body.documentName).trim() : "";
-  const category = body.category != null ? String(body.category).trim() : "";
-  const documentDate = body.documentDate ? new Date(body.documentDate as string) : new Date();
-  const description = body.description != null ? String(body.description).trim() : undefined;
-  const fileUrl = body.fileUrl != null ? String(body.fileUrl).trim() || undefined : undefined;
-  const fileSizeKb = body.fileSizeKb != null ? Number(body.fileSizeKb) : undefined;
-  const uploaderId = body.uploaderId != null ? String(body.uploaderId).trim() : undefined;
+  const companyId = req.companyId!;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    documentName: string;
+    category: string;
+    documentDate?: string;
+    description?: string;
+    fileUrl?: string;
+    fileSizeKb?: number;
+    uploaderId?: string;
+  };
+  const documentDate = data.documentDate ? new Date(data.documentDate) : new Date();
   try {
     const doc = await enterpriseEvidenceVaultService.uploadDocument(companyId, {
-      documentName,
-      category,
+      documentName: data.documentName,
+      category: data.category,
       documentDate,
-      description,
-      fileUrl,
-      fileSizeKb,
-      uploaderId,
+      description: data.description,
+      fileUrl: data.fileUrl?.trim() || undefined,
+      fileSizeKb: data.fileSizeKb,
+      uploaderId: data.uploaderId,
     });
     if (!doc) {
       sendNotFound(res, "Company not found");
@@ -369,8 +356,7 @@ export async function getDocumentPreview(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
   try {
     const result = await enterpriseEvidenceVaultService.getDocumentPreviewUrl(
@@ -391,33 +377,27 @@ export async function signDocument(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const companyId = requireCompanyId(req, res);
-  if (companyId === null) return;
+  const companyId = req.companyId!;
   const documentId = getParam(req.params, "documentId");
-  const body = req.body || {};
-  const signedBy = body.signedBy != null ? String(body.signedBy).trim() : "";
-  const signerEmail =
-    body.signerEmail != null ? String(body.signerEmail).trim() : "";
-  const ipAddress = body.ipAddress != null ? String(body.ipAddress).trim() : "";
-  const signatureMethod =
-    body.signatureMethod != null
-      ? String(body.signatureMethod).trim()
-      : "Electronic Signature";
-  const documentHash =
-    body.documentHash != null ? String(body.documentHash).trim() : "";
-  const signatureData =
-    body.signatureData != null ? String(body.signatureData) : undefined;
+  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    signedBy: string;
+    signerEmail: string;
+    ipAddress?: string;
+    signatureMethod?: string;
+    documentHash?: string;
+    signatureData?: string;
+  };
   try {
     const sig = await enterpriseEvidenceVaultService.signDocument(
       companyId,
       documentId,
       {
-        signedBy,
-        signerEmail,
-        ipAddress,
-        signatureMethod,
-        documentHash: documentHash || "stub-hash",
-        signatureData,
+        signedBy: data.signedBy,
+        signerEmail: data.signerEmail,
+        ipAddress: data.ipAddress ?? "",
+        signatureMethod: data.signatureMethod ?? "Electronic Signature",
+        documentHash: (data.documentHash ?? "").trim() || "stub-hash",
+        signatureData: data.signatureData,
       },
     );
     if (!sig) {

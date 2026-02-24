@@ -1190,7 +1190,7 @@
                 "method": "GET",
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile",
-                "description": "Returns company profile, subscription, compliance percent, activities."
+                "description": "Returns company profile including logo (URL or null), subscription, compliance percent, activities."
               }
             },
             {
@@ -1209,10 +1209,10 @@
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"companyName\": \"Bright Time Consulting\",\n  \"businessType\": \"Consulting\",\n  \"industry\": \"IT & Services\",\n  \"registrationDate\": \"2023-01-10\",\n  \"tin\": \"123-456-789\",\n  \"businessAddress\": \"123 Main Street, Anytown, USA\",\n  \"phoneNumber\": \"+1 (555) 123-4567\",\n  \"emailAddress\": \"info@brighttime.com\",\n  \"website\": \"www.brighttime.com\"\n}"
+                  "raw": "{\n  \"companyName\": \"Bright Time Consulting\",\n  \"businessType\": \"Consulting\",\n  \"industry\": \"IT & Services\",\n  \"registrationDate\": \"2023-01-10\",\n  \"tin\": \"123-456-789\",\n  \"businessAddress\": \"123 Main Street, Anytown, USA\",\n  \"phoneNumber\": \"+1 (555) 123-4567\",\n  \"emailAddress\": \"info@brighttime.com\",\n  \"website\": \"www.brighttime.com\",\n  \"logo\": \"https://example.com/company-logo.png\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile",
-                "description": "Updates business profile. All fields required."
+                "description": "Updates business profile. Body: companyName, businessType, industry, registrationDate, tin, businessAddress, phoneNumber, emailAddress, website (required); logo (optional, URL string)."
               }
             },
             {
