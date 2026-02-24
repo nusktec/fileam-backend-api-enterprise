@@ -9,7 +9,8 @@ export interface JWTUser {
   role?: string;
 }
 
-export type RequestUser = Omit<User, "password"> & {
+export type RequestUser = Omit<User, "password" | "nextSaleNumber"> & {
+  nextSaleNumber?: number;
   userRoles?: Array<
     UserRole & {
       role: Role & { rolePermissions: Array<{ permission: Permission }> };
