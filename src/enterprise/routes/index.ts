@@ -3,6 +3,7 @@ import { health } from "../controllers/healthController";
 import onboardingRoutes from "../../routes/onboardingRoutes";
 import consultantOnboardingRoutes from "./consultantOnboardingRoutes";
 import enterpriseCompanyRoutes from "./enterpriseCompanyRoutes";
+import enterpriseAuthRoutes from "./enterpriseAuthRoutes";
 import {
   createCompany,
   createInvitation,
@@ -20,6 +21,8 @@ const router = express.Router();
 router.get("/", health);
 router.get("/business-profile/types", getBusinessTypes);
 router.get("/business-profile/industries", getIndustries);
+
+router.use("/auth", enterpriseAuthRoutes);
 
 router.post("/company", authenticate(), ...enterpriseValidations.validateCreateCompany, createCompany);
 router.post("/invitation", authenticate(), ...enterpriseValidations.validateCreateInvitation, createInvitation);

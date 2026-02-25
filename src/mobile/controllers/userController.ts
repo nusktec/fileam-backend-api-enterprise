@@ -141,13 +141,21 @@ export const updateBusinessProfile = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const data = await userService.updateBusinessProfile(
-      userId,
-      req.body ?? {},
-    );
+    const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+      businessName?: string;
+      tin?: string;
+      rcNumber?: string;
+      businessType?: string;
+      sector?: string;
+      stateOfResidence?: string;
+      bankAccount?: string;
+      address?: string;
+      logo?: string;
+    };
+    const result = await userService.updateBusinessProfile(userId, data);
     res
       .status(HttpStatusCode.OK)
-      .json(outJson(true, "Business profile updated", data));
+      .json(outJson(true, "Business profile updated", result));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)

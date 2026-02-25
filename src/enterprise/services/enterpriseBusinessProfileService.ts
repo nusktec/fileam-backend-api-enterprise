@@ -32,7 +32,7 @@ export const enterpriseBusinessProfileService = {
   getBusinessTypes: () => BUSINESS_TYPES,
   getIndustries: () => INDUSTRIES,
 
-  async getProfile(companyId: string) {
+  async getProfile(companyId: string, userId?: string) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
@@ -41,6 +41,14 @@ export const enterpriseBusinessProfileService = {
       where: { companyId },
       include: { activities: { orderBy: { eventDate: "desc" }, take: 20 } },
     });
+    let logoFallback: string | null = null;
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { logo: true },
+      });
+      logoFallback = user?.logo ?? null;
+    }
     if (!profile)
       return {
         companyName: company.name,
@@ -52,7 +60,7 @@ export const enterpriseBusinessProfileService = {
         phoneNumber: "",
         emailAddress: "",
         website: "",
-        logo: null,
+        logo: logoFallback,
         subscriptionPlan: "",
         monthlyPayment: 0,
         nextRenewalDate: new Date(),
@@ -71,7 +79,7 @@ export const enterpriseBusinessProfileService = {
       phoneNumber: p.phoneNumber,
       emailAddress: p.emailAddress,
       website: p.website,
-      logo: p.logo ?? null,
+      logo: p.logo ?? logoFallback ?? null,
       subscriptionPlan: p.subscriptionPlan,
       monthlyPayment: decimalToNumber(p.monthlyPayment),
       nextRenewalDate: p.nextRenewalDate,

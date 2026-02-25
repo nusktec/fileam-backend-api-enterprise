@@ -197,6 +197,7 @@ export const userService = {
       stateOfResidence?: string;
       bankAccount?: string;
       address?: string;
+      logo?: string | null;
     },
   ) {
     const business = await prisma.business.findFirst({ where: { userId } });
@@ -229,10 +230,13 @@ export const userService = {
         },
       });
     }
-    if (data.businessName !== undefined) {
+    const userUpdate: { organizationName?: string; logo?: string | null } = {};
+    if (data.businessName !== undefined) userUpdate.organizationName = data.businessName;
+    if (data.logo !== undefined) userUpdate.logo = data.logo === "" ? null : data.logo;
+    if (Object.keys(userUpdate).length > 0) {
       await prisma.user.update({
         where: { id: userId },
-        data: { organizationName: data.businessName },
+        data: userUpdate,
       });
     }
     return this.getBusinessProfile(userId);

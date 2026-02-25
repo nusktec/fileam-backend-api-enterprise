@@ -17,51 +17,12 @@
   "item": [
     {
       "name": "Mobile",
-      "description": "Mobile app endpoints. Base path: /api/v1/mobile. Auth: OTP, login, refresh, logout (no register; use Onboarding to sign up). User (profile, business profile, notification settings, consultant), Onboarding, Sales, Expenses, Tax Computation, Tax Payables, Payments, Filings (VAT/WHT), Reports, Analytics, Evidence Vault, Employees, Help (FAQs, about, contact) — all except Auth OTP/verify/resend and Help FAQs/About require Authorization: Bearer {{accessToken}} and (where noted) completed onboarding. Replace :id in paths with actual UUIDs or composite ids (e.g. evidence-vault documents use composite ids like sale-<uuid>).",
+      "description": "Mobile app endpoints. Base path: /api/v1/mobile. Auth: login, forgot/reset password, refresh, logout (no register; use Onboarding to sign up). User (profile, business profile, notification settings, consultant), Onboarding, Sales, Expenses, Tax Computation, Tax Payables, Payments, Filings (VAT/WHT), Reports, Analytics, Evidence Vault, Employees, Help (FAQs, about, contact) — all except Auth and Help FAQs/About require Authorization: Bearer {{accessToken}} and (where noted) completed onboarding. Replace :id in paths with actual UUIDs or composite ids (e.g. evidence-vault documents use composite ids like sale-<uuid>).",
       "item": [
         {
           "name": "Auth",
-          "description": "OTP email verification, login, token refresh, logout. Registration is via Onboarding only.",
+          "description": "Login, forgot password, reset password, refresh token, logout. Registration and email OTP/verify are in Onboarding only.",
           "item": [
-            {
-              "name": "Send OTP to email",
-              "request": {
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"email\": \"user@example.com\"\n}"
-                },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/otp/send/email",
-                "description": "Sends OTP to the given email. Body: email (required)."
-              }
-            },
-            {
-              "name": "Verify OTP",
-              "request": {
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"code\": \"123456\"\n}"
-                },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/otp/verify/email",
-                "description": "Verifies OTP and marks email verified. Body: email, code (required)."
-              }
-            },
-            {
-              "name": "Resend verification email",
-              "request": {
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"email\": \"user@example.com\"\n}"
-                },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/resend-verification",
-                "description": "Resends verification email. Body: email (required)."
-              }
-            },
             {
               "name": "Login",
               "request": {
@@ -76,16 +37,29 @@
               }
             },
             {
-              "name": "Register",
+              "name": "Forgot password",
               "request": {
                 "method": "POST",
                 "header": [{ "key": "Content-Type", "value": "application/json" }],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\"\n}"
+                  "raw": "{\n  \"email\": \"user@example.com\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/register",
-                "description": "Register a new user. Body: email, password, firstName, lastName (required). Prefer Onboarding flow for sign-up where possible."
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/forgot-password",
+                "description": "Sends a password reset code to the email if an account exists. Body: email (required). Returns generic success for security."
+              }
+            },
+            {
+              "name": "Reset password",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"code\": \"123456\",\n  \"newPassword\": \"newpassword123\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/reset-password",
+                "description": "Resets password using the code from forgot-password email. Body: email, code, newPassword (required)."
               }
             },
             {
@@ -186,10 +160,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"businessName\": \"TechHub Solutions Ltd\",\n  \"tin\": \"12345678-0001\",\n  \"rcNumber\": \"RC1234567\",\n  \"businessType\": \"Business\",\n  \"sector\": \"Technology\",\n  \"stateOfResidence\": \"Lagos\",\n  \"bankAccount\": \"E-123456789-2311728\",\n  \"address\": \"123 Main St\"\n}"
+                  "raw": "{\n  \"businessName\": \"TechHub Solutions Ltd\",\n  \"tin\": \"12345678-0001\",\n  \"rcNumber\": \"RC1234567\",\n  \"businessType\": \"Business\",\n  \"sector\": \"Technology\",\n  \"stateOfResidence\": \"Lagos\",\n  \"bankAccount\": \"E-123456789-2311728\",\n  \"address\": \"123 Main St\",\n  \"logo\": \"https://your-bucket.s3.../logo.png\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/business-profile",
-                "description": "Creates or updates business profile. Body: businessName, tin, rcNumber, businessType, sector, stateOfResidence, bankAccount, address (all optional)."
+                "description": "Creates or updates business profile. Body: businessName, tin, rcNumber, businessType, sector, stateOfResidence, bankAccount, address, logo (all optional). Include logo with a URL from POST /media/upload to set/update logo; omit or set null to clear."
               }
             },
             {
@@ -1114,7 +1088,7 @@
     },
     {
       "name": "Enterprise",
-      "description": "Enterprise endpoints: health check (no auth), company & invitation (auth required), business profile lookups (no auth), company-scoped routes (business profile, tax computation, financials, evidence vault — all require Authorization: Bearer {{accessToken}}; set companyId variable), onboarding (no auth), consultant onboarding (token in header).",
+      "description": "Enterprise endpoints: health check (no auth), auth (login, refresh), company & invitation (auth required), business profile lookups (no auth), company-scoped routes (business profile, tax computation, financials, evidence vault — all require Authorization: Bearer {{accessToken}}; set companyId variable), onboarding (no auth), consultant onboarding (token in header).",
       "item": [
         {
           "name": "Health",
@@ -1124,6 +1098,38 @@
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/",
             "description": "Health check. No auth required."
           }
+        },
+        {
+          "name": "Auth",
+          "description": "Login and refresh token. No auth required for these endpoints.",
+          "item": [
+            {
+              "name": "Login",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/login",
+                "description": "Returns accessToken, refreshToken, user. Same as mobile login (no onboarding fields)."
+              }
+            },
+            {
+              "name": "Refresh token",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/refresh",
+                "description": "Returns new accessToken, refreshToken, user. Body: refreshToken (required)."
+              }
+            }
+          ]
         },
         {
           "name": "Create company",

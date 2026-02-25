@@ -26,9 +26,10 @@ export async function getBusinessProfile(
   res: Response,
 ): Promise<void> {
   const companyId = req.companyId!;
+  const userId = req.user?.id;
   try {
     const profile =
-      await enterpriseBusinessProfileService.getProfile(companyId);
+      await enterpriseBusinessProfileService.getProfile(companyId, userId);
     if (!profile) {
       sendNotFound(res, "Company not found");
       return;

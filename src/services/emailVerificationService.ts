@@ -3,6 +3,7 @@ import {
   sendVerificationEmail,
   sendOtpEmail,
   sendWelcomeEmail,
+  sendPasswordResetEmail,
 } from "./emailService";
 import { RandomAscii } from "../utils/tools";
 import { EMAIL_TEMPLATE_TYPES } from "../config/smtp";
@@ -199,6 +200,92 @@ export class EmailVerificationService {
       return { success: true, message: "Welcome email sent successfully" };
     } catch (error) {
       console.error("Error sending welcome email:", error);
+      return { success: false, message: "Internal server error", error };
+    }
+  }
+
+  static async generateAndSendPasswordReset(
+    email: string,
+    name: string,
+  ): Promise<VerificationResult> {
+    try {
+      const otpCode = RandomAscii(this.OTP_LENGTH);
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + this.OTP_EXPIRY_MINUTES);
+      const type = EMAIL_TEMPLATE_TYPES.PASSWORD_RESET;
+
+      await prisma.emailVerification.upsert({
+        where: { email },
+        create: { email, code: otpCode, type, expiresAt, attempts: 0 },
+        update: {
+          code: otpCode,
+          type,
+          expiresAt,
+          attempts: 0,
+          isVerified: false,
+        },
+      });
+
+      const emailResult = await sendPasswordResetEmail(email, name, otpCode);
+      if (!emailResult.success) {
+        return {
+          success: false,
+          message: "Failed to send password reset email",
+          error: emailResult.error,
+        };
+      }
+      return {
+        success: true,
+        message: "Password reset email sent successfully",
+        data: { email, expiresAt },
+      };
+    } catch (error) {
+      console.error("Error generating password reset:", error);
+      return { success: false, message: "Internal server error", error };
+    }
+  }
+
+  static async verifyPasswordResetCode(
+    email: string,
+    code: string,
+  ): Promise<VerificationResult> {
+    try {
+      const record = await prisma.emailVerification.findUnique({
+        where: { email },
+      });
+
+      if (!record) {
+        return { success: false, message: "Reset record not found" };
+      }
+      if (record.type !== EMAIL_TEMPLATE_TYPES.PASSWORD_RESET) {
+        return { success: false, message: "Invalid reset request" };
+      }
+      if (new Date() > record.expiresAt) {
+        return { success: false, message: "Reset code has expired" };
+      }
+      if (record.attempts >= this.MAX_ATTEMPTS) {
+        return {
+          success: false,
+          message: "Maximum verification attempts exceeded",
+        };
+      }
+
+      await prisma.emailVerification.update({
+        where: { email },
+        data: { attempts: record.attempts + 1 },
+      });
+
+      if (record.code !== code) {
+        return { success: false, message: "Invalid verification code" };
+      }
+
+      return {
+        success: true,
+        message: "Code verified",
+        data: { email },
+      };
+    } catch (error) {
+      console.error("Error verifying password reset code:", error);
       return { success: false, message: "Internal server error", error };
     }
   }

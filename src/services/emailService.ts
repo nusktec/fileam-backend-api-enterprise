@@ -8,6 +8,7 @@ import {
   validateEmailConfig,
 } from "../config/smtp";
 import { EmailCategoryInterface } from "../interfaces/system";
+import { EmailTemplate_PASSWORD_RESET } from "./template/emailTemplates";
 
 const getEmailTemplate = (templateName: string): string => {
   try {
@@ -148,6 +149,25 @@ const sendWelcomeEmail = async (
   }
 };
 
+const sendPasswordResetEmail = async (
+  to: string,
+  name: string,
+  code: string,
+): Promise<{ success: boolean; data?: any; error?: any }> => {
+  try {
+    const htmlContent = EmailTemplate_PASSWORD_RESET(code, name);
+    return await sendEmail(
+      to,
+      "Reset Your Password - Fileam",
+      htmlContent,
+      EMAIL_CATEGORIES.PASSWORD_RESET,
+    );
+  } catch (error) {
+    console.error("Failed to send password reset email:", error);
+    return { success: false, error };
+  }
+};
+
 const SendMail = async (
   category: string,
   subject: string,
@@ -228,5 +248,6 @@ export {
   sendVerificationEmail,
   sendOtpEmail,
   sendWelcomeEmail,
+  sendPasswordResetEmail,
   validateEmailConfig,
 };

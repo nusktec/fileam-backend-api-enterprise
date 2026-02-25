@@ -13,51 +13,6 @@ import {
 import { generateOnboardingToken } from "../../utils/onboardingToken";
 import { authService } from "../services/authService";
 
-export const register = async (req: Request, res: Response): Promise<void> => {
-  const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
-    email: string;
-    password: string;
-    firstName: string;
-    lastName: string;
-    organizationName?: string;
-    organizationAddress?: string;
-    logo?: string;
-  };
-
-  try {
-    const result = await authService.registerUser({
-      email: data.email,
-      password: data.password,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      organizationName: data.organizationName,
-      organizationAddress: data.organizationAddress,
-      logo: data.logo,
-    });
-
-    if (!result.success) {
-      res
-        .status(HttpStatusCode.CONFLICT)
-        .json(outJson(false, result.message, null));
-      return;
-    }
-
-    res
-      .status(HttpStatusCode.CREATED)
-      .json(
-        outJson(
-          true,
-          "Account created successfully. Please check your email for verification.",
-          result.data,
-        ),
-      );
-  } catch (error) {
-    res
-      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "Error creating account", null));
-  }
-};
-
 export const login = async (req: Request, res: Response): Promise<void> => {
   const data = matchedData(req, { locations: ["body"] }) as { email: string; password: string };
 
@@ -114,91 +69,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Server error", null));
-  }
-};
-
-export const sendOtpEmail = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const data = matchedData(req, { locations: ["body"] }) as { email: string };
-    const { email } = data;
-
-    const result = await EmailVerificationService.generateAndSendOtp(
-      email,
-      email.split("@")[0],
-      "otp_request",
-    );
-
-    if (result.success) {
-      res.status(HttpStatusCode.OK).json(
-        outJson(true, "OTP sent successfully", {
-          message: "OTP sent to your email",
-          expiresIn: "10 minutes",
-        }),
-      );
-    } else {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(outJson(false, result.message, null));
-    }
-  } catch (e) {
-    PrintDebug(e);
-    res
-      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "An error has occurred...500ET", null));
-  }
-};
-
-export const verifyEmail = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const data = matchedData(req, { locations: ["body"] }) as { email: string; code: string };
-    const { email, code } = data;
-
-    const user = await authService.findUserByEmail(email);
-    if (!user) {
-      res
-        .status(HttpStatusCode.NOT_FOUND)
-        .json(
-          outJson(false, "User not found. Complete registration first.", null),
-        );
-      return;
-    }
-
-    if (user.verified) {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(outJson(false, "Email already verified.", null));
-      return;
-    }
-
-    const result = await EmailVerificationService.verifyOtp(email, code);
-    if (!result.success) {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(outJson(false, result.message, null));
-      return;
-    }
-
-    await authService.setUserVerified(email);
-    await EmailVerificationService.sendWelcomeEmail(email, user.firstName);
-
-    res.status(HttpStatusCode.OK).json(
-      outJson(true, "Email verified successfully. Welcome email sent.", {
-        email,
-        verified: true,
-        message: "Welcome to file-am!",
-      }),
-    );
-  } catch (error) {
-    PrintDebug(error);
-    res
-      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "Internal server error.", null));
   }
 };
 
@@ -275,7 +145,7 @@ export const logout = async (req: Request, res: Response): Promise<void> => {
   }
 };
 
-export const resendVerificationEmail = async (
+export const forgotPassword = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
@@ -285,37 +155,70 @@ export const resendVerificationEmail = async (
 
     const user = await authService.findUserByEmail(email);
     if (!user) {
-      res
-        .status(HttpStatusCode.NOT_FOUND)
-        .json(outJson(false, "User not found.", null));
+      res.status(HttpStatusCode.OK).json(
+        outJson(true, "If an account exists for this email, you will receive a password reset link.", null),
+      );
       return;
     }
 
-    if (user.verified) {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(outJson(false, "Email is already verified.", null));
-      return;
-    }
-
-    const result = await EmailVerificationService.resendVerification(
+    const result = await EmailVerificationService.generateAndSendPasswordReset(
       email,
       user.firstName,
-      "verification",
     );
 
     if (result.success) {
       res.status(HttpStatusCode.OK).json(
-        outJson(true, "Verification email resent successfully", {
-          message: "New verification code sent to your email",
+        outJson(true, "If an account exists for this email, you will receive a password reset code.", {
+          message: "Check your email for the reset code",
           expiresIn: "10 minutes",
         }),
       );
     } else {
-      res
-        .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-        .json(outJson(false, result.message, null));
+      res.status(HttpStatusCode.OK).json(
+        outJson(true, "If an account exists for this email, you will receive a password reset code.", null),
+      );
     }
+  } catch (error) {
+    PrintDebug(error);
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Internal server error.", null));
+  }
+};
+
+export const resetPassword = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const data = matchedData(req, { locations: ["body"] }) as {
+      email: string;
+      code: string;
+      newPassword: string;
+    };
+    const { email, code, newPassword } = data;
+
+    const user = await authService.findUserByEmail(email);
+    if (!user) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Invalid or expired reset code.", null));
+      return;
+    }
+
+    const result = await EmailVerificationService.verifyPasswordResetCode(email, code);
+    if (!result.success) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, result.message, null));
+      return;
+    }
+
+    await authService.updatePasswordByEmail(email, newPassword);
+
+    res.status(HttpStatusCode.OK).json(
+      outJson(true, "Password reset successfully. You can now log in with your new password.", null),
+    );
   } catch (error) {
     PrintDebug(error);
     res

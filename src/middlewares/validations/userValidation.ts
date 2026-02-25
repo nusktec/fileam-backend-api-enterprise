@@ -25,6 +25,22 @@ const updateProfileValidation = [
   handleValidation,
 ];
 
+const updateBusinessProfileValidation = [
+  check("businessName").optional().isString(),
+  check("tin").optional().isString(),
+  check("rcNumber").optional().isString(),
+  check("businessType").optional().isString(),
+  check("sector").optional().isString(),
+  check("stateOfResidence").optional().isString(),
+  check("bankAccount").optional().isString(),
+  check("address").optional().isString(),
+  check("logo")
+    .optional({ values: "null" })
+    .isString()
+    .withMessage("Logo must be a string or null"),
+  handleValidation,
+];
+
 const changePasswordValidation = [
   check("currentPassword")
     .notEmpty()
@@ -37,5 +53,6 @@ const changePasswordValidation = [
 
 export const validations = {
   updateProfileValidation,
+  updateBusinessProfileValidation,
   changePasswordValidation,
 };

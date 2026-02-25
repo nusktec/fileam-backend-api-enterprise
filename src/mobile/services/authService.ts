@@ -234,4 +234,12 @@ export const authService = {
       data: { verified: true },
     });
   },
+
+  async updatePasswordByEmail(email: string, newPassword: string) {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { email },
+      data: { password: hashedPassword },
+    });
+  },
 };

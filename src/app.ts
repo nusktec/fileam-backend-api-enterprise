@@ -36,6 +36,7 @@ const getAllowedOriginsSet = (): Set<string> => {
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://172.26.32.1:3000",
+    "http://localhost:5173",
   ];
 
   return new Set([...fromEnv, ...devOrigins]);

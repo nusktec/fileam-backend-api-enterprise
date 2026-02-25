@@ -76,6 +76,25 @@ const validateLogoutRequest = [
   handleValidation,
 ];
 
+const validateForgotPasswordRequest = [
+  check("email").trim().isEmail().withMessage("Enter a valid email"),
+  handleValidation,
+];
+
+const validateResetPasswordRequest = [
+  check("email").trim().isEmail().withMessage("Enter a valid email"),
+  check("code")
+    .notEmpty()
+    .withMessage("Reset code is required")
+    .bail()
+    .isLength({ min: 5, max: 6 })
+    .withMessage("Code must be 5–6 characters"),
+  check("newPassword")
+    .isLength({ min: 6 })
+    .withMessage("New password must be at least 6 characters long"),
+  handleValidation,
+];
+
 export const validations = {
   validateLoginRequest,
   validateEmailVerificationRequest,
@@ -83,4 +102,6 @@ export const validations = {
   registerUserValidation,
   validateRefreshTokenRequest,
   validateLogoutRequest,
+  validateForgotPasswordRequest,
+  validateResetPasswordRequest,
 };

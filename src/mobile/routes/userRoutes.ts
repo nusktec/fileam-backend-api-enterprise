@@ -22,7 +22,12 @@ router.get("/profile", getProfile);
 router.put("/profile", validations.updateProfileValidation, updateProfile);
 router.patch("/password", validations.changePasswordValidation, changePassword);
 router.get("/business-profile", getBusinessProfile);
-router.put("/business-profile", express.json(), updateBusinessProfile);
+router.put(
+  "/business-profile",
+  express.json(),
+  validations.updateBusinessProfileValidation,
+  updateBusinessProfile,
+);
 router.get("/notification-settings", getNotificationSettings);
 router.put(
   "/notification-settings",
