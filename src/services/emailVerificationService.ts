@@ -260,6 +260,9 @@ export class EmailVerificationService {
       if (record.type !== EMAIL_TEMPLATE_TYPES.PASSWORD_RESET) {
         return { success: false, message: "Invalid reset request" };
       }
+      if (record.isVerified) {
+        return { success: false, message: "This reset code has already been used" };
+      }
       if (new Date() > record.expiresAt) {
         return { success: false, message: "Reset code has expired" };
       }
@@ -278,6 +281,11 @@ export class EmailVerificationService {
       if (record.code !== code) {
         return { success: false, message: "Invalid verification code" };
       }
+
+      await prisma.emailVerification.update({
+        where: { email },
+        data: { isVerified: true },
+      });
 
       return {
         success: true,

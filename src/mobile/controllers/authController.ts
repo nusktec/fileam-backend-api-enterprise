@@ -155,8 +155,8 @@ export const forgotPassword = async (
 
     const user = await authService.findUserByEmail(email);
     if (!user) {
-      res.status(HttpStatusCode.OK).json(
-        outJson(true, "If an account exists for this email, you will receive a password reset link.", null),
+      res.status(HttpStatusCode.NOT_FOUND).json(
+        outJson(false, "User with this email does not exist", null),
       );
       return;
     }
@@ -168,15 +168,15 @@ export const forgotPassword = async (
 
     if (result.success) {
       res.status(HttpStatusCode.OK).json(
-        outJson(true, "If an account exists for this email, you will receive a password reset code.", {
+        outJson(true, "Password reset code sent to your email.", {
           message: "Check your email for the reset code",
           expiresIn: "10 minutes",
         }),
       );
     } else {
-      res.status(HttpStatusCode.OK).json(
-        outJson(true, "If an account exists for this email, you will receive a password reset code.", null),
-      );
+      res
+        .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+        .json(outJson(false, result.message ?? "Failed to send reset code", null));
     }
   } catch (error) {
     PrintDebug(error);
