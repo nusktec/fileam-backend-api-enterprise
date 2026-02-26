@@ -1,17 +1,19 @@
 model ConsultantOnboardingSession {
-  id          String   @id @default(uuid())
-  sessionToken String  @unique @map("session_token")
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String?  @map("user_id")
   currentStep  Int      @default(1) @map("current_step")
   status       String   @default("draft")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  firmIdentity   ConsultantFirmIdentity?
-  partners       ConsultantPartner[]
-  scope          ConsultantScope?
-  subscription   ConsultantSubscription?
-  paymentSetup   ConsultantPaymentSetup?
-  compliance     ConsultantCompliance?
+  user          User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  firmIdentity  ConsultantFirmIdentity?
+  partners      ConsultantPartner[]
+  scope         ConsultantScope?
+  subscription  ConsultantSubscription?
+  paymentSetup  ConsultantPaymentSetup?
+  compliance    ConsultantCompliance?
 
   @@map("consultant_onboarding_sessions")
 }

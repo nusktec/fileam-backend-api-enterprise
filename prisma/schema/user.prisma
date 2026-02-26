@@ -27,12 +27,13 @@ model User {
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")
 
-  tokens                 Token[]
-  employees              Employee[]
-  userRoles              UserRole[]
-  businesses             Business[]
-  consultantConnections   ConsultantConnection[]
-  sales                  Sale[]
+  tokens                      Token[]
+  employees                   Employee[]
+  userRoles                   UserRole[]
+  businesses                  Business[]
+  consultantConnections       ConsultantConnection[]
+  consultantOnboardingSessions ConsultantOnboardingSession[]
+  sales                       Sale[]
   expenses               Expense[]
   taxPayables            TaxPayable[]
   paymentRecords         PaymentRecord[]
