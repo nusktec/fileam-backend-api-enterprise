@@ -3,6 +3,7 @@ import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { consultantOnboardingService } from "../services/consultantOnboardingService";
+import type { Prisma } from "@prisma/client";
 import { verifyToken } from "../../utils/jwt";
 import { prisma } from "../../config/database";
 
@@ -54,7 +55,9 @@ export async function requireConsultantOnboardingToken(
       return;
     }
     const session = await prisma.consultantOnboardingSession.findFirst({
-      where: { userId: decoded.userId },
+      where: {
+        userId: decoded.userId,
+      } as Prisma.ConsultantOnboardingSessionWhereInput,
       orderBy: { updatedAt: "desc" },
     });
     if (!session) {

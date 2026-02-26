@@ -49,19 +49,21 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       accessToken: string;
       refreshToken: string;
       user: typeof payload;
+      onboardingComplete: boolean;
+      currentOnboardingStep: string | null;
       onboardingToken?: string;
-      currentOnboardingStep?: string;
     } = {
       accessToken,
       refreshToken,
       user: payload,
+      onboardingComplete: user.onboardingComplete ?? false,
+      currentOnboardingStep: user.currentOnboardingStep ?? null,
     };
     if (!user.onboardingComplete) {
       responseData.onboardingToken = generateOnboardingToken({
         email: user.email,
         acceptedInvitationIds: [],
       });
-      responseData.currentOnboardingStep = user.currentOnboardingStep ?? "income_type";
     }
 
     res.status(HttpStatusCode.OK).json(outJson(true, "Login successful", responseData));
@@ -101,22 +103,18 @@ export const refreshToken = async (
     await revokeRefreshToken(token, tokenRecord.user.id);
     await saveRefreshToken(tokenRecord.user.id, newRefreshToken);
 
-    const userPayload = {
-      id: tokenRecord.user.id,
-      firstName: tokenRecord.user.firstName,
-      lastName: tokenRecord.user.lastName,
-      email: tokenRecord.user.email,
-      verified: tokenRecord.user.verified,
-      organizationName: tokenRecord.user.organizationName,
-      organizationAddress: tokenRecord.user.organizationAddress,
-      logo: tokenRecord.user.logo,
+    const userPayload = authService.buildAuthUserPayload(tokenRecord.user);
+    const u = tokenRecord.user as {
+      onboardingComplete?: boolean;
+      currentOnboardingStep?: string | null;
     };
-
     res.status(HttpStatusCode.OK).json(
       outJson(true, "Token refreshed", {
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
         user: userPayload,
+        onboardingComplete: u.onboardingComplete ?? false,
+        currentOnboardingStep: u.currentOnboardingStep ?? null,
       }),
     );
   } catch (error) {

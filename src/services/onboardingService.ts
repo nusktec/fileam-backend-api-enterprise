@@ -42,12 +42,22 @@ function shapeBusinessForResponse(business: {
 
 export const onboardingService = {
   async stepEmail(email: string, firstName?: string, _invitationId?: string) {
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing?.verified)
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { verified: true, onboardingComplete: true, firstName: true },
+    });
+    if (existing?.onboardingComplete) {
+      return {
+        success: false as const,
+        message: "You have already completed mobile onboarding. Use login to access your account.",
+      };
+    }
+    if (existing?.verified) {
       return {
         success: false as const,
         message: "An account with this email already exists",
       };
+    }
 
     const name = firstName ?? existing?.firstName ?? "User";
     const result = await EmailVerificationService.generateAndSendVerification(
@@ -159,6 +169,12 @@ export const onboardingService = {
         success: false as const,
         message: "User not found. Complete password step first.",
       };
+    if (user.onboardingComplete) {
+      return {
+        success: false as const,
+        message: "You have already completed mobile onboarding. Use login to access your account.",
+      };
+    }
 
     const business = await this.getOrCreateBusinessForUser(user.id, incomeType);
     const updatedUser = await prisma.user.update({
@@ -178,6 +194,12 @@ export const onboardingService = {
   async stepTaxObligations(tokenPayload: OnboardingTokenPayload) {
     const user = await this.getUserByEmail(tokenPayload.email);
     if (!user) return { success: false as const, message: "User not found." };
+    if (user.onboardingComplete) {
+      return {
+        success: false as const,
+        message: "You have already completed mobile onboarding. Use login to access your account.",
+      };
+    }
     const business = await prisma.business.findFirst({
       where: { userId: user.id },
     });
@@ -218,6 +240,12 @@ export const onboardingService = {
   ) {
     const user = await this.getUserByEmail(tokenPayload.email);
     if (!user) return { success: false as const, message: "User not found." };
+    if (user.onboardingComplete) {
+      return {
+        success: false as const,
+        message: "You have already completed mobile onboarding. Use login to access your account.",
+      };
+    }
     const business = await prisma.business.findFirst({
       where: { userId: user.id },
     });
@@ -254,6 +282,12 @@ export const onboardingService = {
   ) {
     const user = await this.getUserByEmail(tokenPayload.email);
     if (!user) return { success: false as const, message: "User not found." };
+    if (user.onboardingComplete) {
+      return {
+        success: false as const,
+        message: "You have already completed mobile onboarding. Use login to access your account.",
+      };
+    }
     const business = await prisma.business.findFirst({
       where: { userId: user.id },
     });
@@ -287,6 +321,12 @@ export const onboardingService = {
   async stepConsultantTerms(tokenPayload: OnboardingTokenPayload) {
     const user = await this.getUserByEmail(tokenPayload.email);
     if (!user) return { success: false as const, message: "User not found." };
+    if (user.onboardingComplete) {
+      return {
+        success: false as const,
+        message: "You have already completed mobile onboarding. Use login to access your account.",
+      };
+    }
     const business = await prisma.business.findFirst({
       where: { userId: user.id },
     });

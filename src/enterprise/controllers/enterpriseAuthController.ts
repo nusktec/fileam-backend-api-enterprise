@@ -9,6 +9,9 @@ import {
   revokeRefreshToken,
 } from "../../utils/jwt";
 import { authService } from "../../mobile/services/authService";
+import { EmailVerificationService } from "../../services/emailVerificationService";
+
+const ENTERPRISE_FIRST_STEP = "company_creation";
 
 export const login = async (req: Request, res: Response): Promise<void> => {
   const data = matchedData(req, { locations: ["body"] }) as { email: string; password: string };
@@ -42,12 +45,20 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     await saveRefreshToken(user.id, refreshToken);
 
     const payload = authService.buildAuthUserPayload(user);
+    const enterpriseComplete = (user as { enterpriseOnboardingComplete?: boolean })
+      .enterpriseOnboardingComplete ?? false;
+    const rawStep = (user as { enterpriseOnboardingStep?: string | null })
+      .enterpriseOnboardingStep;
+    const enterpriseStep =
+      enterpriseComplete ? "complete" : (rawStep ?? ENTERPRISE_FIRST_STEP);
 
     res.status(HttpStatusCode.OK).json(
       outJson(true, "Login successful", {
         accessToken,
         refreshToken,
         user: payload,
+        enterpriseOnboardingComplete: enterpriseComplete,
+        enterpriseOnboardingStep: enterpriseStep,
       }),
     );
   } catch (error) {
@@ -87,13 +98,109 @@ export const refreshToken = async (
     await saveRefreshToken(tokenRecord.user.id, newRefreshToken);
 
     const userPayload = authService.buildAuthUserPayload(tokenRecord.user);
-
+    const u = tokenRecord.user as {
+      enterpriseOnboardingComplete?: boolean;
+      enterpriseOnboardingStep?: string | null;
+    };
+    const entComplete = u.enterpriseOnboardingComplete ?? false;
+    const rawStep = u.enterpriseOnboardingStep;
+    const entStep =
+      entComplete ? "complete" : (rawStep ?? ENTERPRISE_FIRST_STEP);
     res.status(HttpStatusCode.OK).json(
       outJson(true, "Token refreshed", {
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
         user: userPayload,
+        enterpriseOnboardingComplete: entComplete,
+        enterpriseOnboardingStep: entStep,
       }),
+    );
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Server error", null));
+  }
+};
+
+export const forgotPassword = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const data = matchedData(req, { locations: ["body"] }) as { email: string };
+    const { email } = data;
+
+    const user = await authService.findUserByEmail(email);
+    if (!user) {
+      res.status(HttpStatusCode.NOT_FOUND).json(
+        outJson(false, "User with this email does not exist", null),
+      );
+      return;
+    }
+
+    const result = await EmailVerificationService.generateAndSendPasswordReset(
+      email,
+      user.firstName,
+    );
+
+    if (result.success) {
+      res.status(HttpStatusCode.OK).json(
+        outJson(true, "Password reset code sent to your email.", {
+          message: "Check your email for the reset code",
+          expiresIn: "10 minutes",
+        }),
+      );
+    } else {
+      res
+        .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+        .json(outJson(false, result.message ?? "Failed to send reset code", null));
+    }
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Server error", null));
+  }
+};
+
+export const resetPassword = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const data = matchedData(req, { locations: ["body"] }) as {
+      email: string;
+      code: string;
+      newPassword: string;
+    };
+    const { email, code, newPassword } = data;
+
+    const user = await authService.findUserByEmail(email);
+    if (!user) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Invalid or expired reset code.", null));
+      return;
+    }
+
+    const result = await EmailVerificationService.verifyPasswordResetCode(
+      email,
+      code,
+    );
+    if (!result.success) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, result.message, null));
+      return;
+    }
+
+    await authService.updatePasswordByEmail(email, newPassword);
+
+    res.status(HttpStatusCode.OK).json(
+      outJson(
+        true,
+        "Password reset successfully. You can now log in with your new password.",
+        null,
+      ),
     );
   } catch (error) {
     res

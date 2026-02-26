@@ -1,9 +1,9 @@
 import express from "express";
 import { health } from "../controllers/healthController";
-import onboardingRoutes from "../../routes/onboardingRoutes";
 import consultantOnboardingRoutes from "./consultantOnboardingRoutes";
 import enterpriseCompanyRoutes from "./enterpriseCompanyRoutes";
 import enterpriseAuthRoutes from "./enterpriseAuthRoutes";
+import enterpriseOnboardingRoutes from "./enterpriseOnboardingRoutes";
 import {
   createCompany,
   createInvitation,
@@ -15,6 +15,7 @@ import {
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireCompanyId } from "../middlewares/requireCompanyId";
+import { requireEnterpriseOnboardingComplete } from "../middlewares/requireEnterpriseOnboardingComplete";
 
 const router = express.Router();
 
@@ -24,17 +25,29 @@ router.get("/business-profile/industries", getIndustries);
 
 router.use("/auth", enterpriseAuthRoutes);
 
-router.post("/company", authenticate(), ...enterpriseValidations.validateCreateCompany, createCompany);
-router.post("/invitation", authenticate(), ...enterpriseValidations.validateCreateInvitation, createInvitation);
+router.post(
+  "/company",
+  authenticate(),
+  ...enterpriseValidations.validateCreateCompany,
+  createCompany,
+);
+router.post(
+  "/invitation",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  ...enterpriseValidations.validateCreateInvitation,
+  createInvitation,
+);
 router.use(
   "/company/:companyId",
   authenticate(),
+  requireEnterpriseOnboardingComplete,
   ...enterpriseValidations.validateCompanyIdParam,
   requireCompanyId,
   enterpriseCompanyRoutes,
 );
 
-router.use("/onboarding", onboardingRoutes);
+router.use("/onboarding", enterpriseOnboardingRoutes);
 router.use("/consultant-onboarding", consultantOnboardingRoutes);
 
 export default router;

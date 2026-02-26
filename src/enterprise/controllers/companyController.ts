@@ -11,9 +11,23 @@ export async function createCompany(
   res: Response,
 ): Promise<void> {
   const data = matchedData(req, { locations: ["body"] }) as { name: string };
+  const userId = req.user?.id;
+  if (!userId) {
+    res
+      .status(HttpStatusCode.UNAUTHORIZED)
+      .json(outJson(false, "Authentication required.", null));
+    return;
+  }
   try {
     const company = await prisma.company.create({
       data: { name: data.name },
+    });
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        enterpriseOnboardingComplete: true,
+        enterpriseOnboardingStep: "complete",
+      } as { enterpriseOnboardingComplete: boolean; enterpriseOnboardingStep: string },
     });
     res
       .status(HttpStatusCode.CREATED)

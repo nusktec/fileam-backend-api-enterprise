@@ -57,6 +57,8 @@ const authHandler = ({ roles = [], permissions = [] }: AuthOptions = {}) => {
           onboardingComplete: true,
           currentOnboardingStep: true,
           onboardingCompletedAt: true,
+          enterpriseOnboardingComplete: true,
+          enterpriseOnboardingStep: true,
           filingRemindersEnabled: true,
           payersNotificationsEnabled: true,
           complianceUpdatesEnabled: true,
