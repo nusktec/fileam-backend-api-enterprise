@@ -40,13 +40,72 @@ export const consultantOnboardingService = {
     });
   },
 
-  async step1(data: Step1Body) {
+  async ensureConsultantSessionForUser(userId: string) {
+    const existing = await prisma.consultantOnboardingSession.findFirst({
+      where: { userId },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (existing) return existing;
+    const sessionToken = uniqueSessionToken();
+    return prisma.consultantOnboardingSession.create({
+      data: {
+        sessionToken,
+        currentStep: 1,
+        status: "draft",
+        userId,
+      },
+    });
+  },
+
+  async step1(data: Step1Body, userId?: string) {
+    if (userId) {
+      const existing = await prisma.consultantOnboardingSession.findFirst({
+        where: { userId },
+        include: { firmIdentity: true },
+        orderBy: { updatedAt: "desc" },
+      });
+      if (existing) {
+        if (existing.firmIdentity) {
+          await prisma.consultantFirmIdentity.update({
+            where: { sessionId: existing.id },
+            data: {
+              businessStructure: data.businessStructure,
+              firmName: data.firmName,
+              registrationType: data.registrationType,
+              rcNumber: data.rcNumber ?? null,
+              yearOfIncorporation: data.yearOfIncorporation ?? null,
+              countryOfRegistration: data.countryOfRegistration,
+            },
+          });
+        } else {
+          await prisma.consultantFirmIdentity.create({
+            data: {
+              sessionId: existing.id,
+              businessStructure: data.businessStructure,
+              firmName: data.firmName,
+              registrationType: data.registrationType,
+              rcNumber: data.rcNumber ?? null,
+              yearOfIncorporation: data.yearOfIncorporation ?? null,
+              countryOfRegistration: data.countryOfRegistration,
+            },
+          });
+        }
+        const updated = await prisma.consultantOnboardingSession.findUnique({
+          where: { id: existing.id },
+          include: { firmIdentity: true },
+        });
+        if (!updated) throw new Error("Session not found");
+        const token = generateConsultantOnboardingToken(updated.id);
+        return { session: updated, token };
+      }
+    }
     const sessionToken = uniqueSessionToken();
     const session = await prisma.consultantOnboardingSession.create({
       data: {
         sessionToken,
         currentStep: 1,
         status: "draft",
+        ...(userId && { userId }),
         firmIdentity: {
           create: {
             businessStructure: data.businessStructure,
@@ -71,8 +130,6 @@ export const consultantOnboardingService = {
     });
     if (!session)
       return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft")
-      return { success: false as const, message: "Session not in draft" };
 
     await prisma.$transaction(async (tx) => {
       await tx.consultantPartner.deleteMany({ where: { sessionId } });
@@ -113,8 +170,6 @@ export const consultantOnboardingService = {
     });
     if (!session)
       return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft")
-      return { success: false as const, message: "Session not in draft" };
 
     const principal = session.partners.find((p) => p.isPrincipal);
     await prisma.$transaction(async (tx) => {
@@ -158,8 +213,6 @@ export const consultantOnboardingService = {
     });
     if (!session)
       return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft")
-      return { success: false as const, message: "Session not in draft" };
 
     await prisma.consultantScope.upsert({
       where: { sessionId },
@@ -190,8 +243,6 @@ export const consultantOnboardingService = {
     });
     if (!session)
       return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft")
-      return { success: false as const, message: "Session not in draft" };
 
     const reminderConfig = data.perFilingReminderConfig
       ? (data.perFilingReminderConfig as object)
@@ -223,8 +274,6 @@ export const consultantOnboardingService = {
     });
     if (!session)
       return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft")
-      return { success: false as const, message: "Session not in draft" };
 
     await prisma.consultantPaymentSetup.upsert({
       where: { sessionId },
@@ -255,8 +304,6 @@ export const consultantOnboardingService = {
     });
     if (!session)
       return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft")
-      return { success: false as const, message: "Session not in draft" };
 
     const submittedAt = data.saveAsDraft ? null : new Date();
     const status = data.saveAsDraft ? "draft" : "submitted";
@@ -290,31 +337,6 @@ export const consultantOnboardingService = {
     await prisma.consultantOnboardingSession.update({
       where: { id: sessionId },
       data: { currentStep: 7, status },
-    });
-    return { success: true as const };
-  },
-
-  async reviewAndSubmit(sessionId: string) {
-    const session = await prisma.consultantOnboardingSession.findUnique({
-      where: { id: sessionId },
-      include: { compliance: true },
-    });
-    if (!session)
-      return { success: false as const, message: "Session not found" };
-    if (session.status !== "draft")
-      return {
-        success: false as const,
-        message: "Already submitted or activated",
-      };
-    if (!session.compliance?.submittedAt) {
-      return {
-        success: false as const,
-        message: "Complete step 7 and submit before review",
-      };
-    }
-    await prisma.consultantOnboardingSession.update({
-      where: { id: sessionId },
-      data: { status: "submitted" },
     });
     return { success: true as const };
   },

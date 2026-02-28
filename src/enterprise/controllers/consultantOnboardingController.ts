@@ -2,8 +2,8 @@ import { Response } from "express";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
-import { generateConsultantOnboardingToken } from "../../utils/consultantOnboardingToken";
 import { consultantOnboardingService } from "../services/consultantOnboardingService";
+import { prisma } from "../../config/database";
 import type {
   Step1Body,
   Step2Body,
@@ -58,13 +58,20 @@ export async function consultantOnboardingStep1(
         ? Number(body.yearOfIncorporation)
         : undefined,
   };
+  let userId: string | undefined =
+    req.consultantOnboardingSession?.userId ?? undefined;
+  if (!userId && req.onboardingPayload?.email) {
+    const user = await prisma.user.findUnique({
+      where: { email: req.onboardingPayload.email },
+      select: { id: true },
+    });
+    userId = user?.id;
+  }
   try {
-    const result = await consultantOnboardingService.step1(data);
+    const result = await consultantOnboardingService.step1(data, userId);
     res.status(HttpStatusCode.CREATED).json(
       outJson(true, "Step 1 saved. Account created.", {
-        consultantOnboardingToken: generateConsultantOnboardingToken(
-          result.session.id,
-        ),
+        consultantOnboardingToken: result.token,
         sessionId: result.session.id,
         currentStep: result.session.currentStep,
         firmIdentity: result.session.firmIdentity,
@@ -459,37 +466,6 @@ export async function consultantOnboardingProfile(
   }
 }
 
-export async function consultantOnboardingReviewSubmit(
-  req: IRequest,
-  res: Response,
-): Promise<void> {
-  const session = req.consultantOnboardingSession!;
-  try {
-    const result = await consultantOnboardingService.reviewAndSubmit(
-      session.id,
-    );
-    if (!result.success) {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(outJson(false, result.message, null));
-      return;
-    }
-    res
-      .status(HttpStatusCode.OK)
-      .json(
-        outJson(
-          true,
-          "Submitted for review. Documents will be reviewed in 24–48 hours.",
-          null,
-        ),
-      );
-  } catch (e) {
-    res
-      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "Failed to submit for review", null));
-  }
-}
-
 export async function consultantOnboardingActivate(
   req: IRequest,
   res: Response,
@@ -504,14 +480,12 @@ export async function consultantOnboardingActivate(
       return;
     }
     const updated = await consultantOnboardingService.getSession(session.id);
-    res
-      .status(HttpStatusCode.OK)
-      .json(
-        outJson(true, "Account activated", {
-          status: updated?.status,
-          currentStep: 8,
-        }),
-      );
+    res.status(HttpStatusCode.OK).json(
+      outJson(true, "Account activated", {
+        status: updated?.status,
+        currentStep: 8,
+      }),
+    );
   } catch (e) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)

@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../config/database";
 import { EmailVerificationService } from "./emailVerificationService";
+import { consultantOnboardingService } from "../enterprise/services/consultantOnboardingService";
 import {
   generateOnboardingToken,
   OnboardingTokenPayload,
@@ -57,6 +58,7 @@ export const enterpriseOnboardingService = {
 
     if (user) {
       if (user.verified) {
+        await consultantOnboardingService.ensureConsultantSessionForUser(user.id);
         const payload: OnboardingTokenPayload = {
           email,
           ...(invitationId && { invitationId }),
@@ -82,6 +84,7 @@ export const enterpriseOnboardingService = {
           enterpriseOnboardingStep: ENTERPRISE_FIRST_STEP,
         } as { verified: boolean; enterpriseOnboardingStep: string },
       });
+      await consultantOnboardingService.ensureConsultantSessionForUser(user.id);
 
       const updated = await prisma.user.findUnique({
         where: { id: user.id },
@@ -182,8 +185,8 @@ export const enterpriseOnboardingService = {
         password: hashedPassword,
         firstName: firstName?.trim() || "User",
         lastName: lastName?.trim() || "",
-        verified: false,
-        enterpriseOnboardingStep: "verify_email",
+        verified: true,
+        enterpriseOnboardingStep: ENTERPRISE_FIRST_STEP,
         enterpriseOnboardingComplete: false,
         userRoles: { create: { roleId: businessRole.id } },
       } as {
@@ -198,30 +201,21 @@ export const enterpriseOnboardingService = {
       },
       include: { userRoles: { include: { role: true } } },
     });
+    await consultantOnboardingService.ensureConsultantSessionForUser(created.id);
 
-    const sendResult =
-      await EmailVerificationService.generateAndSendVerification(
-        email,
-        created.firstName,
-        ACCOUNT_VERIFICATION_TYPE,
-      );
-    if (!sendResult.success) {
-      return {
-        success: false as const,
-        message:
-          sendResult.message ??
-          "Account created but failed to send verification email. Please try again or contact support.",
-      };
-    }
+    const accessToken = generateAccessToken(created.id);
+    const refreshToken = generateRefreshToken();
+    await saveRefreshToken(created.id, refreshToken);
+    const userPayload = authService.buildAuthUserPayload(created);
 
     return {
       success: true as const,
       data: {
-        email,
-        message:
-          "Account created. Check your email to verify your account, then continue onboarding.",
-        requiresEmailVerification: true,
-        enterpriseOnboardingStep: "verify_email",
+        user: userPayload,
+        accessToken,
+        refreshToken,
+        enterpriseOnboardingStep: ENTERPRISE_FIRST_STEP,
+        enterpriseOnboardingComplete: false,
       },
     };
   },

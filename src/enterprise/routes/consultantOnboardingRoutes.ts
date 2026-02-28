@@ -1,5 +1,6 @@
 import express from "express";
-import { requireConsultantOnboardingToken } from "../middlewares/requireConsultantOnboardingToken";
+import { consultantOnboardingTokenOrAccessToken } from "../middlewares/consultantOnboardingTokenOrAccessToken";
+import { requireConsultantSession } from "../middlewares/requireConsultantSession";
 import {
   consultantOnboardingStep1,
   consultantOnboardingStep2,
@@ -9,57 +10,62 @@ import {
   consultantOnboardingStep6,
   consultantOnboardingStep7,
   consultantOnboardingProfile,
-  consultantOnboardingReviewSubmit,
   consultantOnboardingActivate,
 } from "../controllers/consultantOnboardingController";
 
 const router = express.Router();
+const consultantOrAccess = consultantOnboardingTokenOrAccessToken({
+  allowOnboardingToken: false,
+});
 
-router.post("/step/1", consultantOnboardingStep1);
+router.post("/step/1", consultantOrAccess, consultantOnboardingStep1);
 
 router.get(
   "/profile",
-  requireConsultantOnboardingToken,
+  consultantOrAccess,
+  requireConsultantSession,
   consultantOnboardingProfile,
 );
 router.post(
   "/step/2",
-  requireConsultantOnboardingToken,
+  consultantOrAccess,
+  requireConsultantSession,
   consultantOnboardingStep2,
 );
 router.post(
   "/step/3",
-  requireConsultantOnboardingToken,
+  consultantOrAccess,
+  requireConsultantSession,
   consultantOnboardingStep3,
 );
 router.post(
   "/step/4",
-  requireConsultantOnboardingToken,
+  consultantOrAccess,
+  requireConsultantSession,
   consultantOnboardingStep4,
 );
 router.post(
   "/step/5",
-  requireConsultantOnboardingToken,
+  consultantOrAccess,
+  requireConsultantSession,
   consultantOnboardingStep5,
 );
 router.post(
   "/step/6",
-  requireConsultantOnboardingToken,
+  consultantOrAccess,
+  requireConsultantSession,
   consultantOnboardingStep6,
 );
 router.post(
   "/step/7",
-  requireConsultantOnboardingToken,
+  consultantOrAccess,
+  requireConsultantSession,
   consultantOnboardingStep7,
 );
 router.post(
-  "/review-submit",
-  requireConsultantOnboardingToken,
-  consultantOnboardingReviewSubmit,
-);
-router.post(
   "/activate",
-  requireConsultantOnboardingToken,
+  consultantOrAccess,
+  requireConsultantSession,
   consultantOnboardingActivate,
 );
 

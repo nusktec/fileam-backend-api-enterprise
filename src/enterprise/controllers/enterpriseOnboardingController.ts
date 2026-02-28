@@ -59,7 +59,17 @@ export async function stepPassword(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const payload = req.onboardingPayload!;
+  const payload = req.onboardingPayload;
+  if (!payload?.email) {
+    res.status(HttpStatusCode.BAD_REQUEST).json(
+      outJson(
+        false,
+        "Step password requires the onboarding token from email-verify (not the consultant onboarding token). Complete step/email and step/email-verify first, or use the token returned there.",
+        null,
+      ),
+    );
+    return;
+  }
   const { password, firstName, lastName } = req.body;
   if (!password) {
     res
@@ -81,5 +91,5 @@ export async function stepPassword(
   }
   res
     .status(HttpStatusCode.OK)
-    .json(outJson(true, result.data?.message ?? "Account ready", result.data));
+    .json(outJson(true, "Account ready", result.data ?? null));
 }

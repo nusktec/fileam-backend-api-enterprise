@@ -10,8 +10,8 @@
     { "key": "accessToken", "value": "" },
     { "key": "refreshToken", "value": "" },
     { "key": "onboardingToken", "value": "" },
-    { "key": "webhookSecret", "value": "" },
     { "key": "consultantOnboardingToken", "value": "" },
+    { "key": "webhookSecret", "value": "" },
     { "key": "companyId", "value": "" }
   ],
   "item": [
@@ -1274,7 +1274,7 @@
                   "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/login",
-                "description": "Returns accessToken, refreshToken, user, enterpriseOnboardingComplete, enterpriseOnboardingStep (where user stopped if not complete)."
+                "description": "Returns accessToken, refreshToken, user, enterpriseOnboardingComplete, enterpriseOnboardingStep. When enterprise onboarding not complete returns onboardingToken (for enterprise step/password). When user has a consultant session also returns consultantOnboardingToken (for consultant onboarding steps 2–7 and profile; set {{consultantOnboardingToken}} from Step 1 response)."
               }
             },
             {
@@ -1289,7 +1289,7 @@
                   "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/refresh",
-                "description": "Returns new accessToken, refreshToken, user, enterpriseOnboardingComplete, enterpriseOnboardingStep. Body: refreshToken (required)."
+                "description": "Returns new accessToken, refreshToken, user, enterpriseOnboardingComplete, enterpriseOnboardingStep. When enterprise onboarding not complete returns onboardingToken; when user has a consultant session also returns consultantOnboardingToken. Body: refreshToken (required)."
               }
             },
             {
@@ -1326,7 +1326,7 @@
         },
         {
           "name": "Onboarding",
-          "description": "Enterprise signup: step/email (OTP), step/email-verify (verify OTP — returns onboarding token before password, or access/refresh tokens if new user verifying account), step/password (create or link account). Use Authorization: Bearer {{onboardingToken}} for step/password.",
+          "description": "Enterprise signup: step/email (OTP), step/email-verify (returns onboardingToken), step/password (create or link account; returns accessToken, refreshToken, user). Use onboardingToken (from email-verify or login when enterprise not complete) or accessToken for step/password. onboardingToken sets payload (email); do not use consultantOnboardingToken here.",
           "item": [
             {
               "name": "Step - Email (send OTP)",
@@ -1355,7 +1355,7 @@
                   "raw": "{\n  \"email\": \"user@example.com\",\n  \"code\": \"123456\",\n  \"invitationId\": \"\",\n  \"companyId\": \"\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/step/email-verify",
-                "description": "Verifies OTP. Before password: returns onboardingToken. After step/password (new user): same endpoint with email+code sets verified true and returns accessToken, refreshToken, user. Body: email, code (required); invitationId, companyId (optional)."
+                "description": "Verifies OTP. Returns onboardingToken and email. Use onboardingToken for step/password. Body: email, code (required); invitationId, companyId (optional)."
               }
             },
             {
@@ -1374,7 +1374,7 @@
                   "raw": "{\n  \"password\": \"password123\",\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/step/password",
-                "description": "New user: creates account (verified false), sends verification email; returns requiresEmailVerification true, no tokens. Existing user: validates password, returns accessToken, refreshToken, user."
+                "description": "New user: creates account (verified true), returns accessToken, refreshToken, user immediately. Existing user: validates password, returns accessToken, refreshToken, user. Use Authorization: Bearer {{onboardingToken}} or Bearer {{accessToken}}."
               }
             }
           ]
@@ -1996,44 +1996,8 @@
           ]
         },
         {
-          "name": "Onboarding",
-          "description": "Enterprise onboarding: step email (send OTP), step email-verify. No auth required.",
-          "item": [
-            {
-              "name": "Step - Email",
-              "request": {
-                "method": "POST",
-                "header": [
-                  { "key": "Content-Type", "value": "application/json" }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"firstName\": \"New\"\n}"
-                },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/step/email",
-                "description": "Sends OTP to email. Body: email, firstName (optional)."
-              }
-            },
-            {
-              "name": "Step - Email verify",
-              "request": {
-                "method": "POST",
-                "header": [
-                  { "key": "Content-Type", "value": "application/json" }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"code\": \"123456\"\n}"
-                },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/step/email-verify",
-                "description": "Verifies OTP. Body: email, code (required)."
-              }
-            }
-          ]
-        },
-        {
           "name": "Consultant onboarding",
-          "description": "Enterprise consultant onboarding (7 steps + review & activate). Base path: /api/v1/enterprise/consultant-onboarding. Step 1 returns consultantOnboardingToken; use X-Consultant-Onboarding-Token or body.consultantOnboardingToken for steps 2–7, profile, review-submit, activate.",
+          "description": "Enterprise consultant onboarding (7 steps + activate). Step 7 submit (saveAsDraft: false) sets status to submitted; then call activate. Base path: /api/v1/enterprise/consultant-onboarding. consultantOnboardingToken = consultant flow. Set {{consultantOnboardingToken}} from Step 1 response for Get profile and steps 2–7. Auth: X-Consultant-Onboarding-Token: {{consultantOnboardingToken}} or Authorization: Bearer {{accessToken}}.",
           "item": [
             {
               "name": "Step 1 - Firm identity",
@@ -2047,7 +2011,7 @@
                   "raw": "{\n  \"businessStructure\": \"LLP\",\n  \"firmName\": \"Acme Tax Advisory LLP\",\n  \"registrationType\": \"RC\",\n  \"rcNumber\": \"RC123456\",\n  \"yearOfIncorporation\": 2018,\n  \"countryOfRegistration\": \"Nigeria\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/1",
-                "description": "Creates session and firm identity. Body: businessStructure, firmName, registrationType, countryOfRegistration (required); rcNumber, yearOfIncorporation (optional). Returns consultantOnboardingToken and session."
+                "description": "Creates session and firm identity. Body: businessStructure, firmName, registrationType, countryOfRegistration (required); rcNumber, yearOfIncorporation (optional). Returns consultantOnboardingToken and session. Set {{consultantOnboardingToken}} from this response for Get profile and steps 2–7 (or use Authorization: Bearer {{accessToken}})."
               }
             },
             {
@@ -2062,7 +2026,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/profile",
-                "description": "Returns full onboarding session (firm identity, partners, scope, subscription, payment, compliance). Requires consultant onboarding token."
+                "description": "Returns full onboarding session (firm identity, partners, scope, subscription, payment, compliance). Use consultantOnboardingToken from Step 1 response (set {{consultantOnboardingToken}} from that response) or Authorization: Bearer {{accessToken}}. Protected: requires consultant session (complete Step 1 first)."
               }
             },
             {
@@ -2177,21 +2141,6 @@
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/7",
                 "description": "Document URLs (optional): cacDocumentUrl, principalPartnerIdUrl, professionalCertificateUrl, amlDocumentUrl, firmProfileUrl. Declarations (required booleans): declarationAccuracy, declarationFirsCompliance, declarationSuspensionPolicy. saveAsDraft: true to save without submitting."
-              }
-            },
-            {
-              "name": "Review & submit",
-              "request": {
-                "method": "POST",
-                "header": [
-                  { "key": "Content-Type", "value": "application/json" },
-                  {
-                    "key": "X-Consultant-Onboarding-Token",
-                    "value": "{{consultantOnboardingToken}}"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/review-submit",
-                "description": "Marks submission for review (documents reviewed in 24–48 hours). Requires step 7 submitted (saveAsDraft false)."
               }
             },
             {

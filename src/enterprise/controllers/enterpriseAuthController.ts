@@ -10,11 +10,27 @@ import {
 } from "../../utils/jwt";
 import { authService } from "../../mobile/services/authService";
 import { EmailVerificationService } from "../../services/emailVerificationService";
+import { prisma } from "../../config/database";
+import { generateConsultantOnboardingToken } from "../../utils/consultantOnboardingToken";
+import type { Prisma } from "@prisma/client";
 
 const ENTERPRISE_FIRST_STEP = "company_creation";
 
+async function getConsultantOnboardingTokenForUser(
+  userId: string,
+): Promise<string | null> {
+  const session = await prisma.consultantOnboardingSession.findFirst({
+    where: { userId } as Prisma.ConsultantOnboardingSessionWhereInput,
+    orderBy: { updatedAt: "desc" },
+  });
+  return session ? generateConsultantOnboardingToken(session.id) : null;
+}
+
 export const login = async (req: Request, res: Response): Promise<void> => {
-  const data = matchedData(req, { locations: ["body"] }) as { email: string; password: string };
+  const data = matchedData(req, { locations: ["body"] }) as {
+    email: string;
+    password: string;
+  };
 
   try {
     const user = await authService.findUserByEmail(data.email);
@@ -25,7 +41,10 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const isMatch = await authService.validatePassword(data.password, user.password);
+    const isMatch = await authService.validatePassword(
+      data.password,
+      user.password,
+    );
     if (!isMatch) {
       res
         .status(HttpStatusCode.UNAUTHORIZED)
@@ -45,22 +64,41 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     await saveRefreshToken(user.id, refreshToken);
 
     const payload = authService.buildAuthUserPayload(user);
-    const enterpriseComplete = (user as { enterpriseOnboardingComplete?: boolean })
-      .enterpriseOnboardingComplete ?? false;
+    const enterpriseComplete =
+      (user as { enterpriseOnboardingComplete?: boolean })
+        .enterpriseOnboardingComplete ?? false;
     const rawStep = (user as { enterpriseOnboardingStep?: string | null })
       .enterpriseOnboardingStep;
-    const enterpriseStep =
-      enterpriseComplete ? "complete" : (rawStep ?? ENTERPRISE_FIRST_STEP);
+    const enterpriseStep = enterpriseComplete
+      ? "complete"
+      : (rawStep ?? ENTERPRISE_FIRST_STEP);
 
-    res.status(HttpStatusCode.OK).json(
-      outJson(true, "Login successful", {
-        accessToken,
-        refreshToken,
-        user: payload,
-        enterpriseOnboardingComplete: enterpriseComplete,
-        enterpriseOnboardingStep: enterpriseStep,
-      }),
-    );
+    const responseData: {
+      accessToken: string;
+      refreshToken: string;
+      user: ReturnType<typeof authService.buildAuthUserPayload>;
+      enterpriseOnboardingComplete: boolean;
+      enterpriseOnboardingStep: string;
+      onboardingToken?: string;
+      consultantOnboardingToken?: string;
+    } = {
+      accessToken,
+      refreshToken,
+      user: payload,
+      enterpriseOnboardingComplete: enterpriseComplete,
+      enterpriseOnboardingStep: enterpriseStep,
+    };
+    if (!enterpriseComplete) {
+      const consultantToken = await getConsultantOnboardingTokenForUser(
+        user.id,
+      );
+      if (consultantToken)
+        responseData.consultantOnboardingToken = consultantToken;
+    }
+
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Login successful", responseData));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -72,7 +110,9 @@ export const refreshToken = async (
   req: Request,
   res: Response,
 ): Promise<void> => {
-  const data = matchedData(req, { locations: ["body"] }) as { refreshToken: string };
+  const data = matchedData(req, { locations: ["body"] }) as {
+    refreshToken: string;
+  };
   const token = data.refreshToken;
 
   try {
@@ -104,17 +144,34 @@ export const refreshToken = async (
     };
     const entComplete = u.enterpriseOnboardingComplete ?? false;
     const rawStep = u.enterpriseOnboardingStep;
-    const entStep =
-      entComplete ? "complete" : (rawStep ?? ENTERPRISE_FIRST_STEP);
-    res.status(HttpStatusCode.OK).json(
-      outJson(true, "Token refreshed", {
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-        user: userPayload,
-        enterpriseOnboardingComplete: entComplete,
-        enterpriseOnboardingStep: entStep,
-      }),
-    );
+    const entStep = entComplete
+      ? "complete"
+      : (rawStep ?? ENTERPRISE_FIRST_STEP);
+    const responseData: {
+      accessToken: string;
+      refreshToken: string;
+      user: ReturnType<typeof authService.buildAuthUserPayload>;
+      enterpriseOnboardingComplete: boolean;
+      enterpriseOnboardingStep: string;
+      onboardingToken?: string;
+      consultantOnboardingToken?: string;
+    } = {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      user: userPayload,
+      enterpriseOnboardingComplete: entComplete,
+      enterpriseOnboardingStep: entStep,
+    };
+    if (!entComplete) {
+      const consultantToken = await getConsultantOnboardingTokenForUser(
+        tokenRecord.user.id,
+      );
+      if (consultantToken)
+        responseData.consultantOnboardingToken = consultantToken;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Token refreshed", responseData));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
@@ -132,9 +189,9 @@ export const forgotPassword = async (
 
     const user = await authService.findUserByEmail(email);
     if (!user) {
-      res.status(HttpStatusCode.NOT_FOUND).json(
-        outJson(false, "User with this email does not exist", null),
-      );
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "User with this email does not exist", null));
       return;
     }
 
@@ -153,7 +210,9 @@ export const forgotPassword = async (
     } else {
       res
         .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-        .json(outJson(false, result.message ?? "Failed to send reset code", null));
+        .json(
+          outJson(false, result.message ?? "Failed to send reset code", null),
+        );
     }
   } catch (error) {
     res
@@ -195,13 +254,15 @@ export const resetPassword = async (
 
     await authService.updatePasswordByEmail(email, newPassword);
 
-    res.status(HttpStatusCode.OK).json(
-      outJson(
-        true,
-        "Password reset successfully. You can now log in with your new password.",
-        null,
-      ),
-    );
+    res
+      .status(HttpStatusCode.OK)
+      .json(
+        outJson(
+          true,
+          "Password reset successfully. You can now log in with your new password.",
+          null,
+        ),
+      );
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
