@@ -54,6 +54,21 @@
               }
             },
             {
+              "name": "Resend forgot password",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/forgot-password/resend",
+                "description": "Resends the password reset code email using the same rules as Forgot password. Body: email (required)."
+              }
+            },
+            {
               "name": "Reset password",
               "request": {
                 "method": "POST",
@@ -263,6 +278,21 @@
                   "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"firstName\": \"New\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/email"
+              }
+            },
+            {
+              "name": "Step - Email (resend OTP)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"firstName\": \"New\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/email-resend",
+                "description": "Resends the onboarding OTP email for the given address, as long as mobile onboarding is not yet completed and no fully verified account already exists for this email."
               }
             },
             {
@@ -1308,6 +1338,21 @@
               }
             },
             {
+              "name": "Resend forgot password",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/forgot-password/resend",
+                "description": "Resends the password reset code email using the same rules as Forgot password. Body: email (required). Returns 404 if user not found."
+              }
+            },
+            {
               "name": "Reset password",
               "request": {
                 "method": "POST",
@@ -1341,6 +1386,21 @@
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/step/email",
                 "description": "Sends OTP to email. Body: email (required), firstName (optional). Rejects if enterprise onboarding already completed."
+              }
+            },
+            {
+              "name": "Step - Email (resend OTP)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"firstName\": \"Jane\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/step/email-resend",
+                "description": "Resends the enterprise onboarding OTP email for the given address, as long as enterprise onboarding is not yet completed."
               }
             },
             {

@@ -70,6 +70,36 @@ export const onboardingService = {
     return { success: true as const, data: { email } };
   },
 
+  async resendStepEmail(email: string, firstName?: string) {
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { verified: true, onboardingComplete: true, firstName: true },
+    });
+    if (existing?.onboardingComplete) {
+      return {
+        success: false as const,
+        message:
+          "You have already completed mobile onboarding. Use login to access your account.",
+      };
+    }
+    if (existing?.verified) {
+      return {
+        success: false as const,
+        message: "An account with this email already exists",
+      };
+    }
+
+    const name = firstName ?? existing?.firstName ?? "User";
+    const result = await EmailVerificationService.resendVerification(
+      email,
+      name,
+      ONBOARDING_VERIFICATION_TYPE,
+    );
+    if (!result.success)
+      return { success: false as const, message: result.message };
+    return { success: true as const, data: { email } };
+  },
+
   async stepEmailVerify(
     email: string,
     code: string,

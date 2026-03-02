@@ -221,6 +221,48 @@ export const forgotPassword = async (
   }
 };
 
+export const resendForgotPassword = async (
+  req: Request,
+  res: Response,
+): Promise<void> => {
+  try {
+    const data = matchedData(req, { locations: ["body"] }) as { email: string };
+    const { email } = data;
+
+    const user = await authService.findUserByEmail(email);
+    if (!user) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "User with this email does not exist", null));
+      return;
+    }
+
+    const result = await EmailVerificationService.generateAndSendPasswordReset(
+      email,
+      user.firstName,
+    );
+
+    if (result.success) {
+      res.status(HttpStatusCode.OK).json(
+        outJson(true, "Password reset code resent to your email.", {
+          message: "Check your email for the reset code",
+          expiresIn: "10 minutes",
+        }),
+      );
+    } else {
+      res
+        .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+        .json(
+          outJson(false, result.message ?? "Failed to resend reset code", null),
+        );
+    }
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Server error", null));
+  }
+};
+
 export const resetPassword = async (
   req: Request,
   res: Response,

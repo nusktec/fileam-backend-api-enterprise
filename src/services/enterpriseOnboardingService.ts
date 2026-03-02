@@ -41,6 +41,32 @@ export const enterpriseOnboardingService = {
     return { success: true as const, data: { email } };
   },
 
+  async resendStepEmail(email: string, firstName?: string) {
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { firstName: true, enterpriseOnboardingComplete: true },
+    });
+    if (
+      (existing as { enterpriseOnboardingComplete?: boolean } | null)
+        ?.enterpriseOnboardingComplete
+    ) {
+      return {
+        success: false as const,
+        message:
+          "You have already completed enterprise onboarding. Use login to access your account.",
+      };
+    }
+    const name = firstName ?? existing?.firstName ?? "User";
+    const result = await EmailVerificationService.resendVerification(
+      email,
+      name,
+      ONBOARDING_VERIFICATION_TYPE,
+    );
+    if (!result.success)
+      return { success: false as const, message: result.message };
+    return { success: true as const, data: { email } };
+  },
+
   async stepEmailVerify(
     email: string,
     code: string,

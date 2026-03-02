@@ -5,6 +5,7 @@ import {
   logout,
   forgotPassword,
   resetPassword,
+  resendForgotPassword,
 } from "../controllers/authController";
 import { validations } from "../../middlewares/validations/authValidation";
 
@@ -15,6 +16,11 @@ router.post(
   "/forgot-password",
   validations.validateForgotPasswordRequest,
   forgotPassword,
+);
+router.post(
+  "/forgot-password/resend",
+  validations.validateForgotPasswordRequest,
+  resendForgotPassword,
 );
 router.post(
   "/reset-password",

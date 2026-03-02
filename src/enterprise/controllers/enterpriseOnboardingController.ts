@@ -27,6 +27,32 @@ export async function stepEmail(
     .json(outJson(true, "Verification email sent", result.data));
 }
 
+export async function resendStepEmail(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const { email, firstName } = req.body;
+  if (!email) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, "Email is required", null));
+    return;
+  }
+  const result = await enterpriseOnboardingService.resendStepEmail(
+    email,
+    firstName,
+  );
+  if (!result.success) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, result.message, result.data ?? null));
+    return;
+  }
+  res
+    .status(HttpStatusCode.OK)
+    .json(outJson(true, "Verification email resent", result.data));
+}
+
 export async function stepEmailVerify(
   req: IRequest,
   res: Response,

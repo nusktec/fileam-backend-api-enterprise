@@ -3,6 +3,7 @@ import { requireOnboardingOrAccessToken } from "../middlewares/onboardingMiddlew
 import {
   stepEmail,
   stepEmailVerify,
+  resendStepEmail,
   stepPassword,
   stepIncomeType,
   stepTaxObligations,
@@ -19,6 +20,7 @@ const router = express.Router();
 
 router.get("/profile", requireOnboardingOrAccessToken, getOnboardingProfile);
 router.post("/step/email", stepEmail);
+router.post("/step/email-resend", resendStepEmail);
 router.post("/step/email-verify", stepEmailVerify);
 
 router.post("/step/password", requireOnboardingOrAccessToken, stepPassword);

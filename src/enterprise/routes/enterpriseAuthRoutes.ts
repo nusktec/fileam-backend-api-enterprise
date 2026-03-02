@@ -4,6 +4,7 @@ import {
   refreshToken,
   forgotPassword,
   resetPassword,
+  resendForgotPassword,
 } from "../controllers/enterpriseAuthController";
 import { validations } from "../../middlewares/validations/authValidation";
 
@@ -20,6 +21,11 @@ router.post(
   "/reset-password",
   validations.validateResetPasswordRequest,
   resetPassword,
+);
+router.post(
+  "/forgot-password/resend",
+  validations.validateForgotPasswordRequest,
+  resendForgotPassword,
 );
 
 export default router;

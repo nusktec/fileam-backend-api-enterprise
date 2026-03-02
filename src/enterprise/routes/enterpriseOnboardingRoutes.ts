@@ -3,12 +3,14 @@ import {
   stepEmail,
   stepEmailVerify,
   stepPassword,
+  resendStepEmail,
 } from "../controllers/enterpriseOnboardingController";
 import { consultantOnboardingTokenOrAccessToken } from "../middlewares/consultantOnboardingTokenOrAccessToken";
 
 const router = express.Router();
 
 router.post("/step/email", stepEmail);
+router.post("/step/email-resend", resendStepEmail);
 router.post("/step/email-verify", stepEmailVerify);
 router.post(
   "/step/password",
