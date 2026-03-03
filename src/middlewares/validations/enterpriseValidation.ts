@@ -28,6 +28,18 @@ const validateCreateInvitation = [
     .withMessage("invitedEmail must be a valid email"),
   check("invitedBusinessName").optional().trim().isString(),
   check("expiresInHours").optional().isInt({ min: 1, max: 720 }).withMessage("expiresInHours must be between 1 and 720"),
+  check("invitedContactName").optional().trim().isString(),
+  check("invitedRcNumber").optional().trim().isString(),
+  check("invitedPhone").optional().trim().isString(),
+  check("stateOfOperation").optional().trim().isString(),
+  check("taxTypesManaged")
+    .optional()
+    .custom((v) => {
+      if (Array.isArray(v)) return v.every((s) => typeof s === "string");
+      if (typeof v === "string") return true;
+      return false;
+    })
+    .withMessage("taxTypesManaged must be an array of strings (e.g. VAT, PAYE, CIT, WHT) or a string"),
   handleValidation,
 ];
 

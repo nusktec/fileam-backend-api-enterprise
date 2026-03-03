@@ -1,10 +1,12 @@
 model Company {
   id                 String   @id @default(uuid())
   name               String
+  ownerId            String?  @map("owner_id")
   nextInvoiceNumber  Int      @default(1) @map("next_invoice_number")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 
+  owner                       User?     @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   invitations                  Invitation[]
   consultantConnections         ConsultantConnection[]
   enterpriseBusinessProfile     EnterpriseBusinessProfile?

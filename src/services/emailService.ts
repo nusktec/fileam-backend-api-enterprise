@@ -212,6 +212,28 @@ const SendInviteMail = async (
   }
 };
 
+const sendInvitationToJoinEmail = async (
+  to: string,
+  recipientName: string,
+  invitationCode: string,
+  expiresAt: Date,
+): Promise<{ success: boolean; data?: any; error?: any }> => {
+  const expiryFormatted = expiresAt.toLocaleDateString(undefined, {
+    dateStyle: "medium",
+  });
+  const body = `<p>You have been invited to join FileAm.</p>
+<p>Use this invitation code when signing up or accepting the invitation: <strong style="letter-spacing: 2px; font-size: 1.1em;">${invitationCode}</strong></p>
+<p>This invitation expires on ${expiryFormatted}. If you did not expect this email, you can ignore it.</p>
+<p>Best regards,<br>The Fileam Team</p>`;
+  return SendInviteMail(
+    EMAIL_CATEGORIES.INVITATION,
+    "You're invited to join FileAm",
+    recipientName || to,
+    body,
+    to,
+  );
+};
+
 const EmailCategoryEnum: EmailCategoryInterface = Object.freeze({
   PASSWORD_RESET: "Password Reset",
   ORDER_CONFIRMATION: "Order Confirmation",
@@ -243,6 +265,7 @@ const EmailCategoryEnum: EmailCategoryInterface = Object.freeze({
 export {
   SendMail,
   SendInviteMail,
+  sendInvitationToJoinEmail,
   EmailCategoryEnum,
   sendEmail,
   sendVerificationEmail,

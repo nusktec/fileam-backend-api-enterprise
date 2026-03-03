@@ -1,13 +1,18 @@
 model Invitation {
-  id                  String   @id @default(uuid())
-  code                String   @unique
-  companyId           String   @map("company_id")
-  invitedEmail        String   @map("invited_email")
-  invitedBusinessName String?  @map("invited_business_name")
-  status              String   @default("pending")
-  expiresAt           DateTime @map("expires_at")
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
+  id                    String   @id @default(uuid())
+  code                  String   @unique
+  companyId             String   @map("company_id")
+  invitedEmail          String   @map("invited_email")
+  invitedBusinessName   String?  @map("invited_business_name")
+  invitedContactName    String?  @map("invited_contact_name")
+  invitedRcNumber        String?  @map("invited_rc_number")
+  invitedPhone          String?  @map("invited_phone")
+  stateOfOperation      String?  @map("state_of_operation")
+  taxTypesManaged       String?  @map("tax_types_managed")
+  status                String   @default("pending")
+  expiresAt             DateTime @map("expires_at")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   consultantConnections ConsultantConnection[]

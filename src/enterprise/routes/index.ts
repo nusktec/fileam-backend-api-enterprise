@@ -7,6 +7,7 @@ import enterpriseOnboardingRoutes from "./enterpriseOnboardingRoutes";
 import {
   createCompany,
   createInvitation,
+  listCompanies,
 } from "../controllers/companyController";
 import {
   getBusinessTypes,
@@ -25,6 +26,7 @@ router.get("/business-profile/industries", getIndustries);
 
 router.use("/auth", enterpriseAuthRoutes);
 
+router.get("/companies", authenticate(), listCompanies);
 router.post(
   "/company",
   authenticate(),

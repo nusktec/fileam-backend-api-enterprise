@@ -1440,6 +1440,17 @@
           ]
         },
         {
+          "name": "List companies",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/companies",
+            "description": "Lists companies owned by the current user (consultant). Use companyId from response for clients and invitation endpoints. Requires auth."
+          }
+        },
+        {
           "name": "Create company",
           "request": {
             "method": "POST",
@@ -1452,11 +1463,11 @@
               "raw": "{\n  \"name\": \"Acme Consulting Ltd\"\n}"
             },
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company",
-            "description": "Creates a company. Requires auth. Body: name (required). Returns company id."
+            "description": "Creates a company. Requires auth. Body: name (required). Sets current user as owner. Returns company id."
           }
         },
         {
-          "name": "Create invitation",
+          "name": "Create invitation (Invite New / Request Management Access)",
           "request": {
             "method": "POST",
             "header": [
@@ -1465,10 +1476,32 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"companyId\": \"<company-uuid>\",\n  \"invitedEmail\": \"invited@example.com\",\n  \"invitedBusinessName\": \"Invited Business Ltd\",\n  \"expiresInHours\": 168\n}"
+              "raw": "{\n  \"companyId\": \"{{companyId}}\",\n  \"invitedEmail\": \"business@example.com\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
             },
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
-            "description": "Creates an invitation for a business. Requires auth. Body: companyId, invitedEmail (required), invitedBusinessName (optional), expiresInHours (optional, 1-720)."
+            "description": "Creates an invitation. Use for Invite New (all fields) or Request Management Access (companyId, invitedEmail, invitedBusinessName). Required: companyId, invitedEmail. Optional: invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Returns invitation with status Pending Acceptance."
+          }
+        },
+        {
+          "name": "List clients",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/clients",
+            "description": "Lists clients (businesses you manage) for the given company. Returns businessName, rcNumber, status, email, tin, connectionId. Requires auth and companyId in path."
+          }
+        },
+        {
+          "name": "Search clients (Search Existing)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/clients/search?q=urban",
+            "description": "Search existing businesses on FileAm by business name, RC number, or email. Query param q (min 2 chars). Excludes already connected clients. Use result email/invitedBusinessName to call Create invitation for Request Management Access. Requires auth."
           }
         },
         {

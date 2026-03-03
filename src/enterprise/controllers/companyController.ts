@@ -5,6 +5,31 @@ import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { RandomAscii } from "../../utils/tools";
+import { sendInvitationToJoinEmail } from "../../services/emailService";
+import { sendResult, sendServerError } from "../utils/controllerHelpers";
+
+export async function listCompanies(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const userId = req.user?.id;
+  if (!userId) {
+    res
+      .status(HttpStatusCode.UNAUTHORIZED)
+      .json(outJson(false, "Authentication required.", null));
+    return;
+  }
+  try {
+    const companies = await prisma.company.findMany({
+      where: { ownerId: userId },
+      select: { id: true, name: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+    });
+    sendResult(res, "Companies", companies);
+  } catch {
+    sendServerError(res, "Failed to list companies");
+  }
+}
 
 export async function createCompany(
   req: IRequest,
@@ -20,7 +45,7 @@ export async function createCompany(
   }
   try {
     const company = await prisma.company.create({
-      data: { name: data.name },
+      data: { name: data.name, ownerId: userId },
     });
     await prisma.user.update({
       where: { id: userId },
@@ -51,8 +76,23 @@ export async function createInvitation(
     invitedEmail: string;
     invitedBusinessName?: string;
     expiresInHours?: number;
+    invitedContactName?: string;
+    invitedRcNumber?: string;
+    invitedPhone?: string;
+    stateOfOperation?: string;
+    taxTypesManaged?: string[] | string;
   };
-  const { companyId, invitedEmail, invitedBusinessName, expiresInHours } = data;
+  const {
+    companyId,
+    invitedEmail,
+    invitedBusinessName,
+    expiresInHours,
+    invitedContactName,
+    invitedRcNumber,
+    invitedPhone,
+    stateOfOperation,
+    taxTypesManaged,
+  } = data;
   const company = await prisma.company.findUnique({ where: { id: companyId } });
   if (!company) {
     res
@@ -68,6 +108,14 @@ export async function createInvitation(
     code = RandomAscii(6);
     exists = await prisma.invitation.findUnique({ where: { code } });
   }
+  const taxTypesStr =
+    taxTypesManaged == null
+      ? null
+      : Array.isArray(taxTypesManaged)
+        ? JSON.stringify(taxTypesManaged)
+        : typeof taxTypesManaged === "string"
+          ? taxTypesManaged
+          : null;
   try {
     const invitation = await prisma.invitation.create({
       data: {
@@ -75,13 +123,38 @@ export async function createInvitation(
         companyId,
         invitedEmail: invitedEmail.trim().toLowerCase(),
         invitedBusinessName: invitedBusinessName ? invitedBusinessName.trim() : null,
+        invitedContactName: invitedContactName ? invitedContactName.trim() : null,
+        invitedRcNumber: invitedRcNumber ? invitedRcNumber.trim() : null,
+        invitedPhone: invitedPhone ? invitedPhone.trim() : null,
+        stateOfOperation: stateOfOperation ? stateOfOperation.trim() : null,
+        taxTypesManaged: taxTypesStr,
         status: "pending",
         expiresAt,
       },
     });
+
+    const recipientName =
+      invitedContactName?.trim() ||
+      invitedBusinessName?.trim() ||
+      invitedEmail.trim();
+    const emailResult = await sendInvitationToJoinEmail(
+      invitation.invitedEmail,
+      recipientName,
+      invitation.code,
+      invitation.expiresAt,
+    );
+    if (!emailResult.success) {
+      console.error("Failed to send invitation email:", emailResult.error);
+    }
+
     res
       .status(HttpStatusCode.CREATED)
-      .json(outJson(true, "Invitation created", invitation));
+      .json(
+        outJson(true, "Invitation sent successfully. The business owner will receive an email invitation to join FileAm.", {
+          ...invitation,
+          status: "Pending Acceptance",
+        }),
+      );
   } catch (e) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
