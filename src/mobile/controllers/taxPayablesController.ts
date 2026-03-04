@@ -95,9 +95,9 @@ export const initiatePayment = async (
           currency: payable.currency,
           method,
           reference,
-          paymentUrl: null,
+          paymentLink: payable.paymentLink,
           message:
-            "Configure your third-party payment provider and return paymentUrl here. After payment, call the payment webhook to record the result.",
+            "Use paymentLink for frontend redirect. After payment, call the payment webhook to record the result.",
         },
       ),
     );

@@ -4,9 +4,17 @@ import { taxComputationService } from "./taxComputationService";
 import { VAT_FILING_DAY } from "../../constants/taxPayable";
 import type { TaxType, PayableStatus } from "../../constants/taxPayable";
 
+const PAYMENT_BASE_URL =
+  process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
+
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
+}
+
+/** Placeholder payment link until a payment provider is integrated. */
+function getPaymentLink(payableId: string, storedLink: string | null): string {
+  return storedLink ?? `${PAYMENT_BASE_URL}/checkout/${payableId}`;
 }
 
 function getFilingDueDate(year: number, month: number): Date {
@@ -173,6 +181,7 @@ export const taxPayablesService = {
         (s, r) => s + decimalToNumber(r.amountPaid),
         0,
       ),
+      paymentLink: getPaymentLink(p.id, p.paymentLink),
     }));
     return {
       data,
@@ -205,6 +214,7 @@ export const taxPayablesService = {
       status: p.status,
       currency: p.currency,
       totalPaid,
+      paymentLink: getPaymentLink(p.id, p.paymentLink),
       payments: p.payments.map((r) => ({
         id: r.id,
         amountPaid: decimalToNumber(r.amountPaid),

@@ -16,6 +16,7 @@ model TaxPayable {
   stateOfOperation String?  @map("state_of_operation")
   vatRegistrationNumber String? @map("vat_registration_number")
   receiptUrl       String?   @map("receipt_url")
+  paymentLink      String?   @map("payment_link")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
