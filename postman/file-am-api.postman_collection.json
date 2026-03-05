@@ -1277,7 +1277,7 @@
     },
     {
       "name": "Enterprise",
-      "description": "Enterprise endpoints: health check (no auth), auth (login, refresh), company & invitation (auth required), business profile lookups (no auth), company-scoped routes (business profile, tax computation, financials, evidence vault — all require Authorization: Bearer {{accessToken}}; set companyId variable), onboarding (no auth), consultant onboarding (token in header).",
+      "description": "Enterprise endpoints: health check (no auth), auth (login, refresh), company & invitation (auth required), list all businesses (auth + onboarding complete), business profile lookups (no auth), company-scoped routes (clients, business profile, tax computation, financials, evidence vault — all require Authorization: Bearer {{accessToken}}; set companyId variable), onboarding (no auth), consultant onboarding (token in header).",
       "item": [
         {
           "name": "Health",
@@ -1447,7 +1447,7 @@
               { "key": "Authorization", "value": "Bearer {{accessToken}}" }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/companies",
-            "description": "Lists companies owned by the current user (consultant). Use companyId from response for clients and invitation endpoints. Requires auth."
+            "description": "Lists companies owned by the current user (consultant). Response data: array of { id, name, createdAt }. Use id as companyId for invitation and company-scoped endpoints. Requires auth."
           }
         },
         {
@@ -1463,7 +1463,7 @@
               "raw": "{\n  \"name\": \"Acme Consulting Ltd\"\n}"
             },
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company",
-            "description": "Creates a company. Requires auth. Body: name (required). Sets current user as owner. Returns company id."
+            "description": "Creates a company. Body: name (required). Sets current user as owner. Response data: company object (id, name, ownerId, createdAt, etc.). Requires auth. Enterprise onboarding is marked complete after creation."
           }
         },
         {
@@ -1479,7 +1479,18 @@
               "raw": "{\n  \"companyId\": \"{{companyId}}\",\n  \"invitedEmail\": \"business@example.com\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
             },
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
-            "description": "Creates an invitation. Use for Invite New (all fields) or Request Management Access (companyId, invitedEmail, invitedBusinessName). Required: companyId, invitedEmail. Optional: invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Returns invitation with status Pending Acceptance."
+            "description": "Creates an invitation to add a business owner (client) to the company. Body: companyId, invitedEmail (required). Optional: invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
+          }
+        },
+        {
+          "name": "List all businesses",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/businesses",
+            "description": "Lists all businesses in the system (not scoped to any company). Returns every business in data; no pagination. Optional query param: q — search (case-insensitive) by business name, rcNumber, tin, or owner email/firstName/lastName/organizationName; omit q to get all. Response data: array of { id, userId, name, rcNumber, tin, incomeType, stateOfResidence, email, ownerName, createdAt }. Requires auth and enterprise onboarding complete."
           }
         },
         {
@@ -1490,7 +1501,7 @@
               { "key": "Authorization", "value": "Bearer {{accessToken}}" }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/clients",
-            "description": "Lists clients (businesses you manage) for the given company. Returns businessName, rcNumber, status, email, tin, connectionId. Requires auth and companyId in path."
+            "description": "Lists clients (businesses linked to this company via accepted invitations) for the given company. Response data: array of { id (userId), connectionId, businessName, rcNumber, status, vatStatus, nextFiling, email, tin }. Requires auth and companyId in path (set {{companyId}} from List companies or Create company)."
           }
         },
         {
@@ -1501,11 +1512,12 @@
               { "key": "Authorization", "value": "Bearer {{accessToken}}" }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/clients/search?q=urban",
-            "description": "Search existing businesses on FileAm by business name, RC number, or email. Query param q (min 2 chars). Excludes already connected clients. Use result email/invitedBusinessName to call Create invitation for Request Management Access. Requires auth."
+            "description": "Search businesses and users on FileAm by name, RC number, TIN, or email. Query param q (min 2 chars). Excludes users already connected as clients of this company. Use result to Create invitation (Request Management Access). Response data: array of { id, businessName, rcNumber, email, tin, status }. Requires auth and companyId."
           }
         },
         {
           "name": "Business profile (lookups)",
+          "description": "Lookup lists for company business profile. No auth or companyId required.",
           "item": [
             {
               "name": "Get business types",
@@ -1515,7 +1527,7 @@
                   { "key": "Content-Type", "value": "application/json" }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/types",
-                "description": "Returns list of business types for dropdown. No companyId required."
+                "description": "Returns list of business types for dropdown (e.g. for Update business profile). No auth required."
               }
             },
             {
@@ -1526,24 +1538,25 @@
                   { "key": "Content-Type", "value": "application/json" }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/industries",
-                "description": "Returns list of industries for dropdown. No companyId required."
+                "description": "Returns list of industries for dropdown (e.g. for Update business profile). No auth required."
               }
             }
           ]
         },
         {
           "name": "Company - Business profile",
-          "description": "All under /api/v1/enterprise/company/:companyId. Require Authorization: Bearer {{accessToken}}. Set collection variable companyId (e.g. from Create company response).",
+          "description": "Company-scoped business profile (the consultant company's profile, not mobile businesses). All under /api/v1/enterprise/company/:companyId. Require Authorization: Bearer {{accessToken}}. Set {{companyId}} from List companies or Create company.",
           "item": [
             {
               "name": "Get business profile",
               "request": {
                 "method": "GET",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile",
-                "description": "Returns company profile including logo (URL or null), subscription, compliance percent, activities."
+                "description": "Returns the company's business profile: logo (URL or null), subscription, compliance percent, and related fields. Requires auth and companyId."
               }
             },
             {
@@ -1551,10 +1564,11 @@
               "request": {
                 "method": "GET",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile/activities",
-                "description": "Returns list of compliance activities."
+                "description": "Returns list of compliance activities for the company. Requires auth and companyId."
               }
             },
             {
@@ -1562,7 +1576,8 @@
               "request": {
                 "method": "PUT",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
                 "body": {
                   "mode": "raw",
@@ -1577,14 +1592,15 @@
               "request": {
                 "method": "POST",
                 "header": [
-                  { "key": "Content-Type", "value": "application/json" }
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"plan\": \"Enterprise Plan\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile/subscription/upgrade",
-                "description": "Initiates subscription upgrade. Body: plan (optional)."
+                "description": "Initiates subscription upgrade for the company. Body: plan (optional string, e.g. \"Enterprise Plan\"). Requires auth and companyId."
               }
             }
           ]

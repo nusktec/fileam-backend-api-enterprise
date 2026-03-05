@@ -353,6 +353,15 @@ export const consultantOnboardingService = {
       where: { id: sessionId },
       data: { status: "activated", currentStep: 8 },
     });
+    if (session.userId) {
+      await prisma.user.update({
+        where: { id: session.userId },
+        data: {
+          enterpriseOnboardingComplete: true,
+          enterpriseOnboardingStep: "complete",
+        } as { enterpriseOnboardingComplete: boolean; enterpriseOnboardingStep: string },
+      });
+    }
     return { success: true as const };
   },
 };

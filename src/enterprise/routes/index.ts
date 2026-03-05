@@ -13,6 +13,7 @@ import {
   getBusinessTypes,
   getIndustries,
 } from "../controllers/enterpriseBusinessProfileController";
+import { listAllBusinesses } from "../controllers/enterpriseBusinessesController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireCompanyId } from "../middlewares/requireCompanyId";
@@ -27,6 +28,12 @@ router.get("/business-profile/industries", getIndustries);
 router.use("/auth", enterpriseAuthRoutes);
 
 router.get("/companies", authenticate(), listCompanies);
+router.get(
+  "/businesses",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  listAllBusinesses,
+);
 router.post(
   "/company",
   authenticate(),
