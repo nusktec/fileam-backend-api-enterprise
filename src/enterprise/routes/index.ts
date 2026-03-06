@@ -14,6 +14,7 @@ import {
   getIndustries,
 } from "../controllers/enterpriseBusinessProfileController";
 import { listAllBusinesses } from "../controllers/enterpriseBusinessesController";
+import { listClients, searchClients } from "../controllers/enterpriseClientsController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireCompanyId } from "../middlewares/requireCompanyId";
@@ -46,6 +47,18 @@ router.post(
   requireEnterpriseOnboardingComplete,
   ...enterpriseValidations.validateCreateInvitation,
   createInvitation,
+);
+router.get(
+  "/clients",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  listClients,
+);
+router.get(
+  "/clients/search",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  searchClients,
 );
 router.use(
   "/company/:companyId",
