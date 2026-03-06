@@ -1446,8 +1446,19 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{accessToken}}" }
             ],
-            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/companies",
-            "description": "Lists companies owned by the current user (consultant). Response data: array of { id, name, createdAt }. Use id as companyId for invitation and company-scoped endpoints. Requires auth."
+            "url": {
+              "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/companies?q=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v{{apiVersion}}", "enterprise", "companies"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "description": "Optional. Filter by company name (case-insensitive, substring match). Omit to return all companies owned by the current user."
+                }
+              ]
+            },
+            "description": "Lists companies owned by the current user (consultant).\n\nFilter:\n• Query param: q (optional). When provided, filters by company name (case-insensitive, substring). Omit q to return all your companies.\n\nResponse data: array of { id, name, createdAt }. Use id as companyId for invitation and company-scoped endpoints. Requires auth."
           }
         },
         {
@@ -1476,10 +1487,10 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"companyId\": \"{{companyId}}\",\n  \"invitedEmail\": \"business@example.com\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
+              "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
             },
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
-            "description": "Creates an invitation to add a business owner (client) to the company. Body: companyId, invitedEmail (required). Optional: invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
+            "description": "Creates an invitation to add a business owner (client). Uses the current user's first company (by creation date) automatically; companyId is not in the body. Body: invitedEmail (required). Optional: invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Fails with 400 if user has no company. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
           }
         },
         {
@@ -1489,8 +1500,19 @@
             "header": [
               { "key": "Authorization", "value": "Bearer {{accessToken}}" }
             ],
-            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/businesses",
-            "description": "Lists all businesses in the system (not scoped to any company). Returns every business in data; no pagination. Optional query param: q — search (case-insensitive) by business name, rcNumber, tin, or owner email/firstName/lastName/organizationName; omit q to get all. Response data: array of { id, userId, name, rcNumber, tin, incomeType, stateOfResidence, email, ownerName, createdAt }. Requires auth and enterprise onboarding complete."
+            "url": {
+              "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/businesses?q=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v{{apiVersion}}", "enterprise", "businesses"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "",
+                  "description": "Optional. Search filter (case-insensitive). Searches: business name, rcNumber, tin; owner email, firstName, lastName, organizationName. Omit to return all businesses."
+                }
+              ]
+            },
+            "description": "Lists all businesses in the system (not scoped to any company). Returns every business in data; no pagination.\n\nFilter:\n• Query param: q (optional). When provided, filters results by search term (case-insensitive, substring match). Searches: business name, rcNumber, tin; owner email, firstName, lastName, organizationName. Omit q to return all businesses.\nExample: ?q=acme\n\nResponse data: array of { id, userId, name, rcNumber, tin, incomeType, stateOfResidence, email, ownerName, createdAt }. Requires auth and enterprise onboarding complete."
           }
         },
         {

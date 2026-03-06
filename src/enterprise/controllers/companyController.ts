@@ -19,9 +19,13 @@ export async function listCompanies(
       .json(outJson(false, "Authentication required.", null));
     return;
   }
+  const q = (req.query.q as string)?.trim();
   try {
     const companies = await prisma.company.findMany({
-      where: { ownerId: userId },
+      where: {
+        ownerId: userId,
+        ...(q && { name: { contains: q, mode: "insensitive" as const } }),
+      },
       select: { id: true, name: true, createdAt: true },
       orderBy: { createdAt: "desc" },
     });
@@ -68,11 +72,17 @@ export async function createInvitation(
   req: IRequest,
   res: Response,
 ): Promise<void> {
+  const userId = req.user?.id;
+  if (!userId) {
+    res
+      .status(HttpStatusCode.UNAUTHORIZED)
+      .json(outJson(false, "Authentication required.", null));
+    return;
+  }
   const data = matchedData(req, {
     locations: ["body"],
     includeOptionals: true,
   }) as {
-    companyId: string;
     invitedEmail: string;
     invitedBusinessName?: string;
     expiresInHours?: number;
@@ -83,7 +93,6 @@ export async function createInvitation(
     taxTypesManaged?: string[] | string;
   };
   const {
-    companyId,
     invitedEmail,
     invitedBusinessName,
     expiresInHours,
@@ -93,13 +102,58 @@ export async function createInvitation(
     stateOfOperation,
     taxTypesManaged,
   } = data;
-  const company = await prisma.company.findUnique({ where: { id: companyId } });
+  const company = await prisma.company.findFirst({
+    where: { ownerId: userId },
+    orderBy: { createdAt: "asc" },
+  });
   if (!company) {
     res
-      .status(HttpStatusCode.NOT_FOUND)
-      .json(outJson(false, "Company not found", null));
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, "Create a company first before sending invitations.", null));
     return;
   }
+  const companyId = company.id;
+  const normalizedEmail = invitedEmail.trim().toLowerCase();
+
+  const existingPending = await prisma.invitation.findFirst({
+    where: {
+      companyId,
+      invitedEmail: normalizedEmail,
+      status: "pending",
+      expiresAt: { gt: new Date() },
+    },
+  });
+  if (existingPending) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(
+        outJson(false, "You already have a pending invitation sent to this email.", null),
+      );
+    return;
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true },
+  });
+  if (existingUser) {
+    const alreadyClient = await prisma.consultantConnection.findFirst({
+      where: {
+        companyId,
+        userId: existingUser.id,
+        status: "active",
+      },
+    });
+    if (alreadyClient) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(false, "This user has already accepted an invitation and is added as a client.", null),
+        );
+      return;
+    }
+  }
+
   const hours = Math.min(Math.max(Number(expiresInHours) || 168, 1), 720);
   const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000);
   let code = RandomAscii(6);
@@ -121,7 +175,7 @@ export async function createInvitation(
       data: {
         code,
         companyId,
-        invitedEmail: invitedEmail.trim().toLowerCase(),
+        invitedEmail: normalizedEmail,
         invitedBusinessName: invitedBusinessName ? invitedBusinessName.trim() : null,
         invitedContactName: invitedContactName ? invitedContactName.trim() : null,
         invitedRcNumber: invitedRcNumber ? invitedRcNumber.trim() : null,

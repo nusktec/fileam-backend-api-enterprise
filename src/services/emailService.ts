@@ -218,20 +218,29 @@ const sendInvitationToJoinEmail = async (
   invitationCode: string,
   expiresAt: Date,
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
-  const expiryFormatted = expiresAt.toLocaleDateString(undefined, {
-    dateStyle: "medium",
-  });
-  const body = `<p>You have been invited to join FileAm.</p>
-<p>Use this invitation code when signing up or accepting the invitation: <strong style="letter-spacing: 2px; font-size: 1.1em;">${invitationCode}</strong></p>
-<p>This invitation expires on ${expiryFormatted}. If you did not expect this email, you can ignore it.</p>
-<p>Best regards,<br>The Fileam Team</p>`;
-  return SendInviteMail(
-    EMAIL_CATEGORIES.INVITATION,
-    "You're invited to join FileAm",
-    recipientName || to,
-    body,
-    to,
-  );
+  try {
+    const template = getEmailTemplate(EMAIL_TEMPLATE_TYPES.INVITATION);
+    if (!template) {
+      throw new Error("Invitation template not found");
+    }
+    const expiryFormatted = expiresAt.toLocaleDateString(undefined, {
+      dateStyle: "medium",
+    });
+    const htmlContent = renderTemplate(template, {
+      name: recipientName || to,
+      invitationCode,
+      expiryDate: expiryFormatted,
+    });
+    return await sendEmail(
+      to,
+      "You're invited to join Fileam",
+      htmlContent,
+      EMAIL_CATEGORIES.INVITATION,
+    );
+  } catch (error) {
+    console.error("Failed to send invitation email:", error);
+    return { success: false, error };
+  }
 };
 
 const EmailCategoryEnum: EmailCategoryInterface = Object.freeze({

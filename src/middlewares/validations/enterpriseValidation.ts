@@ -13,12 +13,6 @@ const validateCreateCompany = [
 ];
 
 const validateCreateInvitation = [
-  check("companyId")
-    .notEmpty()
-    .withMessage("companyId is required")
-    .bail()
-    .isUUID()
-    .withMessage("companyId must be a valid UUID"),
   check("invitedEmail")
     .trim()
     .notEmpty()

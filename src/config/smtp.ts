@@ -50,6 +50,7 @@ export const EMAIL_TEMPLATE_TYPES = {
   WELCOME: "welcome",
   OTP: "otp",
   PASSWORD_RESET: "password_reset",
+  INVITATION: "invitation",
 } as const;
 
 export const validateEmailConfig = (): boolean => {

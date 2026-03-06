@@ -1,5 +1,6 @@
 import "./config/env";
 import path from "path";
+import "express-async-errors";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import logger from "morgan";
