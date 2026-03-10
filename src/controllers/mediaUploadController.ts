@@ -3,7 +3,7 @@ import { IRequest } from "../interfaces/CustomRequest";
 import { outJson } from "../utils/renders";
 import { HttpStatusCode } from "../interfaces/system";
 import { uploadToS3 } from "../services/mediaUploadService";
-import { MEDIA_CONFIG, getPresignedUrl } from "../config/s3";
+import { MEDIA_CONFIG, getPresignedUrl, deleteFromS3 } from "../config/s3";
 
 export async function uploadMedia(req: IRequest, res: Response): Promise<void> {
   const file = req.file;
@@ -112,4 +112,22 @@ export async function viewMedia(req: IRequest, res: Response): Promise<void> {
     return;
   }
   res.redirect(302, url);
+}
+
+export async function deleteMedia(req: IRequest, res: Response): Promise<void> {
+  const key = (req.query.key as string)?.trim();
+  if (!key) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, "Query parameter 'key' is required", null));
+    return;
+  }
+  const deleted = await deleteFromS3(key);
+  if (!deleted) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to delete file. S3 may not be configured or key may not exist.", null));
+    return;
+  }
+  res.status(HttpStatusCode.OK).json(outJson(true, "File deleted", null));
 }

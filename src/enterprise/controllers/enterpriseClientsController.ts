@@ -7,6 +7,8 @@ import {
   sendNotFound,
 } from "../utils/controllerHelpers";
 import { enterpriseClientsService } from "../services/enterpriseClientsService";
+
+const VALID_INVITATION_STATUSES = ["pending", "accepted", "rejected", "expired"];
 import { prisma } from "../../config/database";
 
 async function resolveCompanyId(userId: string): Promise<string | null> {
@@ -16,6 +18,143 @@ async function resolveCompanyId(userId: string): Promise<string | null> {
     select: { id: true },
   });
   return company?.id ?? null;
+}
+
+export async function listClientInvitations(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const userId = req.user?.id;
+  if (!userId) {
+    sendBadRequest(res, "Authentication required.");
+    return;
+  }
+  const companyId = await resolveCompanyId(userId);
+  if (!companyId) {
+    sendNotFound(res, "No company found. Create a company first.");
+    return;
+  }
+  const status = (req.query.status as string | undefined)?.trim().toLowerCase();
+  if (status && !VALID_INVITATION_STATUSES.includes(status)) {
+    sendBadRequest(
+      res,
+      `Invalid status. Must be one of: ${VALID_INVITATION_STATUSES.join(", ")}.`,
+    );
+    return;
+  }
+  try {
+    const invitations = await enterpriseClientsService.listInvitations(
+      companyId,
+      status,
+    );
+    sendResult(res, "Client invitations", invitations);
+  } catch {
+    sendServerError(res, "Failed to list client invitations");
+  }
+}
+
+export async function getClientInvitation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const userId = req.user?.id;
+  if (!userId) {
+    sendBadRequest(res, "Authentication required.");
+    return;
+  }
+  const companyId = await resolveCompanyId(userId);
+  if (!companyId) {
+    sendNotFound(res, "No company found. Create a company first.");
+    return;
+  }
+  const invitationId = req.params.id as string;
+  try {
+    const invitation = await enterpriseClientsService.getInvitationById(
+      companyId,
+      invitationId,
+    );
+    if (!invitation) {
+      sendNotFound(res, "Invitation not found.");
+      return;
+    }
+    sendResult(res, "Client invitation", invitation);
+  } catch {
+    sendServerError(res, "Failed to get client invitation");
+  }
+}
+
+export async function cancelClientInvitation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const userId = req.user?.id;
+  if (!userId) {
+    sendBadRequest(res, "Authentication required.");
+    return;
+  }
+  const companyId = await resolveCompanyId(userId);
+  if (!companyId) {
+    sendNotFound(res, "No company found. Create a company first.");
+    return;
+  }
+  const invitationId = req.params.id as string;
+  try {
+    const result = await enterpriseClientsService.cancelInvitation(
+      companyId,
+      invitationId,
+    );
+    if (result === "not_found") {
+      sendNotFound(res, "Invitation not found.");
+      return;
+    }
+    if (result === "not_pending") {
+      sendBadRequest(res, "Only pending invitations can be cancelled.");
+      return;
+    }
+    sendResult(res, "Invitation cancelled.", null);
+  } catch {
+    sendServerError(res, "Failed to cancel invitation");
+  }
+}
+
+export async function resendClientInvitation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const userId = req.user?.id;
+  if (!userId) {
+    sendBadRequest(res, "Authentication required.");
+    return;
+  }
+  const companyId = await resolveCompanyId(userId);
+  if (!companyId) {
+    sendNotFound(res, "No company found. Create a company first.");
+    return;
+  }
+  const invitationId = req.params.id as string;
+  const extendExpiryHours = req.body?.extendExpiryHours as number | undefined;
+  try {
+    const result = await enterpriseClientsService.resendInvitation(
+      companyId,
+      invitationId,
+      extendExpiryHours,
+    );
+    if (!result.success) {
+      if (result.reason === "not_found") {
+        sendNotFound(res, "Invitation not found.");
+        return;
+      }
+      if (result.reason === "not_pending") {
+        sendBadRequest(res, "Only pending invitations can be resent.");
+        return;
+      }
+      sendBadRequest(res, "Invitation has expired. Create a new invitation instead.");
+      return;
+    }
+    sendResult(res, "Invitation resent.", result.invitation);
+  } catch {
+    sendServerError(res, "Failed to resend invitation");
+  }
 }
 
 export async function listClients(
@@ -32,40 +171,11 @@ export async function listClients(
     sendNotFound(res, "No company found. Create a company first.");
     return;
   }
+  const q = (req.query.q as string | undefined)?.trim();
   try {
-    const clients = await enterpriseClientsService.listClients(companyId);
+    const clients = await enterpriseClientsService.listClients(companyId, q);
     sendResult(res, "Clients", clients);
   } catch {
     sendServerError(res, "Failed to list clients");
-  }
-}
-
-export async function searchClients(
-  req: IRequest,
-  res: Response,
-): Promise<void> {
-  const userId = req.user?.id;
-  if (!userId) {
-    sendBadRequest(res, "Authentication required.");
-    return;
-  }
-  const q = (req.query.q as string) ?? "";
-  if (!q || q.trim().length < 2) {
-    sendBadRequest(res, "Query q is required and must be at least 2 characters");
-    return;
-  }
-  const companyId = await resolveCompanyId(userId);
-  if (!companyId) {
-    sendNotFound(res, "No company found. Create a company first.");
-    return;
-  }
-  try {
-    const results = await enterpriseClientsService.searchExistingBusinesses(
-      companyId,
-      q.trim(),
-    );
-    sendResult(res, "Search results", results);
-  } catch {
-    sendServerError(res, "Failed to search clients");
   }
 }

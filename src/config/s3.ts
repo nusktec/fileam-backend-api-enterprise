@@ -114,3 +114,17 @@ export async function getPresignedUrl(
   });
   return getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
 }
+
+export async function deleteFromS3(key: string): Promise<boolean> {
+  if (!validateS3Config()) return false;
+  try {
+    const command = new DeleteObjectCommand({
+      Bucket: s3Bucket.Bucket,
+      Key: key,
+    });
+    await s3Client.send(command);
+    return true;
+  } catch {
+    return false;
+  }
+}

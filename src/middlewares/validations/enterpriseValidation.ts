@@ -53,6 +53,11 @@ const validateInvoiceIdParam = [
   handleValidation,
 ];
 
+const validateInvitationIdParam = [
+  param("id").isUUID().withMessage("Invitation ID must be a valid UUID"),
+  handleValidation,
+];
+
 // ---- Business Profile ----
 const validateUpdateBusinessProfile = [
   check("companyName").trim().notEmpty().withMessage("companyName is required"),
@@ -260,6 +265,7 @@ export const enterpriseValidations = {
   validateCompanyIdParam,
   validateDocumentIdParam,
   validateInvoiceIdParam,
+  validateInvitationIdParam,
   validateUpdateBusinessProfile,
   validateUpgradeSubscription,
   validateCalculateVat,

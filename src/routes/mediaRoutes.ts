@@ -7,6 +7,7 @@ import {
   uploadMedia,
   getPresignedUrlForView,
   viewMedia,
+  deleteMedia,
 } from "../controllers/mediaUploadController";
 
 const router = express.Router();
@@ -24,5 +25,7 @@ router.post(
   handleValidation,
   uploadMedia,
 );
+
+router.delete("/", authenticate(), deleteMedia);
 
 export default router;

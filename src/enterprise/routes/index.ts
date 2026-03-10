@@ -14,7 +14,13 @@ import {
   getIndustries,
 } from "../controllers/enterpriseBusinessProfileController";
 import { listAllBusinesses } from "../controllers/enterpriseBusinessesController";
-import { listClients, searchClients } from "../controllers/enterpriseClientsController";
+import {
+  listClients,
+  listClientInvitations,
+  getClientInvitation,
+  cancelClientInvitation,
+  resendClientInvitation,
+} from "../controllers/enterpriseClientsController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireCompanyId } from "../middlewares/requireCompanyId";
@@ -55,10 +61,31 @@ router.get(
   listClients,
 );
 router.get(
-  "/clients/search",
+  "/clients/invitations",
   authenticate(),
   requireEnterpriseOnboardingComplete,
-  searchClients,
+  listClientInvitations,
+);
+router.get(
+  "/clients/invitations/:id",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  ...enterpriseValidations.validateInvitationIdParam,
+  getClientInvitation,
+);
+router.delete(
+  "/clients/invitations/:id",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  ...enterpriseValidations.validateInvitationIdParam,
+  cancelClientInvitation,
+);
+router.post(
+  "/clients/invitations/:id/resend",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  ...enterpriseValidations.validateInvitationIdParam,
+  resendClientInvitation,
 );
 router.use(
   "/company/:companyId",

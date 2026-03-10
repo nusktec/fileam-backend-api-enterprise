@@ -23,7 +23,6 @@ export async function listCompanies(
   try {
     const companies = await prisma.company.findMany({
       where: {
-        ownerId: userId,
         ...(q && { name: { contains: q, mode: "insensitive" as const } }),
       },
       select: { id: true, name: true, createdAt: true },
