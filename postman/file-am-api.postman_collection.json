@@ -1464,162 +1464,180 @@
           ]
         },
         {
-          "name": "List companies",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/companies?q=",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v{{apiVersion}}", "enterprise", "companies"],
-              "query": [
-                {
-                  "key": "q",
-                  "value": "",
-                  "description": "Optional. Filter by company name (case-insensitive, substring match). Omit to return all companies on the platform."
-                }
-              ]
+          "name": "Companies",
+          "description": "List and create companies. All require Authorization: Bearer {{accessToken}}.",
+          "item": [
+            {
+              "name": "List companies",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/companies?q=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "companies"],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "",
+                      "description": "Optional. Filter by company name (case-insensitive, substring match). Omit to return all companies on the platform."
+                    }
+                  ]
+                },
+                "description": "Lists ALL companies on the platform (global, not scoped to the current user).\n\nFilter:\n• Query param: q (optional). When provided, filters by company name (case-insensitive, substring). Omit q to return all companies.\n\nResponse data: array of { id, name, createdAt }. Requires auth."
+              }
             },
-            "description": "Lists ALL companies on the platform (global, not scoped to the current user).\n\nFilter:\n• Query param: q (optional). When provided, filters by company name (case-insensitive, substring). Omit q to return all companies.\n\nResponse data: array of { id, name, createdAt }. Requires auth."
-          }
+            {
+              "name": "Create company",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Acme Consulting Ltd\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company",
+                "description": "Creates a company. Body: name (required). Sets current user as owner. Response data: company object (id, name, ownerId, createdAt, etc.). Requires auth. Enterprise onboarding is marked complete after creation."
+              }
+            }
+          ]
         },
         {
-          "name": "Create company",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Consulting Ltd\"\n}"
+          "name": "Clients",
+          "description": "Clients connected to your company, and list of all businesses. All require Authorization: Bearer {{accessToken}} and enterprise onboarding complete.",
+          "item": [
+            {
+              "name": "List clients",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients?q=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients"],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "",
+                      "description": "Optional. Min 2 chars. Filter connected clients by business name, email, RC number, or TIN."
+                    }
+                  ]
+                },
+                "description": "Lists clients connected to the current user's company (businesses linked via accepted invitations). companyId is resolved automatically from the logged-in user; no companyId in URL.\n\nFilter:\n• Query param: q (optional, min 2 chars). Filters results by business name, email, RC number, or TIN. Omit to return all connected clients.\n\nResponse data: array of { id (userId), connectionId, businessName, rcNumber, status, vatStatus, nextFiling, email, tin }. Returns 404 if user has no company. Requires auth and enterprise onboarding complete."
+              }
             },
-            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company",
-            "description": "Creates a company. Body: name (required). Sets current user as owner. Response data: company object (id, name, ownerId, createdAt, etc.). Requires auth. Enterprise onboarding is marked complete after creation."
-          }
+            {
+              "name": "List all businesses",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/businesses?q=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "businesses"],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "",
+                      "description": "Optional. Search filter (case-insensitive). Searches: business name, rcNumber, tin; owner email, firstName, lastName, organizationName. Omit to return all businesses."
+                    }
+                  ]
+                },
+                "description": "Lists all businesses in the system (not scoped to any company). Returns every business in data; no pagination.\n\nFilter:\n• Query param: q (optional). When provided, filters results by search term (case-insensitive, substring match). Searches: business name, rcNumber, tin; owner email, firstName, lastName, organizationName. Omit q to return all businesses.\nExample: ?q=acme\n\nResponse data: array of { id, userId, name, rcNumber, tin, incomeType, stateOfResidence, email, ownerName, createdAt }. Requires auth and enterprise onboarding complete."
+              }
+            }
+          ]
         },
         {
-          "name": "Create invitation (Invite New / Request Management Access)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
+          "name": "Client invitations",
+          "description": "Invite business owners to connect as clients. Create invitation, list/manage pending and accepted invitations. All require Authorization: Bearer {{accessToken}} and enterprise onboarding complete. Set {{invitationId}} from List client invitations.",
+          "item": [
+            {
+              "name": "Create invitation",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
+                "description": "Creates an invitation to add a business owner (client). Uses the current user's first company (by creation date) automatically; companyId is not in the body. Body: invitedEmail (required). Optional: invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Fails with 400 if user has no company. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
+              }
             },
-            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
-            "description": "Creates an invitation to add a business owner (client). Uses the current user's first company (by creation date) automatically; companyId is not in the body. Body: invitedEmail (required). Optional: invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Fails with 400 if user has no company. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
-          }
-        },
-        {
-          "name": "List client invitations",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations?status=",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "invitations"],
-              "query": [
-                {
-                  "key": "status",
-                  "value": "",
-                  "description": "Optional. Filter by status: pending, accepted, rejected, expired. Omit to return all invitations. Note: 'expired' is computed — invitations still stored as 'pending' in DB but past their expiresAt."
-                }
-              ]
+            {
+              "name": "List client invitations",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations?status=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "invitations"],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "",
+                      "description": "Optional. Filter by status: pending, accepted, rejected, expired. Omit to return all invitations. Note: 'expired' is computed — invitations still stored as 'pending' in DB but past their expiresAt."
+                    }
+                  ]
+                },
+                "description": "Lists all invitations sent by the current user's company. companyId is resolved automatically from the logged-in user.\n\nFilter:\n• Query param: status (optional). One of: pending, accepted, rejected, expired. Omit to return all invitations regardless of status.\n• 'expired' returns pending invitations whose expiresAt is in the past.\n• 'pending' returns only non-expired pending invitations.\n\nResponse data: array of { id, invitedEmail, invitedBusinessName, invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (string[]), status, expiresAt, createdAt }. Returns 404 if user has no company. Requires auth and enterprise onboarding complete."
+              }
             },
-            "description": "Lists all invitations sent by the current user's company. companyId is resolved automatically from the logged-in user.\n\nFilter:\n• Query param: status (optional). One of: pending, accepted, rejected, expired. Omit to return all invitations regardless of status.\n• 'expired' returns pending invitations whose expiresAt is in the past.\n• 'pending' returns only non-expired pending invitations.\n\nResponse data: array of { id, invitedEmail, invitedBusinessName, invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (string[]), status, expiresAt, createdAt }. Returns 404 if user has no company. Requires auth and enterprise onboarding complete."
-          }
-        },
-        {
-          "name": "Get client invitation",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations/{{invitationId}}",
-            "description": "Returns a single invitation by ID. Invitation must belong to the current user's company. Path param: id (UUID). Returns 404 if not found or not owned by company. Requires auth and enterprise onboarding complete."
-          }
-        },
-        {
-          "name": "Cancel client invitation",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations/{{invitationId}}",
-            "description": "Cancels a pending invitation (sets status to rejected). Path param: id (UUID). Returns 400 if invitation is not pending. Returns 404 if not found. Requires auth and enterprise onboarding complete."
-          }
-        },
-        {
-          "name": "Resend client invitation",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"extendExpiryHours\": 168\n}"
+            {
+              "name": "Get client invitation",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations/{{invitationId}}",
+                "description": "Returns a single invitation by ID. Invitation must belong to the current user's company. Path param: id (UUID). Returns 404 if not found or not owned by company. Requires auth and enterprise onboarding complete."
+              }
             },
-            "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations/{{invitationId}}/resend",
-            "description": "Resends the invitation email and optionally extends expiry. Path param: id (UUID). Body: extendExpiryHours (optional, 1-720, default 168). Only pending, non-expired invitations can be resent. Returns 400 if not pending or expired. Returns updated invitation in response. Requires auth and enterprise onboarding complete."
-          }
-        },
-        {
-          "name": "List all businesses",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/businesses?q=",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v{{apiVersion}}", "enterprise", "businesses"],
-              "query": [
-                {
-                  "key": "q",
-                  "value": "",
-                  "description": "Optional. Search filter (case-insensitive). Searches: business name, rcNumber, tin; owner email, firstName, lastName, organizationName. Omit to return all businesses."
-                }
-              ]
+            {
+              "name": "Cancel client invitation",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations/{{invitationId}}",
+                "description": "Cancels a pending invitation (sets status to rejected). Path param: id (UUID). Returns 400 if invitation is not pending. Returns 404 if not found. Requires auth and enterprise onboarding complete."
+              }
             },
-            "description": "Lists all businesses in the system (not scoped to any company). Returns every business in data; no pagination.\n\nFilter:\n• Query param: q (optional). When provided, filters results by search term (case-insensitive, substring match). Searches: business name, rcNumber, tin; owner email, firstName, lastName, organizationName. Omit q to return all businesses.\nExample: ?q=acme\n\nResponse data: array of { id, userId, name, rcNumber, tin, incomeType, stateOfResidence, email, ownerName, createdAt }. Requires auth and enterprise onboarding complete."
-          }
-        },
-        {
-          "name": "List clients",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients?q=",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "v{{apiVersion}}", "enterprise", "clients"],
-              "query": [
-                {
-                  "key": "q",
-                  "value": "",
-                  "description": "Optional. Min 2 chars. Filter connected clients by business name, email, RC number, or TIN."
-                }
-              ]
-            },
-            "description": "Lists clients connected to the current user's company (businesses linked via accepted invitations). companyId is resolved automatically from the logged-in user; no companyId in URL.\n\nFilter:\n• Query param: q (optional, min 2 chars). Filters results by business name, email, RC number, or TIN. Omit to return all connected clients.\n\nResponse data: array of { id (userId), connectionId, businessName, rcNumber, status, vatStatus, nextFiling, email, tin }. Returns 404 if user has no company. Requires auth and enterprise onboarding complete."
-          }
+            {
+              "name": "Resend client invitation",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"extendExpiryHours\": 168\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations/{{invitationId}}/resend",
+                "description": "Resends the invitation email and optionally extends expiry. Path param: id (UUID). Body: extendExpiryHours (optional, 1-720, default 168). Only pending, non-expired invitations can be resent. Returns 400 if not pending or expired. Returns updated invitation in response. Requires auth and enterprise onboarding complete."
+              }
+            }
+          ]
         },
         {
           "name": "Business profile (lookups)",
