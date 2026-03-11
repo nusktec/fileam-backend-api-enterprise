@@ -6,9 +6,9 @@ ENV PATH="${PNPM_HOME}:${PATH}"
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json ./
 COPY prisma ./prisma
-RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN pnpm install --ignore-scripts
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
@@ -21,8 +21,8 @@ FROM base AS runner
 ENV NODE_ENV=production
 ENV PORT=3000
 
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --prod --frozen-lockfile --ignore-scripts
+COPY package.json ./
+RUN pnpm install --prod --ignore-scripts
 
 COPY --from=builder /app/prisma ./prisma
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
