@@ -29,7 +29,11 @@ export async function getBusinessProfile(
   const userId = req.user?.id;
   try {
     const profile =
-      await enterpriseBusinessProfileService.getProfile(companyId, userId);
+      await enterpriseBusinessProfileService.getProfile(
+        companyId,
+        userId,
+        req.linkedUserId,
+      );
     if (!profile) {
       sendNotFound(res, "Company not found");
       return;

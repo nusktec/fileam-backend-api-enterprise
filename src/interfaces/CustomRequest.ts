@@ -30,6 +30,7 @@ export interface PaginationInfo {
 export interface IRequest extends Request {
   user?: RequestUser;
   companyId?: string;
+  linkedUserId?: string;
   onboardingPayload?: OnboardingTokenPayload;
   consultantOnboardingSession?: ConsultantOnboardingSession;
   pagination?: PaginationInfo;

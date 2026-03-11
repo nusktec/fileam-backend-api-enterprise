@@ -21,6 +21,7 @@ export async function getRecentTransactions(
     const list = await enterpriseFinancialsService.getRecentTransactions(
       companyId,
       limit,
+      req.linkedUserId,
     );
     if (!list) {
       sendNotFound(res, "Company not found");
@@ -46,6 +47,7 @@ export async function getAllTransactions(
         limit: pagination?.limit,
         sortOrder: pagination?.sortOrder,
       },
+      req.linkedUserId,
     );
     if (!result) {
       sendNotFound(res, "Company not found");
@@ -67,7 +69,10 @@ export async function getAllTransactions(
 export async function getSummary(req: IRequest, res: Response): Promise<void> {
   const companyId = req.companyId!;
   try {
-    const summary = await enterpriseFinancialsService.getSummary(companyId);
+    const summary = await enterpriseFinancialsService.getSummary(
+      companyId,
+      req.linkedUserId,
+    );
     if (!summary) {
       sendNotFound(res, "Company not found");
       return;
@@ -88,6 +93,7 @@ export async function getMonthlyCashFlow(
     const data = await enterpriseFinancialsService.getMonthlyCashFlow(
       companyId,
       year,
+      req.linkedUserId,
     );
     if (!data) {
       sendNotFound(res, "Company not found");

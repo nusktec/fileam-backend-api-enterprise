@@ -8,6 +8,7 @@ import {
   createCompany,
   createInvitation,
   listCompanies,
+  listManagedEntitiesHandler,
 } from "../controllers/companyController";
 import {
   getBusinessTypes,
@@ -35,6 +36,12 @@ router.get("/business-profile/industries", getIndustries);
 router.use("/auth", enterpriseAuthRoutes);
 
 router.get("/companies", authenticate(), listCompanies);
+router.get(
+  "/managed-entities",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  listManagedEntitiesHandler,
+);
 router.get(
   "/businesses",
   authenticate(),

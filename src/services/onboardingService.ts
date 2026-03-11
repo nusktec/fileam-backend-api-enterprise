@@ -372,10 +372,31 @@ export const onboardingService = {
         include: { company: true },
       });
       if (!inv || inv.status !== "pending") continue;
+
+      const business = await prisma.business.findFirst({
+        where: { userId: user.id },
+      });
+      const clientCompanyName =
+        inv.invitedBusinessName?.trim() ||
+        business?.name ||
+        user.organizationName ||
+        `${user.firstName} ${user.lastName}`.trim() ||
+        user.email;
+
+      const clientCompany = await prisma.company.create({
+        data: {
+          name: clientCompanyName,
+          ownerId: inv.company.ownerId,
+          linkedUserId: user.id,
+          managedByCompanyId: inv.companyId,
+        },
+      });
+
       await prisma.consultantConnection.create({
         data: {
           userId: user.id,
           companyId: inv.companyId,
+          clientCompanyId: clientCompany.id,
           invitationId: inv.id,
           acceptedAt: now,
           consultantTermsAccepted: true,

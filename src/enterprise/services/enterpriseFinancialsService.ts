@@ -22,7 +22,20 @@ export const enterpriseFinancialsService = {
   getDocumentTypes: () => DOCUMENT_TYPES,
   getCurrencies: () => CURRENCIES,
 
-  async getRecentTransactions(companyId: string, limit = 10) {
+  async getRecentTransactions(
+    companyId: string,
+    limit = 10,
+    linkedUserId?: string,
+  ) {
+    if (linkedUserId) {
+      const { getClientTransactions } = await import("./clientDataHelper");
+      const { data } = await getClientTransactions(linkedUserId, {
+        limit,
+        page: 1,
+        sortOrder: "desc",
+      });
+      return data;
+    }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
@@ -50,7 +63,16 @@ export const enterpriseFinancialsService = {
       sortBy?: string;
       sortOrder?: "ASC" | "DESC";
     },
+    linkedUserId?: string,
   ) {
+    if (linkedUserId) {
+      const { getClientTransactions } = await import("./clientDataHelper");
+      return getClientTransactions(linkedUserId, {
+        limit: opts?.limit,
+        page: opts?.page,
+        sortOrder: opts?.sortOrder === "ASC" ? "asc" : "desc",
+      });
+    }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
@@ -82,7 +104,11 @@ export const enterpriseFinancialsService = {
     };
   },
 
-  async getSummary(companyId: string) {
+  async getSummary(companyId: string, linkedUserId?: string) {
+    if (linkedUserId) {
+      const { getClientFinancialSummary } = await import("./clientDataHelper");
+      return getClientFinancialSummary(linkedUserId);
+    }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
@@ -104,12 +130,16 @@ export const enterpriseFinancialsService = {
     };
   },
 
-  async getMonthlyCashFlow(companyId: string, year?: number) {
+  async getMonthlyCashFlow(companyId: string, year?: number, linkedUserId?: string) {
+    const y = year ?? new Date().getFullYear();
+    if (linkedUserId) {
+      const { getClientMonthlyCashFlow } = await import("./clientDataHelper");
+      return getClientMonthlyCashFlow(linkedUserId, y);
+    }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
     if (!company) return null;
-    const y = year ?? new Date().getFullYear();
     const transactions = await prisma.enterpriseTransaction.findMany({
       where: { companyId },
     });

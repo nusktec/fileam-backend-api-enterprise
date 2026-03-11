@@ -36,6 +36,7 @@ model User {
   consultantConnections       ConsultantConnection[]
   consultantOnboardingSessions ConsultantOnboardingSession[]
   ownedCompanies               Company[]                @relation("CompanyOwner")
+  linkedCompanies              Company[]                @relation("CompanyLinkedUser")
   sales                       Sale[]
   expenses               Expense[]
   taxPayables            TaxPayable[]

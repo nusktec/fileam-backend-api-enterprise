@@ -16,6 +16,21 @@
     { "key": "invitationId", "value": "" },
     { "key": "mediaKey", "value": "" }
   ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Auto-set Authorization header from {{accessToken}} when available",
+          "const token = pm.collectionVariables.get('accessToken');",
+          "if (token) {",
+          "    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}"
+        ]
+      }
+    }
+  ],
   "item": [
     {
       "name": "Mobile",
@@ -27,6 +42,23 @@
           "item": [
             {
               "name": "Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.status && json.data) {",
+                      "    if (json.data.accessToken) pm.collectionVariables.set('accessToken', json.data.accessToken);",
+                      "    if (json.data.refreshToken) pm.collectionVariables.set('refreshToken', json.data.refreshToken);",
+                      "    if (json.data.onboardingToken) pm.collectionVariables.set('onboardingToken', json.data.onboardingToken);",
+                      "    console.log('Tokens saved. Run this request first to set Authorization for other requests.');",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
                 "method": "POST",
                 "header": [
@@ -34,11 +66,31 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+                  "raw": "{\n  \"email\": \"consultant@fileam.app\",\n  \"password\": \"Password123!\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/login",
-                "description": "Returns accessToken, refreshToken, user, onboardingComplete, currentOnboardingStep (where user stopped if not complete). If onboarding incomplete, also returns onboardingToken."
-              }
+                "description": "Returns accessToken, refreshToken, user, onboardingComplete, currentOnboardingStep (where user stopped if not complete). If onboarding incomplete, also returns onboardingToken. Run this first to set accessToken for other requests."
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "POST", "header": [], "body": { "mode": "raw", "raw": "{\"email\":\"consultant@fileam.app\",\"password\":\"Password123!\"}" }, "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/login" } },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Login successful\",\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"user\": {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"email\": \"consultant@fileam.app\",\n      \"firstName\": \"Consultant\",\n      \"lastName\": \"User\",\n      \"role\": \"user\"\n    },\n    \"onboardingComplete\": true,\n    \"currentOnboardingStep\": null\n  }\n}"
+                },
+                {
+                  "name": "Invalid credentials",
+                  "originalRequest": { "method": "POST", "header": [], "body": { "mode": "raw", "raw": "{\"email\":\"wrong@example.com\",\"password\":\"wrong\"}" }, "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/login" } },
+                  "status": "Unauthorized",
+                  "code": 401,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": false,\n  \"message\": \"Invalid email or password\",\n  \"data\": null\n}"
+                }
+              ]
             },
             {
               "name": "Forgot password",
@@ -131,7 +183,18 @@
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile",
                 "description": "Returns current user profile (id, email, firstName, lastName, role, etc.)."
-              }
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile" } },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Profile\",\n  \"data\": {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"email\": \"consultant@fileam.app\",\n    \"firstName\": \"Consultant\",\n    \"lastName\": \"User\",\n    \"role\": \"user\",\n    \"organizationName\": \"Fileam Consulting\"\n  }\n}"
+                }
+              ]
             },
             {
               "name": "Update profile",
@@ -1310,7 +1373,22 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/",
             "description": "Health check. No auth required."
-          }
+          },
+          "response": [
+            {
+              "name": "Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/", "host": ["{{baseUrl}}"], "path": ["api", "v{{apiVersion}}", "enterprise", ""] }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"status\": true,\n  \"message\": \"Enterprise API\",\n  \"data\": {\n    \"status\": \"ok\"\n  }\n}"
+            }
+          ]
         },
         {
           "name": "Auth",
@@ -1318,6 +1396,24 @@
           "item": [
             {
               "name": "Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.status && json.data) {",
+                      "    if (json.data.accessToken) pm.collectionVariables.set('accessToken', json.data.accessToken);",
+                      "    if (json.data.refreshToken) pm.collectionVariables.set('refreshToken', json.data.refreshToken);",
+                      "    if (json.data.onboardingToken) pm.collectionVariables.set('onboardingToken', json.data.onboardingToken);",
+                      "    if (json.data.consultantOnboardingToken) pm.collectionVariables.set('consultantOnboardingToken', json.data.consultantOnboardingToken);",
+                      "    console.log('Enterprise tokens saved.');",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
                 "method": "POST",
                 "header": [
@@ -1325,11 +1421,22 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+                  "raw": "{\n  \"email\": \"consultant@fileam.app\",\n  \"password\": \"Password123!\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/login",
-                "description": "Returns accessToken, refreshToken, user, enterpriseOnboardingComplete, enterpriseOnboardingStep. When enterprise onboarding not complete returns onboardingToken (for enterprise step/password). When user has a consultant session also returns consultantOnboardingToken (for consultant onboarding steps 2–7 and profile; set {{consultantOnboardingToken}} from Step 1 response)."
-              }
+                "description": "Returns accessToken, refreshToken, user, enterpriseOnboardingComplete, enterpriseOnboardingStep. When enterprise onboarding not complete returns onboardingToken (for enterprise step/password). When user has a consultant session also returns consultantOnboardingToken. Run this first for Enterprise requests to set accessToken."
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "POST", "header": [], "body": { "mode": "raw", "raw": "{\"email\":\"consultant@fileam.app\",\"password\":\"Password123!\"}" }, "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/login" } },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Login successful\",\n  \"data\": {\n    \"accessToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"refreshToken\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n    \"user\": {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"email\": \"consultant@fileam.app\",\n      \"firstName\": \"Consultant\",\n      \"lastName\": \"User\"\n    },\n    \"enterpriseOnboardingComplete\": true,\n    \"enterpriseOnboardingStep\": null\n  }\n}"
+                }
+              ]
             },
             {
               "name": "Refresh token",
@@ -1487,7 +1594,18 @@
                   ]
                 },
                 "description": "Lists ALL companies on the platform (global, not scoped to the current user).\n\nFilter:\n• Query param: q (optional). When provided, filters by company name (case-insensitive, substring). Omit q to return all companies.\n\nResponse data: array of { id, name, createdAt }. Requires auth."
-              }
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/companies?q=" } },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Companies\",\n  \"data\": [\n    { \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\", \"name\": \"Fileam Consulting Ltd\", \"createdAt\": \"2024-01-15T10:00:00.000Z\" },\n    { \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\", \"name\": \"Acme Corp\", \"createdAt\": \"2024-02-01T14:30:00.000Z\" }\n  ]\n}"
+                }
+              ]
             },
             {
               "name": "Create company",
@@ -1499,11 +1617,70 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Acme Consulting Ltd\"\n}"
+                  "raw": "{\n  \"name\": \"Fileam Consulting Ltd\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company",
                 "description": "Creates a company. Body: name (required). Sets current user as owner. Response data: company object (id, name, ownerId, createdAt, etc.). Requires auth. Enterprise onboarding is marked complete after creation."
-              }
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "POST", "header": [], "body": { "mode": "raw", "raw": "{\"name\":\"Fileam Consulting Ltd\"}" }, "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company" } },
+                  "status": "Created",
+                  "code": 201,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Company created\",\n  \"data\": {\n    \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"Fileam Consulting Ltd\",\n    \"ownerId\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"createdAt\": \"2024-01-15T10:00:00.000Z\"\n  }\n}"
+                }
+              ]
+            },
+            {
+              "name": "List managed entities (companies + clients)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.status && json.data && json.data.length > 0) {",
+                      "    pm.collectionVariables.set('companyId', json.data[0].id);",
+                      "    console.log('Set companyId to first entity: ' + json.data[0].name);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/managed-entities?q=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "managed-entities"],
+                  "query": [
+                    {
+                      "key": "q",
+                      "value": "",
+                      "description": "Optional. Filter by name, email, RC number, or TIN."
+                    }
+                  ]
+                },
+                "description": "Unified list of companies and clients. Returns companies you own + client companies (invited businesses). Use companyId from response for /company/:companyId routes. Run after Login to auto-set companyId."
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/managed-entities?q=" } },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Managed entities\",\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"name\": \"Fileam Consulting Ltd\",\n      \"type\": \"company\",\n      \"source\": \"created\",\n      \"rcNumber\": null,\n      \"tin\": null,\n      \"email\": null,\n      \"status\": \"Active\",\n      \"createdAt\": \"2024-01-15T10:00:00.000Z\"\n    },\n    {\n      \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n      \"name\": \"Acme Business Ltd\",\n      \"type\": \"client\",\n      \"source\": \"invited\",\n      \"rcNumber\": \"RC1234567\",\n      \"tin\": \"12345678-0001\",\n      \"email\": \"client@acme.com\",\n      \"status\": \"Active\",\n      \"createdAt\": \"2024-02-01T14:30:00.000Z\"\n    }\n  ]\n}"
+                }
+              ]
             }
           ]
         },
@@ -1652,7 +1829,18 @@
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/types",
                 "description": "Returns list of business types for dropdown (e.g. for Update business profile). No auth required."
-              }
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/types" } },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Business types\",\n  \"data\": [\"Sole Proprietorship\", \"Partnership\", \"LLC\", \"Corporation\", \"Consulting\", \"IT & Services\"]\n}"
+                }
+              ]
             },
             {
               "name": "Get industries",
@@ -1681,7 +1869,18 @@
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile",
                 "description": "Returns the company's business profile: logo (URL or null), subscription, compliance percent, and related fields. Requires auth and companyId."
-              }
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile" } },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Business profile\",\n  \"data\": {\n    \"companyName\": \"Fileam Consulting Ltd\",\n    \"businessType\": \"Consulting\",\n    \"industry\": \"IT & Services\",\n    \"tin\": \"123-456-789\",\n    \"logo\": null,\n    \"subscriptionPlan\": \"Pro Plan\",\n    \"compliancePercent\": 85\n  }\n}"
+                }
+              ]
             },
             {
               "name": "Get compliance activities",
@@ -1883,7 +2082,18 @@
                   { "key": "Content-Type", "value": "application/json" }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/transactions/recent"
-              }
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/transactions/recent" } },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Recent transactions\",\n  \"data\": [\n    { \"id\": \"tx-1\", \"date\": \"2024-03-15\", \"description\": \"Consulting fee\", \"amount\": 150000, \"type\": \"income\", \"status\": \"Received\" },\n    { \"id\": \"tx-2\", \"date\": \"2024-03-10\", \"description\": \"Office supplies\", \"amount\": -25000, \"type\": \"expense\", \"status\": \"Pending\" }\n  ]\n}"
+                }
+              ]
             },
             {
               "name": "Get all transactions",
@@ -1903,7 +2113,18 @@
                   { "key": "Content-Type", "value": "application/json" }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/summary"
-              }
+              },
+              "response": [
+                {
+                  "name": "Success",
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/summary" } },
+                  "status": "OK",
+                  "code": 200,
+                  "_postman_previewlanguage": "json",
+                  "header": [{ "key": "Content-Type", "value": "application/json" }],
+                  "body": "{\n  \"status\": true,\n  \"message\": \"Financial summary\",\n  \"data\": {\n    \"totalIncome\": 450000,\n    \"totalExpenses\": 125000,\n    \"netProfit\": 325000\n  }\n}"
+                }
+              ]
             },
             {
               "name": "Get monthly cash flow",

@@ -32,7 +32,45 @@ export const enterpriseBusinessProfileService = {
   getBusinessTypes: () => BUSINESS_TYPES,
   getIndustries: () => INDUSTRIES,
 
-  async getProfile(companyId: string, userId?: string) {
+  async getProfile(companyId: string, userId?: string, linkedUserId?: string) {
+    if (linkedUserId) {
+      const [user, business] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: linkedUserId },
+          select: {
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            organizationName: true,
+            organizationAddress: true,
+            logo: true,
+          },
+        }),
+        prisma.business.findFirst({
+          where: { userId: linkedUserId },
+        }),
+      ]);
+      if (!user) return null;
+      const b = business;
+      return {
+        companyName: b?.name ?? user.organizationName ?? `${user.firstName} ${user.lastName}`.trim(),
+        businessType: b?.businessType ?? "",
+        industry: b?.sector ?? "",
+        registrationDate: b?.createdAt ?? new Date(),
+        tin: b?.tin ?? "",
+        businessAddress: b?.streetAddress ?? user.organizationAddress ?? "",
+        phoneNumber: user.phone ?? "",
+        emailAddress: user.email,
+        website: "",
+        logo: user.logo ?? null,
+        subscriptionPlan: "Client",
+        monthlyPayment: 0,
+        nextRenewalDate: new Date(),
+        compliancePercent: 0,
+        activities: [],
+      };
+    }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });

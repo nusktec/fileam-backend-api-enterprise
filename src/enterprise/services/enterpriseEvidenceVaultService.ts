@@ -17,7 +17,24 @@ export const enterpriseEvidenceVaultService = {
   getCategories: () => EVIDENCE_CATEGORIES,
   getStatuses: () => DOCUMENT_STATUSES,
 
-  async getCategoriesWithCounts(companyId: string) {
+  async getCategoriesWithCounts(companyId: string, linkedUserId?: string) {
+    if (linkedUserId) {
+      const { evidenceVaultService } = await import("../../mobile/services/evidenceVaultService");
+      const docs = await evidenceVaultService.listDocuments(linkedUserId);
+      const counts: Record<string, number> = {};
+      for (const c of EVIDENCE_CATEGORIES) counts[c] = 0;
+      for (const d of docs) {
+        const cat = EVIDENCE_CATEGORIES.includes(d.category as never)
+          ? d.category
+          : "Other";
+        counts[cat] = (counts[cat] ?? 0) + 1;
+      }
+      return Object.entries(counts).map(([name, count]) => ({
+        name,
+        count,
+        label: `${name}: ${count} Documents`,
+      }));
+    }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
@@ -37,7 +54,18 @@ export const enterpriseEvidenceVaultService = {
     }));
   },
 
-  async getRecentDocuments(companyId: string, limit = 10) {
+  async getRecentDocuments(companyId: string, limit = 10, linkedUserId?: string) {
+    if (linkedUserId) {
+      const { evidenceVaultService } = await import("../../mobile/services/evidenceVaultService");
+      const docs = await evidenceVaultService.listDocuments(linkedUserId);
+      return docs.slice(0, limit).map((d) => ({
+        id: d.id,
+        date: d.date,
+        documentName: d.name,
+        type: d.category,
+        status: "Recorded",
+      }));
+    }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
@@ -85,7 +113,42 @@ export const enterpriseEvidenceVaultService = {
       status?: string;
     },
     opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
+    linkedUserId?: string,
   ) {
+    if (linkedUserId) {
+      const { evidenceVaultService } = await import("../../mobile/services/evidenceVaultService");
+      const catMap: Record<string, string> = {
+        Invoices: "invoices",
+        Receipts: "receipts",
+        "VAT Schedules": "vat_schedules",
+        "WHT Notes": "wht_notes",
+        "Legal Documents": "filings",
+        Reports: "filings",
+        Contracts: "filings",
+        "Tax Documents": "filings",
+        Other: "all",
+      };
+      const mobileCat =
+        filters?.category && filters.category !== "all"
+          ? catMap[filters.category] ?? "all"
+          : undefined;
+      const docs = await evidenceVaultService.listDocuments(linkedUserId, {
+        search: filters?.search,
+        category: mobileCat,
+      });
+      const page = opts?.page ?? 1;
+      const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
+      const start = (page - 1) * limit;
+      const data = docs.slice(start, start + limit).map((d) => ({
+        id: d.id,
+        documentName: d.name,
+        category: d.category,
+        dateUploaded: d.date,
+        status: "Recorded",
+        fileUrl: d.documentUrl,
+      }));
+      return { data, total: docs.length, page, limit };
+    }
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });

@@ -1,14 +1,20 @@
 model Company {
-  id                 String   @id @default(uuid())
-  name               String
-  ownerId            String?  @map("owner_id")
-  nextInvoiceNumber  Int      @default(1) @map("next_invoice_number")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                    String   @id @default(uuid())
+  name                  String
+  ownerId               String?  @map("owner_id")
+  linkedUserId          String?  @unique @map("linked_user_id")
+  managedByCompanyId    String?  @map("managed_by_company_id")
+  nextInvoiceNumber     Int      @default(1) @map("next_invoice_number")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
 
   owner                       User?     @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  linkedUser                   User?     @relation("CompanyLinkedUser", fields: [linkedUserId], references: [id], onDelete: Cascade)
+  managedByCompany             Company?  @relation("ManagedCompanies", fields: [managedByCompanyId], references: [id], onDelete: Cascade)
+  managedCompanies             Company[] @relation("ManagedCompanies")
   invitations                  Invitation[]
   consultantConnections         ConsultantConnection[]
+  consultantConnectionAsClient  ConsultantConnection[] @relation("ClientCompanyConnection")
   enterpriseBusinessProfile     EnterpriseBusinessProfile?
   enterpriseVatComputations     EnterpriseVatComputation[]
   enterpriseVatMonthly          EnterpriseVatMonthly[]

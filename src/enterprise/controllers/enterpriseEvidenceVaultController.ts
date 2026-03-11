@@ -18,7 +18,10 @@ export async function getCategories(
   const companyId = req.companyId!;
   try {
     const categories =
-      await enterpriseEvidenceVaultService.getCategoriesWithCounts(companyId);
+      await enterpriseEvidenceVaultService.getCategoriesWithCounts(
+        companyId,
+        req.linkedUserId,
+      );
     if (!categories) {
       sendNotFound(res, "Company not found");
       return;
@@ -39,6 +42,7 @@ export async function getRecentDocuments(
     const list = await enterpriseEvidenceVaultService.getRecentDocuments(
       companyId,
       limit,
+      req.linkedUserId,
     );
     if (!list) {
       sendNotFound(res, "Company not found");
@@ -88,6 +92,7 @@ export async function listDocuments(
         limit: pagination?.limit,
         sortOrder: pagination?.sortOrder,
       },
+      req.linkedUserId,
     );
     if (!result) {
       sendNotFound(res, "Company not found");
