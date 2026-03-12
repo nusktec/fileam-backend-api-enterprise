@@ -14,7 +14,7 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
-RUN pnpm exec prisma generate --schema=prisma/schema
+RUN pnpm exec prisma generate --schema=prisma/schema/schema.prisma
 RUN pnpm run build
 
 FROM base AS runner
@@ -26,7 +26,7 @@ RUN pnpm install --prod --ignore-scripts
 
 COPY --from=builder /app/prisma ./prisma
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
-RUN pnpm exec prisma generate --schema=prisma/schema
+RUN pnpm exec prisma generate --schema=prisma/schema/schema.prisma
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/services/template ./dist/services/template
@@ -37,4 +37,4 @@ EXPOSE 3000
 RUN chown -R node:node /app
 USER node
 
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy --schema=prisma/schema/schema.prisma && exec node dist/app.js"]
+CMD ["sh", "-c", "set -e && pnpm exec prisma migrate deploy --schema=prisma/schema/schema.prisma && exec node dist/app.js"]
