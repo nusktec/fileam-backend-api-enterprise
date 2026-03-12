@@ -12,6 +12,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:rollback": "prisma migrate resolve --rolled-back 20260312105438_add_invitation_and_connection_status_enums --schema=prisma/schema",
     "prisma:studio": "prisma studio",
     "db:setup": "pnpm run prisma:migrate && pnpm run seed",
     "docker:build": "docker build -t file-am .",
