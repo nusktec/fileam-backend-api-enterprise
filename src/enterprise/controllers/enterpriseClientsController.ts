@@ -176,14 +176,15 @@ export async function listClients(
     sendNotFound(res, "No company found. Create a company first.");
     return;
   }
-  const q = (req.query.q as string | undefined)?.trim();
+  const rawQ = (req.query.q as string | undefined)?.trim() ?? "";
+  const q = rawQ === "=" ? "" : rawQ;
   const typeParam = (req.query.type as string)?.trim().toLowerCase();
   const type =
     typeParam === "accepted" || typeParam === "pending"
       ? (typeParam as "accepted" | "pending")
       : undefined;
   try {
-    const clients = await enterpriseClientsService.listClients(companyId, q, {
+    const clients = await enterpriseClientsService.listClients(companyId, q || undefined, {
       type: type ?? "all",
     });
     sendResult(res, "Clients", clients);

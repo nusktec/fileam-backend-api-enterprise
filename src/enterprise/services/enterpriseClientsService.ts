@@ -268,9 +268,10 @@ export const enterpriseClientsService = {
       }
     }
 
-    if (!query || query.trim().length < 2) return cards;
+    const searchQuery = (query ?? "").trim();
+    if (searchQuery.length < 2) return cards;
 
-    const q = query.trim().toLowerCase();
+    const q = searchQuery.toLowerCase();
     return cards.filter(
       (c) =>
         c.businessName.toLowerCase().includes(q) ||
