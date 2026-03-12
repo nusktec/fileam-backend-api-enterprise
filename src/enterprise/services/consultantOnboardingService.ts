@@ -344,6 +344,7 @@ export const consultantOnboardingService = {
   async activate(sessionId: string) {
     const session = await prisma.consultantOnboardingSession.findUnique({
       where: { id: sessionId },
+      include: { firmIdentity: true },
     });
     if (!session)
       return { success: false as const, message: "Session not found" };
@@ -361,6 +362,18 @@ export const consultantOnboardingService = {
           enterpriseOnboardingStep: "complete",
         } as { enterpriseOnboardingComplete: boolean; enterpriseOnboardingStep: string },
       });
+      const existingCompany = await prisma.company.findFirst({
+        where: { ownerId: session.userId },
+        select: { id: true },
+      });
+      if (!existingCompany && session.firmIdentity) {
+        await prisma.company.create({
+          data: {
+            name: session.firmIdentity.firmName,
+            ownerId: session.userId,
+          },
+        });
+      }
     }
     return { success: true as const };
   },
