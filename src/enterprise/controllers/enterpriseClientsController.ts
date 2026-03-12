@@ -34,9 +34,10 @@ export async function listClientInvitations(
     sendNotFound(res, "No company found. Create a company first.");
     return;
   }
-  const status = (req.query.status as string | undefined)?.trim().toLowerCase();
-  if (status) {
-    const parts = status.split(",").map((s) => s.trim()).filter(Boolean);
+  const status = (req.query.status as string | undefined) ?? "";
+  const statusTrimmed = status.trim().toLowerCase();
+  if (statusTrimmed) {
+    const parts = statusTrimmed.split(",").map((s) => s.trim()).filter(Boolean);
     const invalid = parts.filter((p) => !VALID_INVITATION_STATUSES.includes(p));
     if (invalid.length) {
       sendBadRequest(
@@ -49,7 +50,7 @@ export async function listClientInvitations(
   try {
     const invitations = await enterpriseClientsService.listInvitations(
       companyId,
-      status,
+      statusTrimmed || undefined,
     );
     sendResult(res, "Client invitations", invitations);
   } catch {

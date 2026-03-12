@@ -73,7 +73,7 @@ export const enterpriseClientsService = {
     status?: string,
   ): Promise<InvitationCard[]> {
     const now = new Date();
-    const statusParam = status?.trim().toLowerCase();
+    const statusParam = (status ?? "").trim().toLowerCase();
     const statuses = statusParam ? statusParam.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
     const where: Record<string, unknown> = { companyId };
@@ -97,12 +97,9 @@ export const enterpriseClientsService = {
         }
       }
       where.OR = conditions;
-    } else {
-      where.OR = [
-        { status: "pending" as const, expiresAt: { gte: now } },
-        { status: "accepted" as const },
-      ];
     }
+    // When no status or empty: return all invitations for this company (pending, accepted, rejected, expired)
+    // shapeInvitationToCard will normalize expired (pending + past expiry) to "expired"
 
     const invitations = await prisma.invitation.findMany({
       where,
