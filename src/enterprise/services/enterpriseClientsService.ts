@@ -65,6 +65,8 @@ export interface ClientCard {
   riskLevel?: string;
   email: string;
   tin: string | null;
+  invitationId?: string;
+  type?: "accepted" | "pending";
 }
 
 export const enterpriseClientsService = {
@@ -180,7 +182,11 @@ export const enterpriseClientsService = {
   },
 
 
-  async listClients(companyId: string, query?: string): Promise<ClientCard[]> {
+  async listClients(
+    companyId: string,
+    query?: string,
+    options?: { type?: "all" | "accepted" | "pending" },
+  ): Promise<ClientCard[]> {
     const connections = await prisma.consultantConnection.findMany({
       where: { companyId },
       include: {
@@ -205,26 +211,62 @@ export const enterpriseClientsService = {
     });
     const businessByUser = new Map(businesses.map((b) => [b.userId, b]));
 
-    const cards = connections.map((conn) => {
-      const user = conn.user;
-      const business = businessByUser.get(conn.userId);
-      const displayName =
-        conn.invitation?.invitedBusinessName ??
-        user.organizationName ??
-        business?.name ??
-        (`${user.firstName} ${user.lastName}`.trim() || user.email);
-      return {
-        id: conn.userId,
-        connectionId: conn.id,
-        businessName: displayName,
-        rcNumber: business?.rcNumber ?? null,
-        status: conn.status === "active" ? "Active" : "Pending Approval",
-        vatStatus: "Pending",
-        nextFiling: null,
-        email: user.email,
-        tin: business?.tin ?? null,
-      };
-    });
+    const typeFilter = options?.type ?? "all";
+    const cards: ClientCard[] = [];
+
+    if (typeFilter === "all" || typeFilter === "accepted") {
+      for (const conn of connections) {
+        const user = conn.user;
+        const business = businessByUser.get(conn.userId);
+        const displayName =
+          conn.invitation?.invitedBusinessName ??
+          user.organizationName ??
+          business?.name ??
+          (`${user.firstName} ${user.lastName}`.trim() || user.email);
+        cards.push({
+          id: conn.userId,
+          connectionId: conn.id,
+          businessName: displayName,
+          rcNumber: business?.rcNumber ?? null,
+          status: conn.status === "active" ? "Active" : "Pending Approval",
+          vatStatus: "Pending",
+          nextFiling: null,
+          email: user.email,
+          tin: business?.tin ?? null,
+          type: "accepted" as const,
+        });
+      }
+    }
+
+    if (typeFilter === "all" || typeFilter === "pending") {
+      const now = new Date();
+      const pendingInvitations = await prisma.invitation.findMany({
+        where: {
+          companyId,
+          status: "pending",
+          expiresAt: { gte: now },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      for (const inv of pendingInvitations) {
+        cards.push({
+          id: inv.invitedEmail,
+          connectionId: "",
+          businessName:
+            inv.invitedBusinessName?.trim() ||
+            inv.invitedContactName?.trim() ||
+            inv.invitedEmail,
+          rcNumber: inv.invitedRcNumber ?? null,
+          status: "Pending Invitation",
+          vatStatus: "Pending",
+          nextFiling: null,
+          email: inv.invitedEmail,
+          tin: null,
+          invitationId: inv.id,
+          type: "pending" as const,
+        });
+      }
+    }
 
     if (!query || query.trim().length < 2) return cards;
 

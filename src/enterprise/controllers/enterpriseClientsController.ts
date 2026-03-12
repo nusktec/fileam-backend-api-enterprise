@@ -177,8 +177,15 @@ export async function listClients(
     return;
   }
   const q = (req.query.q as string | undefined)?.trim();
+  const typeParam = (req.query.type as string)?.trim().toLowerCase();
+  const type =
+    typeParam === "accepted" || typeParam === "pending"
+      ? (typeParam as "accepted" | "pending")
+      : undefined;
   try {
-    const clients = await enterpriseClientsService.listClients(companyId, q);
+    const clients = await enterpriseClientsService.listClients(companyId, q, {
+      type: type ?? "all",
+    });
     sendResult(res, "Clients", clients);
   } catch {
     sendServerError(res, "Failed to list clients");
