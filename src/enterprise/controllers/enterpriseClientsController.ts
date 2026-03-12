@@ -35,12 +35,16 @@ export async function listClientInvitations(
     return;
   }
   const status = (req.query.status as string | undefined)?.trim().toLowerCase();
-  if (status && !VALID_INVITATION_STATUSES.includes(status)) {
-    sendBadRequest(
-      res,
-      `Invalid status. Must be one of: ${VALID_INVITATION_STATUSES.join(", ")}.`,
-    );
-    return;
+  if (status) {
+    const parts = status.split(",").map((s) => s.trim()).filter(Boolean);
+    const invalid = parts.filter((p) => !VALID_INVITATION_STATUSES.includes(p));
+    if (invalid.length) {
+      sendBadRequest(
+        res,
+        `Invalid status. Must be one or more of: ${VALID_INVITATION_STATUSES.join(", ")} (comma-separated for multiple).`,
+      );
+      return;
+    }
   }
   try {
     const invitations = await enterpriseClientsService.listInvitations(

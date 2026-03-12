@@ -73,16 +73,35 @@ export const enterpriseClientsService = {
     status?: string,
   ): Promise<InvitationCard[]> {
     const now = new Date();
+    const statusParam = status?.trim().toLowerCase();
+    const statuses = statusParam ? statusParam.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
     const where: Record<string, unknown> = { companyId };
-    if (status === "expired") {
+
+    if (statuses.includes("expired")) {
       where.status = "pending";
       where.expiresAt = { lt: now };
-    } else if (status) {
-      where.status = status;
-      if (status === "pending") {
+    } else if (statuses.length === 1) {
+      where.status = statuses[0];
+      if (statuses[0] === "pending") {
         where.expiresAt = { gte: now };
       }
+    } else if (statuses.length >= 2) {
+      const conditions: Record<string, unknown>[] = [];
+      if (statuses.includes("pending")) {
+        conditions.push({ status: "pending" as const, expiresAt: { gte: now } });
+      }
+      for (const s of statuses) {
+        if (s !== "pending" && s !== "expired") {
+          conditions.push({ status: s });
+        }
+      }
+      where.OR = conditions;
+    } else {
+      where.OR = [
+        { status: "pending" as const, expiresAt: { gte: now } },
+        { status: "accepted" as const },
+      ];
     }
 
     const invitations = await prisma.invitation.findMany({
