@@ -110,14 +110,28 @@ export const onboardingService = {
     if (!result.success)
       return { success: false as const, message: result.message };
 
+    const normalizedEmail = email.trim().toLowerCase();
+    if (invitationId) {
+      const invitation = await prisma.invitation.findUnique({
+        where: { id: invitationId },
+        select: { invitedEmail: true },
+      });
+      if (invitation && invitation.invitedEmail.toLowerCase() !== normalizedEmail) {
+        return {
+          success: false as const,
+          message: `This invitation was sent to ${invitation.invitedEmail}. Please use that email address to accept the invitation.`,
+        };
+      }
+    }
+
     const payload: OnboardingTokenPayload = {
-      email,
+      email: normalizedEmail,
       ...(invitationId && { invitationId }),
       ...(companyId && { companyId }),
       acceptedInvitationIds: [],
     };
     const token = generateOnboardingToken(payload);
-    return { success: true as const, data: { onboardingToken: token, email } };
+    return { success: true as const, data: { onboardingToken: token, email: normalizedEmail } };
   },
 
   async stepPassword(
@@ -566,13 +580,12 @@ export const onboardingService = {
       };
     if (new Date() > invitation.expiresAt)
       return { success: false as const, message: "Invitation has expired" };
-    if (
-      invitation.invitedEmail.toLowerCase() !==
-      currentPayload.email.toLowerCase()
-    )
+    const invitedEmailNorm = invitation.invitedEmail.toLowerCase();
+    const payloadEmailNorm = (currentPayload.email ?? "").trim().toLowerCase();
+    if (invitedEmailNorm !== payloadEmailNorm)
       return {
         success: false as const,
-        message: "Invitation was sent to a different email",
+        message: `This invitation was sent to ${invitation.invitedEmail}. Please use that email address, or complete sign-up with that email first.`,
       };
 
     const accepted = currentPayload.acceptedInvitationIds ?? [];
