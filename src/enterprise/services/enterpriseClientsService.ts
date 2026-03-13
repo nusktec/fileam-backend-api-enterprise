@@ -3,6 +3,7 @@ import { sendInvitationToJoinEmail } from "../../services/emailService";
 
 export interface InvitationCard {
   id: string;
+  companyId?: string;
   invitedEmail: string;
   invitedBusinessName: string | null;
   invitedContactName: string | null;
@@ -17,6 +18,7 @@ export interface InvitationCard {
 
 function shapeInvitationToCard(inv: {
   id: string;
+  companyId?: string;
   invitedEmail: string;
   invitedBusinessName: string | null;
   invitedRcNumber: string | null;
@@ -41,6 +43,7 @@ function shapeInvitationToCard(inv: {
   }
   return {
     id: inv.id,
+    ...(inv.companyId && { companyId: inv.companyId }),
     invitedEmail: inv.invitedEmail,
     invitedBusinessName: inv.invitedBusinessName ?? null,
     invitedContactName: inv.invitedContactName ?? null,
@@ -67,6 +70,16 @@ export interface ClientCard {
   tin: string | null;
   invitationId?: string;
   type?: "accepted" | "pending";
+  company?: { id: string; name: string };
+  business?: {
+    id: string;
+    name: string;
+    rcNumber: string | null;
+    tin: string | null;
+    incomeType: string;
+    stateOfResidence: string | null;
+    streetAddress: string | null;
+  };
 }
 
 export const enterpriseClientsService = {
@@ -105,6 +118,20 @@ export const enterpriseClientsService = {
 
     const invitations = await prisma.invitation.findMany({
       where,
+      select: {
+        id: true,
+        companyId: true,
+        invitedEmail: true,
+        invitedBusinessName: true,
+        invitedRcNumber: true,
+        invitedContactName: true,
+        invitedPhone: true,
+        stateOfOperation: true,
+        taxTypesManaged: true,
+        status: true,
+        expiresAt: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: "desc" },
     });
 
@@ -187,23 +214,38 @@ export const enterpriseClientsService = {
     query?: string,
     options?: { type?: "all" | "accepted" | "pending" },
   ): Promise<ClientCard[]> {
-    const connections = await prisma.consultantConnection.findMany({
-      where: { companyId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            organizationName: true,
+    const [connections, company, pendingInvitations] = await Promise.all([
+      prisma.consultantConnection.findMany({
+        where: { companyId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              organizationName: true,
+            },
           },
+          invitation: { select: { invitedBusinessName: true } },
+          company: { select: { id: true, name: true } },
         },
-        invitation: {
-          select: { invitedBusinessName: true },
-        },
-      },
-    });
+      }),
+      prisma.company.findUnique({
+        where: { id: companyId },
+        select: { id: true, name: true },
+      }),
+      options?.type === "accepted"
+        ? []
+        : prisma.invitation.findMany({
+            where: {
+              companyId,
+              status: "pending",
+              consultantConnections: { none: {} },
+            },
+            orderBy: { createdAt: "desc" },
+          }),
+    ]);
 
     const userIds = connections.map((c) => c.userId);
     const businesses = await prisma.business.findMany({
@@ -213,6 +255,7 @@ export const enterpriseClientsService = {
 
     const typeFilter = options?.type ?? "all";
     const cards: ClientCard[] = [];
+    const now = new Date();
 
     if (typeFilter === "all" || typeFilter === "accepted") {
       for (const conn of connections) {
@@ -223,32 +266,42 @@ export const enterpriseClientsService = {
           user.organizationName ??
           business?.name ??
           (`${user.firstName} ${user.lastName}`.trim() || user.email);
+        const statusLabel =
+          conn.status === "active"
+            ? "Active"
+            : conn.status === "revoked"
+              ? "Revoked"
+              : "Pending Approval";
         cards.push({
           id: conn.userId,
           connectionId: conn.id,
           businessName: displayName,
           rcNumber: business?.rcNumber ?? null,
-          status: conn.status === "active" ? "Active" : "Pending Approval",
+          status: statusLabel,
           vatStatus: "Pending",
           nextFiling: null,
           email: user.email,
           tin: business?.tin ?? null,
           type: "accepted" as const,
+          company: conn.company ? { id: conn.company.id, name: conn.company.name } : company ? { id: company.id, name: company.name } : undefined,
+          business: business
+            ? {
+                id: business.id,
+                name: business.name,
+                rcNumber: business.rcNumber ?? null,
+                tin: business.tin ?? null,
+                incomeType: business.incomeType,
+                stateOfResidence: business.stateOfResidence ?? null,
+                streetAddress: business.streetAddress ?? null,
+              }
+            : undefined,
         });
       }
     }
 
     if (typeFilter === "all" || typeFilter === "pending") {
-      const now = new Date();
-      const pendingInvitations = await prisma.invitation.findMany({
-        where: {
-          companyId,
-          status: "pending",
-          expiresAt: { gte: now },
-        },
-        orderBy: { createdAt: "desc" },
-      });
       for (const inv of pendingInvitations) {
+        const isExpired = inv.expiresAt < now;
         cards.push({
           id: inv.invitedEmail,
           connectionId: "",
@@ -257,13 +310,14 @@ export const enterpriseClientsService = {
             inv.invitedContactName?.trim() ||
             inv.invitedEmail,
           rcNumber: inv.invitedRcNumber ?? null,
-          status: "Pending Invitation",
+          status: isExpired ? "Expired Invitation" : "Pending Invitation",
           vatStatus: "Pending",
           nextFiling: null,
           email: inv.invitedEmail,
           tin: null,
           invitationId: inv.id,
           type: "pending" as const,
+          company: company ? { id: company.id, name: company.name } : undefined,
         });
       }
     }

@@ -44,12 +44,100 @@ export async function listCompanies(
   try {
     const companies = await prisma.company.findMany({
       where: {
+        ownerId: userId,
+        linkedUserId: null,
+        managedByCompanyId: null,
         ...(q && { name: { contains: q, mode: "insensitive" as const } }),
       },
-      select: { id: true, name: true, createdAt: true },
+      include: {
+        enterpriseBusinessProfile: {
+          select: {
+            companyName: true,
+            businessType: true,
+            industry: true,
+            tin: true,
+            businessAddress: true,
+            phoneNumber: true,
+            emailAddress: true,
+            website: true,
+          },
+        },
+        consultantConnections: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                organizationName: true,
+              },
+            },
+          },
+        },
+        invitations: {
+          where: { status: "pending" },
+          select: { id: true, invitedEmail: true, invitedBusinessName: true, status: true, expiresAt: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
-    sendResult(res, "Companies", companies);
+
+    const userIds = companies.flatMap((c) =>
+      c.consultantConnections.map((conn) => conn.userId),
+    );
+    const businesses = await prisma.business.findMany({
+      where: { userId: { in: userIds } },
+    });
+    const businessByUser = new Map(businesses.map((b) => [b.userId, b]));
+
+    const result = companies.map((c) => {
+      const clients = c.consultantConnections.map((conn) => {
+        const business = businessByUser.get(conn.userId);
+        const user = conn.user;
+        const displayName =
+          (user.organizationName ??
+            business?.name ??
+            `${user.firstName} ${user.lastName}`.trim()) ||
+          user.email;
+        return {
+          id: conn.userId,
+          connectionId: conn.id,
+          email: user.email,
+          businessName: displayName,
+          rcNumber: business?.rcNumber ?? null,
+          tin: business?.tin ?? null,
+          status: conn.status,
+        };
+      });
+      const pendingInvitations = c.invitations.map((inv) => ({
+        id: inv.id,
+        invitedEmail: inv.invitedEmail,
+        invitedBusinessName: inv.invitedBusinessName,
+        status: inv.expiresAt > new Date() ? "pending" : "expired",
+        expiresAt: inv.expiresAt,
+      }));
+      return {
+        id: c.id,
+        name: c.name,
+        createdAt: c.createdAt,
+        business: c.enterpriseBusinessProfile
+          ? {
+              companyName: c.enterpriseBusinessProfile.companyName,
+              businessType: c.enterpriseBusinessProfile.businessType,
+              industry: c.enterpriseBusinessProfile.industry,
+              tin: c.enterpriseBusinessProfile.tin,
+              businessAddress: c.enterpriseBusinessProfile.businessAddress,
+              phoneNumber: c.enterpriseBusinessProfile.phoneNumber,
+              emailAddress: c.enterpriseBusinessProfile.emailAddress,
+              website: c.enterpriseBusinessProfile.website,
+            }
+          : null,
+        clients,
+        pendingInvitations,
+      };
+    });
+    sendResult(res, "Companies", result);
   } catch {
     sendServerError(res, "Failed to list companies");
   }

@@ -6,7 +6,10 @@ import {
   sendServerError,
   sendNotFound,
 } from "../utils/controllerHelpers";
-import { enterpriseClientsService } from "../services/enterpriseClientsService";
+import {
+  enterpriseClientsService,
+  type ClientCard,
+} from "../services/enterpriseClientsService";
 
 const VALID_INVITATION_STATUSES = ["pending", "accepted", "rejected", "expired"];
 import { prisma } from "../../config/database";
@@ -29,8 +32,18 @@ export async function listClientInvitations(
     sendBadRequest(res, "Authentication required.");
     return;
   }
-  const companyId = await resolveCompanyId(userId);
-  if (!companyId) {
+  const companyIdParam = (req.query.companyId as string)?.trim();
+  let companyIds: string[];
+  if (companyIdParam) {
+    companyIds = [companyIdParam];
+  } else {
+    const companies = await prisma.company.findMany({
+      where: { ownerId: userId, linkedUserId: null, managedByCompanyId: null },
+      select: { id: true },
+    });
+    companyIds = companies.map((c) => c.id);
+  }
+  if (companyIds.length === 0) {
     sendNotFound(res, "No company found. Create a company first.");
     return;
   }
@@ -48,11 +61,15 @@ export async function listClientInvitations(
     }
   }
   try {
-    const invitations = await enterpriseClientsService.listInvitations(
-      companyId,
-      statusTrimmed || undefined,
-    );
-    sendResult(res, "Client invitations", invitations);
+    const allInvitations: Awaited<ReturnType<typeof enterpriseClientsService.listInvitations>> = [];
+    for (const cid of companyIds) {
+      const invitations = await enterpriseClientsService.listInvitations(
+        cid,
+        statusTrimmed || undefined,
+      );
+      allInvitations.push(...invitations);
+    }
+    sendResult(res, "Client invitations", allInvitations);
   } catch {
     sendServerError(res, "Failed to list client invitations");
   }
@@ -171,8 +188,18 @@ export async function listClients(
     sendBadRequest(res, "Authentication required.");
     return;
   }
-  const companyId = await resolveCompanyId(userId);
-  if (!companyId) {
+  const companyIdParam = (req.query.companyId as string)?.trim();
+  let companyIds: string[];
+  if (companyIdParam) {
+    companyIds = [companyIdParam];
+  } else {
+    const companies = await prisma.company.findMany({
+      where: { ownerId: userId, linkedUserId: null, managedByCompanyId: null },
+      select: { id: true },
+    });
+    companyIds = companies.map((c) => c.id);
+  }
+  if (companyIds.length === 0) {
     sendNotFound(res, "No company found. Create a company first.");
     return;
   }
@@ -184,10 +211,14 @@ export async function listClients(
       ? (typeParam as "accepted" | "pending")
       : undefined;
   try {
-    const clients = await enterpriseClientsService.listClients(companyId, q || undefined, {
-      type: type ?? "all",
-    });
-    sendResult(res, "Clients", clients);
+    const allClients: ClientCard[] = [];
+    for (const cid of companyIds) {
+      const clients = await enterpriseClientsService.listClients(cid, q || undefined, {
+        type: type ?? "all",
+      });
+      allClients.push(...clients);
+    }
+    sendResult(res, "Clients", allClients);
   } catch {
     sendServerError(res, "Failed to list clients");
   }

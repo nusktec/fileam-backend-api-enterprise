@@ -11,6 +11,7 @@ export interface BusinessListItem {
   email: string;
   ownerName: string;
   createdAt: Date;
+  company?: { id: string; name: string } | null;
 }
 
 export const enterpriseBusinessesService = {
@@ -53,20 +54,33 @@ export const enterpriseBusinessesService = {
       orderBy: { createdAt: "desc" },
     });
 
-    return businesses.map((b) => ({
-      id: b.id,
-      userId: b.userId,
-      name: b.name,
-      rcNumber: b.rcNumber ?? null,
-      tin: b.tin ?? null,
-      incomeType: b.incomeType,
-      stateOfResidence: b.stateOfResidence ?? null,
-      email: b.user.email,
-      ownerName:
-        b.user.organizationName?.trim() ||
-        `${[b.user.firstName, b.user.lastName].filter(Boolean).join(" ")}`.trim() ||
-        b.user.email,
-      createdAt: b.createdAt,
-    }));
+    const userIds = businesses.map((b) => b.userId);
+    const companies = await prisma.company.findMany({
+      where: { linkedUserId: { in: userIds } },
+      select: { id: true, name: true, linkedUserId: true },
+    });
+    const companyByUser = new Map(
+      companies.map((c) => [c.linkedUserId!, c] as [string, { id: string; name: string }]),
+    );
+
+    return businesses.map((b) => {
+      const company = companyByUser.get(b.userId);
+      return {
+        id: b.id,
+        userId: b.userId,
+        name: b.name,
+        rcNumber: b.rcNumber ?? null,
+        tin: b.tin ?? null,
+        incomeType: b.incomeType,
+        stateOfResidence: b.stateOfResidence ?? null,
+        email: b.user.email,
+        ownerName:
+          b.user.organizationName?.trim() ||
+          `${[b.user.firstName, b.user.lastName].filter(Boolean).join(" ")}`.trim() ||
+          b.user.email,
+        createdAt: b.createdAt,
+        company: company ? { id: company.id, name: company.name } : null,
+      };
+    });
   },
 };
