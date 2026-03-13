@@ -1593,7 +1593,7 @@
                     }
                   ]
                 },
-                "description": "Lists ALL companies on the platform (global, not scoped to the current user).\n\nFilter:\n• Query param: q (optional). When provided, filters by company name (case-insensitive, substring). Omit q to return all companies.\n\nResponse data: array of { id, name, createdAt }. Requires auth."
+                "description": "Lists companies owned by the current user (consultant companies).\n\nFilter:\n• Query param: q (optional). When provided, filters by company name (case-insensitive, substring). Omit q to return all your companies.\n\nResponse data: array of { id, name, createdAt, business, clients, pendingInvitations }. Each company includes: business (enterprise profile: companyName, businessType, industry, tin, address, phone, email, website), clients (accepted connections with user/business info), pendingInvitations (pending invitations with status). Requires auth."
               },
               "response": [
                 {
@@ -1748,10 +1748,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
+                  "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"companyId\": \"<company-uuid>\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
-                "description": "Creates an invitation to add a business owner (client). Uses the current user's first company (by creation date) automatically; companyId is not in the body. Body: invitedEmail (required). Optional: invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Fails with 400 if user has no company. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
+                "description": "Creates an invitation to add a business owner (client). Body: invitedEmail (required). Optional: companyId (UUID — the company the client will belong to; omit to use your first company), invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Fails with 400 if user has no company or companyId is invalid. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
               }
             },
             {

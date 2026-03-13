@@ -20,6 +20,11 @@ const validateCreateInvitation = [
     .bail()
     .isEmail()
     .withMessage("invitedEmail must be a valid email"),
+  check("companyId")
+    .optional()
+    .trim()
+    .isUUID()
+    .withMessage("companyId must be a valid UUID"),
   check("invitedBusinessName").optional().trim().isString(),
   check("expiresInHours").optional().isInt({ min: 1, max: 720 }).withMessage("expiresInHours must be between 1 and 720"),
   check("invitedContactName").optional().trim().isString(),

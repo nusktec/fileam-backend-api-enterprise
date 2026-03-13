@@ -192,6 +192,7 @@ export async function createInvitation(
     includeOptionals: true,
   }) as {
     invitedEmail: string;
+    companyId?: string;
     invitedBusinessName?: string;
     expiresInHours?: number;
     invitedContactName?: string;
@@ -202,6 +203,7 @@ export async function createInvitation(
   };
   const {
     invitedEmail,
+    companyId: companyIdParam,
     invitedBusinessName,
     expiresInHours,
     invitedContactName,
@@ -210,15 +212,36 @@ export async function createInvitation(
     stateOfOperation,
     taxTypesManaged,
   } = data;
-  const company = await prisma.company.findFirst({
-    where: { ownerId: userId },
-    orderBy: { createdAt: "asc" },
-  });
-  if (!company) {
-    res
-      .status(HttpStatusCode.BAD_REQUEST)
-      .json(outJson(false, "Create a company first before sending invitations.", null));
-    return;
+
+  let company: { id: string } | null;
+  if (companyIdParam) {
+    company = await prisma.company.findFirst({
+      where: {
+        id: companyIdParam,
+        ownerId: userId,
+        linkedUserId: null,
+        managedByCompanyId: null,
+      },
+      select: { id: true },
+    });
+    if (!company) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Company not found or you do not have access to it.", null));
+      return;
+    }
+  } else {
+    company = await prisma.company.findFirst({
+      where: { ownerId: userId, linkedUserId: null, managedByCompanyId: null },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (!company) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Create a company first before sending invitations.", null));
+      return;
+    }
   }
   const companyId = company.id;
   const normalizedEmail = invitedEmail.trim().toLowerCase();
