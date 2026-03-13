@@ -231,17 +231,17 @@ export async function createInvitation(
       return;
     }
   } else {
-    company = await prisma.company.findFirst({
-      where: { ownerId: userId, linkedUserId: null, managedByCompanyId: null },
-      orderBy: { createdAt: "asc" },
+    const companyName =
+      invitedBusinessName?.trim() ||
+      invitedContactName?.trim() ||
+      `Client: ${invitedEmail.trim()}`;
+    company = await prisma.company.create({
+      data: {
+        name: companyName,
+        ownerId: userId,
+      },
       select: { id: true },
     });
-    if (!company) {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(outJson(false, "Create a company first before sending invitations.", null));
-      return;
-    }
   }
   const companyId = company.id;
   const normalizedEmail = invitedEmail.trim().toLowerCase();

@@ -1589,7 +1589,7 @@
                     {
                       "key": "q",
                       "value": "",
-                      "description": "Optional. Filter by company name (case-insensitive, substring match). Omit to return all companies on the platform."
+                      "description": "Optional. Filter by company name (case-insensitive, substring match). Omit to return all your companies."
                     }
                   ]
                 },
@@ -1696,18 +1696,28 @@
                   { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients?q=",
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients?q=&companyId=&type=",
                   "host": ["{{baseUrl}}"],
                   "path": ["api", "v{{apiVersion}}", "enterprise", "clients"],
                   "query": [
                     {
                       "key": "q",
                       "value": "",
-                      "description": "Optional. Min 2 chars. Filter connected clients by business name, email, RC number, or TIN."
+                      "description": "Optional. Min 2 chars. Filter by business name, email, RC number, or TIN."
+                    },
+                    {
+                      "key": "companyId",
+                      "value": "",
+                      "description": "Optional. Scope to one company. Omit to list clients from all your companies."
+                    },
+                    {
+                      "key": "type",
+                      "value": "",
+                      "description": "Optional. all | accepted | pending. Default: all."
                     }
                   ]
                 },
-                "description": "Lists clients connected to the current user's company (businesses linked via accepted invitations). companyId is resolved automatically from the logged-in user; no companyId in URL.\n\nFilter:\n• Query param: q (optional, min 2 chars). Filters results by business name, email, RC number, or TIN. Omit to return all connected clients.\n\nResponse data: array of { id (userId), connectionId, businessName, rcNumber, status, vatStatus, nextFiling, email, tin }. Returns 404 if user has no company. Requires auth and enterprise onboarding complete."
+                "description": "Lists all clients (accepted connections + pending invitations) across your companies.\n\nFilter:\n• q (optional, min 2 chars): Filter by business name, email, RC number, or TIN.\n• companyId (optional): Scope to one company. Omit to list from all your companies.\n• type (optional): all | accepted | pending. Default: all.\n\nResponse data: array of { id, connectionId, businessName, rcNumber, status, vatStatus, nextFiling, email, tin, type, company, business }. Each client includes: company { id, name }, business { id, name, rcNumber, tin, incomeType, stateOfResidence, streetAddress } for accepted clients. Statuses: Active, Pending Approval, Revoked, Pending Invitation, Expired Invitation. Returns 404 if user has no company. Requires auth and enterprise onboarding complete."
               }
             },
             {
@@ -1729,7 +1739,7 @@
                     }
                   ]
                 },
-                "description": "Lists all businesses in the system (not scoped to any company). Returns every business in data; no pagination.\n\nFilter:\n• Query param: q (optional). When provided, filters results by search term (case-insensitive, substring match). Searches: business name, rcNumber, tin; owner email, firstName, lastName, organizationName. Omit q to return all businesses.\nExample: ?q=acme\n\nResponse data: array of { id, userId, name, rcNumber, tin, incomeType, stateOfResidence, email, ownerName, createdAt }. Requires auth and enterprise onboarding complete."
+                "description": "Lists all businesses in the system (not scoped to any company). Returns every business in data; no pagination.\n\nFilter:\n• Query param: q (optional). When provided, filters results by search term (case-insensitive, substring match). Searches: business name, rcNumber, tin; owner email, firstName, lastName, organizationName. Omit q to return all businesses.\nExample: ?q=acme\n\nResponse data: array of { id, userId, name, rcNumber, tin, incomeType, stateOfResidence, email, ownerName, createdAt, company }. Each business includes company { id, name } when the owner is linked to a company. Requires auth and enterprise onboarding complete."
               }
             }
           ]
@@ -1748,10 +1758,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"companyId\": \"<company-uuid>\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
+                  "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"companyId\": \"{{companyId}}\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
-                "description": "Creates an invitation to add a business owner (client). Body: invitedEmail (required). Optional: companyId (UUID — the company the client will belong to; omit to use your first company), invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Fails with 400 if user has no company or companyId is invalid. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
+                "description": "Creates an invitation to add a business owner (client). Body: invitedEmail (required). Optional: companyId (UUID — the company the client will belong to; omit to auto-create a new company from client info: invitedBusinessName, invitedContactName, or \"Client: {email}\". The new company appears when you list companies.), invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Fails with 400 if companyId is invalid when provided. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
               }
             },
             {
@@ -1762,7 +1772,7 @@
                   { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations?status=",
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations?status=&companyId=",
                   "host": ["{{baseUrl}}"],
                   "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "invitations"],
                   "query": [
@@ -1770,10 +1780,15 @@
                       "key": "status",
                       "value": "",
                       "description": "Optional. Filter by status: pending, accepted, rejected, expired. Omit to return all invitations. Note: 'expired' is computed — invitations still stored as 'pending' in DB but past their expiresAt."
+                    },
+                    {
+                      "key": "companyId",
+                      "value": "",
+                      "description": "Optional. Scope to one company. Omit to list invitations from all your companies."
                     }
                   ]
                 },
-                "description": "Lists all invitations sent by the current user's company. companyId is resolved automatically from the logged-in user.\n\nFilter:\n• Query param: status (optional). One of: pending, accepted, rejected, expired. Omit to return all invitations regardless of status.\n• 'expired' returns pending invitations whose expiresAt is in the past.\n• 'pending' returns only non-expired pending invitations.\n\nResponse data: array of { id, invitedEmail, invitedBusinessName, invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (string[]), status, expiresAt, createdAt }. Returns 404 if user has no company. Requires auth and enterprise onboarding complete."
+                "description": "Lists all client invitations (invitations only; separate from List clients).\n\nFilter:\n• status (optional): pending, accepted, rejected, expired. Omit to return all invitations. 'expired' = pending invitations past expiresAt.\n• companyId (optional): Scope to one company. Omit to list from all your companies.\n\nResponse data: array of { id, companyId, invitedEmail, invitedBusinessName, invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (string[]), status, expiresAt, createdAt }. companyId included when listing from multiple companies. Returns 404 if user has no company. Requires auth and enterprise onboarding complete."
               }
             },
             {
