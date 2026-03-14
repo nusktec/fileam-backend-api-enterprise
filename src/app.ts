@@ -11,6 +11,10 @@ import mobileRoutes from "./mobile/routes";
 import enterpriseRoutes from "./enterprise/routes";
 import webhookRoutes from "./routes/webhookRoutes";
 import mediaRoutes from "./routes/mediaRoutes";
+import {
+  handleRequestAccept,
+  handleRequestDecline,
+} from "./routes/requestRoutes";
 
 import * as process from "process";
 import { catchError, error404, errorHandler } from "./middlewares/errorHandler";
@@ -90,6 +94,14 @@ app.use(`/api/v${API_VERSION}/mobile`, mobileRoutes);
 app.use(`/api/v${API_VERSION}/enterprise`, enterpriseRoutes);
 app.use(`/api/v${API_VERSION}/media`, mediaRoutes);
 app.use(`/api/v${API_VERSION}/webhooks`, webhookRoutes);
+app.get(
+  `/api/v${API_VERSION}/invitations/:id/accept/:code`,
+  handleRequestAccept,
+);
+app.get(
+  `/api/v${API_VERSION}/invitations/:id/decline/:code`,
+  handleRequestDecline,
+);
 
 app.use(error404);
 app.use(catchError);

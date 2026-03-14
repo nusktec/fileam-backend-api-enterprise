@@ -1,9 +1,12 @@
 import { prisma } from "../../config/database";
-import { sendInvitationToJoinEmail } from "../../services/emailService";
+import {
+  sendInvitationToJoinEmail,
+  sendConsultantRequestEmail,
+} from "../../services/emailService";
 
 export interface InvitationCard {
   id: string;
-  companyId?: string;
+  consultantUserId?: string;
   invitedEmail: string;
   invitedBusinessName: string | null;
   invitedContactName: string | null;
@@ -18,7 +21,7 @@ export interface InvitationCard {
 
 function shapeInvitationToCard(inv: {
   id: string;
-  companyId?: string;
+  consultantUserId?: string;
   invitedEmail: string;
   invitedBusinessName: string | null;
   invitedRcNumber: string | null;
@@ -43,7 +46,7 @@ function shapeInvitationToCard(inv: {
   }
   return {
     id: inv.id,
-    ...(inv.companyId && { companyId: inv.companyId }),
+    ...(inv.consultantUserId && { consultantUserId: inv.consultantUserId }),
     invitedEmail: inv.invitedEmail,
     invitedBusinessName: inv.invitedBusinessName ?? null,
     invitedContactName: inv.invitedContactName ?? null,
@@ -84,14 +87,14 @@ export interface ClientCard {
 
 export const enterpriseClientsService = {
   async listInvitations(
-    companyId: string,
+    consultantUserId: string,
     status?: string,
   ): Promise<InvitationCard[]> {
     const now = new Date();
     const statusParam = (status ?? "").trim().toLowerCase();
     const statuses = statusParam ? statusParam.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
-    const where: Record<string, unknown> = { companyId };
+    const where: Record<string, unknown> = { consultantUserId };
 
     if (statuses.includes("expired")) {
       where.status = "pending";
@@ -113,14 +116,12 @@ export const enterpriseClientsService = {
       }
       where.OR = conditions;
     }
-    // When no status or empty: return all invitations for this company (pending, accepted, rejected, expired)
-    // shapeInvitationToCard will normalize expired (pending + past expiry) to "expired"
 
     const invitations = await prisma.invitation.findMany({
       where,
       select: {
         id: true,
-        companyId: true,
+        consultantUserId: true,
         invitedEmail: true,
         invitedBusinessName: true,
         invitedRcNumber: true,
@@ -139,22 +140,22 @@ export const enterpriseClientsService = {
   },
 
   async getInvitationById(
-    companyId: string,
+    consultantUserId: string,
     invitationId: string,
   ): Promise<InvitationCard | null> {
     const inv = await prisma.invitation.findFirst({
-      where: { id: invitationId, companyId },
+      where: { id: invitationId, consultantUserId },
     });
     if (!inv) return null;
     return shapeInvitationToCard(inv);
   },
 
   async cancelInvitation(
-    companyId: string,
+    consultantUserId: string,
     invitationId: string,
   ): Promise<"ok" | "not_found" | "not_pending"> {
     const inv = await prisma.invitation.findFirst({
-      where: { id: invitationId, companyId },
+      where: { id: invitationId, consultantUserId },
     });
     if (!inv) return "not_found";
     if (inv.status !== "pending") return "not_pending";
@@ -166,12 +167,12 @@ export const enterpriseClientsService = {
   },
 
   async resendInvitation(
-    companyId: string,
+    consultantUserId: string,
     invitationId: string,
     extendExpiryHours?: number,
   ): Promise<{ success: true; invitation: InvitationCard } | { success: false; reason: "not_found" | "not_pending" | "expired" }> {
     const inv = await prisma.invitation.findFirst({
-      where: { id: invitationId, companyId },
+      where: { id: invitationId, consultantUserId },
     });
     if (!inv) return { success: false, reason: "not_found" };
     if (inv.status !== "pending") return { success: false, reason: "not_pending" };
@@ -195,14 +196,39 @@ export const enterpriseClientsService = {
       inv.invitedContactName?.trim() ||
       inv.invitedBusinessName?.trim() ||
       inv.invitedEmail;
-    const emailResult = await sendInvitationToJoinEmail(
-      inv.invitedEmail,
-      recipientName,
-      inv.code,
-      newExpiresAt,
-    );
-    if (!emailResult.success) {
-      console.error("Failed to resend invitation email:", emailResult.error);
+
+    if (inv.requestedUserId) {
+      const consultant = await prisma.user.findUnique({
+        where: { id: inv.consultantUserId },
+        select: { firstName: true, lastName: true, organizationName: true },
+      });
+      const consultantName =
+        consultant
+          ? `${consultant.firstName} ${consultant.lastName}`.trim() ||
+            consultant.organizationName ||
+            "A consultant"
+          : "A consultant";
+      const emailResult = await sendConsultantRequestEmail(
+        inv.invitedEmail,
+        recipientName,
+        consultantName,
+        inv.id,
+        inv.code,
+        newExpiresAt,
+      );
+      if (!emailResult.success) {
+        console.error("Failed to resend consultant request email:", emailResult.error);
+      }
+    } else {
+      const emailResult = await sendInvitationToJoinEmail(
+        inv.invitedEmail,
+        recipientName,
+        inv.code,
+        newExpiresAt,
+      );
+      if (!emailResult.success) {
+        console.error("Failed to resend invitation email:", emailResult.error);
+      }
     }
 
     return { success: true, invitation: shapeInvitationToCard(updated) };
@@ -210,13 +236,13 @@ export const enterpriseClientsService = {
 
 
   async listClients(
-    companyId: string,
+    consultantUserId: string,
     query?: string,
     options?: { type?: "all" | "accepted" | "pending" },
   ): Promise<ClientCard[]> {
-    const [connections, company, pendingInvitations] = await Promise.all([
+    const [connections, pendingInvitations] = await Promise.all([
       prisma.consultantConnection.findMany({
-        where: { companyId },
+        where: { consultantUserId },
         include: {
           user: {
             select: {
@@ -228,24 +254,31 @@ export const enterpriseClientsService = {
             },
           },
           invitation: { select: { invitedBusinessName: true } },
-          company: { select: { id: true, name: true } },
         },
-      }),
-      prisma.company.findUnique({
-        where: { id: companyId },
-        select: { id: true, name: true },
       }),
       options?.type === "accepted"
         ? []
         : prisma.invitation.findMany({
             where: {
-              companyId,
+              consultantUserId,
               status: "pending",
               consultantConnections: { none: {} },
             },
             orderBy: { createdAt: "desc" },
           }),
     ]);
+
+    const clientUserIds = connections.map((c) => c.userId);
+    const clientCompanies = await prisma.company.findMany({
+      where: {
+        ownerId: consultantUserId,
+        linkedUserId: { in: clientUserIds },
+      },
+      select: { id: true, name: true, linkedUserId: true },
+    });
+    const companyByUser = new Map(
+      clientCompanies.map((c) => [c.linkedUserId!, { id: c.id, name: c.name }] as [string, { id: string; name: string }]),
+    );
 
     const userIds = connections.map((c) => c.userId);
     const businesses = await prisma.business.findMany({
@@ -272,6 +305,7 @@ export const enterpriseClientsService = {
             : conn.status === "revoked"
               ? "Revoked"
               : "Pending Approval";
+        const clientCompany = companyByUser.get(conn.userId);
         cards.push({
           id: conn.userId,
           connectionId: conn.id,
@@ -283,7 +317,7 @@ export const enterpriseClientsService = {
           email: user.email,
           tin: business?.tin ?? null,
           type: "accepted" as const,
-          company: conn.company ? { id: conn.company.id, name: conn.company.name } : company ? { id: company.id, name: company.name } : undefined,
+          company: clientCompany,
           business: business
             ? {
                 id: business.id,
@@ -317,7 +351,6 @@ export const enterpriseClientsService = {
           tin: null,
           invitationId: inv.id,
           type: "pending" as const,
-          company: company ? { id: company.id, name: company.name } : undefined,
         });
       }
     }

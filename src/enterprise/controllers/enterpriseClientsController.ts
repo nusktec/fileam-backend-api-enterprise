@@ -12,39 +12,14 @@ import {
 } from "../services/enterpriseClientsService";
 
 const VALID_INVITATION_STATUSES = ["pending", "accepted", "rejected", "expired"];
-import { prisma } from "../../config/database";
-
-async function resolveCompanyId(userId: string): Promise<string | null> {
-  const company = await prisma.company.findFirst({
-    where: { ownerId: userId },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  return company?.id ?? null;
-}
 
 export async function listClientInvitations(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const userId = req.user?.id;
-  if (!userId) {
+  const consultantUserId = req.user?.id;
+  if (!consultantUserId) {
     sendBadRequest(res, "Authentication required.");
-    return;
-  }
-  const companyIdParam = (req.query.companyId as string)?.trim();
-  let companyIds: string[];
-  if (companyIdParam) {
-    companyIds = [companyIdParam];
-  } else {
-    const companies = await prisma.company.findMany({
-      where: { ownerId: userId, linkedUserId: null, managedByCompanyId: null },
-      select: { id: true },
-    });
-    companyIds = companies.map((c) => c.id);
-  }
-  if (companyIds.length === 0) {
-    sendNotFound(res, "No company found. Create a company first.");
     return;
   }
   const status = (req.query.status as string | undefined) ?? "";
@@ -61,15 +36,11 @@ export async function listClientInvitations(
     }
   }
   try {
-    const allInvitations: Awaited<ReturnType<typeof enterpriseClientsService.listInvitations>> = [];
-    for (const cid of companyIds) {
-      const invitations = await enterpriseClientsService.listInvitations(
-        cid,
-        statusTrimmed || undefined,
-      );
-      allInvitations.push(...invitations);
-    }
-    sendResult(res, "Client invitations", allInvitations);
+    const invitations = await enterpriseClientsService.listInvitations(
+      consultantUserId,
+      statusTrimmed || undefined,
+    );
+    sendResult(res, "Client invitations", invitations);
   } catch {
     sendServerError(res, "Failed to list client invitations");
   }
@@ -79,20 +50,15 @@ export async function getClientInvitation(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const userId = req.user?.id;
-  if (!userId) {
+  const consultantUserId = req.user?.id;
+  if (!consultantUserId) {
     sendBadRequest(res, "Authentication required.");
-    return;
-  }
-  const companyId = await resolveCompanyId(userId);
-  if (!companyId) {
-    sendNotFound(res, "No company found. Create a company first.");
     return;
   }
   const invitationId = req.params.id as string;
   try {
     const invitation = await enterpriseClientsService.getInvitationById(
-      companyId,
+      consultantUserId,
       invitationId,
     );
     if (!invitation) {
@@ -109,20 +75,15 @@ export async function cancelClientInvitation(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const userId = req.user?.id;
-  if (!userId) {
+  const consultantUserId = req.user?.id;
+  if (!consultantUserId) {
     sendBadRequest(res, "Authentication required.");
-    return;
-  }
-  const companyId = await resolveCompanyId(userId);
-  if (!companyId) {
-    sendNotFound(res, "No company found. Create a company first.");
     return;
   }
   const invitationId = req.params.id as string;
   try {
     const result = await enterpriseClientsService.cancelInvitation(
-      companyId,
+      consultantUserId,
       invitationId,
     );
     if (result === "not_found") {
@@ -143,21 +104,16 @@ export async function resendClientInvitation(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const userId = req.user?.id;
-  if (!userId) {
+  const consultantUserId = req.user?.id;
+  if (!consultantUserId) {
     sendBadRequest(res, "Authentication required.");
-    return;
-  }
-  const companyId = await resolveCompanyId(userId);
-  if (!companyId) {
-    sendNotFound(res, "No company found. Create a company first.");
     return;
   }
   const invitationId = req.params.id as string;
   const extendExpiryHours = req.body?.extendExpiryHours as number | undefined;
   try {
     const result = await enterpriseClientsService.resendInvitation(
-      companyId,
+      consultantUserId,
       invitationId,
       extendExpiryHours,
     );
@@ -183,24 +139,9 @@ export async function listClients(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const userId = req.user?.id;
-  if (!userId) {
+  const consultantUserId = req.user?.id;
+  if (!consultantUserId) {
     sendBadRequest(res, "Authentication required.");
-    return;
-  }
-  const companyIdParam = (req.query.companyId as string)?.trim();
-  let companyIds: string[];
-  if (companyIdParam) {
-    companyIds = [companyIdParam];
-  } else {
-    const companies = await prisma.company.findMany({
-      where: { ownerId: userId, linkedUserId: null, managedByCompanyId: null },
-      select: { id: true },
-    });
-    companyIds = companies.map((c) => c.id);
-  }
-  if (companyIds.length === 0) {
-    sendNotFound(res, "No company found. Create a company first.");
     return;
   }
   const rawQ = (req.query.q as string | undefined)?.trim() ?? "";
@@ -211,14 +152,12 @@ export async function listClients(
       ? (typeParam as "accepted" | "pending")
       : undefined;
   try {
-    const allClients: ClientCard[] = [];
-    for (const cid of companyIds) {
-      const clients = await enterpriseClientsService.listClients(cid, q || undefined, {
-        type: type ?? "all",
-      });
-      allClients.push(...clients);
-    }
-    sendResult(res, "Clients", allClients);
+    const clients = await enterpriseClientsService.listClients(
+      consultantUserId,
+      q || undefined,
+      { type: type ?? "all" },
+    );
+    sendResult(res, "Clients", clients);
   } catch {
     sendServerError(res, "Failed to list clients");
   }

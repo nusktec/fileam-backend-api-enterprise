@@ -53,14 +53,39 @@ export const enterpriseTaxComputationService = {
       purchaseAmountExclVat: number;
       vatRate: number;
     },
+    linkedUserId?: string,
   ) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
     if (!company) return null;
+
+    let salesAmountExclVat = data.salesAmountExclVat;
+    let purchaseAmountExclVat = data.purchaseAmountExclVat;
+    if (linkedUserId && (salesAmountExclVat === 0 || purchaseAmountExclVat === 0)) {
+      const [sales, expenses] = await Promise.all([
+        prisma.sale.aggregate({
+          where: {
+            userId: linkedUserId,
+            saleDate: { gte: data.startDate, lte: data.endDate },
+          },
+          _sum: { totalAmount: true },
+        }),
+        prisma.expense.aggregate({
+          where: {
+            userId: linkedUserId,
+            expenseDate: { gte: data.startDate, lte: data.endDate },
+          },
+          _sum: { totalAmount: true },
+        }),
+      ]);
+      if (salesAmountExclVat === 0) salesAmountExclVat = decimalToNumber(sales._sum.totalAmount);
+      if (purchaseAmountExclVat === 0) purchaseAmountExclVat = decimalToNumber(expenses._sum.totalAmount);
+    }
+
     const rate = data.vatRate / 100;
-    const salesVat = data.salesAmountExclVat * rate;
-    const purchaseVat = data.purchaseAmountExclVat * rate;
+    const salesVat = salesAmountExclVat * rate;
+    const purchaseVat = purchaseAmountExclVat * rate;
     const netVatPayable = salesVat - purchaseVat;
     const computation = await prisma.enterpriseVatComputation.create({
       data: {
@@ -69,8 +94,8 @@ export const enterpriseTaxComputationService = {
         vatPeriod: data.vatPeriod,
         startDate: data.startDate,
         endDate: data.endDate,
-        salesAmountExclVat: new Decimal(data.salesAmountExclVat),
-        purchaseAmountExclVat: new Decimal(data.purchaseAmountExclVat),
+        salesAmountExclVat: new Decimal(salesAmountExclVat),
+        purchaseAmountExclVat: new Decimal(purchaseAmountExclVat),
         vatRate: new Decimal(data.vatRate),
         salesVat: new Decimal(salesVat),
         purchaseVat: new Decimal(purchaseVat),
@@ -192,6 +217,381 @@ export const enterpriseTaxComputationService = {
       thresholdAmount: VAT_THRESHOLD_DEFAULT,
       description: "Learn more about VAT thresholds.",
       link: "#",
+    };
+  },
+
+  async getVatFiling12MonthStats(
+    companyId: string,
+    linkedUserId?: string,
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+
+    if (linkedUserId) {
+      const { getClientMonthlyCashFlow } = await import("./clientDataHelper");
+      const now = new Date();
+      const year = now.getFullYear();
+      const flow = await getClientMonthlyCashFlow(linkedUserId, year);
+      const prevYear = await getClientMonthlyCashFlow(linkedUserId, year - 1);
+      const all = [...prevYear, ...flow].sort(
+        (a, b) => (a.year - b.year) * 12 + (a.month - b.month),
+      );
+      const last12 = all.slice(-12);
+      return {
+        months: last12.map((m) => ({
+          month: m.month,
+          year: m.year,
+          netCashFlow: m.value,
+        })),
+        totalIncome: last12.reduce((s, m) => s + Math.max(0, m.value), 0),
+        totalExpenses: last12.reduce((s, m) => s + Math.abs(Math.min(0, m.value)), 0),
+      };
+    }
+
+    const y = new Date().getFullYear();
+    const rows = await prisma.enterpriseVatMonthly.findMany({
+      where: { companyId, year: { gte: y - 1 } },
+      orderBy: [{ year: "asc" }, { month: "asc" }],
+    });
+    const last12 = rows.slice(-12);
+    return {
+      months: last12.map((r) => ({
+        month: r.month,
+        year: r.year,
+        vatPayable: decimalToNumber(r.vatPayable),
+      })),
+    };
+  },
+
+  async getTaxBreakdown(companyId: string, linkedUserId?: string) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+
+    const taxConfig = await prisma.clientTaxConfiguration.findUnique({
+      where: { companyId },
+    });
+
+    const result: {
+      totalIncome: number;
+      totalExpenses: number;
+      netProfit: number;
+      vat?: {
+        enabled: boolean;
+        outputVat: number;
+        inputVatClaimable: number;
+        netVatPayable: number;
+        belowThreshold?: boolean;
+      };
+      paye?: {
+        enabled: boolean;
+        amount: number;
+        dueDate?: Date;
+        note?: string;
+      };
+      wht?: {
+        enabled: boolean;
+        serviceIncome: number;
+        estimatedWhtDeducted: number;
+        whtRate: number;
+      };
+      cit?: {
+        enabled: boolean;
+        taxableProfit: number;
+        citRate: number;
+        citPayable: number;
+      };
+      stampDuties?: {
+        enabled: boolean;
+        amount: number;
+        note: string;
+      };
+    } = {
+      totalIncome: 0,
+      totalExpenses: 0,
+      netProfit: 0,
+    };
+
+    if (linkedUserId) {
+      const now = new Date();
+      const { getClientFinancialSummary } = await import("./clientDataHelper");
+      const summary = await getClientFinancialSummary(linkedUserId);
+      result.totalIncome = summary.totalIncome;
+      result.totalExpenses = summary.totalExpenses;
+      result.netProfit = summary.netProfit;
+
+      const { taxComputationService } = await import("../../mobile/services/taxComputationService");
+      const comp = await taxComputationService.getForPeriod(
+        linkedUserId,
+        now.getFullYear(),
+        now.getMonth() + 1,
+      );
+
+      if (taxConfig?.vat ?? true) {
+        result.vat = {
+          enabled: true,
+          outputVat: comp.vat.outputVat,
+          inputVatClaimable: comp.vat.inputVatClaimable,
+          netVatPayable: comp.vat.netVatPayable,
+          belowThreshold: comp.vat.belowThreshold,
+        };
+      }
+
+      if (taxConfig?.paye ?? false) {
+        const { employeesService } = await import("../../mobile/services/employeesService");
+        const obligations = await employeesService.getObligations(linkedUserId);
+        result.paye = {
+          enabled: true,
+          amount: obligations.paye.amount,
+          dueDate: obligations.paye.dueDate,
+          note: obligations.paye.note,
+        };
+      }
+
+      if (taxConfig?.wht ?? true) {
+        result.wht = {
+          enabled: true,
+          serviceIncome: comp.wht.serviceIncome,
+          estimatedWhtDeducted: comp.wht.estimatedWhtDeducted,
+          whtRate: comp.wht.whtRateServices,
+        };
+      }
+
+      if (taxConfig?.cit ?? true) {
+        const taxableProfit = Math.max(0, summary.netProfit);
+        const citRate = comp.cit.citRate;
+        result.cit = {
+          enabled: true,
+          taxableProfit,
+          citRate,
+          citPayable: (taxableProfit * 12 * citRate) / 100,
+        };
+      }
+
+      if (taxConfig?.stampDuties ?? false) {
+        result.stampDuties = {
+          enabled: true,
+          amount: 0,
+          note: "Stamp duties computed per transaction/document. No aggregate data available.",
+        };
+      }
+    } else {
+      const { enterpriseFinancialsService } = await import("./enterpriseFinancialsService");
+      const summary = await enterpriseFinancialsService.getSummary(companyId);
+      if (!summary) return null;
+      result.totalIncome = summary.totalIncome;
+      result.totalExpenses = summary.totalExpenses;
+      result.netProfit = summary.netProfit;
+
+      const latestVat = await prisma.enterpriseVatComputation.findFirst({
+        where: { companyId },
+        orderBy: { createdAt: "desc" },
+      });
+
+      if ((taxConfig?.vat ?? true) && latestVat) {
+        result.vat = {
+          enabled: true,
+          outputVat: decimalToNumber(latestVat.salesVat),
+          inputVatClaimable: decimalToNumber(latestVat.purchaseVat),
+          netVatPayable: decimalToNumber(latestVat.netVatPayable),
+        };
+      }
+
+      if (taxConfig?.paye ?? false) {
+        result.paye = {
+          enabled: true,
+          amount: 0,
+          note: "PAYE requires employee data. Add employees to compute.",
+        };
+      }
+
+      if (taxConfig?.wht ?? true) {
+        result.wht = {
+          enabled: true,
+          serviceIncome: 0,
+          estimatedWhtDeducted: 0,
+          whtRate: 5,
+        };
+      }
+
+      if (taxConfig?.cit ?? true) {
+        const taxableProfit = Math.max(0, summary.netProfit);
+        const citRate = 30;
+        result.cit = {
+          enabled: true,
+          taxableProfit,
+          citRate,
+          citPayable: taxableProfit * (citRate / 100),
+        };
+      }
+
+      if (taxConfig?.stampDuties ?? false) {
+        result.stampDuties = {
+          enabled: true,
+          amount: 0,
+          note: "Stamp duties computed per transaction/document. No aggregate data available.",
+        };
+      }
+    }
+
+    return result;
+  },
+
+  async getVatComputation(
+    companyId: string,
+    year?: number,
+    month?: number,
+    linkedUserId?: string,
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    const now = new Date();
+    const y = year ?? now.getFullYear();
+    const m = month ?? now.getMonth() + 1;
+
+    if (linkedUserId) {
+      const { taxComputationService } = await import("../../mobile/services/taxComputationService");
+      const comp = await taxComputationService.getForPeriod(linkedUserId, y, m);
+      return {
+        period: comp.period,
+        outputVat: comp.vat.outputVat,
+        inputVatClaimable: comp.vat.inputVatClaimable,
+        netVatPayable: comp.vat.netVatPayable,
+        belowThreshold: comp.vat.belowThreshold,
+        income: comp.vat.income,
+        vatThreshold: comp.vat.vatThreshold,
+      };
+    }
+
+    const latest = await prisma.enterpriseVatComputation.findFirst({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!latest) return null;
+    return {
+      period: { year: y, month: m, label: `${new Date(y, m - 1).toLocaleString("default", { month: "long" })} ${y}` },
+      outputVat: decimalToNumber(latest.salesVat),
+      inputVatClaimable: decimalToNumber(latest.purchaseVat),
+      netVatPayable: decimalToNumber(latest.netVatPayable),
+    };
+  },
+
+  async getPayeComputation(companyId: string, linkedUserId?: string) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    if (!linkedUserId) {
+      return {
+        amount: 0,
+        dueDate: null,
+        note: "PAYE requires employee data. Add employees to compute.",
+      };
+    }
+    const { employeesService } = await import("../../mobile/services/employeesService");
+    const obligations = await employeesService.getObligations(linkedUserId);
+    return {
+      amount: obligations.paye.amount,
+      dueDate: obligations.paye.dueDate,
+      note: obligations.paye.note,
+      pension: obligations.pension,
+    };
+  },
+
+  async getWhtComputation(
+    companyId: string,
+    year?: number,
+    month?: number,
+    linkedUserId?: string,
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    const now = new Date();
+    const y = year ?? now.getFullYear();
+    const m = month ?? now.getMonth() + 1;
+
+    if (linkedUserId) {
+      const { taxComputationService } = await import("../../mobile/services/taxComputationService");
+      const comp = await taxComputationService.getForPeriod(linkedUserId, y, m);
+      return {
+        period: comp.period,
+        serviceIncome: comp.wht.serviceIncome,
+        whtRate: comp.wht.whtRateServices,
+        estimatedWhtDeducted: comp.wht.estimatedWhtDeducted,
+      };
+    }
+
+    return {
+      period: { year: y, month: m, label: `${new Date(y, m - 1).toLocaleString("default", { month: "long" })} ${y}` },
+      serviceIncome: 0,
+      whtRate: 5,
+      estimatedWhtDeducted: 0,
+      note: "WHT requires sales/expense data. Add transactions to compute.",
+    };
+  },
+
+  async getCitComputation(
+    companyId: string,
+    year?: number,
+    month?: number,
+    linkedUserId?: string,
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    const now = new Date();
+    const y = year ?? now.getFullYear();
+    const m = month ?? now.getMonth() + 1;
+
+    if (linkedUserId) {
+      const { taxComputationService } = await import("../../mobile/services/taxComputationService");
+      const { getClientFinancialSummary } = await import("./clientDataHelper");
+      const comp = await taxComputationService.getForPeriod(linkedUserId, y, m);
+      const summary = await getClientFinancialSummary(linkedUserId);
+      const taxableProfit = Math.max(0, summary.netProfit);
+      return {
+        period: comp.period,
+        monthlyProfit: comp.cit.monthlyProfit,
+        annualizedProfit: comp.cit.annualizedProfit,
+        taxableProfit,
+        citRate: comp.cit.citRate,
+        estimatedAnnualCit: comp.cit.estimatedAnnualCit,
+        citThreshold: comp.cit.citThreshold,
+        percentOfThreshold: comp.cit.percentOfThreshold,
+      };
+    }
+
+    const { enterpriseFinancialsService } = await import("./enterpriseFinancialsService");
+    const summary = await enterpriseFinancialsService.getSummary(companyId);
+    if (!summary) return null;
+    const taxableProfit = Math.max(0, summary.netProfit);
+    const citRate = 30;
+    return {
+      period: { year: y, month: m, label: `${new Date(y, m - 1).toLocaleString("default", { month: "long" })} ${y}` },
+      monthlyProfit: summary.netProfit,
+      annualizedProfit: summary.netProfit * 12,
+      taxableProfit,
+      citRate,
+      estimatedAnnualCit: taxableProfit * (citRate / 100),
+    };
+  },
+
+  async getStampDutiesComputation(companyId: string) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    return {
+      amount: 0,
+      note: "Stamp duties are computed per transaction or document. No aggregate computation available. Submit individual documents for stamping.",
     };
   },
 };

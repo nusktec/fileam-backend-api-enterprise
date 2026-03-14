@@ -12,9 +12,6 @@ model Company {
   linkedUser                   User?     @relation("CompanyLinkedUser", fields: [linkedUserId], references: [id], onDelete: Cascade)
   managedByCompany             Company?  @relation("ManagedCompanies", fields: [managedByCompanyId], references: [id], onDelete: Cascade)
   managedCompanies             Company[] @relation("ManagedCompanies")
-  invitations                  Invitation[]
-  consultantConnections         ConsultantConnection[]
-  consultantConnectionAsClient  ConsultantConnection[] @relation("ClientCompanyConnection")
   enterpriseBusinessProfile     EnterpriseBusinessProfile?
   enterpriseVatComputations     EnterpriseVatComputation[]
   enterpriseVatMonthly          EnterpriseVatMonthly[]
@@ -23,6 +20,7 @@ model Company {
   enterpriseFinancialDocuments  EnterpriseFinancialDocument[]
   enterpriseInvoices           EnterpriseInvoice[]
   enterpriseEvidenceDocuments  EnterpriseEvidenceDocument[]
+  clientTaxConfiguration      ClientTaxConfiguration?
 
   @@map("companies")
 }

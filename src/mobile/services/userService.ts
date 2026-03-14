@@ -16,6 +16,9 @@ type UserWithNotificationPrefs = {
   payersNotificationsEnabled?: boolean;
   complianceUpdatesEnabled?: boolean;
   twoFactorEnabled?: boolean;
+  taxDeadlineEnabled?: boolean;
+  filingConfirmationsEnabled?: boolean;
+  weeklySummaryEnabled?: boolean;
 };
 type ConsultantConnWithExtras = {
   managingTaxForms?: string | null;
@@ -250,6 +253,9 @@ export const userService = {
         payersNotificationsEnabled: true,
         complianceUpdatesEnabled: true,
         twoFactorEnabled: true,
+        taxDeadlineEnabled: true,
+        filingConfirmationsEnabled: true,
+        weeklySummaryEnabled: true,
       } as unknown as Parameters<typeof prisma.user.findUnique>[0]["select"],
     })) as UserWithNotificationPrefs | null;
     return user
@@ -258,6 +264,9 @@ export const userService = {
           payersNotifications: user.payersNotificationsEnabled ?? true,
           complianceUpdates: user.complianceUpdatesEnabled ?? false,
           twoFactorEnabled: user.twoFactorEnabled ?? false,
+          taxDeadline: user.taxDeadlineEnabled ?? true,
+          filingConfirmations: user.filingConfirmationsEnabled ?? true,
+          weeklySummary: user.weeklySummaryEnabled ?? true,
         }
       : null;
   },
@@ -269,6 +278,9 @@ export const userService = {
       payersNotifications?: boolean;
       complianceUpdates?: boolean;
       twoFactorEnabled?: boolean;
+      taxDeadline?: boolean;
+      filingConfirmations?: boolean;
+      weeklySummary?: boolean;
     },
   ) {
     const updatePayload: Record<string, boolean> = {};
@@ -280,6 +292,12 @@ export const userService = {
       updatePayload.complianceUpdatesEnabled = data.complianceUpdates;
     if (data.twoFactorEnabled !== undefined)
       updatePayload.twoFactorEnabled = data.twoFactorEnabled;
+    if (data.taxDeadline !== undefined)
+      updatePayload.taxDeadlineEnabled = data.taxDeadline;
+    if (data.filingConfirmations !== undefined)
+      updatePayload.filingConfirmationsEnabled = data.filingConfirmations;
+    if (data.weeklySummary !== undefined)
+      updatePayload.weeklySummaryEnabled = data.weeklySummary;
     await prisma.user.update({
       where: { id: userId },
       data: updatePayload as never,
@@ -291,7 +309,7 @@ export const userService = {
     const conn = await prisma.consultantConnection.findFirst({
       where: { userId, status: "active" },
       include: {
-        company: true,
+        consultant: true,
         invitation: true,
       },
     });
@@ -300,13 +318,17 @@ export const userService = {
     const taxForms = c.managingTaxForms
       ? c.managingTaxForms.split(",").map((s: string) => s.trim())
       : ["VAT", "WHT", "PITT", "CIT"];
+    const consultantName =
+      c.consultantDisplayName ??
+      conn.invitation?.invitedBusinessName ??
+      (conn.consultant
+        ? `${conn.consultant.firstName} ${conn.consultant.lastName}`.trim() ||
+          conn.consultant.organizationName
+        : null) ??
+      "Consultant";
     return {
       id: conn.id,
-      name:
-        c.consultantDisplayName ??
-        conn.invitation?.invitedBusinessName ??
-        conn.company?.name ??
-        "Consultant",
+      name: consultantName,
       managingTaxForms: taxForms,
       status: conn.status,
     };

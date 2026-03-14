@@ -1,3 +1,4 @@
+import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import type { EvidenceVaultUploadInput, EvidenceVaultSignInput } from "../../interfaces/enterprise/evidenceVault";
 
@@ -16,6 +17,20 @@ const STORAGE_LIMIT_GB = 5;
 export const enterpriseEvidenceVaultService = {
   getCategories: () => EVIDENCE_CATEGORIES,
   getStatuses: () => DOCUMENT_STATUSES,
+
+  async getStats(companyId: string, linkedUserId?: string) {
+    const categories = await this.getCategoriesWithCounts(companyId, linkedUserId);
+    if (!categories) return null;
+    const total = categories.reduce((s, c) => s + c.count, 0);
+    const storage = linkedUserId
+      ? { usedGb: 0, limitGb: STORAGE_LIMIT_GB, usedKb: 0 }
+      : await this.getStorageUsage(companyId);
+    return {
+      total,
+      byCategory: categories,
+      storage: storage ?? { usedGb: 0, limitGb: STORAGE_LIMIT_GB, usedKb: 0 },
+    };
+  },
 
   async getCategoriesWithCounts(companyId: string, linkedUserId?: string) {
     if (linkedUserId) {
@@ -412,5 +427,49 @@ export const enterpriseEvidenceVaultService = {
     return prisma.enterpriseDocumentSignature.findUnique({
       where: { documentId },
     });
+  },
+
+  async convertToInvoice(
+    companyId: string,
+    documentId: string,
+    data: {
+      clientName: string;
+      clientAddress: string;
+      clientEmail: string;
+      totalAmount: number;
+    },
+  ) {
+    const doc = await prisma.enterpriseEvidenceDocument.findFirst({
+      where: { id: documentId, companyId },
+    });
+    if (!doc) return null;
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    const nextNum =
+      (company as { nextInvoiceNumber?: number }).nextInvoiceNumber ?? 1;
+    const invoiceNumber = String(nextNum);
+    await prisma.company.update({
+      where: { id: companyId },
+      data: { nextInvoiceNumber: nextNum + 1 } as never,
+    });
+    const now = new Date();
+    const dueDate = new Date(now);
+    dueDate.setDate(dueDate.getDate() + 30);
+    const invoice = await prisma.enterpriseInvoice.create({
+      data: {
+        companyId,
+        invoiceNumber,
+        clientName: data.clientName,
+        clientAddress: data.clientAddress,
+        clientEmail: data.clientEmail,
+        dateIssued: now,
+        dueDate,
+        totalAmount: new Decimal(data.totalAmount),
+        notes: `Converted from evidence document: ${doc.documentName}`,
+      },
+    });
+    return invoice;
   },
 };

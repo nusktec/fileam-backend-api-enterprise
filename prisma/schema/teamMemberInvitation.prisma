@@ -1,0 +1,45 @@
+enum TeamMemberRole {
+  admin
+  consultant
+}
+
+enum TeamMemberInvitationStatus {
+  pending
+  accepted
+  expired
+}
+
+model TeamMemberInvitation {
+  id               String                     @id @default(uuid())
+  consultantUserId String                     @map("consultant_user_id")
+  email            String
+  name             String
+  role             TeamMemberRole
+  status           TeamMemberInvitationStatus  @default(pending)
+  code             String                     @unique
+  expiresAt        DateTime                   @map("expires_at")
+  acceptedAt       DateTime?                  @map("accepted_at")
+  acceptedUserId   String?                    @map("accepted_user_id")
+  createdAt        DateTime                   @default(now()) @map("created_at")
+  updatedAt        DateTime                   @updatedAt @map("updated_at")
+
+  consultantUser User  @relation("TeamMemberInvitations", fields: [consultantUserId], references: [id], onDelete: Cascade)
+  acceptedUser   User? @relation("TeamMemberInvitationAccepted", fields: [acceptedUserId], references: [id], onDelete: SetNull)
+
+  @@map("team_member_invitations")
+}
+
+model ConsultantTeamMember {
+  id               String         @id @default(uuid())
+  consultantUserId String         @map("consultant_user_id")
+  memberUserId     String         @map("member_user_id")
+  role             TeamMemberRole
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  consultant User @relation("ConsultantTeamMembers", fields: [consultantUserId], references: [id], onDelete: Cascade)
+  member     User @relation("ConsultantTeamMemberOf", fields: [memberUserId], references: [id], onDelete: Cascade)
+
+  @@unique([consultantUserId, memberUserId])
+  @@map("consultant_team_members")
+}

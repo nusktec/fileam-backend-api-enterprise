@@ -101,6 +101,7 @@ export async function calculateVat(
         purchaseAmountExclVat: purchaseAmountExclVat || 0,
         vatRate,
       },
+      req.linkedUserId,
     );
     if (!result) {
       sendNotFound(res, "Company not found");
@@ -156,7 +157,7 @@ export async function downloadVatReport(
       return;
     }
     sendResult(res, "Report URL (stub)", {
-      downloadUrl: `/api/v1/enterprise/company/${companyId}/vat-computation/report.pdf?computationId=${result.computation.id}`,
+      downloadUrl: `/api/v1/enterprise/clients/${req.clientId ?? companyId}/vat-computation/report.pdf?computationId=${result.computation.id}`,
       ...result,
     });
   } catch {
@@ -234,5 +235,156 @@ export async function getThresholdInfo(
     sendResult(res, "Threshold info", info);
   } catch {
     sendServerError(res, "Failed to get threshold info");
+  }
+}
+
+export async function getVatFiling12MonthStats(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  try {
+    const data = await enterpriseTaxComputationService.getVatFiling12MonthStats(
+      companyId,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "12-month VAT filing stats", data);
+  } catch {
+    sendServerError(res, "Failed to get 12-month stats");
+  }
+}
+
+export async function getTaxBreakdown(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  try {
+    const data = await enterpriseTaxComputationService.getTaxBreakdown(
+      companyId,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Tax breakdown", data);
+  } catch {
+    sendServerError(res, "Failed to get tax breakdown");
+  }
+}
+
+export async function getVatComputation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  try {
+    const data = await enterpriseTaxComputationService.getVatComputation(
+      companyId,
+      year,
+      month,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "VAT computation", data);
+  } catch {
+    sendServerError(res, "Failed to get VAT computation");
+  }
+}
+
+export async function getPayeComputation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  try {
+    const data = await enterpriseTaxComputationService.getPayeComputation(
+      companyId,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "PAYE computation", data);
+  } catch {
+    sendServerError(res, "Failed to get PAYE computation");
+  }
+}
+
+export async function getWhtComputation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  try {
+    const data = await enterpriseTaxComputationService.getWhtComputation(
+      companyId,
+      year,
+      month,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "WHT computation", data);
+  } catch {
+    sendServerError(res, "Failed to get WHT computation");
+  }
+}
+
+export async function getCitComputation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  try {
+    const data = await enterpriseTaxComputationService.getCitComputation(
+      companyId,
+      year,
+      month,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "CIT computation", data);
+  } catch {
+    sendServerError(res, "Failed to get CIT computation");
+  }
+}
+
+export async function getStampDutiesComputation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  try {
+    const data = await enterpriseTaxComputationService.getStampDutiesComputation(
+      companyId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Stamp duties computation", data);
+  } catch {
+    sendServerError(res, "Failed to get stamp duties computation");
   }
 }

@@ -267,3 +267,70 @@ export const EmailTemplate_PASSWORD_RESET = (code: string, name: string) => {
   `;
 };
 
+export const EmailTemplate_TEAM_INVITATION = (
+  name: string,
+  inviterName: string,
+  role: string,
+  setPasswordUrl: string,
+) => {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team Invitation - Fileam</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f5f5f5; color: #1a1a1a; line-height: 1.6; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); overflow: hidden; }
+        .header { background-color: #ffffff; padding: 40px 30px; text-align: center; border-bottom: 1px solid #e9ecef; }
+        .logo { display: block; margin: 0 auto 16px; max-height: 48px; width: auto; }
+        .header-subtitle { font-size: 16px; color: #6c757d; }
+        .content { padding: 40px 30px; }
+        .greeting { font-size: 24px; font-weight: 600; color: #1a1a1a; margin-bottom: 20px; text-align: center; }
+        .message { font-size: 16px; color: #4a4a4a; margin-bottom: 30px; text-align: center; line-height: 1.7; }
+        .invite-details { background: #f8f9fa; border-radius: 12px; padding: 24px; margin: 24px 0; border-left: 4px solid ${PRIMARY_COLOR}; }
+        .invite-row { margin: 8px 0; font-size: 15px; }
+        .invite-label { color: #6c757d; font-weight: 600; }
+        .cta-section { text-align: center; margin: 30px 0; }
+        .cta-button { display: inline-block; background-color: ${PRIMARY_COLOR}; color: white !important; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; }
+        .expiry-info { background-color: #fff8e6; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0; text-align: center; }
+        .expiry-text { color: #92400e; font-size: 14px; font-weight: 500; }
+        .footer { background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e9ecef; }
+        .footer-text { color: #6c757d; font-size: 14px; margin-bottom: 15px; }
+        .social-link { display: inline-block; margin: 0 10px; color: ${PRIMARY_COLOR}; text-decoration: none; font-size: 14px; }
+        @media (max-width: 600px) { .container { margin: 10px; } .header, .content, .footer { padding: 20px; } .greeting { font-size: 20px; } .cta-button { display: block; margin: 10px auto; max-width: 200px; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="${FILEAM_LOGO}" alt="Fileam" class="logo" width="140" height="48">
+            <div class="header-subtitle">Team Invitation</div>
+        </div>
+        <div class="content">
+            <div class="greeting">Hello ${name}!</div>
+            <div class="message">${inviterName} has invited you to join their team on Fileam as a <strong>${role}</strong>. Click the button below to set your password and activate your account.</div>
+            <div class="invite-details">
+                <div class="invite-row"><span class="invite-label">Invited by:</span> ${inviterName}</div>
+                <div class="invite-row"><span class="invite-label">Your role:</span> ${role}</div>
+            </div>
+            <div class="expiry-info"><div class="expiry-text">This invitation expires in 7 days</div></div>
+            <div class="cta-section">
+                <a href="${setPasswordUrl}" class="cta-button">Set Password & Join Team</a>
+            </div>
+            <div class="message">If you didn't expect this invitation, you can safely ignore this email.</div>
+        </div>
+        <div class="footer">
+            <div class="footer-text">© Fileam. All rights reserved.</div>
+            <a href="${DOMAIN}/privacy" class="social-link">Privacy Policy</a>
+            <a href="${DOMAIN}/terms" class="social-link">Terms of Service</a>
+            <a href="${DOMAIN}/support" class="social-link">Contact Support</a>
+        </div>
+    </div>
+</body>
+</html>
+  `;
+};
+

@@ -13,6 +13,11 @@ model Business {
   streetAddress                     String?  @map("street_address")
   stateOfResidence                  String?  @map("state_of_residence")
   primaryTaxOffice                  String?  @map("primary_tax_office")
+  city                              String?  @map("city")
+  website                           String?  @map("website")
+  contactEmail                      String?  @map("contact_email")
+  turnoverBand                      String?  @map("turnover_band")
+  vatStatus                         String?  @map("vat_status")
   createdAt                         DateTime @default(now()) @map("created_at")
   updatedAt                         DateTime @updatedAt @map("updated_at")
 

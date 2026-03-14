@@ -42,9 +42,19 @@ const validateCreateInvitation = [
   handleValidation,
 ];
 
-// ---- Params (for routes under /company/:companyId and with :documentId / :invoiceId) ----
+// ---- Params (for routes under /clients/:clientId and with :documentId / :invoiceId) ----
 const validateCompanyIdParam = [
   param("companyId").isUUID().withMessage("Company ID must be a valid UUID"),
+  handleValidation,
+];
+
+const validateClientIdParam = [
+  param("clientId").isUUID().withMessage("Client ID must be a valid UUID"),
+  handleValidation,
+];
+
+const validateFilingIdParam = [
+  param("filingId").isUUID().withMessage("Filing ID must be a valid UUID"),
   handleValidation,
 ];
 
@@ -60,6 +70,17 @@ const validateInvoiceIdParam = [
 
 const validateInvitationIdParam = [
   param("id").isUUID().withMessage("Invitation ID must be a valid UUID"),
+  handleValidation,
+];
+
+const validateSendClientRequest = [
+  check("requestedUserId")
+    .trim()
+    .notEmpty()
+    .withMessage("requestedUserId is required")
+    .bail()
+    .isUUID()
+    .withMessage("requestedUserId must be a valid UUID"),
   handleValidation,
 ];
 
@@ -92,6 +113,54 @@ const validateUpdateBusinessProfile = [
     .trim()
     .isISO8601()
     .withMessage("registrationDate must be a valid ISO date"),
+  handleValidation,
+];
+
+const validateClientBusinessProfile = [
+  check("businessName").optional().trim().notEmpty(),
+  check("rcNumber").optional().trim().isString(),
+  check("tin").optional().trim().isString(),
+  check("industry").optional().trim().isString(),
+  check("turnoverBand").optional().trim().isString(),
+  check("vatStatus").optional().trim().isString(),
+  handleValidation,
+];
+
+const validateClientContact = [
+  check("address").optional().trim().isString(),
+  check("city").optional().trim().isString(),
+  check("email").optional().trim().isEmail(),
+  check("phone").optional().trim().isString(),
+  check("website").optional().trim().isString(),
+  handleValidation,
+];
+
+const validateCreateFiling = [
+  check("taxType")
+    .trim()
+    .notEmpty()
+    .withMessage("taxType is required")
+    .isIn(["VAT", "WHT"])
+    .withMessage("taxType must be VAT or WHT"),
+  check("periodYear").isInt({ min: 2020, max: 2030 }).withMessage("periodYear must be valid"),
+  check("periodMonth").isInt({ min: 1, max: 12 }).withMessage("periodMonth must be 1-12"),
+  check("amount").isFloat({ min: 0 }).withMessage("amount must be non-negative"),
+  check("paymentStatus").optional().isIn(["paid", "not_paid"]),
+  check("dueDate").optional().isISO8601(),
+  check("receiptUrl").optional().trim().isString(),
+  check("documentUrl").optional().trim().isString(),
+  check("evidenceVaultId").optional().trim().isString(),
+  check("stateOfOperation").optional().trim().isString(),
+  check("vatRegistrationNumber").optional().trim().isString(),
+  handleValidation,
+];
+
+const validateTaxConfiguration = [
+  check("vat").optional().isBoolean(),
+  check("paye").optional().isBoolean(),
+  check("wht").optional().isBoolean(),
+  check("cit").optional().isBoolean(),
+  check("stampDuties").optional().isBoolean(),
   handleValidation,
 ];
 
@@ -147,6 +216,7 @@ const validateAddTransaction = [
   check("amount").optional().isFloat().withMessage("amount must be a number"),
   check("status").optional().trim().isString(),
   check("type").optional().trim().isString(),
+  check("category").optional().trim().isString(),
   handleValidation,
 ];
 
@@ -231,6 +301,14 @@ const validateUploadEvidenceDocument = [
   handleValidation,
 ];
 
+const validateConvertToInvoice = [
+  check("clientName").trim().notEmpty().withMessage("clientName is required"),
+  check("clientAddress").trim().notEmpty().withMessage("clientAddress is required"),
+  check("clientEmail").trim().notEmpty().isEmail().withMessage("clientEmail must be valid"),
+  check("totalAmount").isFloat({ min: 0 }).withMessage("totalAmount must be non-negative"),
+  handleValidation,
+];
+
 const validateUpdateDocumentDetails = [
   check("documentName").optional().trim().notEmpty(),
   check("category").optional().trim().isString(),
@@ -247,6 +325,43 @@ const validateApproveDocument = [
 
 const validateRejectDocument = [
   check("notes").optional().trim().isString(),
+  handleValidation,
+];
+
+const validateInviteTeamMember = [
+  check("name")
+    .trim()
+    .notEmpty()
+    .withMessage("name is required")
+    .isLength({ min: 2 })
+    .withMessage("name must be at least 2 characters"),
+  check("email")
+    .trim()
+    .notEmpty()
+    .withMessage("email is required")
+    .isEmail()
+    .withMessage("email must be valid"),
+  check("role")
+    .isIn(["admin", "consultant"])
+    .withMessage("role must be admin or consultant"),
+  handleValidation,
+];
+
+const validateUpdateConsultantBusiness = [
+  check("firmName").optional().trim().isString(),
+  check("businessStructure").optional().trim().isString(),
+  check("registrationType").optional().trim().isString(),
+  check("rcNumber").optional().trim().isString(),
+  check("yearOfIncorporation").optional().isInt({ min: 1900, max: 2100 }),
+  check("countryOfRegistration").optional().trim().isString(),
+  handleValidation,
+];
+
+const validateAcceptTeamInvitation = [
+  check("code").trim().notEmpty().withMessage("code is required"),
+  check("password")
+    .isLength({ min: 6 })
+    .withMessage("password must be at least 6 characters"),
   handleValidation,
 ];
 
@@ -267,11 +382,18 @@ const validateSignDocument = [
 export const enterpriseValidations = {
   validateCreateCompany,
   validateCreateInvitation,
+  validateSendClientRequest,
   validateCompanyIdParam,
+  validateClientIdParam,
   validateDocumentIdParam,
+  validateFilingIdParam,
   validateInvoiceIdParam,
   validateInvitationIdParam,
   validateUpdateBusinessProfile,
+  validateClientBusinessProfile,
+  validateClientContact,
+  validateCreateFiling,
+  validateTaxConfiguration,
   validateUpgradeSubscription,
   validateCalculateVat,
   validateSubmitVatReturn,
@@ -280,8 +402,12 @@ export const enterpriseValidations = {
   validateCreateInvoice,
   validateUpdateInvoice,
   validateUploadEvidenceDocument,
+  validateConvertToInvoice,
   validateUpdateDocumentDetails,
   validateApproveDocument,
   validateRejectDocument,
   validateSignDocument,
+  validateInviteTeamMember,
+  validateAcceptTeamInvitation,
+  validateUpdateConsultantBusiness,
 };

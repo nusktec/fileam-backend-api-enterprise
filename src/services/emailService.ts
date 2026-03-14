@@ -8,7 +8,10 @@ import {
   validateEmailConfig,
 } from "../config/smtp";
 import { EmailCategoryInterface } from "../interfaces/system";
-import { EmailTemplate_PASSWORD_RESET } from "./template/emailTemplates";
+import {
+  EmailTemplate_PASSWORD_RESET,
+  EmailTemplate_TEAM_INVITATION,
+} from "./template/emailTemplates";
 
 const getEmailTemplate = (templateName: string): string => {
   try {
@@ -212,6 +215,44 @@ const SendInviteMail = async (
   }
 };
 
+const sendConsultantRequestEmail = async (
+  to: string,
+  recipientName: string,
+  consultantName: string,
+  invitationId: string,
+  code: string,
+  expiresAt: Date,
+): Promise<{ success: boolean; data?: any; error?: any }> => {
+  try {
+    const template = getEmailTemplate(EMAIL_TEMPLATE_TYPES.CONSULTANT_REQUEST);
+    if (!template) {
+      throw new Error("Consultant request template not found");
+    }
+    const baseUrl = process.env.BASE_URL || "https://fileam.app";
+    const acceptUrl = `${baseUrl}/api/v${process.env.API_VERSION || "1"}/invitations/${invitationId}/accept/${code}`;
+    const declineUrl = `${baseUrl}/api/v${process.env.API_VERSION || "1"}/invitations/${invitationId}/decline/${code}`;
+    const expiryFormatted = expiresAt.toLocaleDateString(undefined, {
+      dateStyle: "medium",
+    });
+    const htmlContent = renderTemplate(template, {
+      name: recipientName || to,
+      consultantName,
+      acceptUrl,
+      declineUrl,
+      expiryDate: expiryFormatted,
+    });
+    return await sendEmail(
+      to,
+      "Consultant Request - Fileam",
+      htmlContent,
+      EMAIL_CATEGORIES.INVITATION,
+    );
+  } catch (error) {
+    console.error("Failed to send consultant request email:", error);
+    return { success: false, error };
+  }
+};
+
 const sendInvitationToJoinEmail = async (
   to: string,
   recipientName: string,
@@ -239,6 +280,32 @@ const sendInvitationToJoinEmail = async (
     );
   } catch (error) {
     console.error("Failed to send invitation email:", error);
+    return { success: false, error };
+  }
+};
+
+const sendTeamInvitationEmail = async (
+  to: string,
+  name: string,
+  inviterName: string,
+  role: string,
+  setPasswordUrl: string,
+): Promise<{ success: boolean; data?: any; error?: any }> => {
+  try {
+    const htmlContent = EmailTemplate_TEAM_INVITATION(
+      name,
+      inviterName,
+      role,
+      setPasswordUrl,
+    );
+    return await sendEmail(
+      to,
+      "You're invited to join the team on Fileam",
+      htmlContent,
+      EMAIL_CATEGORIES.INVITATION,
+    );
+  } catch (error) {
+    console.error("Failed to send team invitation email:", error);
     return { success: false, error };
   }
 };
@@ -274,7 +341,9 @@ const EmailCategoryEnum: EmailCategoryInterface = Object.freeze({
 export {
   SendMail,
   SendInviteMail,
+  sendConsultantRequestEmail,
   sendInvitationToJoinEmail,
+  sendTeamInvitationEmail,
   EmailCategoryEnum,
   sendEmail,
   sendVerificationEmail,

@@ -83,6 +83,50 @@ export async function getSummary(req: IRequest, res: Response): Promise<void> {
   }
 }
 
+export async function getProfitTrend(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  try {
+    const data = await enterpriseFinancialsService.getProfitTrend(
+      companyId,
+      year,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Profit trend", data);
+  } catch {
+    sendServerError(res, "Failed to get profit trend");
+  }
+}
+
+export async function getExpenseBreakdown(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  try {
+    const data = await enterpriseFinancialsService.getExpenseBreakdown(
+      companyId,
+      year,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Expense breakdown", data);
+  } catch {
+    sendServerError(res, "Failed to get expense breakdown");
+  }
+}
+
 export async function getMonthlyCashFlow(
   req: IRequest,
   res: Response,
@@ -116,16 +160,23 @@ export async function addTransaction(
     amount?: number;
     status?: string;
     type?: string;
+    category?: string;
   };
   const date = data.date ? new Date(data.date) : new Date();
   try {
-    const t = await enterpriseFinancialsService.addTransaction(companyId, {
-      date,
-      description: data.description,
-      amount: Number(data.amount ?? 0),
-      status: (data.status ?? "Pending").trim(),
-      type: (data.type ?? "expense").trim(),
-    });
+    const t = await enterpriseFinancialsService.addTransaction(
+      companyId,
+      {
+        date,
+        description: data.description,
+        amount: Number(data.amount ?? 0),
+        status: (data.status ?? "Pending").trim(),
+        type: (data.type ?? "expense").trim(),
+        category: data.category,
+      },
+      req.linkedUserId,
+      req.user?.id,
+    );
     if (!t) {
       sendNotFound(res, "Company not found");
       return;
@@ -211,6 +262,78 @@ export async function getDocumentStatus(
     sendResult(res, "Document status", status);
   } catch {
     sendServerError(res, "Failed to get document status");
+  }
+}
+
+export async function getFinancialDocumentStats(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  try {
+    const stats =
+      await enterpriseFinancialsService.getFinancialDocumentStats(companyId);
+    if (!stats) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Document stats", stats);
+  } catch {
+    sendServerError(res, "Failed to get document stats");
+  }
+}
+
+export async function listFinancialDocuments(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const pagination = req.pagination;
+  const documentStatus = req.query.documentStatus as string | undefined;
+  try {
+    const result =
+      await enterpriseFinancialsService.listFinancialDocuments(companyId, {
+        page: pagination?.page,
+        limit: pagination?.limit,
+        sortOrder: pagination?.sortOrder,
+        documentStatus,
+      });
+    if (!result) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendPaginated(
+      res,
+      "Financial documents",
+      result.data,
+      result.total,
+      result.page,
+      result.limit,
+    );
+  } catch {
+    sendServerError(res, "Failed to list financial documents");
+  }
+}
+
+export async function getFinancialDocument(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const documentId = getParam(req.params, "documentId");
+  try {
+    const doc =
+      await enterpriseFinancialsService.getFinancialDocument(
+        companyId,
+        documentId,
+      );
+    if (!doc) {
+      sendNotFound(res, "Document not found");
+      return;
+    }
+    sendResult(res, "Financial document", doc);
+  } catch {
+    sendServerError(res, "Failed to get document");
   }
 }
 
@@ -351,7 +474,7 @@ export async function getInvoicePdf(
       return;
     }
     sendResult(res, "Invoice PDF URL (stub)", {
-      pdfUrl: `/api/v1/enterprise/company/${companyId}/financials/invoices/${invoiceId}/pdf`,
+      pdfUrl: `/api/v1/enterprise/clients/${req.clientId ?? companyId}/financials/invoices/${invoiceId}/pdf`,
       invoiceNumber: invoice.invoiceNumber,
     });
   } catch {

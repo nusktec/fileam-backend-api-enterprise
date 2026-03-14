@@ -1,6 +1,7 @@
 model Expense {
   id            String   @id @default(uuid())
   userId        String   @map("user_id")
+  createdById   String?  @map("created_by_id")
   expenseNumber String   @unique @map("expense_number")
   description   String
   category      String
@@ -13,7 +14,8 @@ model Expense {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdBy  User?  @relation("ExpenseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@map("expenses")
 }

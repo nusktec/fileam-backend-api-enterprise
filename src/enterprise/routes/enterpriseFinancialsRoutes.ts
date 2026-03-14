@@ -3,6 +3,8 @@ import {
   getRecentTransactions,
   getAllTransactions,
   getSummary,
+  getProfitTrend,
+  getExpenseBreakdown,
   getMonthlyCashFlow,
   addTransaction,
   getDocumentTypes,
@@ -10,6 +12,9 @@ import {
   uploadDocument,
   getDocumentStatus,
   getProcessingQueue,
+  getFinancialDocumentStats,
+  listFinancialDocuments,
+  getFinancialDocument,
   getInvoice,
   updateInvoice,
   markInvoicePaid,
@@ -27,21 +32,34 @@ router.get("/currencies", getCurrencies);
 router.get("/transactions/recent", getRecentTransactions);
 router.get("/transactions", withPagination("date"), getAllTransactions);
 router.get("/summary", getSummary);
+router.get("/profit-analysis/trend", getProfitTrend);
+router.get("/profit-analysis/expense-breakdown", getExpenseBreakdown);
 router.get("/cash-flow/monthly", getMonthlyCashFlow);
 router.post(
   "/transactions",
   enterpriseValidations.validateAddTransaction,
   addTransaction,
 );
-router.post(
-  "/documents/upload",
-  enterpriseValidations.validateUploadFinancialDocument,
-  uploadDocument,
+router.get("/documents/stats", getFinancialDocumentStats);
+router.get(
+  "/documents",
+  withPagination("documentDate"),
+  listFinancialDocuments,
+);
+router.get(
+  "/documents/:documentId",
+  enterpriseValidations.validateDocumentIdParam,
+  getFinancialDocument,
 );
 router.get(
   "/documents/:documentId/status",
   enterpriseValidations.validateDocumentIdParam,
   getDocumentStatus,
+);
+router.post(
+  "/documents/upload",
+  enterpriseValidations.validateUploadFinancialDocument,
+  uploadDocument,
 );
 router.get("/processing-queue", getProcessingQueue);
 router.get("/invoices", withPagination("dateIssued"), listInvoices);

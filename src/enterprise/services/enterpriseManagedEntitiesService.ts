@@ -13,91 +13,68 @@ export interface ManagedEntityCard {
 }
 
 export async function listManagedEntities(
-  userId: string,
+  consultantUserId: string,
   query?: string,
 ): Promise<ManagedEntityCard[]> {
-  const consultantCompany = await prisma.company.findFirst({
-    where: { ownerId: userId },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-
-  const entities: ManagedEntityCard[] = [];
-
-  if (consultantCompany) {
-    const ownedCompanies = await prisma.company.findMany({
-      where: {
-        ownerId: userId,
-        linkedUserId: null,
-        managedByCompanyId: null,
-      },
-      select: { id: true, name: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    });
-    for (const c of ownedCompanies) {
-      entities.push({
-        id: c.id,
-        name: c.name,
-        type: "company",
-        source: "created",
-        rcNumber: null,
-        tin: null,
-        email: null,
-        status: "Active",
-        createdAt: c.createdAt,
-      });
-    }
-
-    const clientCompanies = await prisma.company.findMany({
-      where: {
-        managedByCompanyId: consultantCompany.id,
-        linkedUserId: { not: null },
-      },
-      include: {
-        linkedUser: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-            organizationName: true,
-          },
+  const connections = await prisma.consultantConnection.findMany({
+    where: { consultantUserId, status: "active" },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          organizationName: true,
         },
       },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const clientUserIds = connections.map((c) => c.userId);
+  const [clientCompanies, businesses] = await Promise.all([
+    prisma.company.findMany({
+      where: {
+        ownerId: consultantUserId,
+        linkedUserId: { in: clientUserIds },
+      },
+      select: { id: true, name: true, linkedUserId: true, createdAt: true },
       orderBy: { createdAt: "desc" },
-    });
+    }),
+    prisma.business.findMany({
+      where: { userId: { in: clientUserIds } },
+    }),
+  ]);
 
-    const userIds = clientCompanies
-      .map((c) => c.linkedUserId)
-      .filter((id): id is string => id != null);
-    const businesses = await prisma.business.findMany({
-      where: { userId: { in: userIds } },
-    });
-    const businessByUser = new Map(businesses.map((b) => [b.userId, b]));
+  const businessByUser = new Map(businesses.map((b) => [b.userId, b]));
+  const companyByUser = new Map(
+    clientCompanies.map((c) => [c.linkedUserId!, c] as [string, typeof clientCompanies[0]]),
+  );
 
-    for (const c of clientCompanies) {
-      const user = c.linkedUser;
-      const business = user ? businessByUser.get(user.id) : null;
-      const displayName =
-        c.name ||
-        user?.organizationName ||
-        business?.name ||
-        (user ? `${user.firstName} ${user.lastName}`.trim() : "") ||
-        user?.email ||
-        "Unknown";
-      entities.push({
-        id: c.id,
-        name: displayName,
-        type: "client",
-        source: "invited",
-        rcNumber: business?.rcNumber ?? null,
-        tin: business?.tin ?? null,
-        email: user?.email ?? null,
-        status: "Active",
-        createdAt: c.createdAt,
-      });
-    }
-  }
+  const entities: ManagedEntityCard[] = connections.map((conn) => {
+    const user = conn.user;
+    const business = businessByUser.get(conn.userId);
+    const company = companyByUser.get(conn.userId);
+    const displayName =
+      company?.name ||
+      user.organizationName ||
+      business?.name ||
+      `${user.firstName} ${user.lastName}`.trim() ||
+      user.email ||
+      "Unknown";
+    return {
+      id: conn.userId,
+      name: displayName,
+      type: "client" as const,
+      source: "invited" as const,
+      rcNumber: business?.rcNumber ?? null,
+      tin: business?.tin ?? null,
+      email: user.email ?? null,
+      status: "Active",
+      createdAt: company?.createdAt ?? conn.createdAt,
+    };
+  });
 
   entities.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
@@ -119,18 +96,41 @@ export async function canAccessCompany(
 ): Promise<{ allowed: boolean; linkedUserId?: string }> {
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    select: {
-      ownerId: true,
-      managedByCompanyId: true,
-      linkedUserId: true,
-      managedByCompany: { select: { ownerId: true } },
-    },
+    select: { ownerId: true, linkedUserId: true },
   });
   if (!company) return { allowed: false };
 
-  if (company.ownerId === userId) return { allowed: true, linkedUserId: company.linkedUserId ?? undefined };
-  if (company.managedByCompany?.ownerId === userId)
+  if (company.ownerId === userId)
     return { allowed: true, linkedUserId: company.linkedUserId ?? undefined };
 
   return { allowed: false };
+}
+
+export async function canAccessClient(
+  consultantUserId: string,
+  clientId: string,
+): Promise<{ allowed: boolean; companyId?: string; linkedUserId?: string }> {
+  const connection = await prisma.consultantConnection.findFirst({
+    where: {
+      consultantUserId,
+      userId: clientId,
+      status: "active",
+    },
+    select: { id: true },
+  });
+  if (!connection) return { allowed: false };
+
+  const company = await prisma.company.findFirst({
+    where: {
+      ownerId: consultantUserId,
+      linkedUserId: clientId,
+    },
+    select: { id: true },
+  });
+
+  return {
+    allowed: true,
+    companyId: company?.id,
+    linkedUserId: clientId,
+  };
 }

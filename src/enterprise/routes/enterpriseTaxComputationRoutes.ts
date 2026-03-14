@@ -11,7 +11,15 @@ import {
   getMonthlyVatPayable,
   getThresholdStatus,
   getThresholdInfo,
+  getVatFiling12MonthStats,
+  getTaxBreakdown,
+  getVatComputation,
+  getPayeComputation,
+  getWhtComputation,
+  getCitComputation,
+  getStampDutiesComputation,
 } from "../controllers/enterpriseTaxComputationController";
+import { getTaxSummaryHandler } from "../controllers/enterpriseTaxSummaryController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 
 const router = express.Router({ mergeParams: true });
@@ -33,7 +41,15 @@ router.post(
   submitVatReturn,
 );
 router.get("/tax-computation/vat-payable/monthly", getMonthlyVatPayable);
+router.get("/tax-computation/vat-filing/12-month-stats", getVatFiling12MonthStats);
+router.get("/tax-computation/cit-breakdown", getTaxBreakdown);
+router.get("/tax-computation/vat", getVatComputation);
+router.get("/tax-computation/paye", getPayeComputation);
+router.get("/tax-computation/wht", getWhtComputation);
+router.get("/tax-computation/cit", getCitComputation);
+router.get("/tax-computation/stamp-duties", getStampDutiesComputation);
 router.get("/tax-computation/threshold-status", getThresholdStatus);
 router.get("/tax-computation/threshold-info", getThresholdInfo);
+router.get("/tax-summary", getTaxSummaryHandler);
 
 export default router;

@@ -51,7 +51,7 @@ export async function stepEmailVerify(
   req: IRequest,
   res: Response,
 ): Promise<void> {
-  const { email, code, invitationId, companyId } = req.body;
+  const { email, code, invitationId, consultantUserId } = req.body;
   if (!email || !code) {
     res
       .status(HttpStatusCode.BAD_REQUEST)
@@ -62,7 +62,7 @@ export async function stepEmailVerify(
     email,
     code,
     invitationId,
-    companyId,
+    consultantUserId,
   );
   if (!result.success) {
     res

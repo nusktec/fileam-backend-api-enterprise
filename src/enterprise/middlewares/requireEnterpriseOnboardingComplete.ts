@@ -22,17 +22,11 @@ export async function requireEnterpriseOnboardingComplete(
     next();
     return;
   }
-  const [hasActivatedSession, hasCompany] = await Promise.all([
-    prisma.consultantOnboardingSession.findFirst({
-      where: { userId: user.id, status: "activated" },
-      select: { id: true },
-    }),
-    prisma.company.findFirst({
-      where: { ownerId: user.id },
-      select: { id: true },
-    }),
-  ]);
-  if (hasActivatedSession || hasCompany) {
+  const hasActivatedSession = await prisma.consultantOnboardingSession.findFirst({
+    where: { userId: user.id, status: "activated" },
+    select: { id: true },
+  });
+  if (hasActivatedSession) {
     await prisma.user.update({
       where: { id: user.id },
       data: {

@@ -18,10 +18,12 @@ export async function getClientTransactions(
     prisma.sale.findMany({
       where: { userId },
       orderBy: { saleDate: order },
+      include: { createdBy: { select: { id: true, firstName: true, lastName: true } } },
     }),
     prisma.expense.findMany({
       where: { userId },
       orderBy: { expenseDate: order },
+      include: { createdBy: { select: { id: true, firstName: true, lastName: true } } },
     }),
   ]);
 
@@ -33,6 +35,10 @@ export async function getClientTransactions(
       amount: decimalToNumber(s.totalAmount),
       status: s.status,
       type: "income",
+      createdById: s.createdById ?? s.userId,
+      createdBy: s.createdBy
+        ? { id: s.createdBy.id, name: `${s.createdBy.firstName} ${s.createdBy.lastName}`.trim() }
+        : null,
     })),
     ...expenses.map((e) => ({
       id: `expense-${e.id}`,
@@ -41,6 +47,10 @@ export async function getClientTransactions(
       amount: -decimalToNumber(e.totalAmount),
       status: "Recorded",
       type: "expense",
+      createdById: e.createdById ?? e.userId,
+      createdBy: e.createdBy
+        ? { id: e.createdBy.id, name: `${e.createdBy.firstName} ${e.createdBy.lastName}`.trim() }
+        : null,
     })),
   ].sort((a, b) => {
     const diff = b.date.getTime() - a.date.getTime();
@@ -72,6 +82,28 @@ export async function getClientFinancialSummary(userId: string) {
     totalExpenses,
     netProfit: totalIncome - totalExpenses,
   };
+}
+
+export async function getClientExpenseBreakdown(userId: string, year?: number) {
+  const y = year ?? new Date().getFullYear();
+  const expenses = await prisma.expense.findMany({
+    where: {
+      userId,
+      expenseDate: {
+        gte: new Date(y, 0, 1),
+        lte: new Date(y, 11, 31),
+      },
+    },
+  });
+  const byCategory: Record<string, number> = {};
+  for (const e of expenses) {
+    const cat = e.category || "Other";
+    byCategory[cat] = (byCategory[cat] ?? 0) + Number(e.totalAmount);
+  }
+  return Object.entries(byCategory).map(([category, total]) => ({
+    category,
+    total,
+  }));
 }
 
 export async function getClientMonthlyCashFlow(userId: string, year: number) {

@@ -7,7 +7,8 @@ enum InvitationStatus {
 model Invitation {
   id                    String           @id @default(uuid())
   code                  String           @unique
-  companyId             String           @map("company_id")
+  consultantUserId      String           @map("consultant_user_id")
+  requestedUserId       String?          @unique @map("requested_user_id")
   invitedEmail          String           @map("invited_email")
   invitedBusinessName   String?          @map("invited_business_name")
   invitedContactName    String?          @map("invited_contact_name")
@@ -20,7 +21,8 @@ model Invitation {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
-  company              Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  consultantUser        User                 @relation("ConsultantInvitations", fields: [consultantUserId], references: [id], onDelete: Cascade)
+  requestedUser         User?                @relation("RequestedUser", fields: [requestedUserId], references: [id], onDelete: Cascade)
   consultantConnections ConsultantConnection[]
 
   @@map("invitations")

@@ -104,7 +104,7 @@ export const onboardingService = {
     email: string,
     code: string,
     invitationId?: string,
-    companyId?: string,
+    consultantUserId?: string,
   ) {
     const result = await EmailVerificationService.verifyOtp(email, code);
     if (!result.success)
@@ -127,7 +127,7 @@ export const onboardingService = {
     const payload: OnboardingTokenPayload = {
       email: normalizedEmail,
       ...(invitationId && { invitationId }),
-      ...(companyId && { companyId }),
+      ...(consultantUserId && { consultantUserId }),
       acceptedInvitationIds: [],
     };
     const token = generateOnboardingToken(payload);
@@ -383,7 +383,6 @@ export const onboardingService = {
     for (const invitationId of acceptedIds) {
       const inv = await prisma.invitation.findUnique({
         where: { id: invitationId },
-        include: { company: true },
       });
       if (!inv || inv.status !== "pending") continue;
 
@@ -400,17 +399,16 @@ export const onboardingService = {
       const clientCompany = await prisma.company.create({
         data: {
           name: clientCompanyName,
-          ownerId: inv.company.ownerId,
+          ownerId: inv.consultantUserId,
           linkedUserId: user.id,
-          managedByCompanyId: inv.companyId,
+          managedByCompanyId: null,
         },
       });
 
       await prisma.consultantConnection.create({
         data: {
+          consultantUserId: inv.consultantUserId,
           userId: user.id,
-          companyId: inv.companyId,
-          clientCompanyId: clientCompany.id,
           invitationId: inv.id,
           acceptedAt: now,
           consultantTermsAccepted: true,
@@ -438,7 +436,7 @@ export const onboardingService = {
 
     const connections = await prisma.consultantConnection.findMany({
       where: { userId: fullUser.id },
-      include: { company: true, invitation: true },
+      include: { consultant: true, invitation: true },
     });
 
     const accessToken = generateAccessToken(fullUser.id);
@@ -463,8 +461,11 @@ export const onboardingService = {
 
     const acceptedConsultantConnections = connections.map((c) => ({
       invitationId: c.invitationId,
-      companyId: c.companyId,
-      companyName: c.company.name,
+      consultantUserId: c.consultantUserId,
+      consultantName:
+        `${c.consultant.firstName} ${c.consultant.lastName}`.trim() ||
+        c.consultant.organizationName ||
+        "Consultant",
       acceptedAt: c.acceptedAt,
       consultantTermsAccepted: c.consultantTermsAccepted,
       status: c.status,
@@ -543,7 +544,7 @@ export const onboardingService = {
   async verifyInviteCode(code: string) {
     const invitation = await prisma.invitation.findFirst({
       where: { code, status: "pending" },
-      include: { company: true },
+      include: { consultantUser: true },
     });
     if (!invitation)
       return {
@@ -553,12 +554,19 @@ export const onboardingService = {
     if (new Date() > invitation.expiresAt)
       return { success: false as const, message: "Invitation has expired" };
 
+    const consultantName =
+      invitation.consultantUser
+        ? `${invitation.consultantUser.firstName} ${invitation.consultantUser.lastName}`.trim() ||
+          invitation.consultantUser.organizationName ||
+          "Consultant"
+        : "Consultant";
+
     return {
       success: true as const,
       data: {
         invitationId: invitation.id,
-        companyId: invitation.companyId,
-        companyName: invitation.company.name,
+        consultantUserId: invitation.consultantUserId,
+        consultantName,
         invitedEmail: invitation.invitedEmail,
         invitedBusinessName: invitation.invitedBusinessName,
       },
@@ -571,7 +579,6 @@ export const onboardingService = {
   ) {
     const invitation = await prisma.invitation.findUnique({
       where: { id: invitationId },
-      include: { company: true },
     });
     if (!invitation || invitation.status !== "pending")
       return {

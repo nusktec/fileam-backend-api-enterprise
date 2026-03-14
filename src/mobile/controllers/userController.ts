@@ -197,12 +197,18 @@ export const updateNotificationSettings = async (
       payersNotifications,
       complianceUpdates,
       twoFactorEnabled,
+      taxDeadline,
+      filingConfirmations,
+      weeklySummary,
     } = req.body ?? {};
     const data = await userService.updateNotificationSettings(userId, {
       filingReminders,
       payersNotifications,
       complianceUpdates,
       twoFactorEnabled,
+      taxDeadline,
+      filingConfirmations,
+      weeklySummary,
     });
     res
       .status(HttpStatusCode.OK)

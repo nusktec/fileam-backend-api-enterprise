@@ -24,6 +24,9 @@ model User {
   filingRemindersEnabled Boolean   @default(true) @map("filing_reminders_enabled")
   payersNotificationsEnabled Boolean @default(true) @map("payers_notifications_enabled")
   complianceUpdatesEnabled Boolean  @default(false) @map("compliance_updates_enabled")
+  taxDeadlineEnabled      Boolean   @default(true) @map("tax_deadline_enabled")
+  filingConfirmationsEnabled Boolean @default(true) @map("filing_confirmations_enabled")
+  weeklySummaryEnabled    Boolean   @default(true) @map("weekly_summary_enabled")
   twoFactorEnabled       Boolean   @default(false) @map("two_factor_enabled")
   nextSaleNumber         Int       @default(1) @map("next_sale_number")
   createdAt              DateTime  @default(now()) @map("created_at")
@@ -33,15 +36,24 @@ model User {
   employees                   Employee[]
   userRoles                   UserRole[]
   businesses                  Business[]
-  consultantConnections       ConsultantConnection[]
+  consultantConnections         ConsultantConnection[]
+  consultantConnectionsAsConsultant ConsultantConnection[] @relation("ConsultantConnections")
   consultantOnboardingSessions ConsultantOnboardingSession[]
+  consultantRequests          Invitation[]              @relation("RequestedUser")
+  consultantInvitations       Invitation[]             @relation("ConsultantInvitations")
   ownedCompanies               Company[]                @relation("CompanyOwner")
   linkedCompanies              Company[]                @relation("CompanyLinkedUser")
   sales                       Sale[]
-  expenses               Expense[]
+  salesCreated                Sale[]    @relation("SaleCreatedBy")
+  expenses                    Expense[]
+  expensesCreated             Expense[] @relation("ExpenseCreatedBy")
   taxPayables            TaxPayable[]
   paymentRecords         PaymentRecord[]
   filingDrafts           FilingDraft[]
   vendorPayments         VendorPayment[]
   reports                Report[]
+  teamMemberInvitations  TeamMemberInvitation[]  @relation("TeamMemberInvitations")
+  teamMemberInvitationAccepted TeamMemberInvitation[] @relation("TeamMemberInvitationAccepted")
+  consultantTeamMembers  ConsultantTeamMember[]   @relation("ConsultantTeamMembers")
+  consultantTeamMemberOf ConsultantTeamMember[]    @relation("ConsultantTeamMemberOf")
 }

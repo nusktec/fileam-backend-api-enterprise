@@ -1,4 +1,6 @@
 import { Request, Response } from "express";
+import { IRequest } from "../../interfaces/CustomRequest";
+import { getAuthUserId } from "../../utils/authHelpers";
 import { matchedData } from "express-validator";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
@@ -9,6 +11,7 @@ import {
   revokeRefreshToken,
 } from "../../utils/jwt";
 import { authService } from "../../mobile/services/authService";
+import { userService } from "../../mobile/services/userService";
 import { EmailVerificationService } from "../../services/emailVerificationService";
 import { prisma } from "../../config/database";
 import { generateConsultantOnboardingToken } from "../../utils/consultantOnboardingToken";
@@ -305,6 +308,37 @@ export const resetPassword = async (
           null,
         ),
       );
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Server error", null));
+  }
+};
+
+export const changePassword = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = matchedData(req, { locations: ["body"] }) as {
+      currentPassword: string;
+      newPassword: string;
+    };
+    const result = await userService.changePassword(
+      userId,
+      data.currentPassword,
+      data.newPassword,
+    );
+    if (!result.success) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, result.message, null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Password changed successfully", null));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)

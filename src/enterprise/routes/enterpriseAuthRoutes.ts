@@ -5,8 +5,11 @@ import {
   forgotPassword,
   resetPassword,
   resendForgotPassword,
+  changePassword,
 } from "../controllers/enterpriseAuthController";
 import { validations } from "../../middlewares/validations/authValidation";
+import { validations as userValidations } from "../../middlewares/validations/userValidation";
+import { authenticate } from "../../middlewares/auth/authMiddleware";
 
 const router = express.Router();
 
@@ -26,6 +29,12 @@ router.post(
   "/forgot-password/resend",
   validations.validateForgotPasswordRequest,
   resendForgotPassword,
+);
+router.patch(
+  "/change-password",
+  authenticate(),
+  userValidations.changePasswordValidation,
+  changePassword,
 );
 
 export default router;

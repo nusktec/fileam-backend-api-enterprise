@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  getStats,
   getCategories,
   getRecentDocuments,
   getStorageUsage,
@@ -17,12 +18,14 @@ import {
   uploadDocument,
   getDocumentPreview,
   signDocument,
+  convertToInvoice,
 } from "../controllers/enterpriseEvidenceVaultController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 import { withPagination } from "../../middlewares/paginationMiddleware";
 
 const router = express.Router({ mergeParams: true });
 
+router.get("/stats", getStats);
 router.get("/categories", getCategories);
 router.get("/documents/recent", getRecentDocuments);
 router.get("/storage-usage", getStorageUsage);
@@ -89,6 +92,12 @@ router.post(
   enterpriseValidations.validateDocumentIdParam,
   enterpriseValidations.validateSignDocument,
   signDocument,
+);
+router.post(
+  "/documents/:documentId/convert-to-invoice",
+  enterpriseValidations.validateDocumentIdParam,
+  enterpriseValidations.validateConvertToInvoice,
+  convertToInvoice,
 );
 
 export default router;

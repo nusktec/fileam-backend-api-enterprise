@@ -5,7 +5,7 @@ const ONBOARDING_TOKEN_EXPIRY = "7d";
 export interface OnboardingTokenPayload {
   email: string;
   invitationId?: string;
-  companyId?: string;
+  consultantUserId?: string;
   acceptedInvitationIds?: string[];
 }
 

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "file-am API",
-    "description": "file-am API: Mobile (auth, user, onboarding, sales, expenses, tax computation, tax payables, payments, filings, reports, analytics, evidence vault, employees, help), Media (single file upload to S3), Webhooks (payment confirmation), Enterprise (health, company, invitation, business profile, tax computation, financials, evidence vault, onboarding, consultant onboarding). Sign up via onboarding only (no register endpoint). Payment is handled by a third party. All file-using endpoints (evidence vault, financials, expenses receiptUrl, filings documentUrl/receiptUrl, consultant onboarding docs) accept file URLs only — upload files first via POST /api/v1/media/upload, then send the returned url. Protected routes require Authorization: Bearer {{accessToken}}.",
+    "description": "file-am API: Mobile (auth, user, onboarding, sales, expenses, tax computation, tax payables, payments, filings, reports, analytics, evidence vault, employees, help), Media (single file upload to S3), Webhooks (payment confirmation), Enterprise (health, auth, profile, notification settings, team management, compliance, company, invitation, business profile, tax computation, financials, evidence vault, onboarding, consultant onboarding). Sign up via onboarding only (no register endpoint). Payment is handled by a third party. All file-using endpoints (evidence vault, financials, expenses receiptUrl, filings documentUrl/receiptUrl, consultant onboarding docs) accept file URLs only — upload files first via POST /api/v1/media/upload, then send the returned url. Protected routes require Authorization: Bearer {{accessToken}}.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -12,9 +12,14 @@
     { "key": "onboardingToken", "value": "" },
     { "key": "consultantOnboardingToken", "value": "" },
     { "key": "webhookSecret", "value": "" },
-    { "key": "companyId", "value": "" },
+    { "key": "clientId", "value": "" },
     { "key": "invitationId", "value": "" },
-    { "key": "mediaKey", "value": "" }
+    { "key": "requestedUserId", "value": "" },
+    { "key": "documentId", "value": "" },
+    { "key": "invoiceId", "value": "" },
+    { "key": "filingId", "value": "" },
+    { "key": "mediaKey", "value": "" },
+    { "key": "invitationCode", "value": "" }
   ],
   "event": [
     {
@@ -26,6 +31,11 @@
           "const token = pm.collectionVariables.get('accessToken');",
           "if (token) {",
           "    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "}",
+          "// Ensure Content-Type for POST/PUT/PATCH with body",
+          "const method = pm.request.method;",
+          "if (['POST', 'PUT', 'PATCH'].includes(method) && pm.request.body && pm.request.body.mode === 'raw') {",
+          "    pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
           "}"
         ]
       }
@@ -265,7 +275,7 @@
                   { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings",
-                "description": "Returns filingReminders, payersNotifications, complianceUpdates, twoFactorEnabled (booleans). Auth + onboarding required."
+                "description": "Returns taxDeadline, filingConfirmations, weeklySummary, filingReminders, payersNotifications, complianceUpdates, twoFactorEnabled (booleans). Auth + onboarding required."
               }
             },
             {
@@ -278,10 +288,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"filingReminders\": true,\n  \"payersNotifications\": true,\n  \"complianceUpdates\": false,\n  \"twoFactorEnabled\": false\n}"
+                  "raw": "{\n  \"taxDeadline\": true,\n  \"filingConfirmations\": true,\n  \"weeklySummary\": true,\n  \"filingReminders\": true,\n  \"payersNotifications\": true,\n  \"complianceUpdates\": false,\n  \"twoFactorEnabled\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings",
-                "description": "Updates notification toggles. Body: filingReminders, payersNotifications, complianceUpdates, twoFactorEnabled (all optional booleans)."
+                "description": "Updates notification toggles. Body (all optional booleans): taxDeadline, filingConfirmations, weeklySummary, filingReminders, payersNotifications, complianceUpdates, twoFactorEnabled."
               }
             },
             {
@@ -1364,7 +1374,7 @@
     },
     {
       "name": "Enterprise",
-      "description": "Enterprise endpoints: health check (no auth), auth (login, refresh), company & invitation (auth required), list all businesses (auth + onboarding complete), business profile lookups (no auth), company-scoped routes (clients, business profile, tax computation, financials, evidence vault — all require Authorization: Bearer {{accessToken}}; set companyId variable), onboarding (no auth), consultant onboarding (token in header).",
+      "description": "Enterprise endpoints: health check (no auth), auth (login, refresh, change password), profile (consultant profile & business), notification settings (tax deadline, filing confirmations, weekly summary), team management (invite, list invitations, accept, list members), compliance (stats, upcoming deadlines), company & invitation (auth required), list all businesses (auth + onboarding complete), business profile lookups (no auth), company-scoped routes (clients, business profile, tax computation, financials, evidence vault — all require Authorization: Bearer {{accessToken}}; set clientId variable), onboarding (no auth), consultant onboarding (token in header).",
       "item": [
         {
           "name": "Health",
@@ -1496,6 +1506,233 @@
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/reset-password",
                 "description": "Resets password using the code from forgot-password email. Body: email, code, newPassword (required)."
+              }
+            },
+            {
+              "name": "Change password",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword456!\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/change-password",
+                "description": "Changes password for authenticated user. Requires Authorization. Body: currentPassword (required), newPassword (required, min 6 chars)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Profile",
+          "description": "Consultant profile and business. All require Authorization: Bearer {{accessToken}}. Update profile and consultant-business require enterprise onboarding complete.",
+          "item": [
+            {
+              "name": "Get profile",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
+                "description": "Returns current consultant profile (id, email, firstName, lastName, role, address, organizationName, etc.)."
+              }
+            },
+            {
+              "name": "Update profile",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"address\": \"123 Main St, Lagos\",\n  \"state\": \"Lagos\",\n  \"lga\": \"Ikeja\",\n  \"organizationName\": \"Fileam Consulting Ltd\",\n  \"organizationAddress\": \"123 Main St, Lagos\",\n  \"logo\": \"https://example.com/logo.png\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
+                "description": "Updates consultant profile. Body (all optional): firstName, lastName, address, state, lga, purpose, roleDescription, teamSize, adminCount, organizationName, organizationAddress, logo."
+              }
+            },
+            {
+              "name": "Get consultant business",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-business",
+                "description": "Returns consultant firm identity: firmName, businessStructure, registrationType, rcNumber, yearOfIncorporation, countryOfRegistration."
+              }
+            },
+            {
+              "name": "Update consultant business",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firmName\": \"Fileam Consulting Ltd\",\n  \"businessStructure\": \"limited_liability\",\n  \"registrationType\": \"registered\",\n  \"rcNumber\": \"RC1234567\",\n  \"yearOfIncorporation\": 2020,\n  \"countryOfRegistration\": \"Nigeria\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-business",
+                "description": "Updates consultant firm identity. Body (all optional): firmName, businessStructure, registrationType, rcNumber, yearOfIncorporation, countryOfRegistration."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Notification settings",
+          "description": "Tax deadline, filing confirmations, weekly summary, and other notification preferences. All require Authorization: Bearer {{accessToken}}.",
+          "item": [
+            {
+              "name": "Get notification settings",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/notification-settings",
+                "description": "Returns notification settings: filingReminders, payersNotifications, complianceUpdates, twoFactorEnabled, taxDeadline, filingConfirmations, weeklySummary."
+              }
+            },
+            {
+              "name": "Update notification settings",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"taxDeadline\": true,\n  \"filingConfirmations\": true,\n  \"weeklySummary\": true,\n  \"filingReminders\": true,\n  \"payersNotifications\": true,\n  \"complianceUpdates\": false,\n  \"twoFactorEnabled\": false\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/notification-settings",
+                "description": "Updates notification settings. Body (all optional booleans): taxDeadline, filingConfirmations, weeklySummary, filingReminders, payersNotifications, complianceUpdates, twoFactorEnabled."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Team management",
+          "description": "Invite team members (admin or consultant), list invitations with pending count, accept invitation (public), list team members. Invite/List require Authorization and enterprise onboarding complete.",
+          "item": [
+            {
+              "name": "Invite team member",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"John Smith\",\n  \"email\": \"john@example.com\",\n  \"role\": \"admin\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/invitations",
+                "description": "Invites a team member. Sends HTML email with link to set password. Body: name (required), email (required), role (required: admin | consultant). Consultant role = records and filing only."
+              }
+            },
+            {
+              "name": "List team invitations",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/invitations",
+                "description": "Returns invitations array and pendingCount. Admin can see number of pending invites."
+              }
+            },
+            {
+              "name": "Get invitation by code (public)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/invitations/accept?code={{invitationCode}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "team", "invitations", "accept"],
+                  "query": [
+                    {
+                      "key": "code",
+                      "value": "{{invitationCode}}",
+                      "description": "Invitation code from email link"
+                    }
+                  ]
+                },
+                "description": "Public. Returns invitation details (email, name, role, inviterName) for the accept page. Use code from email link query param."
+              }
+            },
+            {
+              "name": "Accept team invitation (public)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"{{invitationCode}}\",\n  \"password\": \"SecurePass123!\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/invitations/accept",
+                "description": "Public. Accepts invitation and sets password. Creates account if new. Body: code (required), password (required, min 6 chars). Returns accessToken, refreshToken, user."
+              }
+            },
+            {
+              "name": "List team members",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/members",
+                "description": "Returns list of team members: id, userId, email, name, role, joinedAt."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Compliance",
+          "description": "Compliance dashboard: stats (pending filings, payment dues, completed filings) and upcoming deadlines table. Requires Authorization and enterprise onboarding complete.",
+          "item": [
+            {
+              "name": "Get compliance stats",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/compliance/stats",
+                "description": "Returns pendingFilings, paymentDues, completedFilings counts across all clients."
+              }
+            },
+            {
+              "name": "Get upcoming deadlines",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/compliance/upcoming-deadlines?limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "compliance", "upcoming-deadlines"],
+                  "query": [
+                    {
+                      "key": "limit",
+                      "value": "20",
+                      "description": "Optional. Max rows (default 20, max 100)"
+                    }
+                  ]
+                },
+                "description": "Returns table: client, taxType, deadline, status (pending|submitted|paid|overdue), action (view)."
               }
             }
           ]
@@ -1643,8 +1880,8 @@
                     "exec": [
                       "var json = pm.response.json();",
                       "if (json.status && json.data && json.data.length > 0) {",
-                      "    pm.collectionVariables.set('companyId', json.data[0].id);",
-                      "    console.log('Set companyId to first entity: ' + json.data[0].name);",
+                      "    pm.collectionVariables.set('clientId', json.data[0].id);",
+                      "    console.log('Set clientId to first entity: ' + json.data[0].name);",
                       "}"
                     ],
                     "type": "text/javascript"
@@ -1668,7 +1905,7 @@
                     }
                   ]
                 },
-                "description": "Unified list of companies and clients. Returns companies you own + client companies (invited businesses). Use companyId from response for /company/:companyId routes. Run after Login to auto-set companyId."
+                "description": "Unified list of companies and clients. Returns companies you own + client companies (invited businesses). Use clientId from response for /clients/:clientId routes. Run after Login to auto-set clientId."
               },
               "response": [
                 {
@@ -1690,13 +1927,31 @@
           "item": [
             {
               "name": "List clients",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.status && json.data && json.data.length > 0) {",
+                      "    var first = json.data.find(function(c) { return c.type === 'accepted' || c.status === 'Active'; }) || json.data[0];",
+                      "    if (first && first.id) {",
+                      "        pm.collectionVariables.set('clientId', first.id);",
+                      "        console.log('Set clientId to: ' + first.businessName + ' (' + first.id + ')');",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
                 "method": "GET",
                 "header": [
                   { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients?q=&companyId=&type=",
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients?q=&type=",
                   "host": ["{{baseUrl}}"],
                   "path": ["api", "v{{apiVersion}}", "enterprise", "clients"],
                   "query": [
@@ -1706,7 +1961,7 @@
                       "description": "Optional. Min 2 chars. Filter by business name, email, RC number, or TIN."
                     },
                     {
-                      "key": "companyId",
+                      "key": "clientId",
                       "value": "",
                       "description": "Optional. Scope to one company. Omit to list clients from all your companies."
                     },
@@ -1745,11 +2000,58 @@
           ]
         },
         {
-          "name": "Client invitations",
-          "description": "Invite business owners to connect as clients. Create invitation, list/manage pending and accepted invitations. All require Authorization: Bearer {{accessToken}} and enterprise onboarding complete. Set {{invitationId}} from List client invitations.",
+          "name": "Client requests",
+          "description": "List available mobile users and send client request. User accepts/declines via email link.",
           "item": [
             {
-              "name": "Create invitation",
+              "name": "List available clients",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.status && json.data && json.data.length > 0) {",
+                      "    pm.collectionVariables.set('requestedUserId', json.data[0].id);",
+                      "    console.log('Set requestedUserId to: ' + json.data[0].id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/available?q=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "available"],
+                  "query": [{ "key": "q", "value": "", "description": "Optional search filter." }]
+                },
+                "description": "Lists mobile users without a consultant. Run to get requestedUserId for Send client request."
+              }
+            },
+            {
+              "name": "Send client request",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"requestedUserId\": \"{{requestedUserId}}\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-requests",
+                "description": "Sends request to mobile user. Body: requestedUserId (required, UUID from List available clients). User receives email with accept/decline links."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Client invitations",
+          "description": "List and manage client invitations (pending requests). Set {{invitationId}} from List client invitations.",
+          "item": [
+            {
+              "name": "Create invitation (legacy)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1758,7 +2060,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"companyId\": \"{{companyId}}\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
+                  "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
                 "description": "Creates an invitation to add a business owner (client). Body: invitedEmail (required). Optional: companyId (UUID — the company the client will belong to; omit to auto-create a new company from client info: invitedBusinessName, invitedContactName, or \"Client: {email}\". The new company appears when you list companies.), invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Fails with 400 if companyId is invalid when provided. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
@@ -1766,15 +2068,33 @@
             },
             {
               "name": "List client invitations",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.status && json.data && json.data.length > 0) {",
+                      "    var pending = json.data.find(function(i) { return i.status === 'pending' || i.status === 'Pending'; });",
+                      "    if (pending && pending.id) {",
+                      "        pm.collectionVariables.set('invitationId', pending.id);",
+                      "        console.log('Set invitationId to: ' + pending.id);",
+                      "    }",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
                 "method": "GET",
                 "header": [
                   { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations?status=&companyId=",
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-invitations?status=",
                   "host": ["{{baseUrl}}"],
-                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "invitations"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "client-invitations"],
                   "query": [
                     {
                       "key": "status",
@@ -1782,7 +2102,7 @@
                       "description": "Optional. Filter by status: pending, accepted, rejected, expired. Omit to return all invitations. Note: 'expired' is computed — invitations still stored as 'pending' in DB but past their expiresAt."
                     },
                     {
-                      "key": "companyId",
+                      "key": "clientId",
                       "value": "",
                       "description": "Optional. Scope to one company. Omit to list invitations from all your companies."
                     }
@@ -1798,7 +2118,7 @@
                 "header": [
                   { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations/{{invitationId}}",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-invitations/{{invitationId}}",
                 "description": "Returns a single invitation by ID. Invitation must belong to the current user's company. Path param: id (UUID). Returns 404 if not found or not owned by company. Requires auth and enterprise onboarding complete."
               }
             },
@@ -1809,7 +2129,7 @@
                 "header": [
                   { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations/{{invitationId}}",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-invitations/{{invitationId}}",
                 "description": "Cancels a pending invitation (sets status to rejected). Path param: id (UUID). Returns 400 if invitation is not pending. Returns 404 if not found. Requires auth and enterprise onboarding complete."
               }
             },
@@ -1825,7 +2145,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"extendExpiryHours\": 168\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/invitations/{{invitationId}}/resend",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-invitations/{{invitationId}}/resend",
                 "description": "Resends the invitation email and optionally extends expiry. Path param: id (UUID). Body: extendExpiryHours (optional, 1-720, default 168). Only pending, non-expired invitations can be resent. Returns 400 if not pending or expired. Returns updated invitation in response. Requires auth and enterprise onboarding complete."
               }
             }
@@ -1871,8 +2191,61 @@
           ]
         },
         {
+          "name": "Client - Details & profile",
+          "description": "Client details, business profile, contact, tax configuration. Set {{clientId}} from List clients or List managed entities. Run Enterprise Auth > Login first, then List clients.",
+          "item": [
+            {
+              "name": "Get client details",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/details",
+                "description": "Returns client + business + tax config + VAT threshold status."
+              }
+            },
+            {
+              "name": "Update client business profile",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"businessName\": \"Acme Business Ltd\",\n  \"rcNumber\": \"RC1234567\",\n  \"tin\": \"12345678-0001\",\n  \"industry\": \"IT & Services\",\n  \"turnoverBand\": \"Small\",\n  \"vatStatus\": \"Registered\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/client-business-profile",
+                "description": "Updates client business profile. Body: businessName, rcNumber, tin, industry, turnoverBand, vatStatus (all optional)."
+              }
+            },
+            {
+              "name": "Update client contact",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"address\": \"123 Main Street, Lagos\",\n  \"city\": \"Lagos\",\n  \"email\": \"contact@acme.com\",\n  \"phone\": \"+2348012345678\",\n  \"website\": \"https://acme.com\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/client-contact",
+                "description": "Updates client contact info. Body: address, city, email, phone, website (all optional)."
+              }
+            },
+            {
+              "name": "Update tax configuration",
+              "request": {
+                "method": "PUT",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"vat\": true,\n  \"paye\": false,\n  \"wht\": true,\n  \"cit\": true,\n  \"stampDuties\": false\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-configuration",
+                "description": "Updates tax configuration for client. Body: vat, paye, wht, cit, stampDuties (all optional booleans)."
+              }
+            }
+          ]
+        },
+        {
           "name": "Company - Business profile",
-          "description": "Company-scoped business profile (the consultant company's profile, not mobile businesses). All under /api/v1/enterprise/company/:companyId. Require Authorization: Bearer {{accessToken}}. Set {{companyId}} from List companies or Create company.",
+          "description": "Company-scoped business profile (the consultant company's profile, not mobile businesses). All under /api/v1/enterprise/clients/:clientId. Require Authorization: Bearer {{accessToken}}. Set {{clientId}} from List clients or List managed entities.",
           "item": [
             {
               "name": "Get business profile",
@@ -1882,13 +2255,13 @@
                   { "key": "Content-Type", "value": "application/json" },
                   { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile",
                 "description": "Returns the company's business profile: logo (URL or null), subscription, compliance percent, and related fields. Requires auth and companyId."
               },
               "response": [
                 {
                   "name": "Success",
-                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile" } },
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile" } },
                   "status": "OK",
                   "code": 200,
                   "_postman_previewlanguage": "json",
@@ -1905,7 +2278,7 @@
                   { "key": "Content-Type", "value": "application/json" },
                   { "key": "Authorization", "value": "Bearer {{accessToken}}" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile/activities",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile/activities",
                 "description": "Returns list of compliance activities for the company. Requires auth and companyId."
               }
             },
@@ -1921,7 +2294,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"companyName\": \"Bright Time Consulting\",\n  \"businessType\": \"Consulting\",\n  \"industry\": \"IT & Services\",\n  \"registrationDate\": \"2023-01-10\",\n  \"tin\": \"123-456-789\",\n  \"businessAddress\": \"123 Main Street, Anytown, USA\",\n  \"phoneNumber\": \"+1 (555) 123-4567\",\n  \"emailAddress\": \"info@brighttime.com\",\n  \"website\": \"www.brighttime.com\",\n  \"logo\": \"https://example.com/company-logo.png\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile",
                 "description": "Updates business profile. Body: companyName, businessType, industry, registrationDate, tin, businessAddress, phoneNumber, emailAddress, website (required); logo (optional, URL string)."
               }
             },
@@ -1937,7 +2310,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"plan\": \"Enterprise Plan\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/business-profile/subscription/upgrade",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile/subscription/upgrade",
                 "description": "Initiates subscription upgrade for the company. Body: plan (optional string, e.g. \"Enterprise Plan\"). Requires auth and companyId."
               }
             }
@@ -1953,7 +2326,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/status"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/status"
               }
             },
             {
@@ -1963,7 +2336,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/initiate-setup"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/initiate-setup"
               }
             },
             {
@@ -1973,7 +2346,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/types"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/types"
               }
             },
             {
@@ -1983,7 +2356,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/periods"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/periods"
               }
             },
             {
@@ -1997,7 +2370,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"vatType\": \"Standard Rate\",\n  \"vatPeriod\": \"Quarterly\",\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-03-31\",\n  \"salesAmountExclVat\": 100000,\n  \"purchaseAmountExclVat\": 50000,\n  \"vatRate\": 15\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/calculate"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/calculate"
               }
             },
             {
@@ -2007,7 +2380,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/results"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/results"
               }
             },
             {
@@ -2017,7 +2390,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/report/download"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/report/download"
               }
             },
             {
@@ -2031,7 +2404,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"computationId\": \"<computation-uuid>\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/vat-computation/submit-return"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/submit-return"
               }
             },
             {
@@ -2041,7 +2414,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/tax-computation/vat-payable/monthly?year=2024"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/vat-payable/monthly?year=2024"
               }
             },
             {
@@ -2051,7 +2424,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/tax-computation/threshold-status"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/threshold-status"
               }
             },
             {
@@ -2061,7 +2434,95 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/tax-computation/threshold-info"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/threshold-info"
+              }
+            },
+            {
+              "name": "Get VAT computation",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/vat?year=2026&month=2",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "{{clientId}}", "tax-computation", "vat"],
+                  "query": [
+                    { "key": "year", "value": "2026", "description": "Optional. Default: current year." },
+                    { "key": "month", "value": "2", "description": "Optional. Default: current month." }
+                  ]
+                },
+                "description": "Returns VAT computation for period: outputVat, inputVatClaimable, netVatPayable."
+              }
+            },
+            {
+              "name": "Get PAYE computation",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/paye",
+                "description": "Returns PAYE computation from employee payroll."
+              }
+            },
+            {
+              "name": "Get WHT computation",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/wht?year=2026&month=2",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "{{clientId}}", "tax-computation", "wht"],
+                  "query": [
+                    { "key": "year", "value": "2026" },
+                    { "key": "month", "value": "2" }
+                  ]
+                },
+                "description": "Returns WHT computation: serviceIncome, whtRate, estimatedWhtDeducted."
+              }
+            },
+            {
+              "name": "Get CIT computation",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/cit?year=2026&month=2",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "{{clientId}}", "tax-computation", "cit"],
+                  "query": [
+                    { "key": "year", "value": "2026" },
+                    { "key": "month", "value": "2" }
+                  ]
+                },
+                "description": "Returns CIT computation: taxableProfit, citRate, estimatedAnnualCit."
+              }
+            },
+            {
+              "name": "Get Stamp duties computation",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/stamp-duties",
+                "description": "Returns stamp duties computation (placeholder)."
+              }
+            },
+            {
+              "name": "Get tax breakdown (all types)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/cit-breakdown",
+                "description": "Returns breakdown for all configured tax types: VAT, PAYE, WHT, CIT, Stamp Duties."
+              }
+            },
+            {
+              "name": "Get 12-month VAT filing stats",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-computation/vat-filing/12-month-stats",
+                "description": "Returns 12-month stats for VAT filing."
+              }
+            },
+            {
+              "name": "Get tax summary",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-summary",
+                "description": "Returns VAT summary and monthly breakdown."
               }
             }
           ]
@@ -2070,13 +2531,61 @@
           "name": "Company - Financials",
           "item": [
             {
+              "name": "Get document stats",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/stats",
+                "description": "Returns total, clean, review, flagged counts for financial documents."
+              }
+            },
+            {
+              "name": "List financial documents",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.status && json.data && json.data.length > 0) {",
+                      "    pm.collectionVariables.set('documentId', json.data[0].id);",
+                      "    console.log('Set documentId to: ' + json.data[0].id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "{{clientId}}", "financials", "documents"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" },
+                    { "key": "documentStatus", "value": "", "description": "Optional. Filter: clean, review, flagged." }
+                  ]
+                },
+                "description": "Lists financial documents with metadata and VAT fields. Auto-sets documentId for Get financial document."
+              }
+            },
+            {
+              "name": "Get financial document",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}",
+                "description": "Returns single document with VAT calculation. Set {{documentId}} from List financial documents."
+              }
+            },
+            {
               "name": "Get document types",
               "request": {
                 "method": "GET",
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/document-types"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/document-types"
               }
             },
             {
@@ -2086,7 +2595,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/currencies"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/currencies"
               }
             },
             {
@@ -2096,12 +2605,12 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/transactions/recent"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions/recent"
               },
               "response": [
                 {
                   "name": "Success",
-                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/transactions/recent" } },
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions/recent" } },
                   "status": "OK",
                   "code": 200,
                   "_postman_previewlanguage": "json",
@@ -2117,7 +2626,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/transactions"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions"
               }
             },
             {
@@ -2127,12 +2636,12 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/summary"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/summary"
               },
               "response": [
                 {
                   "name": "Success",
-                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/summary" } },
+                  "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/summary" } },
                   "status": "OK",
                   "code": 200,
                   "_postman_previewlanguage": "json",
@@ -2142,13 +2651,39 @@
               ]
             },
             {
+              "name": "Get profit trend",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-analysis/trend?year=2026",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "{{clientId}}", "financials", "profit-analysis", "trend"],
+                  "query": [{ "key": "year", "value": "2026" }]
+                },
+                "description": "Returns monthly cash flow trend."
+              }
+            },
+            {
+              "name": "Get expense breakdown",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-analysis/expense-breakdown?year=2026",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "{{clientId}}", "financials", "profit-analysis", "expense-breakdown"],
+                  "query": [{ "key": "year", "value": "2026" }]
+                },
+                "description": "Returns expenses by category."
+              }
+            },
+            {
               "name": "Get monthly cash flow",
               "request": {
                 "method": "GET",
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/cash-flow/monthly?year=2024"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/cash-flow/monthly?year=2024"
               }
             },
             {
@@ -2162,7 +2697,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"date\": \"2024-03-01\",\n  \"description\": \"Consulting Fee\",\n  \"amount\": 1500,\n  \"status\": \"Received\",\n  \"type\": \"income\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/transactions"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions"
               }
             },
             {
@@ -2176,7 +2711,8 @@
                   "mode": "raw",
                   "raw": "{\n  \"documentType\": \"Invoice\",\n  \"description\": \"Q1 invoice\",\n  \"documentDate\": \"2024-03-01\",\n  \"amount\": 1200,\n  \"currency\": \"USD\",\n  \"fileUrl\": \"https://example.com/doc.pdf\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/documents/upload"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/upload",
+                "description": "Uploads document. Use file URL from POST /media/upload."
               }
             },
             {
@@ -2186,7 +2722,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/documents/:documentId/status"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}/status"
               }
             },
             {
@@ -2196,7 +2732,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/processing-queue"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/processing-queue"
               }
             },
             {
@@ -2206,11 +2742,26 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices"
               }
             },
             {
               "name": "Create invoice",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.status && json.data && json.data.id) {",
+                      "    pm.collectionVariables.set('invoiceId', json.data.id);",
+                      "    console.log('Set invoiceId to: ' + json.data.id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
                 "method": "POST",
                 "header": [
@@ -2218,9 +2769,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"invoiceNumber\": \"INV-2024-001\",\n  \"clientName\": \"Acme Corp.\",\n  \"clientAddress\": \"456 Oak Ave\",\n  \"clientEmail\": \"billing@acme.com\",\n  \"dateIssued\": \"2024-03-01\",\n  \"dueDate\": \"2024-03-15\",\n  \"totalAmount\": 1200,\n  \"notes\": \"\",\n  \"lineItems\": [\n    { \"description\": \"Consulting Services\", \"quantity\": 10, \"unitPrice\": 100, \"total\": 1000 },\n    { \"description\": \"Software License\", \"quantity\": 1, \"unitPrice\": 200, \"total\": 200 }\n  ]\n}"
+                  "raw": "{\n  \"clientName\": \"Acme Corp.\",\n  \"clientAddress\": \"456 Oak Ave, Lagos\",\n  \"clientEmail\": \"billing@acme.com\",\n  \"dateIssued\": \"2024-03-01\",\n  \"dueDate\": \"2024-03-15\",\n  \"totalAmount\": 1200,\n  \"notes\": \"Payment terms: Net 15\",\n  \"lineItems\": [\n    { \"description\": \"Consulting Services\", \"quantity\": 10, \"unitPrice\": 100, \"total\": 1000 },\n    { \"description\": \"Software License\", \"quantity\": 1, \"unitPrice\": 200, \"total\": 200 }\n  ]\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices",
+                "description": "Creates invoice. invoiceNumber auto-generated. Body: clientName, clientAddress, clientEmail (required); dateIssued, dueDate, totalAmount, notes, lineItems (optional)."
               }
             },
             {
@@ -2230,7 +2782,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices/:invoiceId"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices/{{invoiceId}}"
               }
             },
             {
@@ -2242,9 +2794,9 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"clientName\": \"Acme Corp.\",\n  \"paymentStatus\": \"Outstanding\",\n  \"lineItems\": []\n}"
+                  "raw": "{\n  \"clientName\": \"Acme Corp.\",\n  \"clientAddress\": \"456 Oak Ave, Lagos\",\n  \"clientEmail\": \"billing@acme.com\",\n  \"notes\": \"Updated payment terms\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices/:invoiceId"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices/{{invoiceId}}"
               }
             },
             {
@@ -2254,7 +2806,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices/:invoiceId/mark-paid"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices/{{invoiceId}}/mark-paid"
               }
             },
             {
@@ -2264,7 +2816,107 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/financials/invoices/:invoiceId/pdf"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices/{{invoiceId}}/pdf"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filings",
+          "description": "Unfiled items, list filings, create filing, filing report. Set {{filingId}} from List filings.",
+          "item": [
+            {
+              "name": "Get unfiled items",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/unfiled",
+                "description": "Returns unfiled tax payables."
+              }
+            },
+            {
+              "name": "List filings",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var json = pm.response.json();",
+                      "if (json.status && json.data && json.data.length > 0) {",
+                      "    pm.collectionVariables.set('filingId', json.data[0].id);",
+                      "    console.log('Set filingId to: ' + json.data[0].id);",
+                      "}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings?page=1&limit=20&status=all",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "{{clientId}}", "filings"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" },
+                    { "key": "status", "value": "all", "description": "all | overdue | submitted | paid | pending" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create filing (VAT)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"taxType\": \"VAT\",\n  \"periodYear\": 2026,\n  \"periodMonth\": 1,\n  \"amount\": 50000,\n  \"paymentStatus\": \"not_paid\",\n  \"dueDate\": \"2026-02-21\",\n  \"documentUrl\": \"https://example.com/vat-return.pdf\",\n  \"stateOfOperation\": \"Lagos\",\n  \"vatRegistrationNumber\": \"VAT-123\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings",
+                "description": "Creates VAT or WHT filing. Body: taxType (VAT|WHT), periodYear, periodMonth, amount (required); paymentStatus, dueDate, receiptUrl, documentUrl, evidenceVaultId, stateOfOperation, vatRegistrationNumber (optional)."
+              }
+            },
+            {
+              "name": "Create filing (WHT)",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"taxType\": \"WHT\",\n  \"periodYear\": 2026,\n  \"periodMonth\": 1,\n  \"amount\": 25000,\n  \"paymentStatus\": \"not_paid\",\n  \"dueDate\": \"2026-02-21\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings"
+              }
+            },
+            {
+              "name": "Get filing report",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}/report",
+                "description": "Returns report for a filing."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reports",
+          "description": "List recently filed reports.",
+          "item": [
+            {
+              "name": "List reports",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v{{apiVersion}}", "enterprise", "clients", "{{clientId}}", "reports"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" },
+                    { "key": "reportType", "value": "", "description": "Optional filter." }
+                  ]
+                }
               }
             }
           ]
@@ -2273,13 +2925,21 @@
           "name": "Company - Evidence vault",
           "item": [
             {
+              "name": "Get stats",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/stats",
+                "description": "Returns total docs, by category, storage usage."
+              }
+            },
+            {
               "name": "Get categories",
               "request": {
                 "method": "GET",
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/categories"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/categories"
               }
             },
             {
@@ -2289,7 +2949,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/recent"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/recent"
               }
             },
             {
@@ -2299,7 +2959,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/storage-usage"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/storage-usage"
               }
             },
             {
@@ -2309,7 +2969,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents?search=&category=&status="
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents?search=&category=&status="
               }
             },
             {
@@ -2319,7 +2979,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/document-categories"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/document-categories"
               }
             },
             {
@@ -2329,7 +2989,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/document-statuses"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/document-statuses"
               }
             },
             {
@@ -2339,7 +2999,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/approvers"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/approvers"
               }
             },
             {
@@ -2353,7 +3013,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"documentName\": \"Contract_ABC.pdf\",\n  \"category\": \"Contracts\",\n  \"documentDate\": \"2024-03-10\",\n  \"description\": \"Client agreement\",\n  \"fileUrl\": \"https://example.com/contract.pdf\",\n  \"fileSizeKb\": 256\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/upload"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/upload"
               }
             },
             {
@@ -2363,7 +3023,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}"
               }
             },
             {
@@ -2373,7 +3033,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/download"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/download"
               }
             },
             {
@@ -2387,7 +3047,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"documentName\": \"Contract_ABC.pdf\",\n  \"category\": \"Contracts\",\n  \"description\": \"Updated\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/details"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/details"
               }
             },
             {
@@ -2401,7 +3061,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"approverId\": \"approver-1\",\n  \"notes\": \"Approved\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/approve"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/approve"
               }
             },
             {
@@ -2415,7 +3075,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"notes\": \"Rejected\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/reject"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/reject"
               }
             },
             {
@@ -2425,7 +3085,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/signature-report"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/signature-report"
               }
             },
             {
@@ -2435,7 +3095,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/original-file"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/original-file"
               }
             },
             {
@@ -2445,7 +3105,7 @@
                 "header": [
                   { "key": "Content-Type", "value": "application/json" }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/preview"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/preview"
               }
             },
             {
@@ -2459,14 +3119,27 @@
                   "mode": "raw",
                   "raw": "{\n  \"signedBy\": \"Alice Johnson\",\n  \"signerEmail\": \"alice@example.com\",\n  \"ipAddress\": \"192.168.1.100\",\n  \"signatureMethod\": \"Electronic Signature\",\n  \"documentHash\": \"a1b2c3d4e5f6\",\n  \"signatureData\": \"base64-or-svg\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/company/{{companyId}}/evidence-vault/documents/:documentId/sign"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/sign"
+              }
+            },
+            {
+              "name": "Convert to invoice",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"clientName\": \"Acme Corp.\",\n  \"clientAddress\": \"456 Oak Ave, Lagos\",\n  \"clientEmail\": \"billing@acme.com\",\n  \"totalAmount\": 1500\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/convert-to-invoice",
+                "description": "Converts evidence document to invoice. Body: clientName, clientAddress, clientEmail, totalAmount (required)."
               }
             }
           ]
         },
         {
           "name": "Consultant onboarding",
-          "description": "Enterprise consultant onboarding (7 steps + activate). Step 7 submit (saveAsDraft: false) sets status to submitted; then call activate. Base path: /api/v1/enterprise/consultant-onboarding. consultantOnboardingToken = consultant flow. Set {{consultantOnboardingToken}} from Step 1 response for Get profile and steps 2–7. Auth: X-Consultant-Onboarding-Token: {{consultantOnboardingToken}} or Authorization: Bearer {{accessToken}}.",
+          "description": "Enterprise consultant onboarding (7 steps + activate). Step 7 submit (saveAsDraft: false) sets status to submitted; then call activate. Base path: /api/v1/enterprise/onboarding/consultant. consultantOnboardingToken = consultant flow. Set {{consultantOnboardingToken}} from Step 1 response for Get profile and steps 2–7. Auth: X-Consultant-Onboarding-Token: {{consultantOnboardingToken}} or Authorization: Bearer {{accessToken}}.",
           "item": [
             {
               "name": "Step 1 - Firm identity",
@@ -2479,7 +3152,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"businessStructure\": \"LLP\",\n  \"firmName\": \"Acme Tax Advisory LLP\",\n  \"registrationType\": \"RC\",\n  \"rcNumber\": \"RC123456\",\n  \"yearOfIncorporation\": 2018,\n  \"countryOfRegistration\": \"Nigeria\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/1",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/1",
                 "description": "Creates session and firm identity. Body: businessStructure, firmName, registrationType, countryOfRegistration (required); rcNumber, yearOfIncorporation (optional). Returns consultantOnboardingToken and session. Set {{consultantOnboardingToken}} from this response for Get profile and steps 2–7 (or use Authorization: Bearer {{accessToken}})."
               }
             },
@@ -2494,7 +3167,7 @@
                     "value": "{{consultantOnboardingToken}}"
                   }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/profile",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/profile",
                 "description": "Returns full onboarding session (firm identity, partners, scope, subscription, payment, compliance). Use consultantOnboardingToken from Step 1 response (set {{consultantOnboardingToken}} from that response) or Authorization: Bearer {{accessToken}}. Protected: requires consultant session (complete Step 1 first)."
               }
             },
@@ -2513,7 +3186,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"numberOfPartners\": 2,\n  \"principalPartner\": {\n    \"fullName\": \"Jane Doe\",\n    \"email\": \"jane@acme.com\",\n    \"phone\": \"+2348012345678\",\n    \"yearsOfExperience\": 12,\n    \"certifications\": [\n      { \"qualificationName\": \"ACCA\", \"issuingBody\": \"ACCA\", \"year\": 2015 },\n      { \"qualificationName\": \"CITN\", \"issuingBody\": \"CITN\", \"year\": 2018 }\n    ]\n  }\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/2",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/2",
                 "description": "Principal partner and certifications. Body: numberOfPartners, principalPartner (fullName, email, phone, yearsOfExperience, certifications[] with qualificationName, issuingBody, year, national)."
               }
             },
@@ -2532,7 +3205,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"additionalPartners\": [\n    {\n      \"partnerName\": \"John Smith\",\n      \"role\": \"Partner\",\n      \"yearsOfExperience\": 8,\n      \"certifications\": [\n        { \"qualification\": \"ICAN\", \"issuingBody\": \"ICAN\", \"national\": \"Nigeria\", \"year\": 2016 }\n      ]\n    }\n  ]\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/3",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/3",
                 "description": "Additional partners. Body: additionalPartners[] (partnerName, role, yearsOfExperience, certifications[] with qualification, issuingBody, national, year)."
               }
             },
@@ -2551,7 +3224,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"primaryState\": \"Lagos\",\n  \"additionalStates\": [\"Abuja\", \"Rivers\"],\n  \"taxTypesSpecializations\": [\"VAT\", \"PAYE\", \"WHT\", \"CIT\"],\n  \"businessSizeServed\": \"Medium\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/4",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/4",
                 "description": "Body: primaryState, businessSizeServed (required); additionalStates[], taxTypesSpecializations[] (optional). businessSizeServed: Micro | Small | Medium | Large | Multinational."
               }
             },
@@ -2570,7 +3243,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"billingOption\": \"annual\",\n  \"enableAutomatedComplianceReminders\": true,\n  \"perFilingReminderConfig\": [\n    { \"filing\": \"VAT\", \"frequency\": \"monthly\", \"reminderDates\": [1, 15] },\n    { \"filing\": \"PAYE\", \"frequency\": \"monthly\", \"reminderDates\": [5, 10] }\n  ]\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/5",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/5",
                 "description": "Body: billingOption (required); enableAutomatedComplianceReminders (boolean); perFilingReminderConfig[] (filing, frequency, reminderDates[])."
               }
             },
@@ -2589,7 +3262,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"paymentMethod\": \"bank_transfer\",\n  \"bankAccountNumber\": \"1234567890\",\n  \"warrantApproval\": \"\",\n  \"selfRemittance\": \"\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/6",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/6",
                 "description": "Body: paymentMethod (required); bankAccountNumber, warrantApproval, selfRemittance (optional). paymentMethod: direct_debit | bank_transfer | card | custom_invoice."
               }
             },
@@ -2608,7 +3281,7 @@
                   "mode": "raw",
                   "raw": "{\n  \"cacDocumentUrl\": \"https://example.com/cac.pdf\",\n  \"principalPartnerIdUrl\": \"https://example.com/id.pdf\",\n  \"professionalCertificateUrl\": \"https://example.com/cert.pdf\",\n  \"amlDocumentUrl\": \"https://example.com/aml.pdf\",\n  \"firmProfileUrl\": \"https://example.com/profile.pdf\",\n  \"declarationAccuracy\": true,\n  \"declarationFirsCompliance\": true,\n  \"declarationSuspensionPolicy\": true,\n  \"saveAsDraft\": false\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/step/7",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/7",
                 "description": "Document URLs (optional): cacDocumentUrl, principalPartnerIdUrl, professionalCertificateUrl, amlDocumentUrl, firmProfileUrl. Declarations (required booleans): declarationAccuracy, declarationFirsCompliance, declarationSuspensionPolicy. saveAsDraft: true to save without submitting."
               }
             },
@@ -2623,7 +3296,7 @@
                     "value": "{{consultantOnboardingToken}}"
                   }
                 ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-onboarding/activate",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/activate",
                 "description": "Activates the consultant onboarding account. Sets status to activated and currentStep to 8."
               }
             }

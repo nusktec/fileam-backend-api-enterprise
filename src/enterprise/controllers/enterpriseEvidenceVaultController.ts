@@ -11,6 +11,26 @@ import {
 import { sendPaginated } from "../../utils/responseHelpers";
 import { enterpriseEvidenceVaultService } from "../services/enterpriseEvidenceVaultService";
 
+export async function getStats(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  try {
+    const stats = await enterpriseEvidenceVaultService.getStats(
+      companyId,
+      req.linkedUserId,
+    );
+    if (!stats) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Evidence vault stats", stats);
+  } catch {
+    sendServerError(res, "Failed to get stats");
+  }
+}
+
 export async function getCategories(
   req: IRequest,
   res: Response,
@@ -412,5 +432,38 @@ export async function signDocument(
     sendResult(res, "Document signed", sig);
   } catch {
     sendServerError(res, "Failed to sign document");
+  }
+}
+
+export async function convertToInvoice(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const documentId = getParam(req.params, "documentId");
+  const data = matchedData(req, { locations: ["body"] }) as {
+    clientName: string;
+    clientAddress: string;
+    clientEmail: string;
+    totalAmount: number;
+  };
+  try {
+    const invoice = await enterpriseEvidenceVaultService.convertToInvoice(
+      companyId,
+      documentId,
+      {
+        clientName: data.clientName,
+        clientAddress: data.clientAddress,
+        clientEmail: data.clientEmail,
+        totalAmount: Number(data.totalAmount),
+      },
+    );
+    if (!invoice) {
+      sendNotFound(res, "Document not found");
+      return;
+    }
+    sendCreated(res, "Invoice created from document", invoice);
+  } catch {
+    sendServerError(res, "Failed to convert to invoice");
   }
 }

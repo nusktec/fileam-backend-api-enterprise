@@ -24,6 +24,13 @@ export const authService = {
     });
   },
 
+  async findUserById(id: string) {
+    return prisma.user.findUnique({
+      where: { id },
+      include: { userRoles: { include: { role: true } } },
+    });
+  },
+
   async registerBusiness(data: {
     email: string;
     password: string;

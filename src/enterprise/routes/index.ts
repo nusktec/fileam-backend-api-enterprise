@@ -4,12 +4,7 @@ import consultantOnboardingRoutes from "./consultantOnboardingRoutes";
 import enterpriseCompanyRoutes from "./enterpriseCompanyRoutes";
 import enterpriseAuthRoutes from "./enterpriseAuthRoutes";
 import enterpriseOnboardingRoutes from "./enterpriseOnboardingRoutes";
-import {
-  createCompany,
-  createInvitation,
-  listCompanies,
-  listManagedEntitiesHandler,
-} from "../controllers/companyController";
+import { listManagedEntitiesHandler } from "../controllers/companyController";
 import {
   getBusinessTypes,
   getIndustries,
@@ -22,9 +17,27 @@ import {
   cancelClientInvitation,
   resendClientInvitation,
 } from "../controllers/enterpriseClientsController";
+import {
+  getProfile,
+  updateProfile,
+  getConsultantBusiness,
+  updateConsultantBusiness,
+  getNotificationSettings,
+  updateNotificationSettings,
+} from "../controllers/enterpriseUserController";
+import teamManagementRoutes from "./teamManagementRoutes";
+import {
+  getComplianceStats,
+  getUpcomingDeadlines,
+} from "../controllers/complianceController";
+import {
+  listAvailableClients,
+  sendClientRequest,
+} from "../controllers/enterpriseClientRequestsController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
+import { validations as userValidations } from "../../middlewares/validations/userValidation";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
-import { requireCompanyId } from "../middlewares/requireCompanyId";
+import { requireClientId } from "../middlewares/requireClientId";
 import { requireEnterpriseOnboardingComplete } from "../middlewares/requireEnterpriseOnboardingComplete";
 
 const router = express.Router();
@@ -35,7 +48,38 @@ router.get("/business-profile/industries", getIndustries);
 
 router.use("/auth", enterpriseAuthRoutes);
 
-router.get("/companies", authenticate(), listCompanies);
+router.get("/profile", authenticate(), getProfile);
+router.put(
+  "/profile",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  userValidations.updateProfileValidation,
+  updateProfile,
+);
+router.get(
+  "/consultant-business",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  getConsultantBusiness,
+);
+router.put(
+  "/consultant-business",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  enterpriseValidations.validateUpdateConsultantBusiness,
+  updateConsultantBusiness,
+);
+router.get(
+  "/notification-settings",
+  authenticate(),
+  getNotificationSettings,
+);
+router.put(
+  "/notification-settings",
+  authenticate(),
+  updateNotificationSettings,
+);
+
 router.get(
   "/managed-entities",
   authenticate(),
@@ -48,19 +92,6 @@ router.get(
   requireEnterpriseOnboardingComplete,
   listAllBusinesses,
 );
-router.post(
-  "/company",
-  authenticate(),
-  ...enterpriseValidations.validateCreateCompany,
-  createCompany,
-);
-router.post(
-  "/invitation",
-  authenticate(),
-  requireEnterpriseOnboardingComplete,
-  ...enterpriseValidations.validateCreateInvitation,
-  createInvitation,
-);
 router.get(
   "/clients",
   authenticate(),
@@ -68,42 +99,69 @@ router.get(
   listClients,
 );
 router.get(
-  "/clients/invitations",
+  "/clients/available",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  listAvailableClients,
+);
+router.post(
+  "/client-requests",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  ...enterpriseValidations.validateSendClientRequest,
+  sendClientRequest,
+);
+router.get(
+  "/client-invitations",
   authenticate(),
   requireEnterpriseOnboardingComplete,
   listClientInvitations,
 );
 router.get(
-  "/clients/invitations/:id",
+  "/client-invitations/:id",
   authenticate(),
   requireEnterpriseOnboardingComplete,
   ...enterpriseValidations.validateInvitationIdParam,
   getClientInvitation,
 );
 router.delete(
-  "/clients/invitations/:id",
+  "/client-invitations/:id",
   authenticate(),
   requireEnterpriseOnboardingComplete,
   ...enterpriseValidations.validateInvitationIdParam,
   cancelClientInvitation,
 );
 router.post(
-  "/clients/invitations/:id/resend",
+  "/client-invitations/:id/resend",
   authenticate(),
   requireEnterpriseOnboardingComplete,
   ...enterpriseValidations.validateInvitationIdParam,
   resendClientInvitation,
 );
 router.use(
-  "/company/:companyId",
+  "/clients/:clientId",
   authenticate(),
   requireEnterpriseOnboardingComplete,
-  ...enterpriseValidations.validateCompanyIdParam,
-  requireCompanyId,
+  ...enterpriseValidations.validateClientIdParam,
+  requireClientId,
   enterpriseCompanyRoutes,
 );
 
 router.use("/onboarding", enterpriseOnboardingRoutes);
-router.use("/consultant-onboarding", consultantOnboardingRoutes);
+router.use("/onboarding/consultant", consultantOnboardingRoutes);
+router.use("/team", teamManagementRoutes);
+
+router.get(
+  "/compliance/stats",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  getComplianceStats,
+);
+router.get(
+  "/compliance/upcoming-deadlines",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  getUpcomingDeadlines,
+);
 
 export default router;

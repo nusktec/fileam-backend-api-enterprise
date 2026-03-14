@@ -130,6 +130,44 @@ export const enterpriseFinancialsService = {
     };
   },
 
+  async getProfitTrend(companyId: string, year?: number, linkedUserId?: string) {
+    return this.getMonthlyCashFlow(companyId, year, linkedUserId);
+  },
+
+  async getExpenseBreakdown(
+    companyId: string,
+    year?: number,
+    linkedUserId?: string,
+  ) {
+    if (linkedUserId) {
+      const { getClientExpenseBreakdown } = await import("./clientDataHelper");
+      return getClientExpenseBreakdown(linkedUserId, year);
+    }
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    const y = year ?? new Date().getFullYear();
+    const transactions = await prisma.enterpriseTransaction.findMany({
+      where: {
+        companyId,
+        type: "expense",
+        date: {
+          gte: new Date(y, 0, 1),
+          lte: new Date(y, 11, 31),
+        },
+      },
+    });
+    const byCategory: Record<string, number> = {};
+    for (const t of transactions) {
+      byCategory["Expenses"] = (byCategory["Expenses"] ?? 0) + decimalToNumber(t.amount);
+    }
+    return Object.entries(byCategory).map(([category, total]) => ({
+      category,
+      total,
+    }));
+  },
+
   async getMonthlyCashFlow(companyId: string, year?: number, linkedUserId?: string) {
     const y = year ?? new Date().getFullYear();
     if (linkedUserId) {
@@ -168,12 +206,62 @@ export const enterpriseFinancialsService = {
       amount: number;
       status: string;
       type: string;
+      category?: string;
     },
+    linkedUserId?: string,
+    createdById?: string,
   ) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
     if (!company) return null;
+
+    if (linkedUserId) {
+      const { salesService } = await import("../../mobile/services/salesService");
+      const { expensesService } = await import("../../mobile/services/expensesService");
+      const dateStr = data.date.toISOString().split("T")[0];
+      const type = (data.type || "expense").toLowerCase();
+      if (type === "income") {
+        const sale = await salesService.create(linkedUserId, {
+          amount: data.amount,
+          description: data.description,
+          paymentType: "Cash",
+          date: dateStr,
+          vatableIncome: false,
+          serviceIncome: true,
+          createdById: createdById ?? linkedUserId,
+        });
+        return sale
+          ? {
+              id: sale.id,
+              date: sale.date,
+              description: sale.description,
+              amount: sale.totalAmount,
+              status: sale.status,
+              type: "income",
+            }
+          : null;
+      }
+      const expense = await expensesService.create(linkedUserId, {
+        amount: data.amount,
+        description: data.description,
+        category: data.category || "Other",
+        date: dateStr,
+        vatInclusive: false,
+        createdById: createdById ?? linkedUserId,
+      });
+      return expense
+        ? {
+            id: expense.id,
+            date: expense.date,
+            description: expense.description,
+            amount: expense.amount,
+            status: "Recorded",
+            type: "expense",
+          }
+        : null;
+    }
+
     return prisma.enterpriseTransaction.create({
       data: {
         companyId,
@@ -215,6 +303,108 @@ export const enterpriseFinancialsService = {
           status: doc.processingStatus,
         }
       : null;
+  },
+
+  async getFinancialDocumentStats(companyId: string) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    const docs = await prisma.enterpriseFinancialDocument.findMany({
+      where: { companyId },
+      select: { documentStatus: true, processingStatus: true },
+    });
+    let clean = 0;
+    let review = 0;
+    let flagged = 0;
+    for (const d of docs) {
+      const status = (d.documentStatus ?? d.processingStatus ?? "").toLowerCase();
+      if (status === "clean" || status === "processed") clean++;
+      else if (status === "review" || status === "pending") review++;
+      else if (status === "flagged") flagged++;
+      else review++;
+    }
+    return {
+      total: docs.length,
+      clean,
+      review,
+      flagged,
+    };
+  },
+
+  async listFinancialDocuments(
+    companyId: string,
+    opts?: {
+      page?: number;
+      limit?: number;
+      sortOrder?: "ASC" | "DESC";
+      documentStatus?: string;
+    },
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    const page = opts?.page ?? 1;
+    const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
+    const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
+    const where: { companyId: string; documentStatus?: string } = { companyId };
+    if (opts?.documentStatus) where.documentStatus = opts.documentStatus;
+    const [list, total] = await Promise.all([
+      prisma.enterpriseFinancialDocument.findMany({
+        where,
+        orderBy: { documentDate: order },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.enterpriseFinancialDocument.count({ where }),
+    ]);
+    return {
+      data: list.map((d) => ({
+        id: d.id,
+        documentType: d.documentType,
+        description: d.description,
+        documentDate: d.documentDate,
+        amount: decimalToNumber(d.amount),
+        currency: d.currency,
+        vendor: d.vendor ?? null,
+        invoiceNumber: d.invoiceNumber ?? null,
+        format: d.format ?? null,
+        confidence: d.confidence ?? null,
+        documentStatus: d.documentStatus ?? d.processingStatus,
+        subTotalExclVat: d.subTotalExclVat ? decimalToNumber(d.subTotalExclVat) : null,
+        totalWithVat: d.totalWithVat ? decimalToNumber(d.totalWithVat) : null,
+        vatCalculated: d.vatCalculated ? decimalToNumber(d.vatCalculated) : null,
+      })),
+      total,
+      page,
+      limit,
+    };
+  },
+
+  async getFinancialDocument(companyId: string, documentId: string) {
+    const doc = await prisma.enterpriseFinancialDocument.findFirst({
+      where: { id: documentId, companyId },
+    });
+    if (!doc) return null;
+    return {
+      id: doc.id,
+      documentType: doc.documentType,
+      description: doc.description,
+      documentDate: doc.documentDate,
+      amount: decimalToNumber(doc.amount),
+      currency: doc.currency,
+      fileUrl: doc.fileUrl,
+      processingStatus: doc.processingStatus,
+      vendor: doc.vendor ?? null,
+      invoiceNumber: doc.invoiceNumber ?? null,
+      format: doc.format ?? null,
+      confidence: doc.confidence ?? null,
+      documentStatus: doc.documentStatus ?? null,
+      subTotalExclVat: doc.subTotalExclVat ? decimalToNumber(doc.subTotalExclVat) : null,
+      totalWithVat: doc.totalWithVat ? decimalToNumber(doc.totalWithVat) : null,
+      vatCalculated: doc.vatCalculated ? decimalToNumber(doc.vatCalculated) : null,
+    };
   },
 
   async getProcessingQueue(companyId: string) {

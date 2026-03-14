@@ -77,7 +77,6 @@ export const enterpriseBusinessProfileService = {
     if (!company) return null;
     const profile = await prisma.enterpriseBusinessProfile.findUnique({
       where: { companyId },
-      include: { activities: { orderBy: { eventDate: "desc" }, take: 20 } },
     });
     let logoFallback: string | null = null;
     if (userId) {
@@ -122,19 +121,12 @@ export const enterpriseBusinessProfileService = {
       monthlyPayment: decimalToNumber(p.monthlyPayment),
       nextRenewalDate: p.nextRenewalDate,
       compliancePercent: p.compliancePercent,
-      activities: p.activities.map((a) => ({
-        activity: a.activity,
-        eventDate: a.eventDate,
-      })),
+      activities: [],
     };
   },
 
   async getActivities(companyId: string) {
-    const profile = await prisma.enterpriseBusinessProfile.findUnique({
-      where: { companyId },
-      include: { activities: { orderBy: { eventDate: "desc" } } },
-    });
-    return profile?.activities ?? [];
+    return [];
   },
 
   async updateProfile(

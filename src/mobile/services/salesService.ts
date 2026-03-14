@@ -112,6 +112,7 @@ export const salesService = {
       date: string;
       vatableIncome: boolean;
       serviceIncome: boolean;
+      createdById?: string;
     },
   ) {
     const amount = new Decimal(data.amount);
@@ -135,6 +136,7 @@ export const salesService = {
       return tx.sale.create({
         data: {
           userId,
+          createdById: data.createdById ?? userId,
           invoiceNumber,
           description: data.description,
           customerName: data.customerName ?? null,

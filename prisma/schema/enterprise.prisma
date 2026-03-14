@@ -18,22 +18,9 @@ model EnterpriseBusinessProfile {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  company   Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  activities EnterpriseComplianceActivity[]
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@map("enterprise_business_profiles")
-}
-
-model EnterpriseComplianceActivity {
-  id        String   @id @default(uuid())
-  profileId String   @map("profile_id")
-  activity  String   @map("activity")
-  eventDate DateTime @map("event_date")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  profile EnterpriseBusinessProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-
-  @@map("enterprise_compliance_activities")
 }
 
 model EnterpriseVatComputation {
@@ -111,6 +98,14 @@ model EnterpriseFinancialDocument {
   currency         String    @map("currency")
   fileUrl          String?   @map("file_url")
   processingStatus String    @default("pending") @map("processing_status")
+  vendor           String?   @map("vendor")
+  invoiceNumber    String?   @map("invoice_number")
+  format           String?   @map("format")
+  confidence       Int?      @map("confidence")
+  documentStatus   String?   @map("document_status")
+  subTotalExclVat  Decimal?  @map("sub_total_excl_vat") @db.Decimal(14, 2)
+  totalWithVat     Decimal?  @map("total_with_vat") @db.Decimal(14, 2)
+  vatCalculated    Decimal?  @map("vat_calculated") @db.Decimal(14, 2)
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
@@ -171,6 +166,7 @@ model EnterpriseEvidenceDocument {
   approvedAt    DateTime? @map("approved_at")
   rejectedAt    DateTime? @map("rejected_at")
   notes         String?   @map("notes")
+  fileId        String?   @unique @map("file_id")
   lastModified  DateTime  @updatedAt @map("last_modified")
   createdAt     DateTime  @default(now()) @map("created_at")
 

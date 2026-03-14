@@ -112,6 +112,7 @@ export const expensesService = {
       vatInclusive: boolean;
       vatAmount?: number;
       receiptUrl?: string;
+      createdById?: string;
     },
   ) {
     const amount = new Decimal(data.amount);
@@ -124,6 +125,7 @@ export const expensesService = {
     const expense = await prisma.expense.create({
       data: {
         userId,
+        createdById: data.createdById ?? userId,
         expenseNumber,
         description: data.description,
         category: data.category,
