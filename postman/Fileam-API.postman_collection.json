@@ -1,25 +1,25 @@
 {
   "info": {
-    "name": "file-am API",
-    "description": "file-am API: Mobile (auth, user, onboarding, sales, expenses, tax computation, tax payables, payments, filings, reports, analytics, evidence vault, employees, help), Media (single file upload to S3), Webhooks (payment confirmation), Enterprise (health, auth, profile, notification settings, team management, compliance, company, invitation, business profile, tax computation, financials, evidence vault, onboarding, consultant onboarding). Sign up via onboarding only (no register endpoint). Payment is handled by a third party. All file-using endpoints (evidence vault, financials, expenses receiptUrl, filings documentUrl/receiptUrl, consultant onboarding docs) accept file URLs only — upload files first via POST /api/v1/media/upload, then send the returned url. Protected routes require Authorization: Bearer {{accessToken}}.",
+    "name": "Fileam API",
+    "description": "Fileam Backend API v1. Mobile: auth, user, onboarding, sales, expenses, tax, payments, filings, reports, analytics, evidence vault, employees, help. Media: file upload. Webhooks: payment confirmation. Enterprise: auth, profile, notifications, team, compliance, clients, business profile, tax, financials, evidence vault, onboarding. Sign up via onboarding only. Upload files via POST /api/v1/media/upload first, then use returned URL. Auth: Bearer {{accessToken}}.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000" },
-    { "key": "apiVersion", "value": "1" },
     { "key": "accessToken", "value": "" },
-    { "key": "refreshToken", "value": "" },
-    { "key": "onboardingToken", "value": "" },
-    { "key": "consultantOnboardingToken", "value": "" },
-    { "key": "webhookSecret", "value": "" },
+    { "key": "apiVersion", "value": "1" },
+    { "key": "baseUrl", "value": "http://localhost:3000" },
     { "key": "clientId", "value": "" },
-    { "key": "invitationId", "value": "" },
-    { "key": "requestedUserId", "value": "" },
+    { "key": "consultantOnboardingToken", "value": "" },
     { "key": "documentId", "value": "" },
-    { "key": "invoiceId", "value": "" },
     { "key": "filingId", "value": "" },
+    { "key": "invitationCode", "value": "" },
+    { "key": "invitationId", "value": "" },
+    { "key": "invoiceId", "value": "" },
     { "key": "mediaKey", "value": "" },
-    { "key": "invitationCode", "value": "" }
+    { "key": "onboardingToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "requestedUserId", "value": "" },
+    { "key": "webhookSecret", "value": "" }
   ],
   "event": [
     {
@@ -44,7 +44,7 @@
   "item": [
     {
       "name": "Mobile",
-      "description": "Mobile app endpoints. Base path: /api/v1/mobile. Auth: login, forgot/reset password, refresh, logout (no register; use Onboarding to sign up). User (profile, business profile, notification settings, consultant), Onboarding, Sales, Expenses, Tax Computation, Tax Payables, Payments, Filings (VAT/WHT), Reports, Analytics, Evidence Vault, Employees, Help (FAQs, about, contact) — all except Auth and Help FAQs/About require Authorization: Bearer {{accessToken}} and (where noted) completed onboarding. Replace :id in paths with actual UUIDs or composite ids (e.g. evidence-vault documents use composite ids like sale-<uuid>).",
+      "description": "Mobile app. Base: /api/v1/mobile. Auth, User, Onboarding, Sales, Expenses, Tax, Payments, Filings, Reports, Analytics, Evidence Vault, Employees, Help. Auth + onboarding required for most. Use composite ids (e.g. sale-<uuid>) for evidence vault.",
       "item": [
         {
           "name": "Auth",
@@ -1374,7 +1374,7 @@
     },
     {
       "name": "Enterprise",
-      "description": "Enterprise endpoints: health check (no auth), auth (login, refresh, change password), profile (consultant profile & business), notification settings (tax deadline, filing confirmations, weekly summary), team management (invite, list invitations, accept, list members), compliance (stats, upcoming deadlines), company & invitation (auth required), list all businesses (auth + onboarding complete), business profile lookups (no auth), company-scoped routes (clients, business profile, tax computation, financials, evidence vault — all require Authorization: Bearer {{accessToken}}; set clientId variable), onboarding (no auth), consultant onboarding (token in header).",
+      "description": "Enterprise (consultant) endpoints. Auth: login, refresh, change password. Profile, notifications, team, compliance. Companies, clients, client invitations. Client-scoped: business profile, tax, financials, evidence vault, filings, reports. Set {{clientId}} for client routes. Onboarding and consultant onboarding.",
       "item": [
         {
           "name": "Health",
@@ -2048,24 +2048,8 @@
         },
         {
           "name": "Client invitations",
-          "description": "List and manage client invitations (pending requests). Set {{invitationId}} from List client invitations.",
+          "description": "List and manage client invitations. Use Send client request (Client requests) to invite new clients. Set {{invitationId}} from List client invitations.",
           "item": [
-            {
-              "name": "Create invitation (legacy)",
-              "request": {
-                "method": "POST",
-                "header": [
-                  { "key": "Content-Type", "value": "application/json" },
-                  { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"invitedEmail\": \"business@example.com\",\n  \"invitedBusinessName\": \"New Business Ltd\",\n  \"invitedContactName\": \"John Doe\",\n  \"invitedRcNumber\": \"RC1234567\",\n  \"invitedPhone\": \"+2348012345678\",\n  \"stateOfOperation\": \"Lagos\",\n  \"taxTypesManaged\": [\"VAT\", \"CIT\"],\n  \"expiresInHours\": 168\n}"
-                },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/invitation",
-                "description": "Creates an invitation to add a business owner (client). Body: invitedEmail (required). Optional: companyId (UUID — the company the client will belong to; omit to auto-create a new company from client info: invitedBusinessName, invitedContactName, or \"Client: {email}\". The new company appears when you list companies.), invitedBusinessName, expiresInHours (1-720), invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (array e.g. VAT, PAYE, CIT, WHT). Sends email with invitation code. Fails with 400 if companyId is invalid when provided. Response data: invitation object with status Pending Acceptance. Requires auth and enterprise onboarding complete."
-              }
-            },
             {
               "name": "List client invitations",
               "event": [
@@ -2099,16 +2083,11 @@
                     {
                       "key": "status",
                       "value": "",
-                      "description": "Optional. Filter by status: pending, accepted, rejected, expired. Omit to return all invitations. Note: 'expired' is computed — invitations still stored as 'pending' in DB but past their expiresAt."
-                    },
-                    {
-                      "key": "clientId",
-                      "value": "",
-                      "description": "Optional. Scope to one company. Omit to list invitations from all your companies."
+                      "description": "Optional. pending, accepted, rejected, expired (comma-separated). Omit for all."
                     }
                   ]
                 },
-                "description": "Lists all client invitations (invitations only; separate from List clients).\n\nFilter:\n• status (optional): pending, accepted, rejected, expired. Omit to return all invitations. 'expired' = pending invitations past expiresAt.\n• companyId (optional): Scope to one company. Omit to list from all your companies.\n\nResponse data: array of { id, companyId, invitedEmail, invitedBusinessName, invitedContactName, invitedRcNumber, invitedPhone, stateOfOperation, taxTypesManaged (string[]), status, expiresAt, createdAt }. companyId included when listing from multiple companies. Returns 404 if user has no company. Requires auth and enterprise onboarding complete."
+                "description": "Lists client invitations. Query: status (optional). Returns invitations with id, invitedEmail, invitedBusinessName, status, expiresAt."
               }
             },
             {
@@ -2153,7 +2132,7 @@
         },
         {
           "name": "Business profile (lookups)",
-          "description": "Lookup lists for company business profile. No auth or companyId required.",
+          "description": "Business types and industries lookup. No auth required.",
           "item": [
             {
               "name": "Get business types",
@@ -2244,8 +2223,8 @@
           ]
         },
         {
-          "name": "Company - Business profile",
-          "description": "Company-scoped business profile (the consultant company's profile, not mobile businesses). All under /api/v1/enterprise/clients/:clientId. Require Authorization: Bearer {{accessToken}}. Set {{clientId}} from List clients or List managed entities.",
+          "name": "Client - Business profile",
+          "description": "Client business profile. Path: /clients/:clientId. Set {{clientId}} from List clients or List managed entities.",
           "item": [
             {
               "name": "Get business profile",
@@ -2317,7 +2296,7 @@
           ]
         },
         {
-          "name": "Company - Tax computation",
+          "name": "Client - Tax computation",
           "item": [
             {
               "name": "Get VAT status",
@@ -2528,7 +2507,7 @@
           ]
         },
         {
-          "name": "Company - Financials",
+          "name": "Client - Financials",
           "item": [
             {
               "name": "Get document stats",
@@ -2922,7 +2901,7 @@
           ]
         },
         {
-          "name": "Company - Evidence vault",
+          "name": "Client - Evidence vault",
           "item": [
             {
               "name": "Get stats",
