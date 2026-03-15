@@ -126,14 +126,22 @@ export const consultantRequestService = {
       "Client";
 
     const now = new Date();
-    const clientCompany = await prisma.company.create({
-      data: {
-        name: clientCompanyName,
+    let clientCompany = await prisma.company.findFirst({
+      where: {
         ownerId: inv.consultantUserId,
         linkedUserId: targetUserId,
-        managedByCompanyId: null,
       },
     });
+    if (!clientCompany) {
+      clientCompany = await prisma.company.create({
+        data: {
+          name: clientCompanyName,
+          ownerId: inv.consultantUserId,
+          linkedUserId: targetUserId,
+          managedByCompanyId: null,
+        },
+      });
+    }
 
     await prisma.$transaction([
       prisma.consultantConnection.create({

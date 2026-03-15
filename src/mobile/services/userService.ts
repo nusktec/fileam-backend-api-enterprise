@@ -358,10 +358,19 @@ export const userService = {
       where: { id: connectionId, userId },
     });
     if (!conn) return false;
-    await prisma.consultantConnection.update({
-      where: { id: connectionId },
-      data: { status: "revoked" },
-    });
+
+    await prisma.$transaction([
+      prisma.consultantConnection.delete({
+        where: { id: connectionId },
+      }),
+      prisma.invitation.update({
+        where: { id: conn.invitationId },
+        data: {
+          requestedUserId: null,
+          status: "rejected",
+        },
+      }),
+    ]);
     return true;
   },
 };

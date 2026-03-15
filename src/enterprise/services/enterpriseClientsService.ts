@@ -337,7 +337,7 @@ export const enterpriseClientsService = {
       for (const inv of pendingInvitations) {
         const isExpired = inv.expiresAt < now;
         cards.push({
-          id: inv.invitedEmail,
+          id: inv.id,
           connectionId: "",
           businessName:
             inv.invitedBusinessName?.trim() ||
