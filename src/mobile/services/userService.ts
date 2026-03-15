@@ -309,7 +309,16 @@ export const userService = {
     const conn = await prisma.consultantConnection.findFirst({
       where: { userId, status: "active" },
       include: {
-        consultant: true,
+        consultant: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            organizationName: true,
+            phone: true,
+          },
+        },
         invitation: true,
       },
     });
@@ -331,6 +340,16 @@ export const userService = {
       name: consultantName,
       managingTaxForms: taxForms,
       status: conn.status,
+      consultant: conn.consultant
+        ? {
+            id: conn.consultant.id,
+            firstName: conn.consultant.firstName,
+            lastName: conn.consultant.lastName,
+            email: conn.consultant.email,
+            organizationName: conn.consultant.organizationName ?? null,
+            phone: conn.consultant.phone ?? null,
+          }
+        : null,
     };
   },
 
