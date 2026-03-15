@@ -4,6 +4,14 @@ import { sendEmail } from "./emailService";
 export interface ConsultantRequestItem {
   id: string;
   consultantUserId: string;
+  consultant: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    organizationName: string | null;
+    phone: string | null;
+  };
   consultantName: string;
   consultantOrganization: string | null;
   invitedBusinessName: string | null;
@@ -35,26 +43,39 @@ export const consultantRequestService = {
             id: true,
             firstName: true,
             lastName: true,
+            email: true,
             organizationName: true,
+            phone: true,
           },
         },
       },
       orderBy: { createdAt: "desc" },
     });
 
-    return invitations.map((inv) => ({
-      id: inv.id,
-      consultantUserId: inv.consultantUserId,
-      consultantName:
+    return invitations.map((inv) => {
+      const name =
         `${inv.consultantUser.firstName} ${inv.consultantUser.lastName}`.trim() ||
         inv.consultantUser.organizationName ||
-        "Consultant",
-      consultantOrganization: inv.consultantUser.organizationName ?? null,
-      invitedBusinessName: inv.invitedBusinessName ?? null,
-      status: inv.status,
-      expiresAt: inv.expiresAt,
-      createdAt: inv.createdAt,
-    }));
+        "Consultant";
+      return {
+        id: inv.id,
+        consultantUserId: inv.consultantUserId,
+        consultant: {
+          id: inv.consultantUser.id,
+          firstName: inv.consultantUser.firstName,
+          lastName: inv.consultantUser.lastName,
+          email: inv.consultantUser.email,
+          organizationName: inv.consultantUser.organizationName ?? null,
+          phone: inv.consultantUser.phone ?? null,
+        },
+        consultantName: name,
+        consultantOrganization: inv.consultantUser.organizationName ?? null,
+        invitedBusinessName: inv.invitedBusinessName ?? null,
+        status: inv.status,
+        expiresAt: inv.expiresAt,
+        createdAt: inv.createdAt,
+      };
+    });
   },
 
   async acceptForUser(userId: string, invitationId: string) {
