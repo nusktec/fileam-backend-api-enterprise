@@ -197,4 +197,28 @@ export const employeesService = {
     });
     return this.getById(userId, employee.id);
   },
+
+  async fileAsExpense(userId: string, employeeId: string, createdById?: string) {
+    const employee = await prisma.employee.findFirst({
+      where: { id: employeeId, userId },
+    });
+    if (!employee) return null;
+
+    const gross = grossMonthly(employee);
+    const pensionEmployer = computePensionEmployer(gross);
+    const totalMonthlyCost = gross + pensionEmployer;
+
+    const { expensesService } = await import("./expensesService");
+    const dateStr = new Date().toISOString().split("T")[0];
+    const description = `Salary: ${employee.fullName}${employee.jobTitle ? ` - ${employee.jobTitle}` : ""}`;
+
+    return expensesService.create(userId, {
+      amount: totalMonthlyCost,
+      description,
+      category: "Salary",
+      date: dateStr,
+      vatInclusive: false,
+      createdById: createdById ?? userId,
+    });
+  },
 };

@@ -112,3 +112,27 @@ export const createEmployee = async (
       .json(outJson(false, "Failed to add employee", null));
   }
 };
+
+export const fileEmployeeAsExpense = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const expense = await employeesService.fileAsExpense(userId, id!);
+    if (!expense) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Employee not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.CREATED)
+      .json(outJson(true, "Employee filed as expense", expense));
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to file employee as expense", null));
+  }
+};
