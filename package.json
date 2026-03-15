@@ -6,7 +6,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "nodemon src/app.ts",
-    "build": "tsc",
+    "build": "tsc && cp -r src/services/template dist/services/",
     "start": "node dist/app.js",
     "seed": "ts-node src/seed/seed.ts",
     "prisma:generate": "prisma generate",
