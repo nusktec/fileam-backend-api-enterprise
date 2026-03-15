@@ -1,0 +1,383 @@
+{
+  "info": {
+    "name": "Fileam Backend API",
+    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}}. Upload files via Media first, then use returned URL in other endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "accessToken", "value": "" },
+    { "key": "apiVersion", "value": "1" },
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "clientId", "value": "" },
+    { "key": "consultantOnboardingToken", "value": "" },
+    { "key": "documentId", "value": "" },
+    { "key": "filingId", "value": "" },
+    { "key": "invitationCode", "value": "" },
+    { "key": "invitationId", "value": "" },
+    { "key": "invoiceId", "value": "" },
+    { "key": "mediaKey", "value": "path/to/file" },
+    { "key": "onboardingToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "requestedUserId", "value": "" },
+    { "key": "saleId", "value": "" },
+    { "key": "expenseId", "value": "" },
+    { "key": "webhookSecret", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const token = pm.collectionVariables.get('accessToken');",
+          "if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+          "const method = pm.request.method;",
+          "if (['POST','PUT','PATCH','DELETE'].includes(method) && pm.request.body?.mode === 'raw') {",
+          "  pm.request.headers.upsert({ key: 'Content-Type', value: 'application/json' });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Mobile",
+      "item": [
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "Login",
+              "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data){if(j.data.accessToken)pm.collectionVariables.set('accessToken',j.data.accessToken);if(j.data.refreshToken)pm.collectionVariables.set('refreshToken',j.data.refreshToken);if(j.data.onboardingToken)pm.collectionVariables.set('onboardingToken',j.data.onboardingToken);}"], "type": "text/javascript"}}],
+              "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"consultant@fileam.app\",\"password\":\"Password123!\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/login"}
+            },
+            {"name": "Forgot password", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/forgot-password"}},
+            {"name": "Resend forgot password", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/forgot-password/resend"}},
+            {"name": "Reset password", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\",\"code\":\"123456\",\"newPassword\":\"newpass123\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/reset-password"}},
+            {"name": "Refresh token", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"refreshToken\":\"{{refreshToken}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/refresh"}},
+            {"name": "Logout", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"refreshToken\":\"{{refreshToken}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/auth/logout"}}
+          ]
+        },
+        {
+          "name": "User",
+          "item": [
+            {"name": "Get profile", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile"}},
+            {"name": "Update profile", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"address\":\"123 Main St\",\"organizationName\":\"My Company\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile"}},
+            {"name": "Change password", "request": {"method": "PATCH", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"currentPassword\":\"Password123!\",\"newPassword\":\"NewPass456!\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/password"}},
+            {"name": "Get business profile", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/business-profile"}},
+            {"name": "Update business profile", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"businessName\":\"Acme Ltd\",\"tin\":\"12345678-0001\",\"rcNumber\":\"RC1234567\",\"address\":\"123 Main St\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/business-profile"}},
+            {"name": "Get notification settings", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings"}},
+            {"name": "Update notification settings", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"taxDeadline\":true,\"filingConfirmations\":true,\"weeklySummary\":true,\"filingReminders\":true,\"payersNotifications\":true,\"complianceUpdates\":false,\"twoFactorEnabled\":false}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings"}},
+            {"name": "Get consultant", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant"}},
+            {"name": "Revoke consultant", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"connectionId\":\"<uuid>\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/revoke"}}
+          ]
+        },
+        {
+          "name": "Consultant requests",
+          "item": [
+            {"name": "List", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.length>0){pm.collectionVariables.set('invitationId',j.data[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/consultant-requests"}},
+            {"name": "Accept", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/consultant-requests/{{invitationId}}/accept"}},
+            {"name": "Decline", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/consultant-requests/{{invitationId}}/decline"}}
+          ]
+        },
+        {
+          "name": "Onboarding",
+          "item": [
+            {"name": "Get profile", "request": {"method": "GET", "header": [{"key": "Authorization","value": "Bearer {{onboardingToken}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/profile"}},
+            {"name": "Step - Email", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\",\"firstName\":\"Jane\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/email"}},
+            {"name": "Step - Email resend", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\",\"firstName\":\"Jane\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/email-resend"}},
+            {"name": "Step - Email verify", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\",\"code\":\"123456\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/email-verify"}},
+            {"name": "Step - Password", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"},{"key": "Authorization","value": "Bearer {{onboardingToken}}"}], "body": {"mode": "raw", "raw": "{\"password\":\"password123\",\"firstName\":\"Jane\",\"lastName\":\"Doe\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/password"}},
+            {"name": "Step - Income type", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"incomeType\":\"business\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/income-type"}},
+            {"name": "Step - Tax obligations", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"taxObligationsUnderstood\":true}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/tax-obligations"}},
+            {"name": "Step - Business details", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"businessName\":\"Acme\",\"businessType\":\"Business\",\"tin\":\"12345678-0001\",\"rcNumber\":\"RC1234567\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/business-details"}},
+            {"name": "Step - Tax jurisdiction", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"state\":\"Lagos\",\"lga\":\"Ikeja\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/tax-jurisdiction"}},
+            {"name": "Step - Consultant terms", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"accepted\":true}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/consultant-terms"}},
+            {"name": "Invite - Verify code", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"code\":\"123456\",\"email\":\"user@example.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/invite/verify-code"}},
+            {"name": "Invite - Accept request", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"invitationId\":\"{{invitationId}}\",\"invitationCode\":\"{{invitationCode}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/invite/accept-request"}},
+            {"name": "Invite - Reject request", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"invitationId\":\"{{invitationId}}\",\"invitationCode\":\"{{invitationCode}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/invite/reject-request"}}
+          ]
+        },
+        {
+          "name": "Sales",
+          "item": [
+            {"name": "List sales", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; if(j.status&&d&&(Array.isArray(d)?d.length>0:d.data&&d.data.length>0)){var arr=Array.isArray(d)?d:d.data; pm.collectionVariables.set('saleId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20"}},
+            {"name": "Get sale", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}"}},
+            {"name": "Create sale", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Consulting\",\"amount\":50000,\"saleDate\":\"2026-02-21\",\"customerName\":\"Client A\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales"}}
+          ]
+        },
+        {
+          "name": "Expenses",
+          "item": [
+            {"name": "List expenses", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; if(j.status&&d&&(Array.isArray(d)?d.length>0:d.data&&d.data.length>0)){var arr=Array.isArray(d)?d:d.data; pm.collectionVariables.set('expenseId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses?page=1&limit=20"}},
+            {"name": "Get expense", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}"}},
+            {"name": "Create expense", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Office supplies\",\"amount\":15000,\"expenseDate\":\"2026-02-21\",\"category\":\"General\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses"}}
+          ]
+        },
+        {
+          "name": "Tax Computation",
+          "item": [
+            {"name": "Get tax computation", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation"}}
+          ]
+        },
+        {
+          "name": "Tax Payables",
+          "item": [
+            {"name": "List payables", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20"}},
+            {"name": "Get payable", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables/:id"}},
+            {"name": "Initiate payment", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables/:id/initiate-payment"}}
+          ]
+        },
+        {
+          "name": "Payments",
+          "item": [
+            {"name": "List payments", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payments?page=1&limit=20"}},
+            {"name": "Get payment", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payments/:id"}}
+          ]
+        },
+        {
+          "name": "Filings",
+          "item": [
+            {"name": "List filings", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?page=1&limit=20"}},
+            {"name": "Get filing", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/:id"}},
+            {"name": "Get filing document", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/:id/document"}},
+            {"name": "Get filing vault link", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/:id/vault-link"}},
+            {"name": "VAT - Get calculation", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/calculation?periodYear=2026&periodMonth=1"}},
+            {"name": "VAT - Create draft", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"salesAmount\":500000,\"purchaseAmount\":200000}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/draft"}},
+            {"name": "VAT - Submit", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"amount\":50000,\"paymentStatus\":\"Not paid\",\"documentUrl\":\"https://example.com/doc.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/submit"}},
+            {"name": "WHT - Get schedule", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/schedule?period=2026-01"}},
+            {"name": "WHT - Create draft", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"lines\":[{\"vendorName\":\"Vendor A\",\"grossAmount\":100000,\"whtRate\":5,\"whtDeducted\":5000}]}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/draft"}},
+            {"name": "WHT - Submit", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"totalWht\":25000,\"paymentStatus\":\"Not paid\",\"documentUrl\":\"https://example.com/wht.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/submit"}}
+          ]
+        },
+        {
+          "name": "Reports",
+          "item": [
+            {"name": "Get types", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/types"}},
+            {"name": "Get periods", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/periods?reportType=VAT Return Summary"}},
+            {"name": "Generate report", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"reportType\":\"VAT Return Summary\",\"periodYear\":2026,\"periodMonth\":1,\"format\":\"PDF\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/generate"}},
+            {"name": "List reports", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports?page=1&limit=20"}},
+            {"name": "Get report", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/:id"}},
+            {"name": "Get download", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/:id/download"}},
+            {"name": "Get vault link", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/:id/vault-link"}}
+          ]
+        },
+        {
+          "name": "Analytics",
+          "item": [
+            {"name": "Get dashboard", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/dashboard?period=2026-02&range=month"}}
+          ]
+        },
+        {
+          "name": "Evidence Vault",
+          "item": [
+            {"name": "List documents", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents?category=all"}},
+            {"name": "Get document", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/:id"}},
+            {"name": "Get download", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/:id/download"}}
+          ]
+        },
+        {
+          "name": "Employees",
+          "item": [
+            {"name": "List employees", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees?page=1&limit=20"}},
+            {"name": "Get obligations", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/obligations"}},
+            {"name": "Get employee", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/:id"}},
+            {"name": "Create employee", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"fullName\":\"John Doe\",\"jobTitle\":\"Developer\",\"employmentType\":\"full_time\",\"grossPay\":150000}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees"}}
+          ]
+        },
+        {
+          "name": "Help",
+          "item": [
+            {"name": "Get FAQs", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/faqs"}},
+            {"name": "Get about", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/about"}},
+            {"name": "Submit contact", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"subject\":\"Support\",\"message\":\"Hello\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/contact"}}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Media",
+      "item": [
+        {"name": "View", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/media/view?key=path/to/file"}},
+        {"name": "Get presigned URL", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/media/presigned?key=path/to/file"}},
+        {"name": "Upload", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.key){pm.collectionVariables.set('mediaKey',j.data.key);}"], "type": "text/javascript"}}], "request": {"method": "POST", "header": [], "body": {"mode": "formdata", "formdata": [{"key": "file", "type": "file", "src": []}]}, "url": "{{baseUrl}}/api/v{{apiVersion}}/media/upload"}},
+        {"name": "Delete", "request": {"method": "DELETE", "url": "{{baseUrl}}/api/v{{apiVersion}}/media?key={{mediaKey}}"}}
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {"name": "Payment confirmation", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"event\":\"payment.completed\",\"data\":{}}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/webhooks/payment"}}
+      ]
+    },
+    {
+      "name": "Enterprise",
+      "item": [
+        {"name": "Health", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/"}},
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "Login",
+              "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data){if(j.data.accessToken)pm.collectionVariables.set('accessToken',j.data.accessToken);if(j.data.refreshToken)pm.collectionVariables.set('refreshToken',j.data.refreshToken);if(j.data.consultantOnboardingToken)pm.collectionVariables.set('consultantOnboardingToken',j.data.consultantOnboardingToken);}"], "type": "text/javascript"}}],
+              "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"consultant@fileam.app\",\"password\":\"Password123!\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/login"}
+            },
+            {"name": "Refresh token", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"refreshToken\":\"{{refreshToken}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/refresh"}},
+            {"name": "Forgot password", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/forgot-password"}},
+            {"name": "Resend forgot password", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/forgot-password/resend"}},
+            {"name": "Reset password", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"email\":\"user@example.com\",\"code\":\"123456\",\"newPassword\":\"newpass123\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/reset-password"}},
+            {"name": "Change password", "request": {"method": "PATCH", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"currentPassword\":\"Password123!\",\"newPassword\":\"NewPass456!\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/change-password"}}
+          ]
+        },
+        {
+          "name": "Profile",
+          "item": [
+            {"name": "Get profile", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile"}},
+            {"name": "Update profile", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"organizationName\":\"Fileam Consulting\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile"}},
+            {"name": "Get consultant business", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-business"}},
+            {"name": "Update consultant business", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"firmName\":\"Fileam Consulting Ltd\",\"businessStructure\":\"limited_liability\",\"rcNumber\":\"RC1234567\",\"countryOfRegistration\":\"Nigeria\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/consultant-business"}}
+          ]
+        },
+        {
+          "name": "Notification Settings",
+          "item": [
+            {"name": "Get", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/notification-settings"}},
+            {"name": "Update", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"taxDeadline\":true,\"filingConfirmations\":true,\"weeklySummary\":true}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/notification-settings"}}
+          ]
+        },
+        {
+          "name": "Team",
+          "item": [
+            {"name": "Invite member", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"name\":\"John Smith\",\"email\":\"john@example.com\",\"role\":\"admin\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/invitations"}},
+            {"name": "List invitations", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/invitations"}},
+            {"name": "Get invitation by code (public)", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/invitations/accept?code={{invitationCode}}"}},
+            {"name": "Accept invitation (public)", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"code\":\"{{invitationCode}}\",\"password\":\"SecurePass123!\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/invitations/accept"}},
+            {"name": "List members", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/team/members"}}
+          ]
+        },
+        {
+          "name": "Compliance",
+          "item": [
+            {"name": "Get stats", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/compliance/stats"}},
+            {"name": "Get upcoming deadlines", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/compliance/upcoming-deadlines?limit=20"}}
+          ]
+        },
+        {
+          "name": "Managed Entities",
+          "item": [
+            {
+              "name": "List",
+              "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.length>0){var c=j.data.find(function(x){return x.type==='client'})||j.data[0]; pm.collectionVariables.set('clientId',c.id);}"], "type": "text/javascript"}}],
+              "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/managed-entities?q="}
+            }
+          ]
+        },
+        {
+          "name": "Clients",
+          "item": [
+            {"name": "List", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients?q=&type="}},
+            {"name": "List available",
+              "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.length>0){pm.collectionVariables.set('requestedUserId',j.data[0].id);}"], "type": "text/javascript"}}],
+              "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/available?q="}},
+            {"name": "Send client request", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"requestedUserId\":\"{{requestedUserId}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-requests"}},
+            {
+              "name": "Client :clientId",
+              "item": [
+                {
+                  "name": "Profile",
+                  "item": [
+                    {"name": "Get details", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/details"}},
+                    {"name": "Update business profile", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"businessName\":\"Acme Ltd\",\"rcNumber\":\"RC1234567\",\"tin\":\"12345678-0001\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/client-business-profile"}},
+                    {"name": "Update contact", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"address\":\"123 Main St\",\"phone\":\"+2348012345678\",\"email\":\"client@acme.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/client-contact"}},
+                    {"name": "Business profile - Get", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile"}},
+                    {"name": "Business profile - Update", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"companyName\":\"Acme Ltd\",\"businessType\":\"Consulting\",\"industry\":\"IT\",\"tin\":\"123-456-789\",\"businessAddress\":\"123 Main St\",\"phoneNumber\":\"+2348012345678\",\"emailAddress\":\"info@acme.com\",\"website\":\"www.acme.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile"}},
+                    {"name": "Business profile - Upgrade subscription", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"plan\":\"Pro\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile/subscription/upgrade"}}
+                  ]
+                },
+                {
+                  "name": "Tax",
+                  "item": [
+                    {"name": "Update tax config", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"vat\":true,\"paye\":false,\"wht\":true,\"cit\":false}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-configuration"}},
+                    {"name": "Tax summary", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/tax-summary"}},
+                    {"name": "VAT - Get status", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/status"}},
+                    {"name": "VAT - Calculate", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"vatType\":\"standard\",\"vatPeriod\":\"2026-01\",\"startDate\":\"2026-01-01\",\"endDate\":\"2026-01-31\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/calculate"}},
+                    {"name": "VAT - Get results", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/vat-computation/results"}}
+                  ]
+                },
+                {
+                  "name": "Financials",
+                  "item": [
+                    {"name": "Summary", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/summary"}},
+                    {"name": "List documents", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.data; if(j.status&&d&&d.length>0){pm.collectionVariables.set('documentId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents?page=1&limit=20"}},
+                    {"name": "Transactions", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions?page=1&limit=20"}},
+                    {"name": "Add transaction", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Consulting fee\",\"amount\":50000,\"type\":\"income\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions"}},
+                    {"name": "Upload document", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.id){pm.collectionVariables.set('documentId',j.data.id);}"], "type": "text/javascript"}}], "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"documentType\":\"invoice\",\"fileUrl\":\"https://example.com/doc.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/upload"}},
+                    {"name": "Delete document", "request": {"method": "DELETE", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}"}},
+                    {"name": "List invoices", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices?page=1&limit=20"}},
+                    {"name": "Create invoice", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"clientName\":\"Client A\",\"clientAddress\":\"123 St\",\"clientEmail\":\"client@a.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices"}}
+                  ]
+                },
+                {
+                  "name": "Evidence vault",
+                  "item": [
+                    {"name": "List", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.data; if(j.status&&d&&d.length>0){pm.collectionVariables.set('documentId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents?page=1&limit=20"}},
+                    {"name": "Upload", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.id){pm.collectionVariables.set('documentId',j.data.id);}"], "type": "text/javascript"}}], "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"documentName\":\"Contract\",\"category\":\"contracts\",\"fileUrl\":\"https://example.com/doc.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/upload"}},
+                    {"name": "Delete", "request": {"method": "DELETE", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}"}}
+                  ]
+                },
+                {
+                  "name": "Filings",
+                  "item": [
+                    {"name": "Unfiled", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/unfiled"}},
+                    {"name": "List", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings?page=1&limit=20"}},
+                    {"name": "Create", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"taxType\":\"VAT\",\"periodYear\":2026,\"periodMonth\":1,\"amount\":50000,\"paymentStatus\":\"not_paid\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings"}},
+                    {"name": "Get report", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}/report"}}
+                  ]
+                },
+                {
+                  "name": "Reports",
+                  "item": [
+                    {"name": "List", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports"}}
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Invites",
+          "item": [
+            {"name": "List client invitations",
+              "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.length>0){var p=j.data.find(function(i){return i.status==='pending'}); if(p)pm.collectionVariables.set('invitationId',p.id);}"], "type": "text/javascript"}}],
+              "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-invitations?status="}},
+            {"name": "Get invitation", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-invitations/{{invitationId}}"}},
+            {"name": "Cancel invitation", "request": {"method": "DELETE", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-invitations/{{invitationId}}"}},
+            {"name": "Resend invitation", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"extendExpiryHours\":168}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/client-invitations/{{invitationId}}/resend"}}
+          ]
+        },
+        {
+          "name": "Lookups",
+          "item": [
+            {"name": "Business types", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/types"}},
+            {"name": "Industries", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/industries"}}
+          ]
+        },
+        {
+          "name": "Consultant Onboarding",
+          "event": [{"listen": "prerequest", "script": {"exec": ["var t=pm.collectionVariables.get('consultantOnboardingToken'); if(t){pm.request.headers.upsert({key:'Authorization',value:'Bearer '+t});} else {var a=pm.collectionVariables.get('accessToken'); if(a)pm.request.headers.upsert({key:'Authorization',value:'Bearer '+a});}"], "type": "text/javascript"}}],
+          "item": [
+            {"name": "Step 1 - Firm identity", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.consultantOnboardingToken){pm.collectionVariables.set('consultantOnboardingToken',j.data.consultantOnboardingToken);}"], "type": "text/javascript"}}], "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"businessStructure\":\"sole_proprietorship\",\"firmName\":\"My Firm\",\"registrationType\":\"registered\",\"countryOfRegistration\":\"Nigeria\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/1"}},
+            {"name": "Get profile", "request": {"method": "GET", "header": [{"key": "Authorization","value": "Bearer {{consultantOnboardingToken}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/profile"}},
+            {"name": "Step 2 - Principal partner", "request": {"method": "POST", "header": [{"key": "Authorization","value": "Bearer {{consultantOnboardingToken}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"numberOfPartners\":1,\"principalPartner\":{\"fullName\":\"John Doe\",\"email\":\"john@firm.com\",\"phone\":\"+2348012345678\",\"certifications\":[{\"qualificationName\":\"ACCA\",\"issuingBody\":\"ACCA\"}]}}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/2"}},
+            {"name": "Step 3 - Scope", "request": {"method": "POST", "header": [{"key": "Authorization","value": "Bearer {{consultantOnboardingToken}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"primaryState\":\"Lagos\",\"additionalStates\":[],\"taxTypesSpecializations\":[\"VAT\"],\"businessSizeServed\":\"sme\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/3"}},
+            {"name": "Step 4 - Subscription", "request": {"method": "POST", "header": [{"key": "Authorization","value": "Bearer {{consultantOnboardingToken}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"billingOption\":\"monthly\",\"enableAutomatedComplianceReminders\":true}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/4"}},
+            {"name": "Step 5 - Payment setup", "request": {"method": "POST", "header": [{"key": "Authorization","value": "Bearer {{consultantOnboardingToken}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"paymentMethod\":\"bank_transfer\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/5"}},
+            {"name": "Step 6 - Compliance docs", "request": {"method": "POST", "header": [{"key": "Authorization","value": "Bearer {{consultantOnboardingToken}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"cacDocumentUrl\":\"https://example.com/cac.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/6"}},
+            {"name": "Step 7 - Declarations", "request": {"method": "POST", "header": [{"key": "Authorization","value": "Bearer {{consultantOnboardingToken}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"declarationAccuracy\":true,\"declarationFirsCompliance\":true,\"declarationSuspensionPolicy\":true}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/step/7"}},
+            {"name": "Activate", "request": {"method": "POST", "header": [{"key": "Authorization","value": "Bearer {{consultantOnboardingToken}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/activate"}}
+          ]
+        }
+      ]
+    }
+  ]
+}
