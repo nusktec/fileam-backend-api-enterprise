@@ -10,6 +10,7 @@ import {
   getDocumentTypes,
   getCurrencies,
   uploadDocument,
+  deleteDocument,
   getDocumentStatus,
   getProcessingQueue,
   getFinancialDocumentStats,
@@ -60,6 +61,11 @@ router.post(
   "/documents/upload",
   enterpriseValidations.validateUploadFinancialDocument,
   uploadDocument,
+);
+router.delete(
+  "/documents/:documentId",
+  enterpriseValidations.validateDocumentIdParam,
+  deleteDocument,
 );
 router.get("/processing-queue", getProcessingQueue);
 router.get("/invoices", withPagination("dateIssued"), listInvoices);

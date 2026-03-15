@@ -480,8 +480,10 @@ export async function consultantOnboardingActivate(
       return;
     }
     const updated = await consultantOnboardingService.getSession(session.id);
+    const message =
+      (result as { message?: string }).message ?? "Account activated";
     res.status(HttpStatusCode.OK).json(
-      outJson(true, "Account activated", {
+      outJson(true, message, {
         status: updated?.status,
         currentStep: 8,
       }),

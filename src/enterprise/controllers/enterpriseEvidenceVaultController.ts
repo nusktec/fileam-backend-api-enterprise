@@ -149,6 +149,27 @@ export async function getDocument(req: IRequest, res: Response): Promise<void> {
   }
 }
 
+export async function deleteDocument(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const documentId = getParam(req.params, "documentId");
+  try {
+    const result = await enterpriseEvidenceVaultService.deleteDocument(
+      companyId,
+      documentId,
+    );
+    if (!result) {
+      sendNotFound(res, "Document not found");
+      return;
+    }
+    sendResult(res, "Document deleted", result);
+  } catch {
+    sendServerError(res, "Failed to delete document");
+  }
+}
+
 export async function getApprovers(
   req: IRequest,
   res: Response,

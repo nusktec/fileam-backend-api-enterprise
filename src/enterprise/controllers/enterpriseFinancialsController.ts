@@ -244,6 +244,27 @@ export async function uploadDocument(
   }
 }
 
+export async function deleteDocument(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const documentId = getParam(req.params, "documentId");
+  try {
+    const result = await enterpriseFinancialsService.deleteDocument(
+      companyId,
+      documentId,
+    );
+    if (!result) {
+      sendNotFound(res, "Document not found");
+      return;
+    }
+    sendResult(res, "Document deleted", result);
+  } catch {
+    sendServerError(res, "Failed to delete document");
+  }
+}
+
 export async function getDocumentStatus(
   req: IRequest,
   res: Response,

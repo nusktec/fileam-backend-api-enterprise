@@ -13,6 +13,12 @@ export async function runSeed() {
     update: {},
   });
 
+  const superAdminRole = await prisma.role.upsert({
+    where: { name: "super_admin" },
+    create: { name: "super_admin" },
+    update: {},
+  });
+
   await prisma.role.upsert({
     where: { name: "business" },
     create: { name: "business" },
@@ -78,6 +84,16 @@ export async function runSeed() {
       },
     },
     create: { userId: adminUser.id, roleId: adminRole.id },
+    update: {},
+  });
+  await prisma.userRole.upsert({
+    where: {
+      userId_roleId: {
+        userId: adminUser.id,
+        roleId: superAdminRole.id,
+      },
+    },
+    create: { userId: adminUser.id, roleId: superAdminRole.id },
     update: {},
   });
 

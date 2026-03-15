@@ -274,6 +274,17 @@ export const enterpriseFinancialsService = {
     });
   },
 
+  async deleteDocument(companyId: string, documentId: string) {
+    const doc = await prisma.enterpriseFinancialDocument.findFirst({
+      where: { id: documentId, companyId },
+    });
+    if (!doc) return null;
+    await prisma.enterpriseFinancialDocument.delete({
+      where: { id: documentId },
+    });
+    return { deleted: true };
+  },
+
   async uploadDocument(companyId: string, data: FinancialDocumentUploadInput) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },

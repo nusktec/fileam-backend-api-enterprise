@@ -6,6 +6,7 @@ import {
   getStorageUsage,
   listDocuments,
   getDocument,
+  deleteDocument,
   getApprovers,
   approveDocument,
   rejectDocument,
@@ -42,6 +43,11 @@ router.get(
   "/documents/:documentId",
   enterpriseValidations.validateDocumentIdParam,
   getDocument,
+);
+router.delete(
+  "/documents/:documentId",
+  enterpriseValidations.validateDocumentIdParam,
+  deleteDocument,
 );
 router.get(
   "/documents/:documentId/download",

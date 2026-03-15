@@ -350,19 +350,47 @@ export const consultantOnboardingService = {
       return { success: false as const, message: "Session not found" };
     if (session.status === "activated")
       return { success: false as const, message: "Already activated" };
+
+    const hasSuperAdmin = await prisma.user.findFirst({
+      where: {
+        userRoles: {
+          some: {
+            role: {
+              name: { in: ["super_admin", "admin"] },
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    const shouldAutoActivate = !!hasSuperAdmin;
+
+    if (shouldAutoActivate) {
+      await prisma.consultantOnboardingSession.update({
+        where: { id: sessionId },
+        data: { status: "activated", currentStep: 8 },
+      });
+      if (session.userId) {
+        await prisma.user.update({
+          where: { id: session.userId },
+          data: {
+            enterpriseOnboardingComplete: true,
+            enterpriseOnboardingStep: "complete",
+          } as { enterpriseOnboardingComplete: boolean; enterpriseOnboardingStep: string },
+        });
+      }
+      return { success: true as const };
+    }
+
     await prisma.consultantOnboardingSession.update({
       where: { id: sessionId },
-      data: { status: "activated", currentStep: 8 },
+      data: { status: "pending", currentStep: 8 },
     });
-    if (session.userId) {
-      await prisma.user.update({
-        where: { id: session.userId },
-        data: {
-          enterpriseOnboardingComplete: true,
-          enterpriseOnboardingStep: "complete",
-        } as { enterpriseOnboardingComplete: boolean; enterpriseOnboardingStep: string },
-      });
-    }
-    return { success: true as const };
+    return {
+      success: true as const,
+      message:
+        "Activation pending. A platform administrator will review and approve your account.",
+    };
   },
 };

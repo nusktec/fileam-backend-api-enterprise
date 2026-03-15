@@ -352,6 +352,17 @@ export const enterpriseEvidenceVaultService = {
     };
   },
 
+  async deleteDocument(companyId: string, documentId: string) {
+    const doc = await prisma.enterpriseEvidenceDocument.findFirst({
+      where: { id: documentId, companyId },
+    });
+    if (!doc) return null;
+    await prisma.enterpriseEvidenceDocument.delete({
+      where: { id: documentId },
+    });
+    return { deleted: true };
+  },
+
   async uploadDocument(companyId: string, data: EvidenceVaultUploadInput) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
