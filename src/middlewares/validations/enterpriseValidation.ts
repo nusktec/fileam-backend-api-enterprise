@@ -86,23 +86,14 @@ const validateSendClientRequest = [
 
 // ---- Business Profile ----
 const validateUpdateBusinessProfile = [
-  check("companyName").trim().notEmpty().withMessage("companyName is required"),
-  check("businessType")
-    .trim()
-    .notEmpty()
-    .withMessage("businessType is required"),
-  check("industry").trim().notEmpty().withMessage("industry is required"),
-  check("tin").trim().notEmpty().withMessage("tin is required"),
-  check("businessAddress")
-    .trim()
-    .notEmpty()
-    .withMessage("businessAddress is required"),
-  check("phoneNumber").trim().notEmpty().withMessage("phoneNumber is required"),
-  check("emailAddress")
-    .trim()
-    .notEmpty()
-    .withMessage("emailAddress is required"),
-  check("website").trim().notEmpty().withMessage("website is required"),
+  check("companyName").optional().trim().isString(),
+  check("businessType").optional().trim().isString(),
+  check("industry").optional().trim().isString(),
+  check("tin").optional().trim().isString(),
+  check("businessAddress").optional().trim().isString(),
+  check("phoneNumber").optional().trim().isString(),
+  check("emailAddress").optional().trim().isEmail().withMessage("emailAddress must be a valid email"),
+  check("website").optional().trim().isString(),
   check("logo")
     .optional()
     .trim()

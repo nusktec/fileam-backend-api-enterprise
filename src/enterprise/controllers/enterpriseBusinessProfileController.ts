@@ -9,14 +9,14 @@ import {
 import { enterpriseBusinessProfileService } from "../services/enterpriseBusinessProfileService";
 
 interface UpdateBusinessProfileBody {
-  companyName: string;
-  businessType: string;
-  industry: string;
-  tin: string;
-  businessAddress: string;
-  phoneNumber: string;
-  emailAddress: string;
-  website: string;
+  companyName?: string;
+  businessType?: string;
+  industry?: string;
+  tin?: string;
+  businessAddress?: string;
+  phoneNumber?: string;
+  emailAddress?: string;
+  website?: string;
   logo?: string;
   registrationDate?: string;
 }
@@ -68,27 +68,22 @@ export async function updateBusinessProfile(
     includeOptionals: true,
   }) as UpdateBusinessProfileBody;
 
-  const registrationDate = data.registrationDate
-    ? new Date(data.registrationDate)
-    : new Date();
-  const logo =
-    data.logo !== undefined ? (data.logo === "" ? null : data.logo) : undefined;
+  const payload: UpdateBusinessProfileBody & { registrationDate?: Date; logo?: string | null } = {};
+  if (data.companyName !== undefined) payload.companyName = data.companyName;
+  if (data.businessType !== undefined) payload.businessType = data.businessType;
+  if (data.industry !== undefined) payload.industry = data.industry;
+  if (data.tin !== undefined) payload.tin = data.tin;
+  if (data.businessAddress !== undefined) payload.businessAddress = data.businessAddress;
+  if (data.phoneNumber !== undefined) payload.phoneNumber = data.phoneNumber;
+  if (data.emailAddress !== undefined) payload.emailAddress = data.emailAddress;
+  if (data.website !== undefined) payload.website = data.website;
+  if (data.registrationDate !== undefined) payload.registrationDate = new Date(data.registrationDate);
+  if (data.logo !== undefined) payload.logo = data.logo === "" ? null : data.logo;
 
   try {
     const profile = await enterpriseBusinessProfileService.updateProfile(
       companyId,
-      {
-        companyName: data.companyName,
-        businessType: data.businessType,
-        industry: data.industry,
-        registrationDate,
-        tin: data.tin,
-        businessAddress: data.businessAddress,
-        phoneNumber: data.phoneNumber,
-        emailAddress: data.emailAddress,
-        website: data.website,
-        ...(logo !== undefined && { logo }),
-      },
+      payload,
     );
     if (!profile) {
       sendNotFound(res, "Company not found");

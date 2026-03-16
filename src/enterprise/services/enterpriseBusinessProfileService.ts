@@ -131,7 +131,7 @@ export const enterpriseBusinessProfileService = {
 
   async updateProfile(
     companyId: string,
-    data: {
+    data: Partial<{
       companyName: string;
       businessType: string;
       industry: string;
@@ -141,46 +141,84 @@ export const enterpriseBusinessProfileService = {
       phoneNumber: string;
       emailAddress: string;
       website: string;
-      logo?: string | null;
-    },
+      logo: string | null;
+    }>,
   ) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
     if (!company) return null;
+
+    const existing = await prisma.enterpriseBusinessProfile.findUnique({
+      where: { companyId },
+    });
+
+    const defaults = {
+      companyName: company.name,
+      businessType: "",
+      industry: "",
+      registrationDate: new Date(),
+      tin: "",
+      businessAddress: "",
+      phoneNumber: "",
+      emailAddress: "",
+      website: "",
+      logo: undefined as string | undefined,
+    };
+
+    const merged = {
+      ...defaults,
+      ...(existing && {
+        companyName: existing.companyName,
+        businessType: existing.businessType,
+        industry: existing.industry,
+        registrationDate: existing.registrationDate,
+        tin: existing.tin,
+        businessAddress: existing.businessAddress,
+        phoneNumber: existing.phoneNumber,
+        emailAddress: existing.emailAddress,
+        website: existing.website,
+        logo: existing.logo ?? undefined,
+      }),
+      ...data,
+    };
+
     const createPayload = {
       companyId,
-      companyName: data.companyName,
-      businessType: data.businessType,
-      industry: data.industry,
-      registrationDate: data.registrationDate,
-      tin: data.tin,
-      businessAddress: data.businessAddress,
-      phoneNumber: data.phoneNumber,
-      emailAddress: data.emailAddress,
-      website: data.website,
-      logo: data.logo ?? undefined,
+      companyName: merged.companyName,
+      businessType: merged.businessType,
+      industry: merged.industry,
+      registrationDate: merged.registrationDate,
+      tin: merged.tin,
+      businessAddress: merged.businessAddress,
+      phoneNumber: merged.phoneNumber,
+      emailAddress: merged.emailAddress,
+      website: merged.website,
+      logo: merged.logo ?? undefined,
       subscriptionPlan: "Pro Plan",
       monthlyPayment: new Decimal(99.99),
       nextRenewalDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       compliancePercent: 0,
     };
-    const updatePayload = {
-      companyName: data.companyName,
-      businessType: data.businessType,
-      industry: data.industry,
-      registrationDate: data.registrationDate,
-      tin: data.tin,
-      businessAddress: data.businessAddress,
-      phoneNumber: data.phoneNumber,
-      emailAddress: data.emailAddress,
-      website: data.website,
-      ...(data.logo !== undefined && { logo: data.logo }),
-    };
+
+    const updatePayload: Record<string, unknown> = {};
+    if (data.companyName !== undefined) updatePayload.companyName = data.companyName;
+    if (data.businessType !== undefined) updatePayload.businessType = data.businessType;
+    if (data.industry !== undefined) updatePayload.industry = data.industry;
+    if (data.registrationDate !== undefined) updatePayload.registrationDate = data.registrationDate;
+    if (data.tin !== undefined) updatePayload.tin = data.tin;
+    if (data.businessAddress !== undefined) updatePayload.businessAddress = data.businessAddress;
+    if (data.phoneNumber !== undefined) updatePayload.phoneNumber = data.phoneNumber;
+    if (data.emailAddress !== undefined) updatePayload.emailAddress = data.emailAddress;
+    if (data.website !== undefined) updatePayload.website = data.website;
+    if (data.logo !== undefined) updatePayload.logo = data.logo;
+
     const profile = await prisma.enterpriseBusinessProfile.upsert({
       where: { companyId },
       create: createPayload as Prisma.EnterpriseBusinessProfileUncheckedCreateInput,
-      update: updatePayload as Prisma.EnterpriseBusinessProfileUncheckedUpdateInput,
+      update: Object.keys(updatePayload).length > 0
+        ? (updatePayload as Prisma.EnterpriseBusinessProfileUncheckedUpdateInput)
+        : updatePayload,
     });
     return profile;
   },
