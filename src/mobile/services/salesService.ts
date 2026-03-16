@@ -155,6 +155,10 @@ export const salesService = {
 
     if (!sale) return null;
 
+    generateInvoicePdfForSale(userId, sale.id).catch((err) => {
+      console.error("Failed to auto-generate invoice PDF:", err);
+    });
+
     return {
       id: sale.id,
       invoiceNumber: sale.invoiceNumber,
@@ -167,3 +171,8 @@ export const salesService = {
     };
   },
 };
+
+async function generateInvoicePdfForSale(userId: string, saleId: string): Promise<void> {
+  const { generateAndStorePdfForDocument } = await import("./evidenceVaultPdfService");
+  await generateAndStorePdfForDocument(userId, `sale-${saleId}`);
+}

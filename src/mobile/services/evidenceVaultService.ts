@@ -68,8 +68,8 @@ export const evidenceVaultService = {
         source: "Sales",
         date: s.saleDate,
         fileSizeKb: null,
-        documentUrl: null,
-        evidenceVaultId: null,
+        documentUrl: s.documentUrl ?? null,
+        evidenceVaultId: s.evidenceVaultId ?? null,
       });
     }
 
@@ -192,7 +192,20 @@ export const evidenceVaultService = {
     compositeId: string,
   ): Promise<string | null> {
     const doc = await this.getDocumentById(userId, compositeId);
-    if (!doc || !doc.documentUrl) return null;
-    return doc.documentUrl;
+    if (!doc) return null;
+    if (doc.documentUrl) return doc.documentUrl;
+
+    const canGenerate =
+      compositeId.startsWith("sale-") ||
+      (compositeId.startsWith("payable-") && !compositeId.startsWith("payable-receipt-")) ||
+      compositeId.startsWith("report-");
+    if (canGenerate) {
+      const { generateAndStorePdfForDocument } = await import(
+        "./evidenceVaultPdfService"
+      );
+      const url = await generateAndStorePdfForDocument(userId, compositeId);
+      return url;
+    }
+    return null;
   },
 };

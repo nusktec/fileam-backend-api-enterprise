@@ -62,6 +62,7 @@ export const MEDIA_CONFIG = {
     IMAGES: "images",
     VIDEOS: "videos",
     DOCUMENTS: "documents",
+    EVIDENCE_VAULT: "evidence-vault",
     MENU_ITEMS: "menu-items",
     CATEGORIES: "categories",
     BRANCHES: "branches",
