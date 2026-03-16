@@ -68,7 +68,8 @@ export async function updateBusinessProfile(
     includeOptionals: true,
   }) as UpdateBusinessProfileBody;
 
-  const payload: UpdateBusinessProfileBody & { registrationDate?: Date; logo?: string | null } = {};
+  type ProfileUpdate = Parameters<typeof enterpriseBusinessProfileService.updateProfile>[1];
+  const payload: ProfileUpdate = {};
   if (data.companyName !== undefined) payload.companyName = data.companyName;
   if (data.businessType !== undefined) payload.businessType = data.businessType;
   if (data.industry !== undefined) payload.industry = data.industry;
