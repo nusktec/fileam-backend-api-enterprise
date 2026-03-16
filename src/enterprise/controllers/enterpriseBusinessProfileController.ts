@@ -85,6 +85,7 @@ export async function updateBusinessProfile(
     const profile = await enterpriseBusinessProfileService.updateProfile(
       companyId,
       payload,
+      req.linkedUserId,
     );
     if (!profile) {
       sendNotFound(res, "Company not found");

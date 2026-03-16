@@ -61,8 +61,8 @@ export const enterpriseBusinessProfileService = {
         tin: b?.tin ?? "",
         businessAddress: b?.streetAddress ?? user.organizationAddress ?? "",
         phoneNumber: user.phone ?? "",
-        emailAddress: user.email,
-        website: "",
+        emailAddress: b?.contactEmail ?? user.email,
+        website: b?.website ?? "",
         logo: user.logo ?? null,
         subscriptionPlan: "Client",
         monthlyPayment: 0,
@@ -143,7 +143,69 @@ export const enterpriseBusinessProfileService = {
       website: string;
       logo: string | null;
     }>,
+    linkedUserId?: string,
   ) {
+    if (linkedUserId) {
+      const user = await prisma.user.findUnique({
+        where: { id: linkedUserId },
+        select: { id: true },
+      });
+      if (!user) return null;
+
+      let business = await prisma.business.findFirst({
+        where: { userId: linkedUserId },
+      });
+
+      const businessData: Record<string, unknown> = {};
+      if (data.companyName !== undefined) businessData.name = data.companyName;
+      if (data.businessType !== undefined) businessData.businessType = data.businessType;
+      if (data.industry !== undefined) businessData.sector = data.industry;
+      if (data.tin !== undefined) businessData.tin = data.tin;
+      if (data.businessAddress !== undefined) businessData.streetAddress = data.businessAddress;
+      if (data.website !== undefined) businessData.website = data.website;
+      if (data.emailAddress !== undefined) businessData.contactEmail = data.emailAddress;
+
+      const userData: Record<string, unknown> = {};
+      if (data.phoneNumber !== undefined) userData.phone = data.phoneNumber;
+      if (data.logo !== undefined) userData.logo = data.logo;
+      if (data.companyName !== undefined) userData.organizationName = data.companyName;
+      if (data.businessAddress !== undefined) userData.organizationAddress = data.businessAddress;
+
+      await prisma.$transaction(async (tx) => {
+        if (Object.keys(userData).length > 0) {
+          await tx.user.update({
+            where: { id: linkedUserId },
+            data: userData,
+          });
+        }
+        if (Object.keys(businessData).length > 0) {
+          if (business) {
+            await tx.business.update({
+              where: { id: business.id },
+              data: businessData,
+            });
+          } else {
+            await tx.business.create({
+              data: {
+                userId: linkedUserId,
+                name: (data.companyName as string) ?? "Business",
+                incomeType: "business",
+                taxObligationsUnderstoodAndAccepted: false,
+                businessType: data.businessType ?? null,
+                sector: data.industry ?? null,
+                tin: data.tin ?? null,
+                streetAddress: data.businessAddress ?? null,
+                website: data.website ?? null,
+                contactEmail: data.emailAddress ?? null,
+              },
+            });
+          }
+        }
+      });
+
+      return this.getProfile(companyId, undefined, linkedUserId);
+    }
+
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
