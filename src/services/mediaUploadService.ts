@@ -1,4 +1,4 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, ObjectCannedACL } from "@aws-sdk/client-s3";
 import {
   s3Client,
   s3Bucket,
@@ -6,6 +6,7 @@ import {
   generateFileKey,
   validateS3Config,
   MEDIA_CONFIG,
+  S3_CONFIG,
 } from "../config/s3";
 
 const DEFAULT_FOLDER = MEDIA_CONFIG.UPLOAD_FOLDERS.MEDIA;
@@ -28,6 +29,7 @@ export async function uploadToS3(params: {
     Key: key,
     Body: params.buffer,
     ContentType: params.mimetype || "application/octet-stream",
+    ...(S3_CONFIG.PUBLIC_READ_ACL && { ACL: ObjectCannedACL.public_read }),
   });
   await s3Client.send(command);
   const url = generateS3Url(key);

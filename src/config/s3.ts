@@ -17,6 +17,8 @@ export const S3_CONFIG = {
   BUCKET_URL: process.env.S3_BUCKET_URL || "",
   ENDPOINT: process.env.S3_ENDPOINT || undefined,
   FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE === "true",
+  /** Set to "false" to disable public-read ACL (e.g. if bucket blocks ACLs) */
+  PUBLIC_READ_ACL: process.env.S3_PUBLIC_READ_ACL !== "false",
 };
 
 const getBaseEndpoint = (): string | undefined => {

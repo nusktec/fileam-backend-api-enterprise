@@ -1,6 +1,6 @@
 /**
- * Evidence Vault PDF Service - Auto-generates professional PDFs for transactions
- * and stores them in S3. Uses the email design pattern from pdfTemplates.
+ * Evidence Vault PDF Service - Generates PDFs on request (no storage).
+ * Uses the email design pattern from pdfTemplates.
  */
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
@@ -9,20 +9,16 @@ import {
   generateTaxFilingPdf,
   generateReportPdf,
 } from "../../services/template/pdfTemplates";
-import { uploadToS3 } from "../../services/mediaUploadService";
-import { MEDIA_CONFIG } from "../../config/s3";
 
 function toNum(d: Decimal | number | null | undefined): number {
   if (d == null) return 0;
   return typeof d === "number" ? d : Number(d);
 }
 
-const EVIDENCE_FOLDER = MEDIA_CONFIG.UPLOAD_FOLDERS.EVIDENCE_VAULT;
-
-export async function generateAndStorePdfForDocument(
+export async function generatePdfForDocument(
   userId: string,
   compositeId: string,
-): Promise<string | null> {
+): Promise<{ buffer: Buffer; filename: string } | null> {
   const entityId = compositeId.replace(/^(sale|expense|payable|payable-receipt|report)-/, "");
   const prefix = compositeId.startsWith("sale-")
     ? "sale"
@@ -32,7 +28,7 @@ export async function generateAndStorePdfForDocument(
         ? "report"
         : null;
 
-  if (!entityId) return null;
+  if (!prefix || !entityId) return null;
 
   let buffer: Buffer;
   let filename: string;
@@ -114,31 +110,5 @@ export async function generateAndStorePdfForDocument(
     return null;
   }
 
-  const result = await uploadToS3({
-    buffer,
-    mimetype: "application/pdf",
-    originalName: filename,
-    folder: EVIDENCE_FOLDER,
-  });
-
-  if (!result) return null;
-
-  if (prefix === "sale") {
-    await prisma.sale.update({
-      where: { id: entityId },
-      data: { documentUrl: result.url },
-    });
-  } else if (prefix === "payable") {
-    await prisma.taxPayable.update({
-      where: { id: entityId },
-      data: { documentUrl: result.url },
-    });
-  } else if (prefix === "report") {
-    await prisma.report.update({
-      where: { id: entityId },
-      data: { documentUrl: result.url },
-    });
-  }
-
-  return result.url;
+  return { buffer, filename };
 }

@@ -40,12 +40,9 @@ export async function uploadMedia(req: IRequest, res: Response): Promise<void> {
       .json(outJson(false, "Upload failed. S3 may not be configured.", null));
     return;
   }
-  const origin = `${req.protocol}://${req.get("host") ?? ""}`;
-  const basePath = (req.baseUrl ?? "").replace(/\/$/, "");
-  const url = `${origin}${basePath}/view?key=${encodeURIComponent(result.key)}`;
   res
     .status(HttpStatusCode.CREATED)
-    .json(outJson(true, "File uploaded", { url, key: result.key }));
+    .json(outJson(true, "File uploaded", { url: result.url, key: result.key }));
 }
 
 const PRESIGNED_EXPIRY_DEFAULT = 3600;

@@ -61,14 +61,40 @@ export const getDocumentDownload = async (
   try {
     const userId = getAuthUserId(req);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const url = await evidenceVaultService.getDownloadUrl(userId, id!);
-    if (!url) {
+    const doc = await evidenceVaultService.getDocumentById(userId, id!);
+    if (!doc) {
       res
         .status(HttpStatusCode.NOT_FOUND)
-        .json(outJson(false, "Download not available for this document", null));
+        .json(outJson(false, "Document not found", null));
       return;
     }
-    res.status(HttpStatusCode.OK).json(outJson(true, "Download URL", { url }));
+
+    const url = await evidenceVaultService.getDownloadUrl(userId, id!);
+    if (url) {
+      res.status(HttpStatusCode.OK).json(outJson(true, "Download URL", { url }));
+      return;
+    }
+
+    if (evidenceVaultService.canGeneratePdf(id!)) {
+      const { generatePdfForDocument } = await import(
+        "../services/evidenceVaultPdfService"
+      );
+      const result = await generatePdfForDocument(userId, id!);
+      if (result) {
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="${result.filename}"`,
+        );
+        res.setHeader("Content-Length", result.buffer.length);
+        res.status(HttpStatusCode.OK).send(result.buffer);
+        return;
+      }
+    }
+
+    res
+      .status(HttpStatusCode.NOT_FOUND)
+      .json(outJson(false, "Download not available for this document", null));
   } catch (error) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)

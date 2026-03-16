@@ -27,6 +27,8 @@ interface VaultDocument {
   fileSizeKb: number | null;
   documentUrl: string | null;
   evidenceVaultId: string | null;
+  /** When documentUrl is null, use this path to fetch PDF on request (requires auth) */
+  downloadPath?: string | null;
 }
 
 export const evidenceVaultService = {
@@ -60,8 +62,9 @@ export const evidenceVaultService = {
     for (const s of sales) {
       const name = `Invoice ${s.invoiceNumber}${s.customerName ? ` - ${s.customerName}` : ""}`;
       if (searchLower && !name.toLowerCase().includes(searchLower)) continue;
+      const docId = `sale-${s.id}`;
       docs.push({
-        id: `sale-${s.id}`,
+        id: docId,
         documentId: `DOC-${s.id.slice(0, 8).toUpperCase()}`,
         name,
         category: "Invoices",
@@ -70,6 +73,7 @@ export const evidenceVaultService = {
         fileSizeKb: null,
         documentUrl: s.documentUrl ?? null,
         evidenceVaultId: s.evidenceVaultId ?? null,
+        downloadPath: !s.documentUrl ? `/mobile/evidence-vault/documents/${docId}/download` : null,
       });
     }
 
@@ -118,8 +122,9 @@ export const evidenceVaultService = {
               : "Filings";
         if (searchLower && !filingName.toLowerCase().includes(searchLower))
           continue;
+        const docId = `payable-${p.id}`;
         docs.push({
-          id: `payable-${p.id}`,
+          id: docId,
           documentId: `DOC-${p.id.slice(0, 8).toUpperCase()}`,
           name: filingName,
           category: cat,
@@ -128,6 +133,7 @@ export const evidenceVaultService = {
           fileSizeKb: null,
           documentUrl: p.documentUrl,
           evidenceVaultId: p.evidenceVaultId,
+          downloadPath: !p.documentUrl ? `/mobile/evidence-vault/documents/${docId}/download` : null,
         });
       }
     }
@@ -135,8 +141,9 @@ export const evidenceVaultService = {
     for (const r of reports) {
       const name = `${r.reportType} - ${r.periodLabel}`;
       if (searchLower && !name.toLowerCase().includes(searchLower)) continue;
+      const docId = `report-${r.id}`;
       docs.push({
-        id: `report-${r.id}`,
+        id: docId,
         documentId: `DOC-${r.id.slice(0, 8).toUpperCase()}`,
         name,
         category: "Filings",
@@ -145,6 +152,7 @@ export const evidenceVaultService = {
         fileSizeKb: null,
         documentUrl: r.documentUrl,
         evidenceVaultId: r.evidenceVaultId,
+        downloadPath: !r.documentUrl ? `/mobile/evidence-vault/documents/${docId}/download` : null,
       });
     }
 
@@ -193,19 +201,14 @@ export const evidenceVaultService = {
   ): Promise<string | null> {
     const doc = await this.getDocumentById(userId, compositeId);
     if (!doc) return null;
-    if (doc.documentUrl) return doc.documentUrl;
+    return doc.documentUrl ?? null;
+  },
 
-    const canGenerate =
+  canGeneratePdf(compositeId: string): boolean {
+    return (
       compositeId.startsWith("sale-") ||
       (compositeId.startsWith("payable-") && !compositeId.startsWith("payable-receipt-")) ||
-      compositeId.startsWith("report-");
-    if (canGenerate) {
-      const { generateAndStorePdfForDocument } = await import(
-        "./evidenceVaultPdfService"
-      );
-      const url = await generateAndStorePdfForDocument(userId, compositeId);
-      return url;
-    }
-    return null;
+      compositeId.startsWith("report-")
+    );
   },
 };
