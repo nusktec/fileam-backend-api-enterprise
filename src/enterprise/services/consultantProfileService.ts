@@ -64,22 +64,37 @@ export const consultantProfileService = {
       }),
     };
     if (session.firmIdentity) {
-      await prisma.consultantFirmIdentity.update({
-        where: { sessionId: session.id },
-        data: payload,
+      await prisma.$transaction(async (tx) => {
+        await tx.consultantFirmIdentity.update({
+          where: { sessionId: session.id },
+          data: payload,
+        });
+        if (data.firmName !== undefined) {
+          await tx.user.update({
+            where: { id: userId },
+            data: { organizationName: data.firmName },
+          });
+        }
       });
     } else {
-      await prisma.consultantFirmIdentity.create({
-        data: {
-          sessionId: session.id,
-          businessStructure: data.businessStructure ?? "sole_proprietorship",
-          firmName: data.firmName ?? "Firm",
-          registrationType: data.registrationType ?? "registered",
-          rcNumber: data.rcNumber ?? null,
-          yearOfIncorporation: data.yearOfIncorporation ?? null,
-          countryOfRegistration: data.countryOfRegistration ?? "Nigeria",
-        },
-      });
+      const firmName = data.firmName ?? "Firm";
+      await prisma.$transaction([
+        prisma.consultantFirmIdentity.create({
+          data: {
+            sessionId: session.id,
+            businessStructure: data.businessStructure ?? "sole_proprietorship",
+            firmName,
+            registrationType: data.registrationType ?? "registered",
+            rcNumber: data.rcNumber ?? null,
+            yearOfIncorporation: data.yearOfIncorporation ?? null,
+            countryOfRegistration: data.countryOfRegistration ?? "Nigeria",
+          },
+        }),
+        prisma.user.update({
+          where: { id: userId },
+          data: { organizationName: firmName },
+        }),
+      ]);
     }
     return this.getBusiness(userId);
   },
