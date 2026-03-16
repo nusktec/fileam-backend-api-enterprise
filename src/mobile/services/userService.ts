@@ -357,7 +357,9 @@ export const userService = {
     const conn = await prisma.consultantConnection.findFirst({
       where: { id: connectionId, userId },
     });
-    if (!conn) return false;
+    if (!conn) {
+      return true;
+    }
 
     await prisma.$transaction([
       prisma.consultantConnection.delete({

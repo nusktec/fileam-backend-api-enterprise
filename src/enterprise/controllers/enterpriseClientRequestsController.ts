@@ -82,31 +82,77 @@ export async function sendClientRequest(
     return;
   }
 
-  let code = RandomAscii(6);
-  let exists = await prisma.invitation.findUnique({ where: { code } });
-  while (exists) {
-    code = RandomAscii(6);
-    exists = await prisma.invitation.findUnique({ where: { code } });
-  }
-
+  const now = new Date();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
+  const existingRejectedOrExpired = await prisma.invitation.findFirst({
+    where: {
+      consultantUserId,
+      AND: [
+        {
+          OR: [
+            { requestedUserId },
+            { invitedEmail: { equals: requestedUser.email, mode: "insensitive" as const } },
+          ],
+        },
+        {
+          OR: [
+            { status: "rejected" },
+            { status: "pending", expiresAt: { lt: now } },
+          ],
+        },
+      ],
+    },
+  });
+
+  let invitation: { id: string; code: string; expiresAt: Date };
+
   try {
-    const invitation = await prisma.invitation.create({
-      data: {
-        code,
-        consultantUserId,
-        requestedUserId,
-        invitedEmail: requestedUser.email,
-        invitedBusinessName:
-          requestedUser.businesses[0]?.name ??
-          requestedUser.organizationName ??
-          null,
-        invitedContactName: `${requestedUser.firstName} ${requestedUser.lastName}`.trim() || null,
-        status: "pending",
-        expiresAt,
-      },
-    });
+    if (existingRejectedOrExpired) {
+      let code = RandomAscii(6);
+      let codeConflict = await prisma.invitation.findFirst({ where: { code } });
+      while (codeConflict && codeConflict.id !== existingRejectedOrExpired.id) {
+        code = RandomAscii(6);
+        codeConflict = await prisma.invitation.findFirst({ where: { code } });
+      }
+      invitation = await prisma.invitation.update({
+        where: { id: existingRejectedOrExpired.id },
+        data: {
+          code,
+          requestedUserId,
+          invitedEmail: requestedUser.email,
+          invitedBusinessName:
+            requestedUser.businesses[0]?.name ??
+            requestedUser.organizationName ??
+            null,
+          invitedContactName: `${requestedUser.firstName} ${requestedUser.lastName}`.trim() || null,
+          status: "pending",
+          expiresAt,
+        },
+      });
+    } else {
+      let code = RandomAscii(6);
+      let exists = await prisma.invitation.findUnique({ where: { code } });
+      while (exists) {
+        code = RandomAscii(6);
+        exists = await prisma.invitation.findUnique({ where: { code } });
+      }
+      invitation = await prisma.invitation.create({
+        data: {
+          code,
+          consultantUserId,
+          requestedUserId,
+          invitedEmail: requestedUser.email,
+          invitedBusinessName:
+            requestedUser.businesses[0]?.name ??
+            requestedUser.organizationName ??
+            null,
+          invitedContactName: `${requestedUser.firstName} ${requestedUser.lastName}`.trim() || null,
+          status: "pending",
+          expiresAt,
+        },
+      });
+    }
 
     const recipientName =
       (requestedUser.organizationName ??
@@ -129,8 +175,8 @@ export async function sendClientRequest(
       recipientName,
       consultantName,
       invitation.id,
-      code,
-      expiresAt,
+      invitation.code,
+      invitation.expiresAt,
     );
     if (!emailResult.success) {
       console.error("Failed to send consultant request email:", emailResult.error);
