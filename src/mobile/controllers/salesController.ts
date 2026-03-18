@@ -61,6 +61,7 @@ export const createSale = async (
     const {
       amount,
       description,
+      category,
       customerName,
       paymentType,
       date,
@@ -70,6 +71,7 @@ export const createSale = async (
     const sale = await salesService.create(userId, {
       amount: Number(amount),
       description,
+      category,
       customerName,
       paymentType,
       date,

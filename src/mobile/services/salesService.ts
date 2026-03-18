@@ -67,6 +67,7 @@ export const salesService = {
         invoiceNumber: s.invoiceNumber,
         status: s.status,
         description: s.description,
+        category: s.category ?? null,
         date: s.saleDate,
         amount: decimalToNumber(s.amount),
         vatAmount: decimalToNumber(s.vatAmount),
@@ -90,6 +91,7 @@ export const salesService = {
       status: sale.status,
       totalAmount: decimalToNumber(sale.totalAmount),
       description: sale.description,
+      category: sale.category ?? null,
       customer: sale.customerName,
       paymentType: sale.paymentType,
       date: sale.saleDate,
@@ -107,6 +109,7 @@ export const salesService = {
     data: {
       amount: number;
       description: string;
+      category?: string;
       customerName?: string;
       paymentType: string;
       date: string;
@@ -139,6 +142,7 @@ export const salesService = {
           createdById: data.createdById ?? userId,
           invoiceNumber,
           description: data.description,
+          category: data.category ?? null,
           customerName: data.customerName ?? null,
           amount,
           vatRate,

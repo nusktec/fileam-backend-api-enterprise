@@ -1,5 +1,6 @@
 import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import { SALE_CATEGORIES } from "../../constants/saleCategories";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
 
@@ -8,6 +9,11 @@ export const createSaleValidation = [
     .isFloat({ min: 0 })
     .withMessage("Amount must be a positive number"),
   check("description").trim().notEmpty().withMessage("Description is required"),
+  check("category")
+    .optional()
+    .trim()
+    .isIn(SALE_CATEGORIES)
+    .withMessage(`category must be one of: ${SALE_CATEGORIES.join(", ")}`),
   check("customerName").optional().trim().isString(),
   check("paymentType")
     .isIn(PAYMENT_TYPES)

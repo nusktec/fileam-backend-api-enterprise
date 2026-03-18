@@ -4,6 +4,7 @@ model Sale {
   createdById    String?  @map("created_by_id")
   invoiceNumber  String   @map("invoice_number")
   description    String
+  category       String?  @map("category")
   customerName   String?  @map("customer_name")
   amount         Decimal  @db.Decimal(14, 2)
   vatRate        Decimal  @default(0) @map("vat_rate") @db.Decimal(5, 2)

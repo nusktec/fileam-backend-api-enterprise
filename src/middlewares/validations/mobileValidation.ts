@@ -1,5 +1,6 @@
 import { check, param } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import { EMPLOYMENT_TYPES } from "../../constants/employmentTypes";
 
 /**
  * Use on routes that have :id param (e.g. GET /documents/:id).
@@ -14,7 +15,10 @@ export const validateIdParam = [
 export const validateCreateEmployee = [
   check("fullName").trim().notEmpty().withMessage("fullName is required"),
   check("jobTitle").trim().notEmpty().withMessage("jobTitle is required"),
-  check("employmentType").trim().notEmpty().withMessage("employmentType is required"),
+  check("employmentType")
+    .trim()
+    .isIn(EMPLOYMENT_TYPES)
+    .withMessage(`employmentType must be one of: ${EMPLOYMENT_TYPES.join(", ")}`),
   check("basicSalary")
     .notEmpty()
     .withMessage("basicSalary is required")

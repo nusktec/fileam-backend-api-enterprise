@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API",
-    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}}. Upload files via Media first, then use returned URL in other endpoints.",
+    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}}. Upload files via Media first, then use returned URL in other endpoints. Expense categories: Rent, Tools & Software, Marketing, Internet, Salary, Other. Sale categories: Consulting, Product Sales, Service Income, Subscription, Other. Employment types: Part time, Full time, Contract.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -76,7 +76,8 @@
             {"name": "Get notification settings", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings"}},
             {"name": "Update notification settings", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"taxDeadline\":true,\"filingConfirmations\":true,\"weeklySummary\":true,\"filingReminders\":true,\"payersNotifications\":true,\"complianceUpdates\":false,\"twoFactorEnabled\":false}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings"}},
             {"name": "Get consultant", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.id){pm.collectionVariables.set('connectionId',j.data.id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant"}},
-            {"name": "Revoke consultant", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"connectionId\":\"{{connectionId}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/revoke"}}
+            {"name": "Revoke consultant", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"connectionId\":\"{{connectionId}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/revoke"}},
+            {"name": "Contacts and types", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/contacts-and-types"}}
           ]
         },
         {
@@ -110,7 +111,8 @@
           "item": [
             {"name": "List sales", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.sales?d.sales:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('saleId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20"}},
             {"name": "Get sale", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}"}},
-            {"name": "Create sale", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Consulting\",\"amount\":50000,\"date\":\"2026-02-21\",\"paymentType\":\"Cash\",\"customerName\":\"Client A\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales"}}
+            {"name": "Create sale", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Consulting\",\"amount\":50000,\"date\":\"2026-02-21\",\"paymentType\":\"Cash\",\"customerName\":\"Client A\",\"category\":\"Consulting\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales"}},
+            {"name": "Create sale (Product Sales)", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Product sale\",\"amount\":75000,\"date\":\"2026-02-21\",\"paymentType\":\"Transfer\",\"customerName\":\"Retail Co\",\"category\":\"Product Sales\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales"}}
           ]
         },
         {
@@ -118,7 +120,8 @@
           "item": [
             {"name": "List expenses", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.expenses?d.expenses:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('expenseId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses?page=1&limit=20"}},
             {"name": "Get expense", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}"}},
-            {"name": "Create expense", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Office supplies\",\"amount\":15000,\"date\":\"2026-02-21\",\"category\":\"Other\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses"}}
+            {"name": "Create expense", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Office supplies\",\"amount\":15000,\"date\":\"2026-02-21\",\"category\":\"Other\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses"}},
+            {"name": "Create expense (Marketing)", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Google Ads\",\"amount\":25000,\"date\":\"2026-02-21\",\"category\":\"Marketing\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses"}}
           ]
         },
         {
@@ -189,7 +192,8 @@
             {"name": "List employees", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.employees?d.employees:d&&Array.isArray(d)?d:[]; if(arr.length&&arr[0].id){pm.collectionVariables.set('employeeId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees?page=1&limit=20"}},
             {"name": "Get obligations", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/obligations"}},
             {"name": "Get employee", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}"}},
-            {"name": "Create employee", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"fullName\":\"John Doe\",\"jobTitle\":\"Developer\",\"employmentType\":\"full_time\",\"basicSalary\":120000,\"housingAllowance\":30000}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees"}},
+            {"name": "Create employee", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"fullName\":\"John Doe\",\"jobTitle\":\"Developer\",\"employmentType\":\"Full time\",\"basicSalary\":120000,\"housingAllowance\":30000}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees"}},
+            {"name": "Create employee (Part time)", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"fullName\":\"Jane Smith\",\"jobTitle\":\"Designer\",\"employmentType\":\"Part time\",\"basicSalary\":60000,\"housingAllowance\":15000}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees"}},
             {"name": "File employee as expense", "request": {"method": "POST", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}/file-as-expense"}}
           ]
         },
@@ -307,7 +311,7 @@
                     {"name": "Update business profile", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"businessName\":\"Acme Ltd\",\"rcNumber\":\"RC1234567\",\"tin\":\"12345678-0001\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/client-business-profile"}},
                     {"name": "Update contact", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"address\":\"123 Main St\",\"phone\":\"+2348012345678\",\"email\":\"client@acme.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/client-contact"}},
                     {"name": "Business profile - Get", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile"}},
-                    {"name": "Business profile - Update", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"companyName\":\"Acme Ltd\",\"businessType\":\"Consulting\",\"industry\":\"IT\",\"tin\":\"123-456-789\",\"businessAddress\":\"123 Main St\",\"phoneNumber\":\"+2348012345678\",\"emailAddress\":\"info@acme.com\",\"website\":\"www.acme.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile"}},
+                    {"name": "Business profile - Update", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"companyName\":\"Acme Ltd\",\"businessType\":\"Consulting\",\"industry\":\"IT & Services\",\"tin\":\"123-456-789\",\"businessAddress\":\"123 Main St\",\"phoneNumber\":\"+2348012345678\",\"emailAddress\":\"info@acme.com\",\"website\":\"www.acme.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile"}},
                     {"name": "Business profile - Upgrade subscription", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"plan\":\"Pro\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile/subscription/upgrade"}}
                   ]
                 },
@@ -375,6 +379,7 @@
         {
           "name": "Lookups",
           "item": [
+            {"name": "Contacts and types", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/contacts-and-types"}},
             {"name": "Business types", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/types"}},
             {"name": "Industries", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/business-profile/industries"}}
           ]

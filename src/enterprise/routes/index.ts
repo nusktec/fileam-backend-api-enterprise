@@ -34,6 +34,7 @@ import {
   listAvailableClients,
   sendClientRequest,
 } from "../controllers/enterpriseClientRequestsController";
+import { getContactsAndTypes } from "../controllers/contactsAndTypesController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 import { validations as userValidations } from "../../middlewares/validations/userValidation";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
@@ -91,6 +92,12 @@ router.get(
   authenticate(),
   requireEnterpriseOnboardingComplete,
   listAllBusinesses,
+);
+router.get(
+  "/contacts-and-types",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  getContactsAndTypes,
 );
 router.get(
   "/clients",
