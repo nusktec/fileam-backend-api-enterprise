@@ -8,6 +8,7 @@ import {
 } from "../utils/controllerHelpers";
 import { clientBusinessProfileService } from "../services/clientBusinessProfileService";
 import { getClientDetails } from "../services/clientDetailsService";
+import { getClientDashboard } from "../services/clientDashboardService";
 
 export async function putClientBusinessProfile(
   req: IRequest,
@@ -93,5 +94,22 @@ export async function getClientDetailsHandler(
     sendResult(res, "Client details", details);
   } catch {
     sendServerError(res, "Failed to get client details");
+  }
+}
+
+export async function getClientDashboardHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId!;
+  try {
+    const data = await getClientDashboard(linkedUserId);
+    if (!data) {
+      sendNotFound(res, "Client not found");
+      return;
+    }
+    sendResult(res, "Client dashboard", data);
+  } catch {
+    sendServerError(res, "Failed to get client dashboard");
   }
 }

@@ -52,6 +52,41 @@ export const getSaleById = async (
   }
 };
 
+export const getSaleDetails = getSaleById;
+
+export const downloadSaleInvoice = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const saleId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const { generatePdfForDocument } = await import(
+      "../services/evidenceVaultPdfService"
+    );
+    const result = await generatePdfForDocument(userId, `sale-${saleId!}`);
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Sale not found or invoice unavailable", null));
+      return;
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${result.filename}"`,
+    );
+    res.setHeader("Content-Length", result.buffer.length);
+    res.status(HttpStatusCode.OK).send(result.buffer);
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to download invoice", null));
+  }
+};
+
 export const createSale = async (
   req: IRequest,
   res: Response,

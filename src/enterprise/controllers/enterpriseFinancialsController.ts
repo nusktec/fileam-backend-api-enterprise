@@ -7,6 +7,7 @@ import {
   sendResult,
   sendCreated,
   sendServerError,
+  sendBadRequest,
 } from "../utils/controllerHelpers";
 import { sendPaginated } from "../../utils/responseHelpers";
 import { enterpriseFinancialsService } from "../services/enterpriseFinancialsService";
@@ -102,6 +103,54 @@ export async function getProfitTrend(
     sendResult(res, "Profit trend", data);
   } catch {
     sendServerError(res, "Failed to get profit trend");
+  }
+}
+
+export async function getProfitAndLoss(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  try {
+    const data = await enterpriseFinancialsService.getProfitAndLoss(
+      companyId,
+      year,
+      month,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Profit & Loss", data);
+  } catch {
+    sendServerError(res, "Failed to get profit & loss");
+  }
+}
+
+export async function getBalanceSheet(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  try {
+    const data = await enterpriseFinancialsService.getBalanceSheet(
+      companyId,
+      year,
+      month,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Balance sheet", data);
+  } catch {
+    sendServerError(res, "Failed to get balance sheet");
   }
 }
 
@@ -241,6 +290,111 @@ export async function uploadDocument(
     sendCreated(res, "Document uploaded", doc);
   } catch {
     sendServerError(res, "Failed to upload document");
+  }
+}
+
+export async function uploadInvoiceDocument(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const data = (req.body || {}) as { fileUrl?: string; documentDate?: string };
+  const fileUrl = data.fileUrl?.trim();
+  if (!fileUrl) {
+    sendBadRequest(res, "fileUrl is required");
+    return;
+  }
+  try {
+    const result = await enterpriseFinancialsService.uploadInvoiceDocument(
+      companyId,
+      {
+        fileUrl,
+        documentDate: data.documentDate ? new Date(data.documentDate) : undefined,
+      },
+    );
+    if (!result) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendCreated(res, "Invoice uploaded", result);
+  } catch {
+    sendServerError(res, "Failed to upload invoice");
+  }
+}
+
+export async function ocrExtractDocument(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const fileId = getParam(req.params, "fileId");
+  try {
+    const result = await enterpriseFinancialsService.mockOcrExtract(
+      companyId,
+      fileId,
+    );
+    if (!result) {
+      sendNotFound(res, "Document not found");
+      return;
+    }
+    sendCreated(res, "OCR extraction completed (mock)", result);
+  } catch {
+    sendServerError(res, "Failed to extract OCR");
+  }
+}
+
+export async function vendorIdentifyDocument(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const extractionId = getParam(req.params, "extractionId");
+  try {
+    const result = await enterpriseFinancialsService.mockVendorIdentify(
+      companyId,
+      extractionId,
+    );
+    sendCreated(res, "Vendor identified (mock)", result);
+  } catch {
+    sendServerError(res, "Failed to identify vendor");
+  }
+}
+
+export async function analyzeDocument(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const vendorId = getParam(req.params, "vendorId");
+  try {
+    const result = await enterpriseFinancialsService.mockAnalyze(
+      companyId,
+      vendorId,
+    );
+    sendResult(res, "Analysis complete (mock)", result);
+  } catch {
+    sendServerError(res, "Failed to analyze document");
+  }
+}
+
+export async function getDocumentReview(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const documentId = getParam(req.params, "documentId");
+  try {
+    const result = await enterpriseFinancialsService.getDocumentReview(
+      companyId,
+      documentId,
+    );
+    if (!result) {
+      sendNotFound(res, "Document not found");
+      return;
+    }
+    sendResult(res, "Document review", result);
+  } catch {
+    sendServerError(res, "Failed to get document review");
   }
 }
 

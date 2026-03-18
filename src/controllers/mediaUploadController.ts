@@ -37,7 +37,7 @@ export async function uploadMedia(req: IRequest, res: Response): Promise<void> {
   if (!result) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "Upload failed. S3 may not be configured.", null));
+      .json(outJson(false, "Upload failed. R2 may not be configured.", null));
     return;
   }
   res
@@ -123,7 +123,7 @@ export async function deleteMedia(req: IRequest, res: Response): Promise<void> {
   if (!deleted) {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "Failed to delete file. S3 may not be configured or key may not exist.", null));
+      .json(outJson(false, "Failed to delete file. R2 may not be configured or key may not exist.", null));
     return;
   }
   res.status(HttpStatusCode.OK).json(outJson(true, "File deleted", null));

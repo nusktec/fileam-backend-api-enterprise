@@ -63,6 +63,11 @@ const validateDocumentIdParam = [
   handleValidation,
 ];
 
+const validateFileIdParam = [
+  param("fileId").isUUID().withMessage("File ID must be a valid UUID"),
+  handleValidation,
+];
+
 const validateInvoiceIdParam = [
   param("invoiceId").isUUID().withMessage("Invoice ID must be a valid UUID"),
   handleValidation,
@@ -377,6 +382,7 @@ export const enterpriseValidations = {
   validateCompanyIdParam,
   validateClientIdParam,
   validateDocumentIdParam,
+  validateFileIdParam,
   validateFilingIdParam,
   validateInvoiceIdParam,
   validateInvitationIdParam,

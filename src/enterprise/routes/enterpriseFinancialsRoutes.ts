@@ -5,11 +5,18 @@ import {
   getSummary,
   getProfitTrend,
   getExpenseBreakdown,
+  getProfitAndLoss,
+  getBalanceSheet,
   getMonthlyCashFlow,
   addTransaction,
   getDocumentTypes,
   getCurrencies,
   uploadDocument,
+  uploadInvoiceDocument,
+  ocrExtractDocument,
+  vendorIdentifyDocument,
+  analyzeDocument,
+  getDocumentReview,
   deleteDocument,
   getDocumentStatus,
   getProcessingQueue,
@@ -33,8 +40,12 @@ router.get("/currencies", getCurrencies);
 router.get("/transactions/recent", getRecentTransactions);
 router.get("/transactions", withPagination("date"), getAllTransactions);
 router.get("/summary", getSummary);
+router.get("/profit-loss", getProfitAndLoss);
+router.get("/balance-sheet", getBalanceSheet);
 router.get("/profit-analysis/trend", getProfitTrend);
 router.get("/profit-analysis/expense-breakdown", getExpenseBreakdown);
+router.get("/profitability/trends", getProfitTrend);
+router.get("/profitability/expense-breakdown", getExpenseBreakdown);
 router.get("/cash-flow/monthly", getMonthlyCashFlow);
 router.post(
   "/transactions",
@@ -61,6 +72,22 @@ router.post(
   "/documents/upload",
   enterpriseValidations.validateUploadFinancialDocument,
   uploadDocument,
+);
+router.post("/documents/upload-invoice", uploadInvoiceDocument);
+router.post(
+  "/documents/:fileId/ocr-extract",
+  enterpriseValidations.validateFileIdParam,
+  ocrExtractDocument,
+);
+router.post(
+  "/documents/extractions/:extractionId/vendor-identify",
+  vendorIdentifyDocument,
+);
+router.post("/documents/vendors/:vendorId/analyze", analyzeDocument);
+router.get(
+  "/documents/:documentId/review",
+  enterpriseValidations.validateDocumentIdParam,
+  getDocumentReview,
 );
 router.delete(
   "/documents/:documentId",

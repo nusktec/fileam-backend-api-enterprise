@@ -104,10 +104,10 @@ export async function getUpcomingDeadlines(
     );
     const due = new Date(p.filingDueDate);
     due.setHours(0, 0, 0, 0);
-    let status: "overdue" | "submitted" | "paid" | "pending" = "pending";
-    if (p.status === "paid" || totalPaid >= totalPayable) status = "paid";
-    else if (p.submittedAt) status = "submitted";
-    else if (due < today) status = "overdue";
+    let status: "Pending" | "Overdue" | "Filed" = "Pending";
+    if (p.status === "paid" || totalPaid >= totalPayable) status = "Filed";
+    else if (p.submittedAt) status = "Filed";
+    else if (due < today) status = "Overdue";
 
     const user = userById.get(p.userId);
     const clientName =

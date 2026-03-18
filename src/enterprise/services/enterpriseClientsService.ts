@@ -64,10 +64,12 @@ export interface ClientCard {
   id: string;
   connectionId: string;
   businessName: string;
+  companyRegNumber: string | null;
   rcNumber: string | null;
+  isActive: boolean;
   status: string;
-  vatStatus: string;
-  nextFiling: string | null;
+  vatStatus: "Registered" | "Unregistered" | "Pending";
+  nextFiling: { taxType: string; dueDate: Date } | null;
   riskLevel?: string;
   email: string;
   tin: string | null;
@@ -281,10 +283,24 @@ export const enterpriseClientsService = {
     );
 
     const userIds = connections.map((c) => c.userId);
-    const businesses = await prisma.business.findMany({
-      where: { userId: { in: userIds } },
-    });
+    const [businesses, nextPayables] = await Promise.all([
+      prisma.business.findMany({ where: { userId: { in: userIds } } }),
+      prisma.taxPayable.findMany({
+        where: {
+          userId: { in: userIds },
+          status: { in: ["pending", "draft"] },
+          filingDueDate: { gte: new Date() },
+        },
+        orderBy: { filingDueDate: "asc" },
+      }),
+    ]);
     const businessByUser = new Map(businesses.map((b) => [b.userId, b]));
+    const nextByUser = new Map<string, { taxType: string; dueDate: Date }>();
+    for (const p of nextPayables) {
+      if (!nextByUser.has(p.userId)) {
+        nextByUser.set(p.userId, { taxType: p.taxType, dueDate: p.filingDueDate });
+      }
+    }
 
     const typeFilter = options?.type ?? "all";
     const cards: ClientCard[] = [];
@@ -306,14 +322,20 @@ export const enterpriseClientsService = {
               ? "Revoked"
               : "Pending Approval";
         const clientCompany = companyByUser.get(conn.userId);
+        const vatStatusRaw = (business?.vatStatus ?? "").toLowerCase();
+        const vatStatus: ClientCard["vatStatus"] =
+          vatStatusRaw === "registered" ? "Registered" : vatStatusRaw === "unregistered" ? "Unregistered" : "Pending";
+        const nextFiling = nextByUser.get(conn.userId) ?? null;
         cards.push({
           id: conn.userId,
           connectionId: conn.id,
           businessName: displayName,
+          companyRegNumber: business?.rcNumber ?? null,
           rcNumber: business?.rcNumber ?? null,
+          isActive: conn.status === "active",
           status: statusLabel,
-          vatStatus: "Pending",
-          nextFiling: null,
+          vatStatus,
+          nextFiling,
           email: user.email,
           tin: business?.tin ?? null,
           type: "accepted" as const,
@@ -343,9 +365,11 @@ export const enterpriseClientsService = {
             inv.invitedBusinessName?.trim() ||
             inv.invitedContactName?.trim() ||
             inv.invitedEmail,
+          companyRegNumber: inv.invitedRcNumber ?? null,
           rcNumber: inv.invitedRcNumber ?? null,
+          isActive: false,
           status: isExpired ? "Expired Invitation" : "Pending Invitation",
-          vatStatus: "Pending",
+          vatStatus: "Pending" as const,
           nextFiling: null,
           email: inv.invitedEmail,
           tin: null,
@@ -364,6 +388,7 @@ export const enterpriseClientsService = {
         c.businessName.toLowerCase().includes(q) ||
         c.email.toLowerCase().includes(q) ||
         (c.rcNumber ?? "").toLowerCase().includes(q) ||
+        (c.companyRegNumber ?? "").toLowerCase().includes(q) ||
         (c.tin ?? "").toLowerCase().includes(q),
     );
   },

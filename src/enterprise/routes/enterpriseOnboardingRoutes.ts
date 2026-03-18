@@ -5,7 +5,7 @@ import {
   stepPassword,
   resendStepEmail,
 } from "../controllers/enterpriseOnboardingController";
-import { consultantOnboardingTokenOrAccessToken } from "../middlewares/consultantOnboardingTokenOrAccessToken";
+import { requireOnboardingToken } from "../../middlewares/onboardingMiddleware";
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.post("/step/email-resend", resendStepEmail);
 router.post("/step/email-verify", stepEmailVerify);
 router.post(
   "/step/password",
-  consultantOnboardingTokenOrAccessToken(),
+  requireOnboardingToken,
   stepPassword,
 );
 

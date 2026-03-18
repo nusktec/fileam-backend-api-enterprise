@@ -1,4 +1,5 @@
 import { Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
 import { outJson } from "../utils/renders";
 import { HttpStatusCode } from "../interfaces/system";
 import { IRequest } from "../interfaces/CustomRequest";
@@ -11,10 +12,17 @@ export function requireOnboardingToken(
   res: Response,
   next: NextFunction,
 ): void {
-  const token =
+  let token: string | undefined =
     req.header("Authorization")?.replace(/^Bearer\s+/i, "") ??
     req.header("X-Onboarding-Token") ??
     (req.body?.onboardingToken as string | undefined);
+
+  if (token) {
+    token = token.trim();
+    if (token.toLowerCase().startsWith("bearer ")) {
+      token = token.slice(7).trim();
+    }
+  }
 
   if (!token) {
     res
@@ -45,10 +53,17 @@ export async function requireOnboardingOrAccessToken(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  const token =
+  let token: string | undefined =
     req.header("Authorization")?.replace(/^Bearer\s+/i, "") ??
     req.header("X-Onboarding-Token") ??
     (req.body?.onboardingToken as string | undefined);
+
+  if (token) {
+    token = token.trim();
+    if (token.toLowerCase().startsWith("bearer ")) {
+      token = token.slice(7).trim();
+    }
+  }
 
   if (!token) {
     res
@@ -57,13 +72,35 @@ export async function requireOnboardingOrAccessToken(
     return;
   }
 
-  try {
-    const payload = onboardingService.verifyOnboardingToken(token);
-    if (payload?.email) {
-      req.onboardingPayload = payload;
-      return next();
+  const onboardingPayload = onboardingService.verifyOnboardingToken(token);
+  if (onboardingPayload?.email) {
+    req.onboardingPayload = onboardingPayload;
+    return next();
+  }
+
+  const decodedUnverified = jwt.decode(token) as { exp?: number; email?: string } | null;
+  if (decodedUnverified && typeof decodedUnverified.exp === "number") {
+    const isExpired = decodedUnverified.exp * 1000 < Date.now();
+    if (isExpired) {
+      res.status(HttpStatusCode.UNAUTHORIZED).json(
+        outJson(
+          false,
+          "Onboarding token expired. Complete step/email and step/email-verify again to get a new token.",
+          null,
+        ),
+      );
+      return;
     }
-  } catch {
+    if (decodedUnverified.email) {
+      res.status(HttpStatusCode.UNAUTHORIZED).json(
+        outJson(
+          false,
+          "Invalid onboarding token (signature mismatch). Ensure JWT_SECRET is consistent and complete step/email-verify again if needed.",
+          null,
+        ),
+      );
+      return;
+    }
   }
 
   try {
@@ -79,9 +116,13 @@ export async function requireOnboardingOrAccessToken(
       select: { id: true, email: true },
     });
     if (!user?.email) {
-      res
-        .status(HttpStatusCode.UNAUTHORIZED)
-        .json(outJson(false, "Invalid or expired onboarding token.", null));
+      res.status(HttpStatusCode.UNAUTHORIZED).json(
+        outJson(
+          false,
+          "User not found. The token may be from a different environment. For step/password, use the onboarding token from step/email-verify on this server.",
+          null,
+        ),
+      );
       return;
     }
     req.onboardingPayload = {

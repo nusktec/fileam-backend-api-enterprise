@@ -15,7 +15,35 @@ import {
   listFilings,
   getFilingReport,
   createFiling,
+  getFilingsSummary,
+  getVatReturns,
 } from "../services/enterpriseFilingsService";
+
+export async function getFilingsSummaryHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId!;
+  try {
+    const data = await getFilingsSummary(linkedUserId);
+    sendResult(res, "Filings summary", data);
+  } catch {
+    sendServerError(res, "Failed to get filings summary");
+  }
+}
+
+export async function getVatReturnsHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId!;
+  try {
+    const data = await getVatReturns(linkedUserId);
+    sendResult(res, "VAT returns", data);
+  } catch {
+    sendServerError(res, "Failed to get VAT returns");
+  }
+}
 
 export async function getUnfiledItemsHandler(
   req: IRequest,

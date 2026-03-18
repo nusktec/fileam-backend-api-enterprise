@@ -4,6 +4,9 @@ import { Decimal } from "@prisma/client/runtime/library";
 const VAT_TYPES = ["Standard Rate", "Reduced Rate", "Zero Rate", "Exempt"];
 const VAT_PERIODS = ["Monthly", "Quarterly", "Annual"];
 const VAT_THRESHOLD_DEFAULT = 100000;
+const VAT_TURNOVER_THRESHOLD = 25_000_000;
+const BELOW_THRESHOLD_MESSAGE =
+  "This business turnover in the last 12 months is below N25,000,000. VAT registration is not currently required. We will monitor the turnover and alert you if VAT registration becomes necessary in the future.";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -191,7 +194,7 @@ export const enterpriseTaxComputationService = {
     }));
   },
 
-  async getThresholdStatus(companyId: string) {
+  async getThresholdStatus(companyId: string, linkedUserId?: string) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
     });
@@ -199,24 +202,84 @@ export const enterpriseTaxComputationService = {
     let status = await prisma.enterpriseThresholdStatus.findUnique({
       where: { companyId },
     });
+    const message =
+      status?.status === "below"
+        ? BELOW_THRESHOLD_MESSAGE
+        : status?.message ?? "VAT registration may be required.";
     if (!status) {
       status = await prisma.enterpriseThresholdStatus.create({
         data: {
           companyId,
           status: "below",
-          message:
-            "Your monthly VAT liability is currently below the threshold.",
+          message: BELOW_THRESHOLD_MESSAGE,
         },
       });
     }
-    return status;
+    return {
+      ...status,
+      message,
+      belowThreshold: status.status === "below",
+      turnoverThreshold: VAT_TURNOVER_THRESHOLD,
+    };
   },
 
   async getThresholdInfo() {
     return {
-      thresholdAmount: VAT_THRESHOLD_DEFAULT,
+      thresholdAmount: VAT_TURNOVER_THRESHOLD,
       description: "Learn more about VAT thresholds.",
       link: "#",
+    };
+  },
+
+  async getTaxComputationChart(companyId: string, linkedUserId?: string) {
+    const stats = await this.getVatFiling12MonthStats(companyId, linkedUserId);
+    if (!stats) return null;
+    const months = "months" in stats ? stats.months : [];
+    const totalTurnOver =
+      "totalIncome" in stats
+        ? (stats as { totalIncome: number }).totalIncome
+        : (months as Array<{ netCashFlow?: number; vatPayable?: number }>).reduce(
+            (s, m) => s + (m.netCashFlow ?? m.vatPayable ?? 0),
+            0,
+          );
+    const chartSet = (months as Array<{ month: number; year: number; netCashFlow?: number; vatPayable?: number }>).map(
+      (m) => ({
+        month: m.month,
+        year: m.year,
+        label: `${new Date(m.year, m.month - 1).toLocaleString("default", { month: "short" })} ${m.year}`,
+        amount: m.netCashFlow ?? m.vatPayable ?? 0,
+      }),
+    );
+    const thresholdStatus = await this.getThresholdStatus(companyId, linkedUserId);
+    const status =
+      thresholdStatus?.status === "below"
+        ? "This business is not required to charge for VAT"
+        : "VAT registration required";
+    const turnoverStatement =
+      totalTurnOver < VAT_TURNOVER_THRESHOLD
+        ? `Turnover (N${totalTurnOver.toLocaleString()}) is below N25,000,000 threshold`
+        : `Turnover (N${totalTurnOver.toLocaleString()}) is above N25,000,000 threshold`;
+    return {
+      totalTurnOver,
+      chartSet,
+      status,
+      turnoverStatement,
+    };
+  },
+
+  async getTaxAssumptions(companyId: string, linkedUserId?: string) {
+    const [thresholdStatus, business] = await Promise.all([
+      this.getThresholdStatus(companyId, linkedUserId),
+      linkedUserId
+        ? prisma.business.findFirst({ where: { userId: linkedUserId } })
+        : null,
+    ]);
+    const vatStatus = (business?.vatStatus ?? thresholdStatus?.status ?? "below").toLowerCase();
+    return {
+      vatRegistrationStatus: vatStatus === "registered" ? "Registered" : "Unregistered",
+      applicationCitRate: 30,
+      msmeExemptionEligible: "No" as const,
+      pioneerTaxStatus: "Not Applicable" as const,
     };
   },
 

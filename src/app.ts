@@ -38,10 +38,7 @@ const getAllowedOriginsSet = (): Set<string> => {
     .filter(Boolean);
 
   const devOrigins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://172.26.32.1:3000",
-    "http://localhost:5173",
+    "*",
   ];
 
   return new Set([...fromEnv, ...devOrigins]);
@@ -74,11 +71,15 @@ app.use(
       "Content-Type",
       "Authorization",
       "X-Requested-With",
+      "Accept",
       "X-Consultant-Onboarding-Token",
       "X-Onboarding-Token",
+      "Consultant-Onboarding-Token",
+      "Onboarding-Token",
     ],
     exposedHeaders: ["Set-Cookie"],
     maxAge: 86400,
+    optionsSuccessStatus: 204,
   }),
 );
 

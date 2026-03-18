@@ -9,6 +9,7 @@ import {
   putClientBusinessProfile,
   putClientContact,
   getClientDetailsHandler,
+  getClientDashboardHandler,
 } from "../controllers/clientBusinessProfileController";
 import { putTaxConfiguration } from "../controllers/clientTaxConfigurationController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
@@ -16,6 +17,7 @@ import { enterpriseValidations } from "../../middlewares/validations/enterpriseV
 const router = express.Router({ mergeParams: true });
 
 router.get("/details", getClientDetailsHandler);
+router.get("/dashboard", getClientDashboardHandler);
 router.put(
   "/client-business-profile",
   ...enterpriseValidations.validateClientBusinessProfile,

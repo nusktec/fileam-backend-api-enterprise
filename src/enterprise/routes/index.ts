@@ -26,10 +26,12 @@ import {
   updateNotificationSettings,
 } from "../controllers/enterpriseUserController";
 import teamManagementRoutes from "./teamManagementRoutes";
+import enterpriseUploadRoutes from "./enterpriseUploadRoutes";
 import {
   getComplianceStats,
   getUpcomingDeadlines,
 } from "../controllers/complianceController";
+import { getGlobalDashboard } from "../controllers/enterpriseDashboardController";
 import {
   listAvailableClients,
   sendClientRequest,
@@ -79,6 +81,13 @@ router.put(
   "/notification-settings",
   authenticate(),
   updateNotificationSettings,
+);
+
+router.get(
+  "/dashboard",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  getGlobalDashboard,
 );
 
 router.get(
@@ -154,12 +163,19 @@ router.use(
   enterpriseCompanyRoutes,
 );
 
+router.use("/upload", enterpriseUploadRoutes);
 router.use("/onboarding", enterpriseOnboardingRoutes);
 router.use("/onboarding/consultant", consultantOnboardingRoutes);
 router.use("/team", teamManagementRoutes);
 
 router.get(
   "/compliance/stats",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  getComplianceStats,
+);
+router.get(
+  "/compliance/overview",
   authenticate(),
   requireEnterpriseOnboardingComplete,
   getComplianceStats,

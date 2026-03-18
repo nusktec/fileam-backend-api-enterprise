@@ -23,7 +23,7 @@ export function consultantOnboardingTokenOrAccessToken(
     res: Response,
     next: NextFunction,
   ): Promise<void> {
-    const token =
+    let token: string | undefined =
       req.header("Authorization")?.replace(/^Bearer\s+/i, "") ??
       req.header("X-Consultant-Onboarding-Token") ??
       req.header("Consultant-Onboarding-Token") ??
@@ -33,6 +33,13 @@ export function consultantOnboardingTokenOrAccessToken(
       (allowOnboardingToken
         ? (req.body?.onboardingToken as string | undefined)
         : undefined);
+
+    if (token) {
+      token = token.trim();
+      if (token.toLowerCase().startsWith("bearer ")) {
+        token = token.slice(7).trim();
+      }
+    }
 
     if (!token) {
       res
@@ -68,9 +75,13 @@ export function consultantOnboardingTokenOrAccessToken(
     try {
       const decoded = verifyToken(token);
       if (!decoded.userId || (decoded.type && decoded.type !== "access")) {
-        res
-          .status(HttpStatusCode.UNAUTHORIZED)
-          .json(outJson(false, "Invalid or expired token.", null));
+        res.status(HttpStatusCode.UNAUTHORIZED).json(
+          outJson(
+            false,
+            "Invalid or expired token. For step/password, use the token from step/email-verify. Complete step/email and step/email-verify again if needed.",
+            null,
+          ),
+        );
         return;
       }
       const user = await prisma.user.findUnique({
@@ -96,9 +107,13 @@ export function consultantOnboardingTokenOrAccessToken(
       if (session) req.consultantOnboardingSession = session;
       return next();
     } catch {
-      res
-        .status(HttpStatusCode.UNAUTHORIZED)
-        .json(outJson(false, "Invalid or expired token.", null));
+      res.status(HttpStatusCode.UNAUTHORIZED).json(
+        outJson(
+          false,
+          "Invalid or expired token. For step/password, use the token from step/email-verify. Complete step/email and step/email-verify again if needed.",
+          null,
+        ),
+      );
     }
   };
 }

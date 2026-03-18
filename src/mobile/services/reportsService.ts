@@ -47,6 +47,9 @@ export const reportsService = {
       where: { id: reportId, userId },
     });
     if (!r) return null;
+    const periodData = await import("./reportDataService").then((m) =>
+      m.getReportDataForPeriod(userId, r.periodYear, r.periodMonth),
+    );
     return {
       id: r.id,
       reportType: r.reportType,
@@ -58,6 +61,13 @@ export const reportsService = {
       documentUrl: r.documentUrl ?? undefined,
       evidenceVaultId: r.evidenceVaultId ?? undefined,
       status: r.status,
+      vatSummary: periodData.vatSummary,
+      whtSummary: periodData.whtSummary,
+      citSummary: periodData.citSummary,
+      filings: periodData.filings,
+      sales: periodData.sales,
+      expenses: periodData.expenses,
+      compliance: periodData.compliance,
     };
   },
 
@@ -122,6 +132,16 @@ export const reportsService = {
       select: { documentUrl: true },
     });
     return r?.documentUrl ?? null;
+  },
+
+  async generatePdfForReport(
+    userId: string,
+    reportId: string,
+  ): Promise<{ buffer: Buffer; filename: string } | null> {
+    const { generatePdfForDocument } = await import(
+      "./evidenceVaultPdfService"
+    );
+    return generatePdfForDocument(userId, `report-${reportId}`);
   },
 
   async getVaultLink(userId: string, reportId: string): Promise<string | null> {

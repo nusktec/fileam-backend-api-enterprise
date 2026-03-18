@@ -215,7 +215,10 @@ export async function getThresholdStatus(
   const companyId = req.companyId!;
   try {
     const status =
-      await enterpriseTaxComputationService.getThresholdStatus(companyId);
+      await enterpriseTaxComputationService.getThresholdStatus(
+        companyId,
+        req.linkedUserId,
+      );
     if (!status) {
       sendNotFound(res, "Company not found");
       return;
@@ -223,6 +226,48 @@ export async function getThresholdStatus(
     sendResult(res, "Threshold status", status);
   } catch {
     sendServerError(res, "Failed to get threshold status");
+  }
+}
+
+export async function getTaxComputationChart(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  try {
+    const data =
+      await enterpriseTaxComputationService.getTaxComputationChart(
+        companyId,
+        req.linkedUserId,
+      );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Tax computation chart", data);
+  } catch {
+    sendServerError(res, "Failed to get tax computation chart");
+  }
+}
+
+export async function getTaxAssumptions(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  try {
+    const data =
+      await enterpriseTaxComputationService.getTaxAssumptions(
+        companyId,
+        req.linkedUserId,
+      );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "Tax assumptions", data);
+  } catch {
+    sendServerError(res, "Failed to get tax assumptions");
   }
 }
 

@@ -6,9 +6,14 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import {
   generateInvoicePdf,
+  generateReceiptPdf,
   generateTaxFilingPdf,
-  generateReportPdf,
+  generateFullReportPdf,
 } from "../../services/template/pdfTemplates";
+import {
+  getReportDataForPeriod,
+  fetchLogoBuffer,
+} from "./reportDataService";
 
 function toNum(d: Decimal | number | null | undefined): number {
   if (d == null) return 0;
@@ -22,11 +27,13 @@ export async function generatePdfForDocument(
   const entityId = compositeId.replace(/^(sale|expense|payable|payable-receipt|report)-/, "");
   const prefix = compositeId.startsWith("sale-")
     ? "sale"
-    : compositeId.startsWith("payable-") && !compositeId.startsWith("payable-receipt-")
-      ? "payable"
-      : compositeId.startsWith("report-")
-        ? "report"
-        : null;
+    : compositeId.startsWith("expense-")
+      ? "expense"
+      : compositeId.startsWith("payable-") && !compositeId.startsWith("payable-receipt-")
+        ? "payable"
+        : compositeId.startsWith("report-")
+          ? "report"
+          : null;
 
   if (!prefix || !entityId) return null;
 
@@ -67,6 +74,29 @@ export async function generatePdfForDocument(
       businessAddress: business?.streetAddress ?? user?.organizationAddress ?? undefined,
     });
     filename = `invoice-${sale.invoiceNumber}.pdf`;
+  } else if (prefix === "expense") {
+    const expense = await prisma.expense.findFirst({
+      where: { id: entityId, userId },
+    });
+    if (!expense) return null;
+
+    const business = await prisma.business.findFirst({
+      where: { userId },
+      select: { name: true },
+    });
+
+    buffer = await generateReceiptPdf({
+      expenseNumber: expense.expenseNumber,
+      description: expense.description,
+      category: expense.category,
+      amount: toNum(expense.amount),
+      vatInclusive: expense.vatInclusive,
+      vatAmount: expense.vatAmount != null ? toNum(expense.vatAmount) : null,
+      totalAmount: toNum(expense.totalAmount),
+      expenseDate: expense.expenseDate,
+      businessName: business?.name ?? undefined,
+    });
+    filename = `receipt-${expense.expenseNumber}.pdf`;
   } else if (prefix === "payable") {
     const payable = await prisma.taxPayable.findFirst({
       where: { id: entityId, userId },
@@ -96,7 +126,13 @@ export async function generatePdfForDocument(
     });
     if (!report) return null;
 
-    buffer = await generateReportPdf({
+    const [periodData, logoBuffer] = await Promise.all([
+      getReportDataForPeriod(userId, report.periodYear, report.periodMonth),
+      fetchLogoBuffer(),
+    ]);
+
+    const { periodYear, periodMonth, ...rest } = periodData;
+    const fullReportData = {
       reportType: report.reportType,
       periodLabel: report.periodLabel,
       periodYear: report.periodYear,
@@ -104,7 +140,10 @@ export async function generatePdfForDocument(
       generatedAt: report.generatedAt,
       format: report.format,
       status: report.status,
-    });
+      ...rest,
+    };
+
+    buffer = await generateFullReportPdf(fullReportData, logoBuffer);
     filename = `report-${report.reportType}-${report.periodLabel.replace(/\s/g, "-")}.pdf`;
   } else {
     return null;

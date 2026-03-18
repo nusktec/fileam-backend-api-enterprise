@@ -9,24 +9,29 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-export const S3_CONFIG = {
-  ACCESS_KEY_ID: process.env.S3_ACCESS_KEY_ID || "",
-  SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY || "",
-  REGION: process.env.S3_REGION || "us-east-1",
-  BUCKET_NAME: process.env.S3_BUCKET_NAME || "",
-  BUCKET_URL: process.env.S3_BUCKET_URL || "",
-  ENDPOINT: process.env.S3_ENDPOINT || undefined,
-  FORCE_PATH_STYLE: process.env.S3_FORCE_PATH_STYLE === "true",
-  /** Set to "false" to disable public-read ACL (e.g. if bucket blocks ACLs) */
-  PUBLIC_READ_ACL: process.env.S3_PUBLIC_READ_ACL !== "false",
-};
+/** Cloudflare R2 Object Storage (S3-compatible) */
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "";
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "";
+const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "";
+const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || "";
+/** Public URL base for serving files (e.g. https://pub-xxx.r2.dev or https://files.yourdomain.com) */
+const R2_PUBLIC_URL = (process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
 
-const getBaseEndpoint = (): string | undefined => {
-  if (!S3_CONFIG.ENDPOINT) return undefined;
-  if (S3_CONFIG.ENDPOINT.includes("/" + S3_CONFIG.BUCKET_NAME)) {
-    return S3_CONFIG.ENDPOINT.replace("/" + S3_CONFIG.BUCKET_NAME, "");
-  }
-  return S3_CONFIG.ENDPOINT;
+const R2_ENDPOINT = R2_ACCOUNT_ID
+  ? `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+  : undefined;
+
+export const S3_CONFIG = {
+  /** R2 uses S3-compatible API */
+  ACCESS_KEY_ID: R2_ACCESS_KEY_ID,
+  SECRET_ACCESS_KEY: R2_SECRET_ACCESS_KEY,
+  REGION: "auto" as const,
+  BUCKET_NAME: R2_BUCKET_NAME,
+  BUCKET_URL: R2_PUBLIC_URL,
+  ENDPOINT: R2_ENDPOINT,
+  FORCE_PATH_STYLE: true,
+  /** R2 does not support ACLs; public access is via bucket settings / custom domain */
+  PUBLIC_READ_ACL: false,
 };
 
 export const s3Client = new S3Client({
@@ -35,8 +40,8 @@ export const s3Client = new S3Client({
     accessKeyId: S3_CONFIG.ACCESS_KEY_ID,
     secretAccessKey: S3_CONFIG.SECRET_ACCESS_KEY,
   },
-  ...(getBaseEndpoint() && { endpoint: getBaseEndpoint() }),
-  forcePathStyle: true,
+  ...(R2_ENDPOINT && { endpoint: R2_ENDPOINT }),
+  forcePathStyle: S3_CONFIG.FORCE_PATH_STYLE,
 });
 
 export const s3Bucket = {
@@ -69,30 +74,35 @@ export const MEDIA_CONFIG = {
     CATEGORIES: "categories",
     BRANCHES: "branches",
     USERS: "users",
+    ENTERPRISE: "enterprise",
   },
 } as const;
 
 export const validateS3Config = (): boolean => {
   if (!S3_CONFIG.ACCESS_KEY_ID) {
-    console.error("S3_ACCESS_KEY_ID is not configured");
+    console.error("R2_ACCESS_KEY_ID is not configured");
     return false;
   }
   if (!S3_CONFIG.SECRET_ACCESS_KEY) {
-    console.error("S3_SECRET_ACCESS_KEY is not configured");
+    console.error("R2_SECRET_ACCESS_KEY is not configured");
     return false;
   }
   if (!S3_CONFIG.BUCKET_NAME) {
-    console.error("S3_BUCKET_NAME is not configured");
+    console.error("R2_BUCKET_NAME is not configured");
+    return false;
+  }
+  if (!R2_ACCOUNT_ID) {
+    console.error("R2_ACCOUNT_ID is not configured");
     return false;
   }
   return true;
 };
 
 export const generateS3Url = (key: string): string => {
-  if (S3_CONFIG.ENDPOINT) {
-    return `${S3_CONFIG.ENDPOINT}/${key}`;
+  if (R2_PUBLIC_URL) {
+    return `${R2_PUBLIC_URL}/${key}`;
   }
-  return `https://${S3_CONFIG.BUCKET_NAME}.s3.${S3_CONFIG.REGION}.amazonaws.com/${key}`;
+  return `https://${S3_CONFIG.BUCKET_NAME}.r2.cloudflarestorage.com/${key}`;
 };
 
 export const generateFileKey = (folder: string, filename: string): string => {

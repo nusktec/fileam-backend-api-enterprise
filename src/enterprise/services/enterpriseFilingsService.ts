@@ -10,6 +10,94 @@ function periodLabel(year: number, month: number): string {
   return `${new Date(year, month - 1).toLocaleString("default", { month: "long" })} ${year}`;
 }
 
+function daysUntil(d: Date): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(d);
+  due.setHours(0, 0, 0, 0);
+  return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+export async function getFilingsSummary(linkedUserId: string) {
+  const payables = await prisma.taxPayable.findMany({
+    where: { userId: linkedUserId },
+    include: { payments: { where: { status: "completed" } } },
+  });
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let submitted = 0;
+  let inProgress = 0;
+  let todayCount = 0;
+  let overdue = 0;
+  let submittedDays = 0;
+  let inProgressDays = 0;
+  let todayDays = 0;
+  let overdueDays = 0;
+
+  for (const p of payables) {
+    const totalPayable = decimalToNumber(p.totalPayable);
+    const totalPaid = p.payments.reduce(
+      (s, r) => s + decimalToNumber(r.amountPaid),
+      0,
+    );
+    const due = new Date(p.filingDueDate);
+    due.setHours(0, 0, 0, 0);
+    const days = daysUntil(p.filingDueDate);
+
+    if (p.status === "paid" || totalPaid >= totalPayable) {
+      submitted++;
+      if (submittedDays === 0 || days < submittedDays) submittedDays = Math.abs(days);
+    } else if (p.submittedAt) {
+      submitted++;
+      if (submittedDays === 0 || days < submittedDays) submittedDays = Math.abs(days);
+    } else if (due < today) {
+      overdue++;
+      overdueDays = Math.max(overdueDays, Math.abs(days));
+    } else if (days === 0) {
+      todayCount++;
+      todayDays = 0;
+    } else {
+      inProgress++;
+      if (inProgressDays === 0 || days < inProgressDays) inProgressDays = days;
+    }
+  }
+
+  return {
+    submitted: { count: submitted, days: submittedDays },
+    inProgress: { count: inProgress, days: inProgressDays },
+    today: { count: todayCount, days: todayDays },
+    overdue: { count: overdue, days: overdueDays },
+  };
+}
+
+export async function getVatReturns(linkedUserId: string) {
+  const payables = await prisma.taxPayable.findMany({
+    where: { userId: linkedUserId, taxType: "VAT" },
+    orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
+    include: { payments: { where: { status: "completed" } } },
+  });
+  return payables.map((p) => {
+    const totalPayable = decimalToNumber(p.totalPayable);
+    const totalPaid = p.payments.reduce(
+      (s, r) => s + decimalToNumber(r.amountPaid),
+      0,
+    );
+    let readiness = 0;
+    if (p.status === "paid" || totalPaid >= totalPayable) readiness = 100;
+    else if (p.submittedAt) readiness = 90;
+    else if (totalPayable > 0) readiness = Math.min(80, Math.round((totalPaid / totalPayable) * 80));
+    return {
+      id: p.id,
+      periodLabel: periodLabel(p.periodYear, p.periodMonth),
+      periodYear: p.periodYear,
+      periodMonth: p.periodMonth,
+      dueDate: p.filingDueDate,
+      readiness,
+    };
+  });
+}
+
 export async function getUnfiledItems(linkedUserId: string) {
   const payables = await prisma.taxPayable.findMany({
     where: {

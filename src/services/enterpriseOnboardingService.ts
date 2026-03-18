@@ -176,10 +176,20 @@ export const enterpriseOnboardingService = {
           message: "Invalid password. Use the password for this account.",
         };
 
-      const accessToken = generateAccessToken(existing.id);
+      const updated = await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          enterpriseOnboardingStep: ENTERPRISE_FIRST_STEP,
+          ...(firstName?.trim() && { firstName: firstName.trim() }),
+          ...(lastName !== undefined && { lastName: lastName?.trim() ?? "" }),
+        } as { enterpriseOnboardingStep: string; firstName?: string; lastName?: string },
+        include: { userRoles: { include: { role: true } } },
+      });
+
+      const accessToken = generateAccessToken(updated.id);
       const refreshToken = generateRefreshToken();
-      await saveRefreshToken(existing.id, refreshToken);
-      const userPayload = authService.buildAuthUserPayload(existing);
+      await saveRefreshToken(updated.id, refreshToken);
+      const userPayload = authService.buildAuthUserPayload(updated);
 
       return {
         success: true as const,

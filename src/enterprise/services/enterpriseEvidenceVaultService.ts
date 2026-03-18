@@ -25,10 +25,19 @@ export const enterpriseEvidenceVaultService = {
     const storage = linkedUserId
       ? { usedGb: 0, limitGb: STORAGE_LIMIT_GB, usedKb: 0 }
       : await this.getStorageUsage(companyId);
+    const byName = Object.fromEntries(categories.map((c) => [c.name, c.count]));
     return {
       total,
       byCategory: categories,
       storage: storage ?? { usedGb: 0, limitGb: STORAGE_LIMIT_GB, usedKb: 0 },
+      metrics: {
+        allDocument: total,
+        invoice: byName["Invoices"] ?? byName["Invoice"] ?? 0,
+        receipts: byName["Receipts"] ?? 0,
+        vatSchedules: byName["Tax Documents"] ?? 0,
+        filings: 0,
+        whtCerts: 0,
+      },
     };
   },
 

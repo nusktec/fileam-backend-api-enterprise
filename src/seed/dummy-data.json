@@ -1,0 +1,59 @@
+{
+  "users": {
+    "consultant": {
+      "email": "consultant@fileam.app",
+      "password": "Password123!",
+      "firstName": "Jane",
+      "lastName": "Consultant",
+      "organizationName": "Fileam Consulting Ltd"
+    },
+    "client": {
+      "email": "client@fileam.app",
+      "password": "Password123!",
+      "firstName": "John",
+      "lastName": "Client",
+      "organizationName": "Acme Business Ltd"
+    }
+  },
+  "business": {
+    "name": "Acme Business Ltd",
+    "incomeType": "business",
+    "businessType": "Consulting",
+    "sector": "IT & Services",
+    "tin": "12345678-0001",
+    "rcNumber": "RC1234567",
+    "streetAddress": "123 Victoria Island, Lagos",
+    "stateOfResidence": "Lagos",
+    "primaryTaxOffice": "Lagos Island",
+    "city": "Lagos"
+  },
+  "saleTemplates": [
+    { "description": "Consulting services - Q1", "category": "Consulting", "customerName": "Tech Corp Nigeria", "paymentType": "Transfer" },
+    { "description": "Software licensing", "category": "Product Sales", "customerName": "Retail Plus Ltd", "paymentType": "Card" },
+    { "description": "Monthly retainer", "category": "Subscription", "customerName": "Startup Hub", "paymentType": "Transfer" },
+    { "description": "Advisory services", "category": "Consulting", "customerName": "Finance Group", "paymentType": "Cash" },
+    { "description": "Training workshop", "category": "Service Income", "customerName": "EdTech Solutions", "paymentType": "Transfer" },
+    { "description": "Product delivery", "category": "Product Sales", "customerName": "Logistics Co", "paymentType": "Transfer" },
+    { "description": "Support package", "category": "Subscription", "customerName": "SME Partners", "paymentType": "Transfer" },
+    { "description": "Project milestone", "category": "Consulting", "customerName": "Government Agency", "paymentType": "Transfer" }
+  ],
+  "expenseTemplates": [
+    { "description": "Office rent - Victoria Island", "category": "Rent" },
+    { "description": "Slack & Zoom subscription", "category": "Tools & Software" },
+    { "description": "Google Ads campaign", "category": "Marketing" },
+    { "description": "Broadband - MainOne", "category": "Internet" },
+    { "description": "Staff salaries - March", "category": "Salary" },
+    { "description": "Office supplies", "category": "Other" },
+    { "description": "Professional development", "category": "Other" },
+    { "description": "Client entertainment", "category": "Marketing" }
+  ],
+  "employeeTemplates": [
+    { "fullName": "Ada Okafor", "jobTitle": "Accountant", "employmentType": "Full time", "basicSalary": 180000, "housingAllowance": 45000 },
+    { "fullName": "Chidi Nwosu", "jobTitle": "Tax Associate", "employmentType": "Full time", "basicSalary": 150000, "housingAllowance": 37500 },
+    { "fullName": "Amara Eze", "jobTitle": "Admin Assistant", "employmentType": "Part time", "basicSalary": 80000, "housingAllowance": 20000 }
+  ],
+  "amountRanges": {
+    "sale": { "min": 50000, "max": 500000 },
+    "expense": { "min": 5000, "max": 150000 }
+  }
+}
