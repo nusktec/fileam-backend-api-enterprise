@@ -240,21 +240,15 @@ async function runSeedDummy() {
   let saleNum = Math.max(clientWithNum?.nextSaleNumber ?? 1, maxSaleNum + 1);
 
   const EXPENSE_COUNTER_ID = "expense_number";
-  const expenseCounterRow = await prisma.counter.findUnique({
-    where: { id: EXPENSE_COUNTER_ID },
-  });
-  const existingExpenses = await prisma.expense.findMany({
-    select: { expenseNumber: true },
-  });
-  const maxExpenseNum = existingExpenses.reduce((max, e) => {
-    const n = parseInt(e.expenseNumber.replace(/\D/g, ""), 10) || 0;
-    return n > max ? n : max;
-  }, 0);
-  let expenseCounter = Math.max(
-    expenseCounterRow?.lastNumber ?? 0,
-    maxExpenseNum,
-    1,
-  );
+
+  async function nextExpenseNumber(): Promise<string> {
+    const counter = await prisma.counter.upsert({
+      where: { id: EXPENSE_COUNTER_ID },
+      create: { id: EXPENSE_COUNTER_ID, lastNumber: 1 },
+      update: { lastNumber: { increment: 1 } },
+    });
+    return `EXP-${String(counter.lastNumber).padStart(3, "0")}`;
+  }
 
   for (let m = 0; m < 5; m++) {
     const monthStart = addMonths(startDate, m);
@@ -303,12 +297,13 @@ async function runSeedDummy() {
       const amount = randomInt(expenseRange.min, expenseRange.max);
       const totalAmount = new Decimal(amount);
       const expenseDate = new Date(year, month - 1, randomInt(1, 28));
+      const expenseNumber = await nextExpenseNumber();
 
       await prisma.expense.create({
         data: {
           userId: client.id,
           createdById: client.id,
-          expenseNumber: `EXP-${String(expenseCounter++).padStart(3, "0")}`,
+          expenseNumber,
           description: template.description,
           category: template.category ?? randomPick(EXPENSE_CATEGORIES),
           amount: new Decimal(amount),
@@ -466,20 +461,6 @@ async function runSeedDummy() {
     where: { id: client.id },
     data: { nextSaleNumber: saleNum },
   });
-
-  const counter = await prisma.counter.findUnique({
-    where: { id: EXPENSE_COUNTER_ID },
-  });
-  if (counter && counter.lastNumber < expenseCounter) {
-    await prisma.counter.update({
-      where: { id: EXPENSE_COUNTER_ID },
-      data: { lastNumber: expenseCounter },
-    });
-  } else if (!counter) {
-    await prisma.counter.create({
-      data: { id: EXPENSE_COUNTER_ID, lastNumber: expenseCounter },
-    });
-  }
 
   const existingInvCount = await prisma.enterpriseInvoice.count({
     where: { companyId: company.id },
