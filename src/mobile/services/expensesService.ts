@@ -148,4 +148,54 @@ export const expensesService = {
       vatTag: expense.vatInclusive,
     };
   },
+
+  async update(
+    userId: string,
+    expenseId: string,
+    data: Partial<{
+      description: string;
+      category: string;
+      amount: number;
+      vatInclusive: boolean;
+      vatAmount: number;
+      date: string;
+      receiptUrl: string;
+    }>,
+  ) {
+    const expense = await prisma.expense.findFirst({
+      where: { id: expenseId, userId },
+    });
+    if (!expense) return null;
+
+    const updateData: Record<string, unknown> = {};
+    if (data.description != null) updateData.description = data.description;
+    if (data.category != null) updateData.category = data.category;
+    if (data.date != null) updateData.expenseDate = new Date(data.date);
+    if (data.vatInclusive != null) updateData.vatInclusive = data.vatInclusive;
+    if (data.receiptUrl != null) updateData.receiptUrl = data.receiptUrl;
+
+    if (data.amount != null || data.vatAmount != null) {
+      const amount = data.amount != null ? new Decimal(data.amount) : expense.amount;
+      const vatAmount =
+        data.vatAmount != null ? new Decimal(data.vatAmount) : expense.vatAmount ?? new Decimal(0);
+      const vatNum = Number(vatAmount);
+      updateData.amount = amount;
+      updateData.vatAmount = vatNum > 0 ? vatAmount : null;
+      updateData.totalAmount = vatNum > 0 ? amount.add(vatAmount) : amount;
+    }
+
+    const updated = await prisma.expense.update({
+      where: { id: expenseId },
+      data: updateData,
+    });
+    return {
+      id: updated.id,
+      expenseNumber: updated.expenseNumber,
+      description: updated.description,
+      date: updated.expenseDate,
+      category: updated.category,
+      amount: decimalToNumber(updated.totalAmount),
+      vatTag: updated.vatInclusive,
+    };
+  },
 };

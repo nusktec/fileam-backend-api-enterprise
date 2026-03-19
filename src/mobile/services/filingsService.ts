@@ -172,4 +172,36 @@ export const filingsService = {
     });
     return p?.evidenceVaultId ?? null;
   },
+
+  async update(
+    userId: string,
+    filingId: string,
+    data: Partial<{
+      status: string;
+      documentUrl: string;
+      submittedAt: string | Date | null;
+      receiptUrl: string;
+    }>,
+  ) {
+    const p = await prisma.taxPayable.findFirst({
+      where: { id: filingId, userId },
+    });
+    if (!p) return null;
+
+    const updateData: Record<string, unknown> = {};
+    if (data.status != null) updateData.status = data.status;
+    if (data.documentUrl != null) updateData.documentUrl = data.documentUrl;
+    if (data.receiptUrl != null) updateData.receiptUrl = data.receiptUrl;
+    if (data.submittedAt !== undefined) {
+      updateData.submittedAt = data.submittedAt
+        ? new Date(data.submittedAt)
+        : null;
+    }
+
+    await prisma.taxPayable.update({
+      where: { id: filingId },
+      data: updateData,
+    });
+    return this.getById(userId, filingId);
+  },
 };

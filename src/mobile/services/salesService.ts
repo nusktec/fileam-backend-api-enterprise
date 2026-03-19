@@ -170,4 +170,59 @@ export const salesService = {
       totalAmount: decimalToNumber(sale.totalAmount),
     };
   },
+
+  async update(
+    userId: string,
+    saleId: string,
+    data: Partial<{
+      description: string;
+      category: string;
+      customerName: string;
+      amount: number;
+      paymentType: string;
+      date: string;
+      vatableIncome: boolean;
+      serviceIncome: boolean;
+      status: string;
+    }>,
+  ) {
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, userId },
+    });
+    if (!sale) return null;
+
+    const updateData: Record<string, unknown> = {};
+    if (data.description != null) updateData.description = data.description;
+    if (data.category != null) updateData.category = data.category;
+    if (data.customerName != null) updateData.customerName = data.customerName;
+    if (data.paymentType != null) updateData.paymentType = data.paymentType;
+    if (data.date != null) updateData.saleDate = new Date(data.date);
+    if (data.vatableIncome != null) updateData.vatableIncome = data.vatableIncome;
+    if (data.serviceIncome != null) updateData.serviceIncome = data.serviceIncome;
+    if (data.status != null) updateData.status = data.status;
+
+    if (data.amount != null) {
+      const amount = new Decimal(data.amount);
+      const vatRate = (sale.vatableIncome ? VAT_RATE : 0) / 100;
+      const vatAmount = amount.mul(vatRate);
+      updateData.amount = amount;
+      updateData.vatAmount = vatAmount;
+      updateData.totalAmount = amount.add(vatAmount);
+    }
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: updateData,
+    });
+    return {
+      id: updated.id,
+      invoiceNumber: updated.invoiceNumber,
+      status: updated.status,
+      description: updated.description,
+      date: updated.saleDate,
+      amount: decimalToNumber(updated.amount),
+      vatAmount: decimalToNumber(updated.vatAmount),
+      totalAmount: decimalToNumber(updated.totalAmount),
+    };
+  },
 };

@@ -9,6 +9,7 @@ import http from "http";
 import { prisma } from "./config/database";
 import mobileRoutes from "./mobile/routes";
 import enterpriseRoutes from "./enterprise/routes";
+import aiRoutes from "./routes/aiRoutes";
 import webhookRoutes from "./routes/webhookRoutes";
 import mediaRoutes from "./routes/mediaRoutes";
 import {
@@ -76,6 +77,8 @@ app.use(
       "X-Onboarding-Token",
       "Consultant-Onboarding-Token",
       "Onboarding-Token",
+      "X-Client-Id",
+      "X-Api-Secret",
     ],
     exposedHeaders: ["Set-Cookie"],
     maxAge: 86400,
@@ -93,6 +96,7 @@ const API_VERSION = process.env.API_VERSION || "1";
 
 app.use(`/api/v${API_VERSION}/mobile`, mobileRoutes);
 app.use(`/api/v${API_VERSION}/enterprise`, enterpriseRoutes);
+app.use(`/api/v${API_VERSION}/ai`, aiRoutes);
 app.use(`/api/v${API_VERSION}/media`, mediaRoutes);
 app.use(`/api/v${API_VERSION}/webhooks`, webhookRoutes);
 app.get(

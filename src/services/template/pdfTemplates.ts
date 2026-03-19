@@ -474,7 +474,7 @@ export function generateFullReportPdf(
     doc
       .fontSize(18)
       .fillColor(PRIMARY_COLOR)
-      .text(data.reportType.toUpperCase(), col1, y, { width: pageWidth });
+      .text("Summary Tax Report", col1, y, { width: pageWidth });
     y += 28;
 
     doc.fontSize(7).fillColor("#6c757d");

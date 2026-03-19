@@ -33,7 +33,9 @@
     { "key": "webhookSecret", "value": "" },
     { "key": "fileId", "value": "" },
     { "key": "extractionId", "value": "" },
-    { "key": "vendorId", "value": "" }
+    { "key": "vendorId", "value": "" },
+    { "key": "aiServiceSecret", "value": "fileam-ai-service-secret-change-in-production" },
+    { "key": "aiClientId", "value": "" }
   ],
   "event": [
     {
@@ -42,7 +44,12 @@
         "type": "text/javascript",
         "exec": [
           "const url = pm.request.url.toString();",
-          "if (url.includes('/enterprise/onboarding/step/password')) {",
+          "if (url.includes('/ai/')) {",
+          "  const cid = pm.collectionVariables.get('aiClientId') || pm.collectionVariables.get('clientId');",
+          "  const secret = pm.collectionVariables.get('aiServiceSecret');",
+          "  if (cid) pm.request.headers.upsert({ key: 'X-Client-Id', value: cid });",
+          "  if (secret) pm.request.headers.upsert({ key: 'X-Api-Secret', value: secret });",
+          "} else if (url.includes('/enterprise/onboarding/step/password')) {",
           "  const t = pm.collectionVariables.get('enterpriseOnboardingToken');",
           "  if (t) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + t });",
           "} else if (url.includes('/mobile/onboarding/') && (url.includes('step/password') || url.includes('profile'))) {",
@@ -449,6 +456,15 @@
             {"name": "Activate", "request": {"method": "POST", "header": [{"key": "Authorization","value": "Bearer {{consultantOnboardingToken}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/onboarding/consultant/activate"}}
           ]
         }
+      ]
+    },
+    {
+      "name": "AI Service",
+      "item": [
+        {"name": "Get records - Sales", "request": {"method": "GET", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records?type=sales&page=1&limit=20"}},
+        {"name": "Get records - Expenses", "request": {"method": "GET", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records?type=expenses&page=1&limit=20"}},
+        {"name": "Get records - Filings", "request": {"method": "GET", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records?type=filings&page=1&limit=20"}},
+        {"name": "Update record", "request": {"method": "PATCH", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"type\":\"sales\",\"id\":\"{{saleId}}\",\"payload\":{\"status\":\"Paid\"}}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records"}}
       ]
     }
   ]

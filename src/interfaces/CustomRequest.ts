@@ -32,6 +32,7 @@ export interface IRequest extends Request {
   companyId?: string;
   clientId?: string;
   linkedUserId?: string;
+  aiClientId?: string;
   onboardingPayload?: OnboardingTokenPayload;
   consultantOnboardingSession?: ConsultantOnboardingSession;
   pagination?: PaginationInfo;
