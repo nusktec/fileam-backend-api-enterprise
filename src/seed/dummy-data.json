@@ -15,6 +15,84 @@
       "organizationName": "Acme Business Ltd"
     }
   },
+  "clients": [
+    {
+      "email": "client@fileam.app",
+      "firstName": "John",
+      "lastName": "Client",
+      "organizationName": "Acme Business Ltd",
+      "thresholdScenario": "default",
+      "business": {
+        "name": "Acme Business Ltd",
+        "incomeType": "business",
+        "businessType": "Consulting",
+        "sector": "IT & Services",
+        "tin": "12345678-0001",
+        "rcNumber": "RC1234567",
+        "streetAddress": "123 Victoria Island, Lagos",
+        "stateOfResidence": "Lagos",
+        "primaryTaxOffice": "Lagos Island",
+        "city": "Lagos"
+      }
+    },
+    {
+      "email": "below-threshold@fileam.app",
+      "firstName": "Chidi",
+      "lastName": "SmallBiz",
+      "organizationName": "SmallBiz Consulting Ltd",
+      "thresholdScenario": "below",
+      "business": {
+        "name": "SmallBiz Consulting Ltd",
+        "incomeType": "business",
+        "businessType": "Consulting",
+        "sector": "Professional Services",
+        "tin": "12345678-0002",
+        "rcNumber": "RC1234568",
+        "streetAddress": "45 Adeniran Ogunsanya, Surulere",
+        "stateOfResidence": "Lagos",
+        "primaryTaxOffice": "Lagos Mainland",
+        "city": "Lagos"
+      }
+    },
+    {
+      "email": "approaching-threshold@fileam.app",
+      "firstName": "Ada",
+      "lastName": "GrowingCo",
+      "organizationName": "Growing Company Ltd",
+      "thresholdScenario": "approaching",
+      "business": {
+        "name": "Growing Company Ltd",
+        "incomeType": "business",
+        "businessType": "IT & Services",
+        "sector": "Technology",
+        "tin": "12345678-0003",
+        "rcNumber": "RC1234569",
+        "streetAddress": "12 Ozumba Mbadiwe, VI",
+        "stateOfResidence": "Lagos",
+        "primaryTaxOffice": "Lagos Island",
+        "city": "Lagos"
+      }
+    },
+    {
+      "email": "above-threshold@fileam.app",
+      "firstName": "Emeka",
+      "lastName": "BigEnterprise",
+      "organizationName": "Big Enterprise Nigeria Ltd",
+      "thresholdScenario": "above",
+      "business": {
+        "name": "Big Enterprise Nigeria Ltd",
+        "incomeType": "business",
+        "businessType": "Manufacturing",
+        "sector": "Industrial",
+        "tin": "12345678-0004",
+        "rcNumber": "RC1234570",
+        "streetAddress": "88 Apapa-Oshodi Expressway",
+        "stateOfResidence": "Lagos",
+        "primaryTaxOffice": "Lagos Industrial",
+        "city": "Lagos"
+      }
+    }
+  ],
   "business": {
     "name": "Acme Business Ltd",
     "incomeType": "business",
@@ -55,5 +133,32 @@
   "amountRanges": {
     "sale": { "min": 50000, "max": 500000 },
     "expense": { "min": 5000, "max": 150000 }
+  },
+  "thresholdScenarios": {
+    "below": {
+      "description": "Below VAT Threshold - ~10M annual turnover (net sales-expenses)",
+      "monthlySaleTotal": 950000,
+      "saleRange": { "min": 80000, "max": 180000 },
+      "expenseRange": { "min": 10000, "max": 80000 },
+      "salesPerMonth": 6,
+      "expensesPerMonth": 4
+    },
+    "approaching": {
+      "description": "Approaching VAT Threshold - ~23M annual turnover",
+      "monthlySaleTotal": 2300000,
+      "saleRange": { "min": 250000, "max": 450000 },
+      "expenseRange": { "min": 50000, "max": 150000 },
+      "salesPerMonth": 6,
+      "expensesPerMonth": 5
+    },
+    "above": {
+      "description": "Above VAT Threshold - ~28M annual turnover",
+      "monthlySaleTotal": 2550000,
+      "saleRange": { "min": 350000, "max": 600000 },
+      "expenseRange": { "min": 80000, "max": 200000 },
+      "salesPerMonth": 5,
+      "expensesPerMonth": 5
+    },
+    "default": null
   }
 }

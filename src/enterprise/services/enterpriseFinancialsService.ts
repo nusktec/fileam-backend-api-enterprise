@@ -506,6 +506,7 @@ export const enterpriseFinancialsService = {
     return {
       data: list.map((d) => ({
         id: d.id,
+        documentId: d.id,
         documentType: d.documentType,
         description: d.description,
         documentDate: d.documentDate,
