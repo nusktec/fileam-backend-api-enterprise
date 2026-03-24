@@ -2,11 +2,13 @@ import { prisma } from "../../config/database";
 import {
   sendInvitationToJoinEmail,
   sendConsultantRequestEmail,
+  sendConsultantIncomingClientRequestEmail,
 } from "../../services/emailService";
 
 export interface InvitationCard {
   id: string;
   consultantUserId?: string;
+  initiator?: "consultant_to_client" | "client_to_consultant";
   invitedEmail: string;
   invitedBusinessName: string | null;
   invitedContactName: string | null;
@@ -22,6 +24,7 @@ export interface InvitationCard {
 function shapeInvitationToCard(inv: {
   id: string;
   consultantUserId?: string;
+  initiator?: "consultant_to_client" | "client_to_consultant";
   invitedEmail: string;
   invitedBusinessName: string | null;
   invitedRcNumber: string | null;
@@ -47,6 +50,7 @@ function shapeInvitationToCard(inv: {
   return {
     id: inv.id,
     ...(inv.consultantUserId && { consultantUserId: inv.consultantUserId }),
+    ...(inv.initiator && { initiator: inv.initiator }),
     invitedEmail: inv.invitedEmail,
     invitedBusinessName: inv.invitedBusinessName ?? null,
     invitedContactName: inv.invitedContactName ?? null,
@@ -124,6 +128,7 @@ export const enterpriseClientsService = {
       select: {
         id: true,
         consultantUserId: true,
+        initiator: true,
         invitedEmail: true,
         invitedBusinessName: true,
         invitedRcNumber: true,
@@ -199,7 +204,46 @@ export const enterpriseClientsService = {
       inv.invitedBusinessName?.trim() ||
       inv.invitedEmail;
 
-    if (inv.requestedUserId) {
+    if (inv.initiator === "client_to_consultant" && inv.requestedUserId) {
+      const [consultant, clientUser] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: inv.consultantUserId },
+          select: { firstName: true, lastName: true, organizationName: true, email: true },
+        }),
+        prisma.user.findUnique({
+          where: { id: inv.requestedUserId },
+          include: { businesses: { take: 1 } },
+        }),
+      ]);
+      const consultantGreeting =
+        consultant
+          ? `${consultant.firstName} ${consultant.lastName}`.trim() ||
+            consultant.organizationName ||
+            consultant.email
+          : inv.invitedEmail;
+      const clientDisplayName =
+        clientUser?.organizationName ??
+        clientUser?.businesses[0]?.name ??
+        ((clientUser
+          ? `${clientUser.firstName} ${clientUser.lastName}`.trim()
+          : "") ||
+          clientUser?.email ||
+          recipientName);
+      const emailResult = await sendConsultantIncomingClientRequestEmail(
+        inv.invitedEmail,
+        consultantGreeting ?? inv.invitedEmail,
+        clientDisplayName,
+        inv.id,
+        inv.code,
+        newExpiresAt,
+      );
+      if (!emailResult.success) {
+        console.error(
+          "Failed to resend consultant incoming request email:",
+          emailResult.error,
+        );
+      }
+    } else if (inv.requestedUserId) {
       const consultant = await prisma.user.findUnique({
         where: { id: inv.consultantUserId },
         select: { firstName: true, lastName: true, organizationName: true },
@@ -265,6 +309,16 @@ export const enterpriseClientsService = {
               consultantUserId,
               status: "pending",
               consultantConnections: { none: {} },
+            },
+            include: {
+              requestedUser: {
+                select: {
+                  email: true,
+                  firstName: true,
+                  lastName: true,
+                  organizationName: true,
+                },
+              },
             },
             orderBy: { createdAt: "desc" },
           }),
@@ -358,20 +412,32 @@ export const enterpriseClientsService = {
     if (typeFilter === "all" || typeFilter === "pending") {
       for (const inv of pendingInvitations) {
         const isExpired = inv.expiresAt < now;
+        const ru = inv.requestedUser;
+        const clientInitiated = inv.initiator === "client_to_consultant";
+        const businessName = clientInitiated && ru
+          ? (ru.organizationName?.trim() ||
+              `${ru.firstName} ${ru.lastName}`.trim() ||
+              ru.email)
+          : inv.invitedBusinessName?.trim() ||
+            inv.invitedContactName?.trim() ||
+            inv.invitedEmail;
+        const email =
+          clientInitiated && ru ? ru.email : inv.invitedEmail;
         cards.push({
           id: inv.id,
           connectionId: "",
-          businessName:
-            inv.invitedBusinessName?.trim() ||
-            inv.invitedContactName?.trim() ||
-            inv.invitedEmail,
+          businessName,
           companyRegNumber: inv.invitedRcNumber ?? null,
           rcNumber: inv.invitedRcNumber ?? null,
           isActive: false,
-          status: isExpired ? "Expired Invitation" : "Pending Invitation",
+          status: isExpired
+            ? "Expired Invitation"
+            : clientInitiated
+              ? "Client requested connection"
+              : "Pending Invitation",
           vatStatus: "Pending" as const,
           nextFiling: null,
-          email: inv.invitedEmail,
+          email,
           tin: null,
           invitationId: inv.id,
           type: "pending" as const,

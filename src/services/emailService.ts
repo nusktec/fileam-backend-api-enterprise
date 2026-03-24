@@ -253,6 +253,47 @@ const sendConsultantRequestEmail = async (
   }
 };
 
+/** Email to consultant when a mobile client requests to connect (accept/decline in link). */
+const sendConsultantIncomingClientRequestEmail = async (
+  to: string,
+  consultantRecipientName: string,
+  clientName: string,
+  invitationId: string,
+  code: string,
+  expiresAt: Date,
+): Promise<{ success: boolean; data?: any; error?: any }> => {
+  try {
+    const template = getEmailTemplate(
+      EMAIL_TEMPLATE_TYPES.CONSULTANT_INCOMING_REQUEST,
+    );
+    if (!template) {
+      throw new Error("Consultant incoming request template not found");
+    }
+    const baseUrl = process.env.BASE_URL || "https://fileam.app";
+    const acceptUrl = `${baseUrl}/api/v${process.env.API_VERSION || "1"}/invitations/${invitationId}/accept/${code}`;
+    const declineUrl = `${baseUrl}/api/v${process.env.API_VERSION || "1"}/invitations/${invitationId}/decline/${code}`;
+    const expiryFormatted = expiresAt.toLocaleDateString(undefined, {
+      dateStyle: "medium",
+    });
+    const htmlContent = renderTemplate(template, {
+      name: consultantRecipientName || to,
+      clientName,
+      acceptUrl,
+      declineUrl,
+      expiryDate: expiryFormatted,
+    });
+    return await sendEmail(
+      to,
+      "Client connection request - Fileam",
+      htmlContent,
+      EMAIL_CATEGORIES.INVITATION,
+    );
+  } catch (error) {
+    console.error("Failed to send consultant incoming request email:", error);
+    return { success: false, error };
+  }
+};
+
 const sendInvitationToJoinEmail = async (
   to: string,
   recipientName: string,
@@ -342,6 +383,7 @@ export {
   SendMail,
   SendInviteMail,
   sendConsultantRequestEmail,
+  sendConsultantIncomingClientRequestEmail,
   sendInvitationToJoinEmail,
   sendTeamInvitationEmail,
   EmailCategoryEnum,

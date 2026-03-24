@@ -52,6 +52,7 @@ export const EMAIL_TEMPLATE_TYPES = {
   PASSWORD_RESET: "password_reset",
   INVITATION: "invitation",
   CONSULTANT_REQUEST: "consultant_request",
+  CONSULTANT_INCOMING_REQUEST: "consultant_incoming_request",
 } as const;
 
 export const validateEmailConfig = (): boolean => {

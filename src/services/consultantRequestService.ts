@@ -3,6 +3,7 @@ import { sendEmail } from "./emailService";
 
 export interface ConsultantRequestItem {
   id: string;
+  initiator: "consultant_to_client" | "client_to_consultant";
   consultantUserId: string;
   consultant: {
     id: string;
@@ -59,6 +60,7 @@ export const consultantRequestService = {
         "Consultant";
       return {
         id: inv.id,
+        initiator: inv.initiator,
         consultantUserId: inv.consultantUserId,
         consultant: {
           id: inv.consultantUser.id,
@@ -89,6 +91,13 @@ export const consultantRequestService = {
     }
     if (new Date() > inv.expiresAt) {
       return { success: false as const, message: "Request has expired" };
+    }
+    if (inv.initiator === "client_to_consultant") {
+      return {
+        success: false as const,
+        message:
+          "The consultant must accept this request using the link sent to their email.",
+      };
     }
 
     const user = await prisma.user.findUnique({

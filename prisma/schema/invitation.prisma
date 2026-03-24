@@ -4,11 +4,17 @@ enum InvitationStatus {
   rejected
 }
 
+enum InvitationInitiator {
+  consultant_to_client
+  client_to_consultant
+}
+
 model Invitation {
   id                    String           @id @default(uuid())
   code                  String           @unique
   consultantUserId      String           @map("consultant_user_id")
   requestedUserId       String?          @unique @map("requested_user_id")
+  initiator             InvitationInitiator @default(consultant_to_client) @map("initiator")
   invitedEmail          String           @map("invited_email")
   invitedBusinessName   String?          @map("invited_business_name")
   invitedContactName    String?          @map("invited_contact_name")

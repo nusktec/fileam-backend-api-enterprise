@@ -120,6 +120,7 @@ export async function sendClientRequest(
         data: {
           code,
           requestedUserId,
+          initiator: "consultant_to_client",
           invitedEmail: requestedUser.email,
           invitedBusinessName:
             requestedUser.businesses[0]?.name ??
@@ -142,6 +143,7 @@ export async function sendClientRequest(
           code,
           consultantUserId,
           requestedUserId,
+          initiator: "consultant_to_client",
           invitedEmail: requestedUser.email,
           invitedBusinessName:
             requestedUser.businesses[0]?.name ??

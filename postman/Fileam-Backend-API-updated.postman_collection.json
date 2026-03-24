@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}}. Upload files via Media first, then use returned URL in other endpoints. Enterprise Signup: Step Email → Step Email verify (saves enterpriseOnboardingToken) → Step Password (requires Authorization: Bearer {{enterpriseOnboardingToken}}). Expense categories: Rent, Tools & Software, Marketing, Internet, Salary, Other. Sale categories: Consulting, Product Sales, Service Income, Subscription, Other. Employment types: Part time, Full time, Contract.\n\nOptional list filters (leave {{listDateFrom}}/{{listDateTo}} empty to skip): dateFrom & dateTo as YYYY-MM-DD or ISO8601 on paginated/date-based lists (sales, expenses, payables, payments, filings, reports, employees, transactions, financial documents, invoices, evidence vault, enterprise filings/reports, AI records). Enterprise evidence vault also accepts legacy startDate & endDate.\n\nEnterprise GET .../clients/:clientId/reports/export-all returns one PDF merging each matching stored report (by generatedAt range) as separate multi-page sections; if none match, exports one section per calendar month in the range (default last 12 months when dates empty). Optional reportType filter. Response header X-Report-Sections = section count. Max 48 sections.",
+    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}} (collection prerequest sets Authorization except onboarding and AI routes). Upload files via Media first, then use returned URL in other endpoints. Enterprise Signup: Step Email → Step Email verify (saves enterpriseOnboardingToken) → Step Password (requires Authorization: Bearer {{enterpriseOnboardingToken}}). Expense categories: Rent, Tools & Software, Marketing, Internet, Salary, Other. Sale categories: Consulting, Product Sales, Service Income, Subscription, Other. Employment types: Part time, Full time, Contract.\n\nConsultants: Mobile GET /mobile/consultants (directory, query q/page/limit) and POST /mobile/consultants/request with consultantUserId. Mobile GET /mobile/consultant-requests returns pending items; each item includes initiator consultant_to_client (consultant invited you — use Accept/Decline in app) or client_to_consultant (you requested — consultant accepts via email link). Email links (no auth): GET /api/v{{apiVersion}}/invitations/:id/accept/:code and .../decline/:code — set {{invitationLinkId}} and {{invitationLinkCode}} from the email.\n\nEnterprise client filings: POST .../clients/:clientId/filings/vat/submit-return submits VAT for the linked client (body like periodYear, periodMonth, amount, paymentStatus paid|not_paid, optional dueDate, documentUrl, etc.); POST .../filings with taxType VAT|WHT remains available.\n\nOptional list filters (leave {{listDateFrom}}/{{listDateTo}} empty to skip): dateFrom & dateTo as YYYY-MM-DD or ISO8601 on paginated/date-based lists (sales, expenses, payables, payments, filings, reports, employees, transactions, financial documents, invoices, evidence vault, enterprise filings/reports, AI records). Enterprise evidence vault also accepts legacy startDate & endDate.\n\nEnterprise GET .../clients/:clientId/reports/export-all returns one PDF merging each matching stored report (by generatedAt range) as separate multi-page sections; if none match, exports one section per calendar month in the range (default last 12 months when dates empty). Optional reportType filter. Response header X-Report-Sections = section count. Max 48 sections.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -10,6 +10,7 @@
     { "key": "baseUrl", "value": "http://localhost:3000" },
     { "key": "clientId", "value": "" },
     { "key": "connectionId", "value": "" },
+    { "key": "consultantUserId", "value": "" },
     { "key": "consultantOnboardingToken", "value": "" },
     { "key": "enterpriseOnboardingToken", "value": "" },
     { "key": "documentId", "value": "" },
@@ -18,6 +19,8 @@
     { "key": "filingId", "value": "" },
     { "key": "invitationCode", "value": "" },
     { "key": "invitationId", "value": "" },
+    { "key": "invitationLinkCode", "value": "" },
+    { "key": "invitationLinkId", "value": "" },
     { "key": "invoiceId", "value": "" },
     { "key": "mediaKey", "value": "path/to/file" },
     { "key": "onboardingToken", "value": "" },
@@ -57,6 +60,8 @@
           "} else if (url.includes('/mobile/onboarding/') && (url.includes('step/password') || url.includes('profile'))) {",
           "  const t = pm.collectionVariables.get('onboardingToken');",
           "  if (t) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + t });",
+          "} else if (url.includes('/invitations/') && (url.includes('/accept/') || url.includes('/decline/'))) {",
+          "  pm.request.headers.remove('Authorization');",
           "} else {",
           "  const token = pm.collectionVariables.get('accessToken');",
           "  if (token) pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
@@ -106,9 +111,23 @@
         {
           "name": "Consultant requests",
           "item": [
-            {"name": "List", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.length>0){pm.collectionVariables.set('invitationId',j.data[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/consultant-requests"}},
+            {"name": "List", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.length>0){var rows=j.data; var pick=rows.find(function(r){return r.initiator!=='client_to_consultant';})||rows[0]; pm.collectionVariables.set('invitationId',pick.id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/consultant-requests", "description": "Pending requests. initiator: consultant_to_client = you can Accept/Decline here; client_to_consultant = wait for consultant email link."}},
             {"name": "Accept", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/consultant-requests/{{invitationId}}/accept"}},
             {"name": "Decline", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/consultant-requests/{{invitationId}}/decline"}}
+          ]
+        },
+        {
+          "name": "Consultants",
+          "item": [
+            {"name": "List directory", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var inner=j.data; var arr=inner&&inner.data?inner.data:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('consultantUserId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/consultants?page=1&limit=20&q=", "description": "Lists enterprise-onboarded consultants. Empty data if you already have an active consultant. Optional search q (min 2 characters)."}},
+            {"name": "Request consultant", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"consultantUserId\":\"{{consultantUserId}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/consultants/request", "description": "Sends the consultant an email with accept/decline links. Connection is created when they accept."}}
+          ]
+        },
+        {
+          "name": "Invitation email links (no auth)",
+          "item": [
+            {"name": "Accept invitation (open in browser)", "request": {"auth": {"type": "noauth"}, "method": "GET", "header": [], "url": "{{baseUrl}}/api/v{{apiVersion}}/invitations/{{invitationLinkId}}/accept/{{invitationLinkCode}}", "description": "Paste invitation UUID and short code from the email into invitationLinkId and invitationLinkCode. No Authorization header."}},
+            {"name": "Decline invitation (open in browser)", "request": {"auth": {"type": "noauth"}, "method": "GET", "header": [], "url": "{{baseUrl}}/api/v{{apiVersion}}/invitations/{{invitationLinkId}}/decline/{{invitationLinkCode}}", "description": "Same variables as Accept. No Authorization header."}}
           ]
         },
         {
@@ -410,7 +429,7 @@
                     {"name": "Unfiled", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/unfiled"}},
                     {"name": "List", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
                     {"name": "Create", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"taxType\":\"VAT\",\"periodYear\":2026,\"periodMonth\":1,\"amount\":50000,\"paymentStatus\":\"not_paid\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings"}},
-                    {"name": "Submit VAT return", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"amount\":50000,\"paymentStatus\":\"not_paid\",\"documentUrl\":\"https://example.com/vat-return.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/vat/submit-return"}},
+                    {"name": "Submit VAT return", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; if(j.status&&d&&(d.id||d.filingId)){pm.collectionVariables.set('filingId',d.id||d.filingId);}"], "type": "text/javascript"}}], "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"amount\":50000,\"paymentStatus\":\"not_paid\",\"documentUrl\":\"https://example.com/vat-return.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/vat/submit-return", "description": "VAT-only submit for enterprise acting as client (no taxType). Optional: dueDate (ISO8601), receiptUrl, evidenceVaultId, stateOfOperation, vatRegistrationNumber."}},
                     {"name": "Get report", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}/report"}}
                   ]
                 },

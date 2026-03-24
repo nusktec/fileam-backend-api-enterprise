@@ -35,7 +35,7 @@ export async function handleRequestAccept(req: Request, res: Response): Promise<
     return;
   }
 
-  const inv = await prisma.invitation.findUnique({
+  const inv = await prisma.invitation.findFirst({
     where: { id: id!, code: code! },
     include: { consultantUser: true },
   });
@@ -50,6 +50,19 @@ export async function handleRequestAccept(req: Request, res: Response): Promise<
   }
   if (!inv.requestedUserId) {
     res.status(400).send(STATUS_PAGE_HTML("Error", "Invalid request."));
+    return;
+  }
+
+  const existingActive = await prisma.consultantConnection.findFirst({
+    where: { userId: inv.requestedUserId, status: "active" },
+  });
+  if (existingActive) {
+    res.status(400).send(
+      STATUS_PAGE_HTML(
+        "Already connected",
+        "This account already has an active consultant connection.",
+      ),
+    );
     return;
   }
 
@@ -68,14 +81,22 @@ export async function handleRequestAccept(req: Request, res: Response): Promise<
     user?.email ||
     "Client";
 
-  const clientCompany = await prisma.company.create({
-    data: {
-      name: clientCompanyName,
+  let clientCompany = await prisma.company.findFirst({
+    where: {
       ownerId: inv.consultantUserId,
       linkedUserId: inv.requestedUserId,
-      managedByCompanyId: null,
     },
   });
+  if (!clientCompany) {
+    clientCompany = await prisma.company.create({
+      data: {
+        name: clientCompanyName,
+        ownerId: inv.consultantUserId,
+        linkedUserId: inv.requestedUserId,
+        managedByCompanyId: null,
+      },
+    });
+  }
 
   await prisma.$transaction([
     prisma.consultantConnection.create({
@@ -94,20 +115,44 @@ export async function handleRequestAccept(req: Request, res: Response): Promise<
     }),
   ]);
 
+  const clientName =
+    user?.organizationName ?? business?.name ?? user?.email ?? "A client";
+
+  if (inv.initiator === "client_to_consultant") {
+    if (user?.email) {
+      await sendEmail(
+        user.email,
+        "Consultant accepted your request - Fileam",
+        `<p>Your request to connect with your tax professional on Fileam was accepted. You can continue in the app.</p><p><a href="https://fileam.app">Open Fileam</a></p>`,
+      );
+    }
+    res.send(
+      STATUS_PAGE_HTML(
+        "Request accepted",
+        "You have accepted this connection request. The client has been notified.",
+      ),
+    );
+    return;
+  }
+
   const consultantUser = await prisma.user.findUnique({
     where: { id: inv.consultantUserId },
     select: { email: true },
   });
   if (consultantUser?.email) {
-    const clientName = user?.organizationName ?? business?.name ?? user?.email ?? "A client";
     await sendEmail(
       consultantUser.email,
-      "Client Accepted Your Request - Fileam",
-      `<p>${clientName} has accepted your consultant request. You can now fully manage their tax operations.</p><p><a href="https://fileam.app">Go to Fileam</a></p>`,
+      "Client accepted your invitation - Fileam",
+      `<p>${clientName} has accepted your invitation to connect on Fileam.</p><p><a href="https://fileam.app">Go to Fileam</a></p>`,
     );
   }
 
-  res.send(STATUS_PAGE_HTML("Request Accepted", "You have successfully accepted this consultant request. You can now proceed to the app."));
+  res.send(
+    STATUS_PAGE_HTML(
+      "Invitation accepted",
+      "You have successfully accepted this invitation. You can now proceed to the app.",
+    ),
+  );
 }
 
 export async function handleRequestDecline(req: Request, res: Response): Promise<void> {
@@ -118,8 +163,9 @@ export async function handleRequestDecline(req: Request, res: Response): Promise
     return;
   }
 
-  const inv = await prisma.invitation.findUnique({
+  const inv = await prisma.invitation.findFirst({
     where: { id: id!, code: code! },
+    include: { requestedUser: { select: { email: true } } },
   });
 
   if (!inv || inv.status !== "pending") {
@@ -132,5 +178,20 @@ export async function handleRequestDecline(req: Request, res: Response): Promise
     data: { status: "rejected" },
   });
 
-  res.send(STATUS_PAGE_HTML("Request Declined", "You have declined this consultant request."));
+  if (inv.initiator === "client_to_consultant" && inv.requestedUser?.email) {
+    await sendEmail(
+      inv.requestedUser.email,
+      "Consultant declined your request - Fileam",
+      `<p>Your connection request on Fileam was declined. You can try inviting another professional from the app.</p><p><a href="https://fileam.app">Open Fileam</a></p>`,
+    );
+  }
+
+  res.send(
+    STATUS_PAGE_HTML(
+      "Request declined",
+      inv.initiator === "client_to_consultant"
+        ? "You have declined this connection request. The client has been notified."
+        : "You have declined this invitation.",
+    ),
+  );
 }
