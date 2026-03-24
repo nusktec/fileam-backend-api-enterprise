@@ -89,13 +89,29 @@ export const paymentRecordsService = {
   async list(
     userId: string,
     filters?: { taxPayableId?: string; status?: string },
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
+    opts?: {
+      page?: number;
+      limit?: number;
+      sortOrder?: "ASC" | "DESC";
+      dateFrom?: Date;
+      dateTo?: Date;
+    },
   ) {
-    const where: { userId: string; taxPayableId?: string; status?: string } = {
+    const where: {
+      userId: string;
+      taxPayableId?: string;
+      status?: string;
+      createdAt?: { gte?: Date; lte?: Date };
+    } = {
       userId,
     };
     if (filters?.taxPayableId) where.taxPayableId = filters.taxPayableId;
     if (filters?.status) where.status = filters.status;
+    if (opts?.dateFrom || opts?.dateTo) {
+      where.createdAt = {};
+      if (opts.dateFrom) where.createdAt.gte = opts.dateFrom;
+      if (opts.dateTo) where.createdAt.lte = opts.dateTo;
+    }
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";

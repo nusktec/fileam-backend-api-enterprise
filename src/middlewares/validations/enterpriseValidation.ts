@@ -151,6 +151,21 @@ const validateCreateFiling = [
   handleValidation,
 ];
 
+/** Same body as create filing for VAT only (no taxType). */
+const validateSubmitVatFiling = [
+  check("periodYear").isInt({ min: 2020, max: 2030 }).withMessage("periodYear must be valid"),
+  check("periodMonth").isInt({ min: 1, max: 12 }).withMessage("periodMonth must be 1-12"),
+  check("amount").isFloat({ min: 0 }).withMessage("amount must be non-negative"),
+  check("paymentStatus").optional().isIn(["paid", "not_paid"]),
+  check("dueDate").optional().isISO8601(),
+  check("receiptUrl").optional().trim().isString(),
+  check("documentUrl").optional().trim().isString(),
+  check("evidenceVaultId").optional().trim().isString(),
+  check("stateOfOperation").optional().trim().isString(),
+  check("vatRegistrationNumber").optional().trim().isString(),
+  handleValidation,
+];
+
 const validateTaxConfiguration = [
   check("vat").optional().isBoolean(),
   check("paye").optional().isBoolean(),
@@ -390,6 +405,7 @@ export const enterpriseValidations = {
   validateClientBusinessProfile,
   validateClientContact,
   validateCreateFiling,
+  validateSubmitVatFiling,
   validateTaxConfiguration,
   validateUpgradeSubscription,
   validateCalculateVat,

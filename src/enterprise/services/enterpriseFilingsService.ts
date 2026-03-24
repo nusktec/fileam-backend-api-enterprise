@@ -135,10 +135,25 @@ export async function getUnfiledItems(linkedUserId: string) {
 
 export async function listFilings(
   linkedUserId: string,
-  opts?: { page?: number; limit?: number; status?: string },
+  opts?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+  },
 ) {
-  const where: { userId: string; status?: string } = { userId: linkedUserId };
+  const where: {
+    userId: string;
+    status?: string;
+    filingDueDate?: { gte?: Date; lte?: Date };
+  } = { userId: linkedUserId };
   if (opts?.status && opts.status !== "all") where.status = opts.status;
+  if (opts?.dateFrom || opts?.dateTo) {
+    where.filingDueDate = {};
+    if (opts.dateFrom) where.filingDueDate.gte = opts.dateFrom;
+    if (opts.dateTo) where.filingDueDate.lte = opts.dateTo;
+  }
   const page = opts?.page ?? 1;
   const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
   const [payables, total] = await Promise.all([
@@ -232,6 +247,16 @@ export async function createFiling(
   }
 
   return null;
+}
+
+export async function submitClientVatReturn(
+  linkedUserId: string,
+  data: Omit<
+    Parameters<typeof createFiling>[1],
+    "taxType"
+  >,
+) {
+  return createFiling(linkedUserId, { ...data, taxType: "VAT" });
 }
 
 export async function getFilingReport(

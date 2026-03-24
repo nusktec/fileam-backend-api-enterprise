@@ -6,6 +6,7 @@ import { salesService } from "../mobile/services/salesService";
 import { expensesService } from "../mobile/services/expensesService";
 import { filingsService } from "../mobile/services/filingsService";
 import { prisma } from "../config/database";
+import { parseDateRangeQuery } from "../utils/dateRangeQuery";
 
 const RECORD_TYPES = ["sales", "expenses", "filings"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
@@ -49,6 +50,12 @@ export async function getRecords(
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || 20), 10)));
   const sortOrder = req.query.sortOrder === "ASC" ? "ASC" : "DESC";
 
+  const dr = parseDateRangeQuery(req.query as Record<string, unknown>);
+  if (!dr.ok) {
+    res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, dr.message, null));
+    return;
+  }
+
   try {
     let data: unknown;
     if (type === "sales") {
@@ -57,12 +64,16 @@ export async function getRecords(
         page,
         limit,
         sortOrder,
+        dateFrom: dr.range.dateFrom,
+        dateTo: dr.range.dateTo,
       });
     } else if (type === "expenses") {
       data = await expensesService.list(clientId, {
         page,
         limit,
         sortOrder,
+        dateFrom: dr.range.dateFrom,
+        dateTo: dr.range.dateTo,
       });
     } else {
       data = await filingsService.list(
@@ -71,7 +82,13 @@ export async function getRecords(
           status: req.query.status as string | undefined,
           taxType: req.query.taxType as string | undefined,
         },
-        { page, limit, sortOrder },
+        {
+          page,
+          limit,
+          sortOrder,
+          dateFrom: dr.range.dateFrom,
+          dateTo: dr.range.dateTo,
+        },
       );
     }
     res.status(HttpStatusCode.OK).json(outJson(true, "Records retrieved", data));

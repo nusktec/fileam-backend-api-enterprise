@@ -135,6 +135,8 @@ export const enterpriseEvidenceVaultService = {
       startDate?: string;
       endDate?: string;
       status?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
     },
     opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
     linkedUserId?: string,
@@ -159,6 +161,8 @@ export const enterpriseEvidenceVaultService = {
       const docs = await evidenceVaultService.listDocuments(linkedUserId, {
         search: filters?.search,
         category: mobileCat,
+        dateFrom: filters?.dateFrom,
+        dateTo: filters?.dateTo,
       });
       const page = opts?.page ?? 1;
       const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
@@ -190,7 +194,11 @@ export const enterpriseEvidenceVaultService = {
     if (filters?.category && filters.category !== "all")
       where.category = filters.category;
     if (filters?.status) where.status = filters.status;
-    if (filters?.startDate || filters?.endDate) {
+    if (filters?.dateFrom || filters?.dateTo) {
+      where.documentDate = {};
+      if (filters.dateFrom) where.documentDate.gte = filters.dateFrom;
+      if (filters.dateTo) where.documentDate.lte = filters.dateTo;
+    } else if (filters?.startDate || filters?.endDate) {
       where.documentDate = {};
       if (filters.startDate)
         where.documentDate.gte = new Date(filters.startDate);

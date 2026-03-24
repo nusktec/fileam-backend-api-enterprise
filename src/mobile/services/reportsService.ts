@@ -5,10 +5,25 @@ export const reportsService = {
   async list(
     userId: string,
     filters?: { reportType?: string },
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
+    opts?: {
+      page?: number;
+      limit?: number;
+      sortOrder?: "ASC" | "DESC";
+      dateFrom?: Date;
+      dateTo?: Date;
+    },
   ) {
-    const where: { userId: string; reportType?: string } = { userId };
+    const where: {
+      userId: string;
+      reportType?: string;
+      generatedAt?: { gte?: Date; lte?: Date };
+    } = { userId };
     if (filters?.reportType) where.reportType = filters.reportType;
+    if (opts?.dateFrom || opts?.dateTo) {
+      where.generatedAt = {};
+      if (opts.dateFrom) where.generatedAt.gte = opts.dateFrom;
+      if (opts.dateTo) where.generatedAt.lte = opts.dateTo;
+    }
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";

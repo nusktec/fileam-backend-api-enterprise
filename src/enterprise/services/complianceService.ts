@@ -118,6 +118,7 @@ export async function getUpcomingDeadlines(
 
     return {
       id: p.id,
+      filingId: p.id,
       clientId: p.userId,
       client: clientName,
       taxType: p.taxType,

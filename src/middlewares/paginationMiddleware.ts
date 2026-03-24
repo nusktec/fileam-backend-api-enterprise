@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { HttpStatusCode } from "../interfaces/system";
 import { outJson } from "../utils/renders";
+import { parseDateRangeQuery } from "../utils/dateRangeQuery";
 
 export interface PaginationQuery {
   page?: string;
@@ -8,6 +9,8 @@ export interface PaginationQuery {
   search?: string;
   sortBy?: string;
   sortOrder?: "ASC" | "DESC";
+  dateFrom?: string;
+  dateTo?: string;
 }
 
 export interface PaginationRequest extends Request {
@@ -17,6 +20,8 @@ export interface PaginationRequest extends Request {
     search?: string;
     sortBy?: string;
     sortOrder: "ASC" | "DESC";
+    dateFrom?: Date;
+    dateTo?: Date;
   };
 }
 
@@ -53,6 +58,14 @@ export const validatePaginationParams = (
     return;
   }
 
+  const dr = parseDateRangeQuery(req.query as Record<string, unknown>);
+  if (!dr.ok) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, dr.message, null));
+    return;
+  }
+
   // Set default pagination parameters
   req.pagination = {
     page: pageNum || 1,
@@ -60,6 +73,9 @@ export const validatePaginationParams = (
     search: req.query.search as string,
     sortBy: req.query.sortBy as string,
     sortOrder: (sortOrder?.toUpperCase() as "ASC" | "DESC") || "DESC",
+    ...(dr.range.dateFrom || dr.range.dateTo
+      ? { dateFrom: dr.range.dateFrom, dateTo: dr.range.dateTo }
+      : {}),
   };
 
   next();

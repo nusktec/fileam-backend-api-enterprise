@@ -8,20 +8,39 @@ function decimalToNumber(d: Decimal | null | undefined): number {
 
 export async function getClientTransactions(
   userId: string,
-  opts?: { limit?: number; page?: number; sortOrder?: "asc" | "desc" },
+  opts?: {
+    limit?: number;
+    page?: number;
+    sortOrder?: "asc" | "desc";
+    dateFrom?: Date;
+    dateTo?: Date;
+  },
 ) {
   const limit = opts?.limit ?? 10;
   const page = opts?.page ?? 1;
   const order = opts?.sortOrder === "asc" ? "asc" : "desc";
 
+  const saleWhere: { userId: string; saleDate?: { gte?: Date; lte?: Date } } = {
+    userId,
+  };
+  const expenseWhere: {
+    userId: string;
+    expenseDate?: { gte?: Date; lte?: Date };
+  } = { userId };
+  if (opts?.dateFrom || opts?.dateTo) {
+    const r = { gte: opts.dateFrom, lte: opts.dateTo };
+    saleWhere.saleDate = { ...r };
+    expenseWhere.expenseDate = { ...r };
+  }
+
   const [sales, expenses] = await Promise.all([
     prisma.sale.findMany({
-      where: { userId },
+      where: saleWhere,
       orderBy: { saleDate: order },
       include: { createdBy: { select: { id: true, firstName: true, lastName: true } } },
     }),
     prisma.expense.findMany({
-      where: { userId },
+      where: expenseWhere,
       orderBy: { expenseDate: order },
       include: { createdBy: { select: { id: true, firstName: true, lastName: true } } },
     }),

@@ -106,7 +106,15 @@ export async function listDocuments(
   try {
     const result = await enterpriseEvidenceVaultService.listDocuments(
       companyId,
-      { search, category, startDate, endDate, status },
+      {
+        search,
+        category,
+        startDate,
+        endDate,
+        status,
+        dateFrom: pagination?.dateFrom,
+        dateTo: pagination?.dateTo,
+      },
       {
         page: pagination?.page,
         limit: pagination?.limit,

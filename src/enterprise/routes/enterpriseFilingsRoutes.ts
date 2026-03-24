@@ -6,6 +6,7 @@ import {
   getFilingReportHandler,
   getFilingsSummaryHandler,
   getVatReturnsHandler,
+  submitClientVatReturnHandler,
 } from "../controllers/enterpriseFilingsController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 
@@ -15,6 +16,11 @@ router.get("/summary", getFilingsSummaryHandler);
 router.get("/vat-returns", getVatReturnsHandler);
 router.get("/unfiled", getUnfiledItemsHandler);
 router.get("/", listFilingsHandler);
+router.post(
+  "/vat/submit-return",
+  ...enterpriseValidations.validateSubmitVatFiling,
+  submitClientVatReturnHandler,
+);
 router.post(
   "/",
   ...enterpriseValidations.validateCreateFiling,

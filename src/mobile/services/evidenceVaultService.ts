@@ -34,19 +34,41 @@ interface VaultDocument {
 export const evidenceVaultService = {
   async listDocuments(
     userId: string,
-    filters?: { search?: string; category?: string },
+    filters?: {
+      search?: string;
+      category?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+    },
   ): Promise<VaultDocument[]> {
     const docs: VaultDocument[] = [];
     const searchLower = filters?.search?.toLowerCase().trim();
     const category = (filters?.category || "all").toLowerCase();
 
+    const saleWhere: { userId: string; saleDate?: { gte?: Date; lte?: Date } } =
+      { userId };
+    const expenseWhere: {
+      userId: string;
+      expenseDate?: { gte?: Date; lte?: Date };
+    } = { userId };
+    const reportWhere: {
+      userId: string;
+      generatedAt?: { gte?: Date; lte?: Date };
+    } = { userId };
+    if (filters?.dateFrom || filters?.dateTo) {
+      const r = { gte: filters.dateFrom, lte: filters.dateTo };
+      saleWhere.saleDate = { ...r };
+      expenseWhere.expenseDate = { ...r };
+      reportWhere.generatedAt = { ...r };
+    }
+
     const [sales, expenses, payables, reports] = await Promise.all([
       prisma.sale.findMany({
-        where: { userId },
+        where: saleWhere,
         orderBy: { saleDate: "desc" },
       }),
       prisma.expense.findMany({
-        where: { userId },
+        where: expenseWhere,
         orderBy: { expenseDate: "desc" },
       }),
       prisma.taxPayable.findMany({
@@ -54,7 +76,7 @@ export const evidenceVaultService = {
         orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
       }),
       prisma.report.findMany({
-        where: { userId },
+        where: reportWhere,
         orderBy: { generatedAt: "desc" },
       }),
     ]);
@@ -157,6 +179,19 @@ export const evidenceVaultService = {
     }
 
     docs.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    let out = docs;
+    if (filters?.dateFrom || filters?.dateTo) {
+      const from = filters.dateFrom?.getTime();
+      const to = filters.dateTo?.getTime();
+      out = out.filter((d) => {
+        const t = d.date.getTime();
+        if (from != null && t < from) return false;
+        if (to != null && t > to) return false;
+        return true;
+      });
+    }
+
     if (category && category !== "all") {
       const categoryMap: Record<string, string> = {
         invoices: "Invoices",
@@ -166,9 +201,9 @@ export const evidenceVaultService = {
         filings: "Filings",
       };
       const target = categoryMap[category];
-      if (target) return docs.filter((d) => d.category === target);
+      if (target) return out.filter((d) => d.category === target);
     }
-    return docs;
+    return out;
   },
 
   async getCategoryCounts(userId: string): Promise<Record<string, number>> {

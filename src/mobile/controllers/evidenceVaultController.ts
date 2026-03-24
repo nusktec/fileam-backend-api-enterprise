@@ -4,6 +4,7 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { evidenceVaultService } from "../services/evidenceVaultService";
+import { parseDateRangeQuery } from "../../utils/dateRangeQuery";
 
 export const listDocuments = async (
   req: IRequest,
@@ -13,8 +14,20 @@ export const listDocuments = async (
     const userId = getAuthUserId(req);
     const search = req.query.search as string | undefined;
     const category = req.query.category as string | undefined;
+    const dr = parseDateRangeQuery(req.query as Record<string, unknown>);
+    if (!dr.ok) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, dr.message, null));
+      return;
+    }
     const [documents, counts] = await Promise.all([
-      evidenceVaultService.listDocuments(userId, { search, category }),
+      evidenceVaultService.listDocuments(userId, {
+        search,
+        category,
+        dateFrom: dr.range.dateFrom,
+        dateTo: dr.range.dateTo,
+      }),
       evidenceVaultService.getCategoryCounts(userId),
     ]);
     res.status(HttpStatusCode.OK).json(

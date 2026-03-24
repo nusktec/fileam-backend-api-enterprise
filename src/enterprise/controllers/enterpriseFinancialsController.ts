@@ -47,6 +47,8 @@ export async function getAllTransactions(
         page: pagination?.page,
         limit: pagination?.limit,
         sortOrder: pagination?.sortOrder,
+        dateFrom: pagination?.dateFrom,
+        dateTo: pagination?.dateTo,
       },
       req.linkedUserId,
     );
@@ -472,6 +474,8 @@ export async function listFinancialDocuments(
         limit: pagination?.limit,
         sortOrder: pagination?.sortOrder,
         documentStatus,
+        dateFrom: pagination?.dateFrom,
+        dateTo: pagination?.dateTo,
       });
     if (!result) {
       sendNotFound(res, "Company not found");
@@ -668,6 +672,8 @@ export async function listInvoices(
       page: pagination?.page,
       limit: pagination?.limit,
       sortOrder: pagination?.sortOrder,
+      dateFrom: pagination?.dateFrom,
+      dateTo: pagination?.dateTo,
     });
     if (!result) {
       sendNotFound(res, "Company not found");

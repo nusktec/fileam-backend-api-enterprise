@@ -1,6 +1,7 @@
 import express from "express";
 import {
   listReportsHandler,
+  exportAllReportsPdfHandler,
   getTaxesSummaryHandler,
   getVatPaymentReportHandler,
   getCitComputationReportHandler,
@@ -19,6 +20,7 @@ router.get("/cit", getCitComputationReportHandler);
 router.get("/wht", getWhtReportHandler);
 router.get("/tax-withholding", getTaxWithholdingReportHandler);
 router.get("/paye", getPayeComputationReportHandler);
+router.get("/export-all", exportAllReportsPdfHandler);
 router.get("/:reportId/download", getReportDownloadHandler);
 
 export default router;

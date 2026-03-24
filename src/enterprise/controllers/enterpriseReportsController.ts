@@ -5,7 +5,9 @@ import {
   sendNotFound,
   sendResult,
   sendServerError,
+  sendBadRequest,
 } from "../utils/controllerHelpers";
+import { parseDateRangeQuery } from "../../utils/dateRangeQuery";
 import { sendPaginated } from "../../utils/responseHelpers";
 import {
   listReports,
@@ -16,6 +18,7 @@ import {
   getTaxWithholdingReport,
   getPayeComputationReport,
   getReportDownload,
+  exportAllReportsPdf,
 } from "../services/enterpriseReportsService";
 
 export async function getTaxesSummaryHandler(
@@ -96,6 +99,44 @@ export async function getPayeComputationReportHandler(
   }
 }
 
+export async function exportAllReportsPdfHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId!;
+  const dr = parseDateRangeQuery(req.query as Record<string, unknown>);
+  if (!dr.ok) {
+    sendBadRequest(res, dr.message);
+    return;
+  }
+  const reportTypeRaw = req.query.reportType as string | undefined;
+  const reportType =
+    reportTypeRaw && reportTypeRaw.trim() ? reportTypeRaw.trim() : undefined;
+  try {
+    const result = await exportAllReportsPdf(linkedUserId, {
+      dateRange: dr.range,
+      reportType,
+    });
+    if (!result) {
+      sendNotFound(
+        res,
+        "No report periods to export. Add reports or set dateFrom/dateTo.",
+      );
+      return;
+    }
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${result.filename.replace(/"/g, "")}"`,
+    );
+    res.setHeader("Content-Length", String(result.buffer.length));
+    res.setHeader("X-Report-Sections", String(result.sectionCount));
+    res.status(200).send(result.buffer);
+  } catch {
+    sendServerError(res, "Failed to export reports PDF");
+  }
+}
+
 export async function getReportDownloadHandler(
   req: IRequest,
   res: Response,
@@ -108,7 +149,20 @@ export async function getReportDownloadHandler(
       sendNotFound(res, "Report not found or no document available");
       return;
     }
-    sendResult(res, "Report download", data);
+    if (data.kind === "pdf") {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${data.filename.replace(/"/g, "")}"`,
+      );
+      res.setHeader("Content-Length", String(data.buffer.length));
+      res.status(200).send(data.buffer);
+      return;
+    }
+    sendResult(res, "Report download", {
+      documentUrl: data.documentUrl,
+      format: data.format,
+    });
   } catch {
     sendServerError(res, "Failed to get report download");
   }
@@ -122,11 +176,18 @@ export async function listReportsHandler(
   const page = req.query.page ? Number(req.query.page) : 1;
   const limit = req.query.limit ? Number(req.query.limit) : 20;
   const reportType = req.query.reportType as string | undefined;
+  const dr = parseDateRangeQuery(req.query as Record<string, unknown>);
+  if (!dr.ok) {
+    sendBadRequest(res, dr.message);
+    return;
+  }
   try {
     const result = await listReports(linkedUserId, {
       page,
       limit,
       reportType,
+      dateFrom: dr.range.dateFrom,
+      dateTo: dr.range.dateTo,
     });
     sendPaginated(
       res,

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}}. Upload files via Media first, then use returned URL in other endpoints. Enterprise Signup: Step Email → Step Email verify (saves enterpriseOnboardingToken) → Step Password (requires Authorization: Bearer {{enterpriseOnboardingToken}}). Expense categories: Rent, Tools & Software, Marketing, Internet, Salary, Other. Sale categories: Consulting, Product Sales, Service Income, Subscription, Other. Employment types: Part time, Full time, Contract.",
+    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}}. Upload files via Media first, then use returned URL in other endpoints. Enterprise Signup: Step Email → Step Email verify (saves enterpriseOnboardingToken) → Step Password (requires Authorization: Bearer {{enterpriseOnboardingToken}}). Expense categories: Rent, Tools & Software, Marketing, Internet, Salary, Other. Sale categories: Consulting, Product Sales, Service Income, Subscription, Other. Employment types: Part time, Full time, Contract.\n\nOptional list filters (leave {{listDateFrom}}/{{listDateTo}} empty to skip): dateFrom & dateTo as YYYY-MM-DD or ISO8601 on paginated/date-based lists (sales, expenses, payables, payments, filings, reports, employees, transactions, financial documents, invoices, evidence vault, enterprise filings/reports, AI records). Enterprise evidence vault also accepts legacy startDate & endDate.\n\nEnterprise GET .../clients/:clientId/reports/export-all returns one PDF merging each matching stored report (by generatedAt range) as separate multi-page sections; if none match, exports one section per calendar month in the range (default last 12 months when dates empty). Optional reportType filter. Response header X-Report-Sections = section count. Max 48 sections.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -35,7 +35,9 @@
     { "key": "extractionId", "value": "" },
     { "key": "vendorId", "value": "" },
     { "key": "aiServiceSecret", "value": "fileam-ai-service-secret-change-in-production" },
-    { "key": "aiClientId", "value": "" }
+    { "key": "aiClientId", "value": "" },
+    { "key": "listDateFrom", "value": "" },
+    { "key": "listDateTo", "value": "" }
   ],
   "event": [
     {
@@ -130,7 +132,7 @@
         {
           "name": "Sales",
           "item": [
-            {"name": "List sales", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.sales?d.sales:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('saleId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20"}},
+            {"name": "List sales", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.sales?d.sales:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('saleId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
             {"name": "Get sale", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}"}},
             {"name": "Get sale details", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/details"}},
             {"name": "Download invoice", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/download-invoice"}},
@@ -141,7 +143,7 @@
         {
           "name": "Expenses",
           "item": [
-            {"name": "List expenses", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.expenses?d.expenses:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('expenseId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses?page=1&limit=20"}},
+            {"name": "List expenses", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.expenses?d.expenses:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('expenseId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
             {"name": "Get expense", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}"}},
             {"name": "Get expense details", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}/details"}},
             {"name": "Download receipt", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}/download-receipt"}},
@@ -158,7 +160,7 @@
         {
           "name": "Tax Payables",
           "item": [
-            {"name": "List payables", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.data?d.data:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('payableId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20"}},
+            {"name": "List payables", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.data?d.data:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('payableId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
             {"name": "Get payable", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables/{{payableId}}"}},
             {"name": "Initiate payment", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables/{{payableId}}/initiate-payment"}}
           ]
@@ -166,14 +168,14 @@
         {
           "name": "Payments",
           "item": [
-            {"name": "List payments", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.data?d.data:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('paymentId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payments?page=1&limit=20"}},
+            {"name": "List payments", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.data?d.data:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('paymentId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payments?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
             {"name": "Get payment", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payments/{{paymentId}}"}}
           ]
         },
         {
           "name": "Filings",
           "item": [
-            {"name": "List filings", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.data?d.data:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('filingId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?page=1&limit=20"}},
+            {"name": "List filings", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.data?d.data:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('filingId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
             {"name": "Get filing", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{filingId}}"}},
             {"name": "Get filing document", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{filingId}}/document"}},
             {"name": "Get filing vault link", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{filingId}}/vault-link"}},
@@ -191,7 +193,7 @@
             {"name": "Get types", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/types"}},
             {"name": "Get periods", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/periods?reportType=VAT Return Summary"}},
             {"name": "Generate report", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"reportType\":\"VAT Return Summary\",\"periodYear\":2026,\"periodMonth\":1,\"format\":\"PDF\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/generate"}},
-            {"name": "List reports", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.data?d.data:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('reportId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports?page=1&limit=20"}},
+            {"name": "List reports", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.data?d.data:d&&Array.isArray(d)?d:[]; if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('reportId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
             {"name": "Get report", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/{{reportId}}"}},
             {"name": "Get download", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/{{reportId}}/download"}},
             {"name": "Get vault link", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/{{reportId}}/vault-link"}}
@@ -206,7 +208,7 @@
         {
           "name": "Evidence Vault",
           "item": [
-            {"name": "List documents", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.documents; if(j.status&&d&&d.length&&d[0].id){pm.collectionVariables.set('vaultDocId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents?category=all"}},
+            {"name": "List documents", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.documents; if(j.status&&d&&d.length&&d[0].id){pm.collectionVariables.set('vaultDocId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
             {"name": "Get document", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/{{vaultDocId}}"}},
             {"name": "Get download", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/{{vaultDocId}}/download"}}
           ]
@@ -214,7 +216,7 @@
         {
           "name": "Employees",
           "item": [
-            {"name": "List employees", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.employees?d.employees:d&&Array.isArray(d)?d:[]; if(arr.length&&arr[0].id){pm.collectionVariables.set('employeeId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees?page=1&limit=20"}},
+            {"name": "List employees", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data; var arr=d&&d.employees?d.employees:d&&Array.isArray(d)?d:[]; if(arr.length&&arr[0].id){pm.collectionVariables.set('employeeId',arr[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
             {"name": "Get obligations", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/obligations"}},
             {"name": "Get employee", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}"}},
             {"name": "Create employee", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"fullName\":\"John Doe\",\"jobTitle\":\"Developer\",\"employmentType\":\"Full time\",\"basicSalary\":120000,\"housingAllowance\":30000}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees"}},
@@ -371,8 +373,8 @@
                     {"name": "Balance sheet", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/balance-sheet?year=2026"}},
                     {"name": "Profitability trends", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profitability/trends?year=2026"}},
                     {"name": "Expense breakdown", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profitability/expense-breakdown?year=2026"}},
-                    {"name": "List documents", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.data; if(j.status&&d&&d.length>0){pm.collectionVariables.set('documentId',d[0].id);pm.collectionVariables.set('fileId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents?page=1&limit=20"}},
-                    {"name": "Transactions", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions?page=1&limit=20"}},
+                    {"name": "List documents", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.data; if(j.status&&d&&d.length>0){pm.collectionVariables.set('documentId',d[0].id);pm.collectionVariables.set('fileId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
+                    {"name": "Transactions", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
                     {"name": "Add transaction", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"description\":\"Consulting fee\",\"amount\":50000,\"type\":\"income\",\"date\":\"2026-02-23\",\"status\":\"Pending\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions"}},
                     {"name": "Upload document", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.id){pm.collectionVariables.set('documentId',j.data.id);pm.collectionVariables.set('fileId',j.data.id);}"], "type": "text/javascript"}}], "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"documentType\":\"invoice\",\"fileUrl\":\"https://example.com/doc.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/upload"}},
                     {"name": "Upload invoice (PDF/DOCX)", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.fileId){pm.collectionVariables.set('fileId',j.data.fileId);pm.collectionVariables.set('documentId',j.data.fileId);}"], "type": "text/javascript"}}], "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"fileUrl\":\"https://example.com/invoice.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/upload-invoice"}},
@@ -383,7 +385,7 @@
                     {"name": "Document status", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}/status"}},
                     {"name": "Review document", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}/review"}},
                     {"name": "Delete document", "request": {"method": "DELETE", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}"}},
-                    {"name": "List invoices", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.data; if(j.status&&d&&d.length>0){pm.collectionVariables.set('invoiceId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices?page=1&limit=20"}},
+                    {"name": "List invoices", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.data; if(j.status&&d&&d.length>0){pm.collectionVariables.set('invoiceId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
                     {"name": "Create invoice", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.id){pm.collectionVariables.set('invoiceId',j.data.id);}"], "type": "text/javascript"}}], "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"clientName\":\"Client A\",\"clientAddress\":\"123 St\",\"clientEmail\":\"client@a.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices"}},
                     {"name": "Get invoice", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices/{{invoiceId}}"}},
                     {"name": "Update invoice", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"clientName\":\"Client B\",\"clientAddress\":\"456 Ave\",\"clientEmail\":\"client@b.com\",\"dateIssued\":\"2026-02-01\",\"dueDate\":\"2026-03-01\",\"notes\":\"Updated\",\"lineItems\":[{\"description\":\"Service\",\"quantity\":1,\"unitPrice\":100000,\"total\":100000}]}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/invoices/{{invoiceId}}"}},
@@ -395,7 +397,7 @@
                   "name": "Evidence vault",
                   "item": [
                     {"name": "Stats", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/stats"}},
-                    {"name": "List", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.data; if(j.status&&d&&d.length>0){pm.collectionVariables.set('documentId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents?page=1&limit=20"}},
+                    {"name": "List", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var d=j.data&&j.data.data; if(j.status&&d&&d.length>0){pm.collectionVariables.set('documentId',d[0].id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
                     {"name": "Upload", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.id){pm.collectionVariables.set('documentId',j.data.id);}"], "type": "text/javascript"}}], "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"documentName\":\"Contract\",\"category\":\"contracts\",\"fileUrl\":\"https://example.com/doc.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/upload"}},
                     {"name": "Delete", "request": {"method": "DELETE", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}"}}
                   ]
@@ -406,15 +408,17 @@
                     {"name": "Summary", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/summary"}},
                     {"name": "VAT returns", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/vat-returns"}},
                     {"name": "Unfiled", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/unfiled"}},
-                    {"name": "List", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings?page=1&limit=20"}},
+                    {"name": "List", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
                     {"name": "Create", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"taxType\":\"VAT\",\"periodYear\":2026,\"periodMonth\":1,\"amount\":50000,\"paymentStatus\":\"not_paid\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings"}},
+                    {"name": "Submit VAT return", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"amount\":50000,\"paymentStatus\":\"not_paid\",\"documentUrl\":\"https://example.com/vat-return.pdf\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/vat/submit-return"}},
                     {"name": "Get report", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}/report"}}
                   ]
                 },
                 {
                   "name": "Reports",
                   "item": [
-                    {"name": "List", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports"}},
+                    {"name": "List", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
+                    {"name": "Export all reports (merged PDF)", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports/export-all?dateFrom={{listDateFrom}}&dateTo={{listDateTo}}&reportType="}},
                     {"name": "Taxes summary", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports/taxes-summary"}},
                     {"name": "VAT payment report", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports/vat-payment"}},
                     {"name": "CIT computation report", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports/cit"}},
@@ -467,9 +471,9 @@
     {
       "name": "AI Service",
       "item": [
-        {"name": "Get records - Sales", "request": {"method": "GET", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records?type=sales&page=1&limit=20"}},
-        {"name": "Get records - Expenses", "request": {"method": "GET", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records?type=expenses&page=1&limit=20"}},
-        {"name": "Get records - Filings", "request": {"method": "GET", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records?type=filings&page=1&limit=20"}},
+        {"name": "Get records - Sales", "request": {"method": "GET", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records?type=sales&page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
+        {"name": "Get records - Expenses", "request": {"method": "GET", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records?type=expenses&page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
+        {"name": "Get records - Filings", "request": {"method": "GET", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"}], "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records?type=filings&page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"}},
         {"name": "Update record", "request": {"method": "PATCH", "header": [{"key": "X-Client-Id","value": "{{aiClientId}}"},{"key": "X-Api-Secret","value": "{{aiServiceSecret}}"},{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"type\":\"sales\",\"id\":\"{{saleId}}\",\"payload\":{\"status\":\"Paid\"}}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records"}}
       ]
     }

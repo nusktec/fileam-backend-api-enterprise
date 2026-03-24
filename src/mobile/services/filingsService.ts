@@ -35,10 +35,25 @@ export const filingsService = {
   async list(
     userId: string,
     filters?: { status?: string; taxType?: string },
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
+    opts?: {
+      page?: number;
+      limit?: number;
+      sortOrder?: "ASC" | "DESC";
+      dateFrom?: Date;
+      dateTo?: Date;
+    },
   ) {
-    const where: { userId: string; taxType?: string } = { userId };
+    const where: {
+      userId: string;
+      taxType?: string;
+      filingDueDate?: { gte?: Date; lte?: Date };
+    } = { userId };
     if (filters?.taxType) where.taxType = filters.taxType;
+    if (opts?.dateFrom || opts?.dateTo) {
+      where.filingDueDate = {};
+      if (opts.dateFrom) where.filingDueDate.gte = opts.dateFrom;
+      if (opts.dateTo) where.filingDueDate.lte = opts.dateTo;
+    }
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";

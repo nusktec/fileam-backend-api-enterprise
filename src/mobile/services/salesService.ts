@@ -13,10 +13,25 @@ export const salesService = {
   async list(
     userId: string,
     status?: string,
-    opts?: { page?: number; limit?: number; sortOrder?: "ASC" | "DESC" },
+    opts?: {
+      page?: number;
+      limit?: number;
+      sortOrder?: "ASC" | "DESC";
+      dateFrom?: Date;
+      dateTo?: Date;
+    },
   ) {
-    const where: { userId: string; status?: string } = { userId };
+    const where: {
+      userId: string;
+      status?: string;
+      saleDate?: { gte?: Date; lte?: Date };
+    } = { userId };
     if (status && status !== "all") where.status = status;
+    if (opts?.dateFrom || opts?.dateTo) {
+      where.saleDate = {};
+      if (opts.dateFrom) where.saleDate.gte = opts.dateFrom;
+      if (opts.dateTo) where.saleDate.lte = opts.dateTo;
+    }
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
@@ -30,12 +45,12 @@ export const salesService = {
       }),
       prisma.sale.count({ where }),
       prisma.sale.aggregate({
-        where: { userId },
+        where,
         _sum: { totalAmount: true, vatAmount: true },
       }),
       prisma.sale.groupBy({
         by: ["status"],
-        where: { userId },
+        where,
         _count: true,
       }),
     ]);

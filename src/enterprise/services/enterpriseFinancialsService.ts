@@ -62,6 +62,8 @@ export const enterpriseFinancialsService = {
       limit?: number;
       sortBy?: string;
       sortOrder?: "ASC" | "DESC";
+      dateFrom?: Date;
+      dateTo?: Date;
     },
     linkedUserId?: string,
   ) {
@@ -71,6 +73,8 @@ export const enterpriseFinancialsService = {
         limit: opts?.limit,
         page: opts?.page,
         sortOrder: opts?.sortOrder === "ASC" ? "asc" : "desc",
+        dateFrom: opts?.dateFrom,
+        dateTo: opts?.dateTo,
       });
     }
     const company = await prisma.company.findUnique({
@@ -80,14 +84,23 @@ export const enterpriseFinancialsService = {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
+    const txWhere: {
+      companyId: string;
+      date?: { gte?: Date; lte?: Date };
+    } = { companyId };
+    if (opts?.dateFrom || opts?.dateTo) {
+      txWhere.date = {};
+      if (opts.dateFrom) txWhere.date.gte = opts.dateFrom;
+      if (opts.dateTo) txWhere.date.lte = opts.dateTo;
+    }
     const [list, total] = await Promise.all([
       prisma.enterpriseTransaction.findMany({
-        where: { companyId },
+        where: txWhere,
         orderBy: { date: order },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.enterpriseTransaction.count({ where: { companyId } }),
+      prisma.enterpriseTransaction.count({ where: txWhere }),
     ]);
     return {
       data: list.map((t) => ({
@@ -483,6 +496,8 @@ export const enterpriseFinancialsService = {
       limit?: number;
       sortOrder?: "ASC" | "DESC";
       documentStatus?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
     },
   ) {
     const company = await prisma.company.findUnique({
@@ -492,8 +507,17 @@ export const enterpriseFinancialsService = {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
-    const where: { companyId: string; documentStatus?: string } = { companyId };
+    const where: {
+      companyId: string;
+      documentStatus?: string;
+      documentDate?: { gte?: Date; lte?: Date };
+    } = { companyId };
     if (opts?.documentStatus) where.documentStatus = opts.documentStatus;
+    if (opts?.dateFrom || opts?.dateTo) {
+      where.documentDate = {};
+      if (opts.dateFrom) where.documentDate.gte = opts.dateFrom;
+      if (opts.dateTo) where.documentDate.lte = opts.dateTo;
+    }
     const [list, total] = await Promise.all([
       prisma.enterpriseFinancialDocument.findMany({
         where,
@@ -742,6 +766,8 @@ export const enterpriseFinancialsService = {
       limit?: number;
       sortBy?: string;
       sortOrder?: "ASC" | "DESC";
+      dateFrom?: Date;
+      dateTo?: Date;
     },
   ) {
     const company = await prisma.company.findUnique({
@@ -751,15 +777,24 @@ export const enterpriseFinancialsService = {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
+    const invWhere: {
+      companyId: string;
+      dateIssued?: { gte?: Date; lte?: Date };
+    } = { companyId };
+    if (opts?.dateFrom || opts?.dateTo) {
+      invWhere.dateIssued = {};
+      if (opts.dateFrom) invWhere.dateIssued.gte = opts.dateFrom;
+      if (opts.dateTo) invWhere.dateIssued.lte = opts.dateTo;
+    }
     const [list, total] = await Promise.all([
       prisma.enterpriseInvoice.findMany({
-        where: { companyId },
+        where: invWhere,
         orderBy: { dateIssued: order },
         skip: (page - 1) * limit,
         take: limit,
         include: { lineItems: true },
       }),
-      prisma.enterpriseInvoice.count({ where: { companyId } }),
+      prisma.enterpriseInvoice.count({ where: invWhere }),
     ]);
     return { data: list, total, page, limit };
   },

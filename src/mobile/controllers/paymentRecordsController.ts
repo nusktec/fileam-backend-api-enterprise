@@ -21,6 +21,8 @@ export const listPayments = async (
         page: pagination?.page,
         limit: pagination?.limit,
         sortOrder: pagination?.sortOrder,
+        dateFrom: pagination?.dateFrom,
+        dateTo: pagination?.dateTo,
       },
     );
     res

@@ -17,6 +17,8 @@ export const listSales = async (
       page: pagination?.page,
       limit: pagination?.limit,
       sortOrder: pagination?.sortOrder,
+      dateFrom: pagination?.dateFrom,
+      dateTo: pagination?.dateTo,
     });
     res.status(HttpStatusCode.OK).json(outJson(true, "Sales retrieved", data));
   } catch (error) {

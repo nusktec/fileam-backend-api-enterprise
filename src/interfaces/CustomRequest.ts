@@ -25,6 +25,9 @@ export interface PaginationInfo {
   search?: string;
   sortBy?: string;
   sortOrder: "ASC" | "DESC";
+  /** Inclusive date range from query dateFrom / dateTo */
+  dateFrom?: Date;
+  dateTo?: Date;
 }
 
 export interface IRequest extends Request {

@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { parseDateRangeQuery } from "../../utils/dateRangeQuery";
 import { matchedData } from "express-validator";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getParam } from "../utils/paramHelpers";
@@ -17,6 +18,7 @@ import {
   createFiling,
   getFilingsSummary,
   getVatReturns,
+  submitClientVatReturn,
 } from "../services/enterpriseFilingsService";
 
 export async function getFilingsSummaryHandler(
@@ -66,11 +68,18 @@ export async function listFilingsHandler(
   const status = req.query.status as string | undefined;
   const page = req.query.page ? Number(req.query.page) : 1;
   const limit = req.query.limit ? Number(req.query.limit) : 20;
+  const dr = parseDateRangeQuery(req.query as Record<string, unknown>);
+  if (!dr.ok) {
+    sendBadRequest(res, dr.message);
+    return;
+  }
   try {
     const result = await listFilings(linkedUserId, {
       page,
       limit,
       status,
+      dateFrom: dr.range.dateFrom,
+      dateTo: dr.range.dateTo,
     });
     sendPaginated(
       res,
@@ -133,6 +142,50 @@ export async function createFilingHandler(
     sendCreated(res, "Filing created", result);
   } catch {
     sendServerError(res, "Failed to create filing");
+  }
+}
+
+export async function submitClientVatReturnHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId!;
+  const data = matchedData(req, {
+    locations: ["body"],
+    includeOptionals: true,
+  }) as {
+    periodYear: number;
+    periodMonth: number;
+    amount: number;
+    paymentStatus?: string;
+    dueDate?: string;
+    receiptUrl?: string;
+    documentUrl?: string;
+    evidenceVaultId?: string;
+    stateOfOperation?: string;
+    vatRegistrationNumber?: string;
+  };
+  try {
+    const result = await submitClientVatReturn(linkedUserId, {
+      periodYear: Number(data.periodYear),
+      periodMonth: Number(data.periodMonth),
+      amount: Number(data.amount),
+      paymentStatus:
+        data.paymentStatus === "paid" ? "paid" : "not_paid",
+      dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+      receiptUrl: data.receiptUrl,
+      documentUrl: data.documentUrl,
+      evidenceVaultId: data.evidenceVaultId,
+      stateOfOperation: data.stateOfOperation,
+      vatRegistrationNumber: data.vatRegistrationNumber,
+    });
+    if (!result) {
+      sendNotFound(res, "Failed to submit VAT return");
+      return;
+    }
+    sendCreated(res, "VAT return submitted", result);
+  } catch {
+    sendServerError(res, "Failed to submit VAT return");
   }
 }
 
