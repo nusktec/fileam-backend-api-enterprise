@@ -39,6 +39,18 @@ const renderTemplate = (
   });
 };
 
+/**
+ * Public base URL for invitation accept/decline links in emails.
+ * Use INVITATION_LINK_BASE_URL in production so links hit the API host, not the frontend (BASE_URL is often the web app).
+ */
+function getInvitationLinkBaseUrl(): string {
+  const raw =
+    process.env.INVITATION_LINK_BASE_URL?.trim() ||
+    process.env.BASE_URL?.trim() ||
+    "https://fileam.app";
+  return raw.replace(/\/+$/, "");
+}
+
 const sendEmail = async (
   to: string,
   subject: string,
@@ -228,7 +240,7 @@ const sendConsultantRequestEmail = async (
     if (!template) {
       throw new Error("Consultant request template not found");
     }
-    const baseUrl = process.env.BASE_URL || "https://fileam.app";
+    const baseUrl = getInvitationLinkBaseUrl();
     const acceptUrl = `${baseUrl}/api/v${process.env.API_VERSION || "1"}/invitations/${invitationId}/accept/${code}`;
     const declineUrl = `${baseUrl}/api/v${process.env.API_VERSION || "1"}/invitations/${invitationId}/decline/${code}`;
     const expiryFormatted = expiresAt.toLocaleDateString(undefined, {
@@ -269,7 +281,7 @@ const sendConsultantIncomingClientRequestEmail = async (
     if (!template) {
       throw new Error("Consultant incoming request template not found");
     }
-    const baseUrl = process.env.BASE_URL || "https://fileam.app";
+    const baseUrl = getInvitationLinkBaseUrl();
     const acceptUrl = `${baseUrl}/api/v${process.env.API_VERSION || "1"}/invitations/${invitationId}/accept/${code}`;
     const declineUrl = `${baseUrl}/api/v${process.env.API_VERSION || "1"}/invitations/${invitationId}/decline/${code}`;
     const expiryFormatted = expiresAt.toLocaleDateString(undefined, {
