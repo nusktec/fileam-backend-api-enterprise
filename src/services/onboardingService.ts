@@ -379,8 +379,10 @@ export const onboardingService = {
 
     const acceptedIds = tokenPayload.acceptedInvitationIds ?? [];
     const now = new Date();
+    let linkedConsultant = false;
 
     for (const invitationId of acceptedIds) {
+      if (linkedConsultant) break;
       const inv = await prisma.invitation.findUnique({
         where: { id: invitationId },
       });
@@ -396,7 +398,7 @@ export const onboardingService = {
         `${user.firstName} ${user.lastName}`.trim() ||
         user.email;
 
-      const clientCompany = await prisma.company.create({
+      await prisma.company.create({
         data: {
           name: clientCompanyName,
           ownerId: inv.consultantUserId,
@@ -419,6 +421,7 @@ export const onboardingService = {
         where: { id: inv.id },
         data: { status: "accepted" },
       });
+      linkedConsultant = true;
     }
 
     await prisma.user.update({

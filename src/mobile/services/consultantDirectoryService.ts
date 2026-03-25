@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { RandomAscii } from "../../utils/tools";
 import { sendConsultantIncomingClientRequestEmail } from "../../services/emailService";
@@ -154,21 +154,36 @@ export async function requestConsultantConnection(
     exists = await prisma.invitation.findUnique({ where: { code } });
   }
 
-  const invitation = await prisma.invitation.create({
-    data: {
-      code,
-      consultantUserId,
-      requestedUserId: clientUserId,
-      initiator: "client_to_consultant",
-      invitedEmail: consultant.email,
-      invitedBusinessName:
-        client.businesses[0]?.name ?? client.organizationName ?? null,
-      invitedContactName:
-        `${client.firstName} ${client.lastName}`.trim() || null,
-      status: "pending",
-      expiresAt,
-    },
-  });
+  let invitation;
+  try {
+    invitation = await prisma.invitation.create({
+      data: {
+        code,
+        consultantUserId,
+        requestedUserId: clientUserId,
+        initiator: "client_to_consultant",
+        invitedEmail: consultant.email,
+        invitedBusinessName:
+          client.businesses[0]?.name ?? client.organizationName ?? null,
+        invitedContactName:
+          `${client.firstName} ${client.lastName}`.trim() || null,
+        status: "pending",
+        expiresAt,
+      },
+    });
+  } catch (err) {
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      return {
+        success: false,
+        message:
+          "Unable to send this request while another invitation is tied to your account. Apply the latest database migration or clear old pending invitations.",
+      };
+    }
+    throw err;
+  }
 
   const clientDisplayName =
     client.organizationName ??

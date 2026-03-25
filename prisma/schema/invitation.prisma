@@ -13,7 +13,7 @@ model Invitation {
   id                    String           @id @default(uuid())
   code                  String           @unique
   consultantUserId      String           @map("consultant_user_id")
-  requestedUserId       String?          @unique @map("requested_user_id")
+  requestedUserId       String?          @map("requested_user_id")
   initiator             InvitationInitiator @default(consultant_to_client) @map("initiator")
   invitedEmail          String           @map("invited_email")
   invitedBusinessName   String?          @map("invited_business_name")
@@ -31,5 +31,6 @@ model Invitation {
   requestedUser         User?                @relation("RequestedUser", fields: [requestedUserId], references: [id], onDelete: Cascade)
   consultantConnections ConsultantConnection[]
 
+  @@index([requestedUserId])
   @@map("invitations")
 }

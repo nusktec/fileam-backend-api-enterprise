@@ -120,6 +120,17 @@ export const consultantRequestService = {
     }
     const targetUserId = inv.requestedUserId ?? userId;
 
+    const existingActiveConsultant = await prisma.consultantConnection.findFirst({
+      where: { userId: targetUserId, status: "active" },
+    });
+    if (existingActiveConsultant) {
+      return {
+        success: false as const,
+        message:
+          "You already have a consultant. Revoke that connection before accepting another invitation.",
+      };
+    }
+
     const business = await prisma.business.findFirst({
       where: { userId: targetUserId },
     });
