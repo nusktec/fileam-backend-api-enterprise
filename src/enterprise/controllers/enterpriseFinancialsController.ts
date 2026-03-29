@@ -274,6 +274,7 @@ export async function uploadDocument(
     amount?: number;
     currency?: string;
     fileUrl?: string;
+    invoiceId?: string;
   };
   const documentDate = data.documentDate ? new Date(data.documentDate) : new Date();
   try {
@@ -284,6 +285,7 @@ export async function uploadDocument(
       amount: Number(data.amount ?? 0),
       currency: (data.currency ?? "USD").trim(),
       fileUrl: data.fileUrl?.trim() || undefined,
+      invoiceId: data.invoiceId?.trim() || undefined,
     });
     if (!doc) {
       sendNotFound(res, "Company not found");
@@ -300,7 +302,11 @@ export async function uploadInvoiceDocument(
   res: Response,
 ): Promise<void> {
   const companyId = req.companyId!;
-  const data = (req.body || {}) as { fileUrl?: string; documentDate?: string };
+  const data = (req.body || {}) as {
+    fileUrl?: string;
+    documentDate?: string;
+    invoiceId?: string;
+  };
   const fileUrl = data.fileUrl?.trim();
   if (!fileUrl) {
     sendBadRequest(res, "fileUrl is required");
@@ -312,6 +318,7 @@ export async function uploadInvoiceDocument(
       {
         fileUrl,
         documentDate: data.documentDate ? new Date(data.documentDate) : undefined,
+        invoiceId: data.invoiceId?.trim() || undefined,
       },
     );
     if (!result) {
@@ -565,6 +572,7 @@ export async function updateInvoice(
     dateIssued?: string;
     dueDate?: string;
     notes?: string;
+    financialDocumentId?: string | null;
     lineItems?: Array<{
       description?: string;
       quantity?: number;
@@ -579,6 +587,7 @@ export async function updateInvoice(
     dateIssued?: Date;
     dueDate?: Date;
     notes?: string;
+    financialDocumentId?: string | null;
     lineItems?: Array<{
       description: string;
       quantity: number;
@@ -599,6 +608,12 @@ export async function updateInvoice(
       unitPrice: Number(item.unitPrice ?? 0),
       total: Number(item.total ?? 0),
     }));
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "financialDocumentId")) {
+    update.financialDocumentId =
+      data.financialDocumentId == null || data.financialDocumentId === ""
+        ? null
+        : String(data.financialDocumentId);
   }
   try {
     const invoice = await enterpriseFinancialsService.updateInvoice(
@@ -679,10 +694,16 @@ export async function listInvoices(
       sendNotFound(res, "Company not found");
       return;
     }
+    // Ensure list rows expose optional links explicitly.
+    const rows = result.data.map((inv) => ({
+      ...inv,
+      documentId: inv.documentId ?? null,
+      financialDocumentId: inv.financialDocumentId ?? null,
+    }));
     sendPaginated(
       res,
       "Invoices",
-      result.data,
+      rows,
       result.total,
       result.page,
       result.limit,
@@ -705,6 +726,7 @@ export async function createInvoice(
     dueDate?: string;
     totalAmount?: number;
     notes?: string;
+    financialDocumentId?: string;
     lineItems?: Array<{
       description?: string;
       quantity?: number;
@@ -731,6 +753,7 @@ export async function createInvoice(
       dueDate,
       totalAmount: Number(data.totalAmount ?? 0),
       notes: data.notes,
+      financialDocumentId: data.financialDocumentId?.trim() || undefined,
       lineItems,
     });
     if (!invoice) {

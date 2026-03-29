@@ -244,6 +244,10 @@ const validateUploadFinancialDocument = [
   check("amount").optional().isFloat().withMessage("amount must be a number"),
   check("currency").optional().trim().isString(),
   check("fileUrl").optional().trim().isString().withMessage("fileUrl must be a string (URL from media upload)"),
+  check("invoiceId")
+    .optional()
+    .isUUID()
+    .withMessage("invoiceId must be a valid UUID when provided"),
   handleValidation,
 ];
 
@@ -276,6 +280,10 @@ const validateCreateInvoice = [
   check("lineItems.*.quantity").optional().isInt({ min: 0 }),
   check("lineItems.*.unitPrice").optional().isFloat({ min: 0 }),
   check("lineItems.*.total").optional().isFloat({ min: 0 }),
+  check("financialDocumentId")
+    .optional()
+    .isUUID()
+    .withMessage("financialDocumentId must be a valid UUID when provided"),
   handleValidation,
 ];
 
@@ -291,6 +299,10 @@ const validateUpdateInvoice = [
   check("lineItems.*.quantity").optional().isInt({ min: 0 }),
   check("lineItems.*.unitPrice").optional().isFloat({ min: 0 }),
   check("lineItems.*.total").optional().isFloat({ min: 0 }),
+  check("financialDocumentId")
+    .optional({ values: "null" })
+    .isUUID()
+    .withMessage("financialDocumentId must be a valid UUID or null"),
   handleValidation,
 ];
 

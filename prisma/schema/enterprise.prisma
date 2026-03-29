@@ -109,7 +109,8 @@ model EnterpriseFinancialDocument {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company                 Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoiceUsingThisUpload EnterpriseInvoice? @relation("InvoiceFinancialDocumentLink")
 
   @@map("enterprise_financial_documents")
 }
@@ -125,12 +126,16 @@ model EnterpriseInvoice {
   dueDate        DateTime  @map("due_date") @db.Date
   paymentStatus  String    @default("Outstanding") @map("payment_status")
   totalAmount    Decimal   @map("total_amount") @db.Decimal(14, 2)
-  notes          String?   @map("notes")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  notes                 String?   @map("notes")
+  documentId            String?   @unique @map("evidence_document_id")
+  financialDocumentId   String?   @unique @map("financial_document_id")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  company    Company                     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  lineItems  EnterpriseInvoiceLineItem[]
+  company                 Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lineItems               EnterpriseInvoiceLineItem[]
+  sourceEvidenceDocument  EnterpriseEvidenceDocument?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  sourceFinancialDocument EnterpriseFinancialDocument? @relation("InvoiceFinancialDocumentLink", fields: [financialDocumentId], references: [id], onDelete: SetNull)
 
   @@unique([companyId, invoiceNumber])
   @@map("enterprise_invoices")
@@ -170,9 +175,10 @@ model EnterpriseEvidenceDocument {
   lastModified  DateTime  @updatedAt @map("last_modified")
   createdAt     DateTime  @default(now()) @map("created_at")
 
-  company     Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  signature   EnterpriseDocumentSignature?
-  auditTrail  EnterpriseDocumentAudit[]
+  company                Company                      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  signature              EnterpriseDocumentSignature?
+  auditTrail             EnterpriseDocumentAudit[]
+  invoiceFromConversion  EnterpriseInvoice?
 
   @@map("enterprise_evidence_documents")
 }

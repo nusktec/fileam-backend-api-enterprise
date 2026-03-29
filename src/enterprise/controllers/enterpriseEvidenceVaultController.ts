@@ -464,6 +464,28 @@ export async function signDocument(
   }
 }
 
+export async function getInvoiceExtractionPreview(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const documentId = getParam(req.params, "documentId");
+  try {
+    const preview =
+      await enterpriseEvidenceVaultService.mockInvoiceExtractionPreview(
+        companyId,
+        documentId,
+      );
+    if (!preview) {
+      sendNotFound(res, "Document not found");
+      return;
+    }
+    sendResult(res, "Mock invoice extraction (preview)", preview);
+  } catch {
+    sendServerError(res, "Failed to build extraction preview");
+  }
+}
+
 export async function convertToInvoice(
   req: IRequest,
   res: Response,

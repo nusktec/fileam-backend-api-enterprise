@@ -5,4 +5,6 @@ export interface FinancialDocumentUploadInput {
   amount: number;
   currency: string;
   fileUrl?: string;
+  /** Optional: link this upload to an existing structured invoice (same company). */
+  invoiceId?: string;
 }

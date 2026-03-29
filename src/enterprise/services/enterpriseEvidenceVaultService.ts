@@ -1,6 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import type { EvidenceVaultUploadInput, EvidenceVaultSignInput } from "../../interfaces/enterprise/evidenceVault";
+import { enterpriseFinancialsService } from "./enterpriseFinancialsService";
 
 const EVIDENCE_CATEGORIES = [
   "Contracts",
@@ -457,6 +458,48 @@ export const enterpriseEvidenceVaultService = {
     });
   },
 
+  /**
+   * Placeholder for future OCR / ML extraction. Returns static mock fields
+   * shaped like the convert-to-invoice body so clients can pre-fill a form.
+   */
+  async mockInvoiceExtractionPreview(companyId: string, documentId: string) {
+    const doc = await prisma.enterpriseEvidenceDocument.findFirst({
+      where: { id: documentId, companyId },
+    });
+    if (!doc) return null;
+    return {
+      extractionSource: "mock",
+      disclaimer:
+        "Structured fields are placeholders. Wire real extraction from the document file later.",
+      document: {
+        id: doc.id,
+        documentName: doc.documentName,
+        category: doc.category,
+        fileUrl: doc.fileUrl,
+      },
+      suggestedInvoice: {
+        clientName: "Acme Corporation (mock)",
+        clientAddress: "100 Mock Road, Victoria Island, Lagos",
+        clientEmail: "accounts.payable@example.com",
+        totalAmount: 250_750.25,
+        lineItems: [
+          {
+            description: "Consulting services — period placeholder",
+            quantity: 1,
+            unitPrice: 220_000,
+            total: 220_000,
+          },
+          {
+            description: "VAT / adjustments (mock)",
+            quantity: 1,
+            unitPrice: 30_750.25,
+            total: 30_750.25,
+          },
+        ],
+      },
+    };
+  },
+
   async convertToInvoice(
     companyId: string,
     documentId: string,
@@ -485,7 +528,7 @@ export const enterpriseEvidenceVaultService = {
     const now = new Date();
     const dueDate = new Date(now);
     dueDate.setDate(dueDate.getDate() + 30);
-    const invoice = await prisma.enterpriseInvoice.create({
+    const created = await prisma.enterpriseInvoice.create({
       data: {
         companyId,
         invoiceNumber,
@@ -496,8 +539,9 @@ export const enterpriseEvidenceVaultService = {
         dueDate,
         totalAmount: new Decimal(data.totalAmount),
         notes: `Converted from evidence document: ${doc.documentName}`,
+        documentId,
       },
     });
-    return invoice;
+    return enterpriseFinancialsService.getInvoice(companyId, created.id);
   },
 };

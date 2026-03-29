@@ -18,6 +18,136 @@ function decimalToNumber(d: Decimal | null | undefined): number {
   return Number(d);
 }
 
+/** One financial document may link to at most one invoice per company; clears any previous invoice using the same file. */
+async function linkInvoiceFinancialDocumentInTx(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  invoiceId: string,
+  financialDocumentId: string | null,
+) {
+  if (financialDocumentId == null) {
+    await tx.enterpriseInvoice.update({
+      where: { id: invoiceId },
+      data: { financialDocumentId: null },
+    });
+    return;
+  }
+  const doc = await tx.enterpriseFinancialDocument.findFirst({
+    where: { id: financialDocumentId, companyId },
+  });
+  if (!doc) {
+    throw new Error("Financial document not found for this company");
+  }
+  const other = await tx.enterpriseInvoice.findFirst({
+    where: { financialDocumentId, id: { not: invoiceId } },
+  });
+  if (other) {
+    await tx.enterpriseInvoice.update({
+      where: { id: other.id },
+      data: { financialDocumentId: null },
+    });
+  }
+  await tx.enterpriseInvoice.update({
+    where: { id: invoiceId },
+    data: { financialDocumentId },
+  });
+}
+
+/** Row shape from Prisma (include or explicit select); documentId is evidence-vault link, else null. */
+type EnterpriseInvoiceWithLineItems = {
+  id: string;
+  companyId: string;
+  invoiceNumber: string;
+  clientName: string;
+  clientAddress: string;
+  clientEmail: string;
+  dateIssued: Date;
+  dueDate: Date;
+  paymentStatus: string;
+  totalAmount: Decimal;
+  notes: string | null;
+  documentId: string | null;
+  financialDocumentId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  lineItems: Array<{
+    id: string;
+    invoiceId: string;
+    description: string;
+    quantity: number;
+    unitPrice: Decimal;
+    total: Decimal;
+    sortOrder: number;
+    createdAt: Date;
+  }>;
+};
+
+/** Plain JSON shape for API responses (always includes documentId, null when not linked). */
+function serializeEnterpriseInvoice(inv: EnterpriseInvoiceWithLineItems) {
+  const lineItems = [...inv.lineItems].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  );
+  return {
+    id: inv.id,
+    companyId: inv.companyId,
+    invoiceNumber: inv.invoiceNumber,
+    clientName: inv.clientName,
+    clientAddress: inv.clientAddress,
+    clientEmail: inv.clientEmail,
+    dateIssued: inv.dateIssued,
+    dueDate: inv.dueDate,
+    paymentStatus: inv.paymentStatus,
+    totalAmount: decimalToNumber(inv.totalAmount),
+    notes: inv.notes,
+    documentId: inv.documentId == null ? null : inv.documentId,
+    financialDocumentId:
+      inv.financialDocumentId == null ? null : inv.financialDocumentId,
+    createdAt: inv.createdAt,
+    updatedAt: inv.updatedAt,
+    lineItems: lineItems.map((l) => ({
+      id: l.id,
+      invoiceId: l.invoiceId,
+      description: l.description,
+      quantity: l.quantity,
+      unitPrice: decimalToNumber(l.unitPrice),
+      total: decimalToNumber(l.total),
+      sortOrder: l.sortOrder,
+      createdAt: l.createdAt,
+    })),
+  };
+}
+
+const enterpriseInvoiceListSelect = {
+  id: true,
+  companyId: true,
+  invoiceNumber: true,
+  clientName: true,
+  clientAddress: true,
+  clientEmail: true,
+  dateIssued: true,
+  dueDate: true,
+  paymentStatus: true,
+  totalAmount: true,
+  notes: true,
+  documentId: true,
+  financialDocumentId: true,
+  createdAt: true,
+  updatedAt: true,
+  lineItems: {
+    orderBy: { sortOrder: "asc" as const },
+    select: {
+      id: true,
+      invoiceId: true,
+      description: true,
+      quantity: true,
+      unitPrice: true,
+      total: true,
+      sortOrder: true,
+      createdAt: true,
+    },
+  },
+} satisfies Prisma.EnterpriseInvoiceSelect;
+
 export const enterpriseFinancialsService = {
   getDocumentTypes: () => DOCUMENT_TYPES,
   getCurrencies: () => CURRENCIES,
@@ -368,7 +498,7 @@ export const enterpriseFinancialsService = {
       where: { id: companyId },
     });
     if (!company) return null;
-    return prisma.enterpriseFinancialDocument.create({
+    const doc = await prisma.enterpriseFinancialDocument.create({
       data: {
         companyId,
         documentType: data.documentType,
@@ -380,11 +510,29 @@ export const enterpriseFinancialsService = {
         processingStatus: "pending",
       },
     });
+    const linkInvoiceId = data.invoiceId;
+    if (linkInvoiceId) {
+      await prisma.$transaction(async (tx) => {
+        const inv = await tx.enterpriseInvoice.findFirst({
+          where: { id: linkInvoiceId, companyId },
+        });
+        if (!inv) {
+          throw new Error("Invoice not found for this company");
+        }
+        await linkInvoiceFinancialDocumentInTx(
+          tx,
+          companyId,
+          linkInvoiceId,
+          doc.id,
+        );
+      });
+    }
+    return doc;
   },
 
   async uploadInvoiceDocument(
     companyId: string,
-    data: { fileUrl: string; documentDate?: Date },
+    data: { fileUrl: string; documentDate?: Date; invoiceId?: string },
   ) {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -401,6 +549,23 @@ export const enterpriseFinancialsService = {
         processingStatus: "pending",
       },
     });
+    const linkInvoiceId = data.invoiceId;
+    if (linkInvoiceId) {
+      await prisma.$transaction(async (tx) => {
+        const inv = await tx.enterpriseInvoice.findFirst({
+          where: { id: linkInvoiceId, companyId },
+        });
+        if (!inv) {
+          throw new Error("Invoice not found for this company");
+        }
+        await linkInvoiceFinancialDocumentInTx(
+          tx,
+          companyId,
+          linkInvoiceId,
+          doc.id,
+        );
+      });
+    }
     return { fileId: doc.id };
   },
 
@@ -527,6 +692,17 @@ export const enterpriseFinancialsService = {
       }),
       prisma.enterpriseFinancialDocument.count({ where }),
     ]);
+    const docIds = list.map((d) => d.id);
+    const invoiceLinks =
+      docIds.length === 0
+        ? []
+        : await prisma.enterpriseInvoice.findMany({
+            where: { companyId, financialDocumentId: { in: docIds } },
+            select: { id: true, financialDocumentId: true },
+          });
+    const financialDocToInvoiceId = new Map(
+      invoiceLinks.map((r) => [r.financialDocumentId!, r.id]),
+    );
     return {
       data: list.map((d) => ({
         id: d.id,
@@ -544,6 +720,7 @@ export const enterpriseFinancialsService = {
         subTotalExclVat: d.subTotalExclVat ? decimalToNumber(d.subTotalExclVat) : null,
         totalWithVat: d.totalWithVat ? decimalToNumber(d.totalWithVat) : null,
         vatCalculated: d.vatCalculated ? decimalToNumber(d.vatCalculated) : null,
+        invoiceId: financialDocToInvoiceId.get(d.id) ?? null,
       })),
       total,
       page,
@@ -556,6 +733,10 @@ export const enterpriseFinancialsService = {
       where: { id: documentId, companyId },
     });
     if (!doc) return null;
+    const linkedInvoice = await prisma.enterpriseInvoice.findFirst({
+      where: { companyId, financialDocumentId: doc.id },
+      select: { id: true },
+    });
     return {
       id: doc.id,
       documentType: doc.documentType,
@@ -573,6 +754,7 @@ export const enterpriseFinancialsService = {
       subTotalExclVat: doc.subTotalExclVat ? decimalToNumber(doc.subTotalExclVat) : null,
       totalWithVat: doc.totalWithVat ? decimalToNumber(doc.totalWithVat) : null,
       vatCalculated: doc.vatCalculated ? decimalToNumber(doc.vatCalculated) : null,
+      invoiceId: linkedInvoice?.id ?? null,
     };
   },
 
@@ -599,15 +781,7 @@ export const enterpriseFinancialsService = {
       include: { lineItems: { orderBy: { sortOrder: "asc" } } },
     });
     if (!invoice) return null;
-    return {
-      ...invoice,
-      totalAmount: decimalToNumber(invoice.totalAmount),
-      lineItems: invoice.lineItems.map((l) => ({
-        ...l,
-        unitPrice: decimalToNumber(l.unitPrice),
-        total: decimalToNumber(l.total),
-      })),
-    };
+    return serializeEnterpriseInvoice(invoice);
   },
 
   async updateInvoice(
@@ -620,6 +794,8 @@ export const enterpriseFinancialsService = {
       dateIssued?: Date;
       dueDate?: Date;
       notes?: string;
+      /** Set to a financial document id, or null to unlink. Omit to leave unchanged. */
+      financialDocumentId?: string | null;
       lineItems?: Array<{
         description: string;
         quantity: number;
@@ -671,10 +847,22 @@ export const enterpriseFinancialsService = {
         data: { totalAmount: new Decimal(totalAmount) },
       });
     }
-    return prisma.enterpriseInvoice.findUnique({
+    const financialDocLink = data.financialDocumentId;
+    if (financialDocLink !== undefined) {
+      await prisma.$transaction(async (tx) => {
+        await linkInvoiceFinancialDocumentInTx(
+          tx,
+          companyId,
+          invoiceId,
+          financialDocLink ?? null,
+        );
+      });
+    }
+    const updated = await prisma.enterpriseInvoice.findUnique({
       where: { id: invoiceId },
       include: { lineItems: true },
     });
+    return updated ? serializeEnterpriseInvoice(updated) : null;
   },
 
   async markInvoicePaid(companyId: string, invoiceId: string) {
@@ -686,7 +874,11 @@ export const enterpriseFinancialsService = {
       where: { id: invoiceId },
       data: { paymentStatus: "Paid" },
     });
-    return prisma.enterpriseInvoice.findUnique({ where: { id: invoiceId } });
+    const full = await prisma.enterpriseInvoice.findUnique({
+      where: { id: invoiceId },
+      include: { lineItems: { orderBy: { sortOrder: "asc" } } },
+    });
+    return full ? serializeEnterpriseInvoice(full) : null;
   },
 
   async createInvoice(
@@ -699,6 +891,8 @@ export const enterpriseFinancialsService = {
       dueDate: Date;
       totalAmount: number;
       notes?: string;
+      /** Optional structured financial document (upload pipeline) linked to this invoice. */
+      financialDocumentId?: string;
       lineItems: Array<{
         description: string;
         quantity: number;
@@ -751,10 +945,19 @@ export const enterpriseFinancialsService = {
           },
         });
       }
-      return tx.enterpriseInvoice.findUnique({
+      if (data.financialDocumentId) {
+        await linkInvoiceFinancialDocumentInTx(
+          tx,
+          companyId,
+          created.id,
+          data.financialDocumentId,
+        );
+      }
+      const full = await tx.enterpriseInvoice.findUnique({
         where: { id: created.id },
-        include: { lineItems: true },
+        include: { lineItems: { orderBy: { sortOrder: "asc" } } },
       });
+      return full ? serializeEnterpriseInvoice(full) : null;
     });
     return invoice;
   },
@@ -792,10 +995,13 @@ export const enterpriseFinancialsService = {
         orderBy: { dateIssued: order },
         skip: (page - 1) * limit,
         take: limit,
-        include: { lineItems: true },
+        select: enterpriseInvoiceListSelect,
       }),
       prisma.enterpriseInvoice.count({ where: invWhere }),
     ]);
-    return { data: list, total, page, limit };
+    const data = list.map((inv) =>
+      serializeEnterpriseInvoice(inv as EnterpriseInvoiceWithLineItems),
+    );
+    return { data, total, page, limit };
   },
 };

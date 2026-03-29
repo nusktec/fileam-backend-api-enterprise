@@ -19,6 +19,7 @@ import {
   uploadDocument,
   getDocumentPreview,
   signDocument,
+  getInvoiceExtractionPreview,
   convertToInvoice,
 } from "../controllers/enterpriseEvidenceVaultController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
@@ -98,6 +99,11 @@ router.post(
   enterpriseValidations.validateDocumentIdParam,
   enterpriseValidations.validateSignDocument,
   signDocument,
+);
+router.get(
+  "/documents/:documentId/invoice-extraction-preview",
+  enterpriseValidations.validateDocumentIdParam,
+  getInvoiceExtractionPreview,
 );
 router.post(
   "/documents/:documentId/convert-to-invoice",
