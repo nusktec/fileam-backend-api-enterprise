@@ -6,6 +6,22 @@ export const FILING_STATUS = [
   "draft",
 ] as const;
 
+/** Values accepted on filing submit bodies (case-insensitive "Paid" also accepted in controllers). */
+export const FILING_PAYMENT_STATUSES = ["paid", "not_paid"] as const;
+
+export type FilingPaymentStatus = (typeof FILING_PAYMENT_STATUSES)[number];
+
+/** How /mobile/filings/tax/:taxType/preview behaves for each built-in tax code. */
+export const TAX_FILING_PREVIEW_KIND = {
+  VAT: "calculation",
+  WHT: "schedule",
+  CIT: "manual",
+  PAYE: "manual",
+} as const;
+
+export type TaxFilingPreviewKind =
+  (typeof TAX_FILING_PREVIEW_KIND)[keyof typeof TAX_FILING_PREVIEW_KIND];
+
 export const FILING_TIMELINE_EVENTS = {
   DRAFT_CREATED: "draft_created",
   REVIEWED_VALIDATED: "reviewed_validated",

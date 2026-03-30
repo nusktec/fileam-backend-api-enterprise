@@ -18,8 +18,11 @@ import {
   createFiling,
   getFilingsSummary,
   getVatReturns,
+  getTaxReturns,
   submitClientVatReturn,
 } from "../services/enterpriseFilingsService";
+import { filingTaxTypeService } from "../services/filingTaxTypeService";
+import { getTaxFilingConstants } from "../../services/taxFilingConstantsService";
 
 export async function getFilingsSummaryHandler(
   req: IRequest,
@@ -45,6 +48,129 @@ export async function getVatReturnsHandler(
   } catch {
     sendServerError(res, "Failed to get VAT returns");
   }
+}
+
+export async function getTaxReturnsHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId!;
+  const raw = req.query.taxType as string | undefined;
+  const taxType = raw?.trim() ? raw.trim().toUpperCase() : null;
+  try {
+    if (taxType) {
+      const ok = await filingTaxTypeService.isActiveCode(taxType);
+      if (!ok) {
+        sendBadRequest(
+          res,
+          "Invalid or inactive taxType; use GET .../filings/tax-types",
+        );
+        return;
+      }
+    }
+    const returns = await getTaxReturns(linkedUserId, taxType);
+    sendResult(res, "Tax returns", {
+      returns,
+      taxTypeFilter: taxType,
+    });
+  } catch {
+    sendServerError(res, "Failed to get tax returns");
+  }
+}
+
+export async function getFilingsConstantsHandler(
+  _req: IRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const data = await getTaxFilingConstants();
+    sendResult(res, "Filings constants", data);
+  } catch {
+    sendServerError(res, "Failed to load filings constants");
+  }
+}
+
+async function submitClientFilingReturnForType(
+  req: IRequest,
+  res: Response,
+  taxType: "WHT" | "CIT" | "PAYE",
+  successMessage: string,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId!;
+  const data = matchedData(req, {
+    locations: ["body"],
+    includeOptionals: true,
+  }) as {
+    periodYear: number;
+    periodMonth: number;
+    amount: number;
+    paymentStatus?: string;
+    dueDate?: string;
+    receiptUrl?: string;
+    documentUrl?: string;
+    evidenceVaultId?: string;
+    stateOfOperation?: string;
+    vatRegistrationNumber?: string;
+  };
+  try {
+    const result = await createFiling(linkedUserId, {
+      taxType,
+      periodYear: Number(data.periodYear),
+      periodMonth: Number(data.periodMonth),
+      amount: Number(data.amount),
+      paymentStatus:
+        data.paymentStatus === "paid" ? "paid" : "not_paid",
+      dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
+      receiptUrl: data.receiptUrl,
+      documentUrl: data.documentUrl,
+      evidenceVaultId: data.evidenceVaultId,
+      stateOfOperation: data.stateOfOperation,
+      vatRegistrationNumber: data.vatRegistrationNumber,
+    });
+    if (!result) {
+      sendNotFound(res, "Failed to submit return");
+      return;
+    }
+    sendCreated(res, successMessage, result);
+  } catch {
+    sendServerError(res, "Failed to submit return");
+  }
+}
+
+export async function submitClientWhtReturnHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  await submitClientFilingReturnForType(
+    req,
+    res,
+    "WHT",
+    "WHT return submitted",
+  );
+}
+
+export async function submitClientCitReturnHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  await submitClientFilingReturnForType(
+    req,
+    res,
+    "CIT",
+    "CIT return submitted",
+  );
+}
+
+export async function submitClientPayeReturnHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  await submitClientFilingReturnForType(
+    req,
+    res,
+    "PAYE",
+    "PAYE return submitted",
+  );
 }
 
 export async function getUnfiledItemsHandler(
@@ -115,14 +241,10 @@ export async function createFilingHandler(
     stateOfOperation?: string;
     vatRegistrationNumber?: string;
   };
-  const taxType = (data.taxType ?? "").toUpperCase();
-  if (taxType !== "VAT" && taxType !== "WHT") {
-    sendBadRequest(res, "taxType must be VAT or WHT");
-    return;
-  }
+  const taxType = (data.taxType ?? "").trim().toUpperCase();
   try {
     const result = await createFiling(linkedUserId, {
-      taxType: taxType as "VAT" | "WHT",
+      taxType,
       periodYear: Number(data.periodYear),
       periodMonth: Number(data.periodMonth),
       amount: Number(data.amount),
@@ -189,6 +311,43 @@ export async function submitClientVatReturnHandler(
   }
 }
 
+export async function listFilingTaxTypesHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  try {
+    const includeInactive = req.query.includeInactive === "true";
+    const taxTypes = await filingTaxTypeService.listForApi(includeInactive);
+    sendResult(res, "Filing tax types", { taxTypes });
+  } catch {
+    sendServerError(res, "Failed to list filing tax types");
+  }
+}
+
+export async function updateFilingTaxTypesHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const data = matchedData(req, {
+    locations: ["body"],
+    includeOptionals: true,
+  }) as {
+    options: Array<{
+      id: string;
+      label?: string;
+      sortOrder?: number;
+      isActive?: boolean;
+    }>;
+  };
+  try {
+    await filingTaxTypeService.bulkUpdate(data.options);
+    const taxTypes = await filingTaxTypeService.listForApi(true);
+    sendResult(res, "Filing tax types updated", { taxTypes });
+  } catch {
+    sendServerError(res, "Failed to update filing tax types");
+  }
+}
+
 export async function getFilingReportHandler(
   req: IRequest,
   res: Response,
@@ -198,7 +357,7 @@ export async function getFilingReportHandler(
   try {
     const report = await getFilingReport(linkedUserId, filingId);
     if (!report) {
-      sendNotFound(res, "Filing report not found");
+      sendNotFound(res, "Filing not found");
       return;
     }
     sendResult(res, "Filing report", report);

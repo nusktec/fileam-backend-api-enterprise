@@ -16,6 +16,7 @@ import evidenceVaultRoutes from "./evidenceVaultRoutes";
 import employeesRoutes from "./employeesRoutes";
 import helpRoutes from "./helpRoutes";
 import contactsAndTypesRoutes from "./contactsAndTypesRoutes";
+import accountDeletionRoutes from "./accountDeletionRoutes";
 
 const router = express.Router();
 
@@ -35,6 +36,8 @@ router.use("/analytics", analyticsRoutes);
 router.use("/evidence-vault", evidenceVaultRoutes);
 router.use("/employees", employeesRoutes);
 router.use("/help", helpRoutes);
+router.use("/account-deletion", accountDeletionRoutes);
 router.use("/contacts-and-types", contactsAndTypesRoutes);
 
 export default router;
+

@@ -1,5 +1,6 @@
 import { check, param } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import { filingTaxTypeService } from "../../enterprise/services/filingTaxTypeService";
 
 // ---- Company & Invitation (top-level protected routes) ----
 const validateCreateCompany = [
@@ -136,8 +137,15 @@ const validateCreateFiling = [
     .trim()
     .notEmpty()
     .withMessage("taxType is required")
-    .isIn(["VAT", "WHT"])
-    .withMessage("taxType must be VAT or WHT"),
+    .custom(async (value: string) => {
+      const ok = await filingTaxTypeService.isActiveCode(value);
+      if (!ok) {
+        throw new Error(
+          "taxType must be an active type; use GET .../filings/tax-types",
+        );
+      }
+      return true;
+    }),
   check("periodYear").isInt({ min: 2020, max: 2030 }).withMessage("periodYear must be valid"),
   check("periodMonth").isInt({ min: 1, max: 12 }).withMessage("periodMonth must be 1-12"),
   check("amount").isFloat({ min: 0 }).withMessage("amount must be non-negative"),
@@ -148,6 +156,15 @@ const validateCreateFiling = [
   check("evidenceVaultId").optional().trim().isString(),
   check("stateOfOperation").optional().trim().isString(),
   check("vatRegistrationNumber").optional().trim().isString(),
+  handleValidation,
+];
+
+const validateUpdateFilingTaxTypes = [
+  check("options").isArray({ min: 1 }).withMessage("options must be a non-empty array"),
+  check("options.*.id").isUUID().withMessage("Each option needs a valid id"),
+  check("options.*.label").optional().trim().notEmpty(),
+  check("options.*.sortOrder").optional().isInt(),
+  check("options.*.isActive").optional().isBoolean(),
   handleValidation,
 ];
 
@@ -417,6 +434,7 @@ export const enterpriseValidations = {
   validateClientBusinessProfile,
   validateClientContact,
   validateCreateFiling,
+  validateUpdateFilingTaxTypes,
   validateSubmitVatFiling,
   validateTaxConfiguration,
   validateUpgradeSubscription,

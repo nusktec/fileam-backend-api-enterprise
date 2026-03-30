@@ -95,6 +95,18 @@ const validateResetPasswordRequest = [
   handleValidation,
 ];
 
+/** Public web: request account deletion by email (no auth). */
+const validatePublicAccountDeletionRequest = [
+  check("email")
+    .trim()
+    .notEmpty()
+    .withMessage("Email is required")
+    .bail()
+    .isEmail()
+    .withMessage("Enter a valid email"),
+  handleValidation,
+];
+
 export const validations = {
   validateLoginRequest,
   validateEmailVerificationRequest,
@@ -104,4 +116,5 @@ export const validations = {
   validateLogoutRequest,
   validateForgotPasswordRequest,
   validateResetPasswordRequest,
+  validatePublicAccountDeletionRequest,
 };

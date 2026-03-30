@@ -6,7 +6,14 @@ import {
   getFilingReportHandler,
   getFilingsSummaryHandler,
   getVatReturnsHandler,
+  getTaxReturnsHandler,
+  getFilingsConstantsHandler,
   submitClientVatReturnHandler,
+  submitClientWhtReturnHandler,
+  submitClientCitReturnHandler,
+  submitClientPayeReturnHandler,
+  listFilingTaxTypesHandler,
+  updateFilingTaxTypesHandler,
 } from "../controllers/enterpriseFilingsController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 
@@ -15,6 +22,21 @@ const router = express.Router({ mergeParams: true });
 router.get("/summary", getFilingsSummaryHandler);
 router.get("/vat-returns", getVatReturnsHandler);
 router.get("/unfiled", getUnfiledItemsHandler);
+router.get("/tax-types", listFilingTaxTypesHandler);
+router.put(
+  "/tax-types",
+  express.json(),
+  ...enterpriseValidations.validateUpdateFilingTaxTypes,
+  updateFilingTaxTypesHandler,
+);
+router.get("/constants", getFilingsConstantsHandler);
+router.get("/returns", getTaxReturnsHandler);
+// Before GET "/" so paths like /:filingId/report are not swallowed by less-specific handlers on some stacks.
+router.get(
+  "/:filingId/report",
+  ...enterpriseValidations.validateFilingIdParam,
+  getFilingReportHandler,
+);
 router.get("/", listFilingsHandler);
 router.post(
   "/vat/submit-return",
@@ -22,14 +44,24 @@ router.post(
   submitClientVatReturnHandler,
 );
 router.post(
+  "/wht/submit-return",
+  ...enterpriseValidations.validateSubmitVatFiling,
+  submitClientWhtReturnHandler,
+);
+router.post(
+  "/cit/submit-return",
+  ...enterpriseValidations.validateSubmitVatFiling,
+  submitClientCitReturnHandler,
+);
+router.post(
+  "/paye/submit-return",
+  ...enterpriseValidations.validateSubmitVatFiling,
+  submitClientPayeReturnHandler,
+);
+router.post(
   "/",
   ...enterpriseValidations.validateCreateFiling,
   createFilingHandler,
-);
-router.get(
-  "/:filingId/report",
-  ...enterpriseValidations.validateFilingIdParam,
-  getFilingReportHandler,
 );
 
 export default router;

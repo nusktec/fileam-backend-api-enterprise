@@ -1,5 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import { genericTaxFilingService } from "../../services/genericTaxFilingService";
+import { filingTaxTypeService } from "./filingTaxTypeService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -71,31 +73,53 @@ export async function getFilingsSummary(linkedUserId: string) {
   };
 }
 
-export async function getVatReturns(linkedUserId: string) {
+function readinessForPayable(p: {
+  status: string;
+  submittedAt: Date | null;
+  totalPayable: Decimal;
+  payments: { amountPaid: Decimal }[];
+}): number {
+  const totalPayable = decimalToNumber(p.totalPayable);
+  const totalPaid = p.payments.reduce(
+    (s, r) => s + decimalToNumber(r.amountPaid),
+    0,
+  );
+  if (p.status === "paid" || totalPaid >= totalPayable) return 100;
+  if (p.submittedAt) return 90;
+  if (totalPayable > 0)
+    return Math.min(80, Math.round((totalPaid / totalPayable) * 80));
+  return 0;
+}
+
+/** Optional taxType filters to that active tax code; omit for all tax types. */
+export async function getTaxReturns(
+  linkedUserId: string,
+  taxTypeFilter?: string | null,
+) {
+  const where: { userId: string; taxType?: string } = {
+    userId: linkedUserId,
+  };
+  const t = taxTypeFilter?.trim();
+  if (t) where.taxType = t.toUpperCase();
+
   const payables = await prisma.taxPayable.findMany({
-    where: { userId: linkedUserId, taxType: "VAT" },
+    where,
     orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
     include: { payments: { where: { status: "completed" } } },
   });
-  return payables.map((p) => {
-    const totalPayable = decimalToNumber(p.totalPayable);
-    const totalPaid = p.payments.reduce(
-      (s, r) => s + decimalToNumber(r.amountPaid),
-      0,
-    );
-    let readiness = 0;
-    if (p.status === "paid" || totalPaid >= totalPayable) readiness = 100;
-    else if (p.submittedAt) readiness = 90;
-    else if (totalPayable > 0) readiness = Math.min(80, Math.round((totalPaid / totalPayable) * 80));
-    return {
-      id: p.id,
-      periodLabel: periodLabel(p.periodYear, p.periodMonth),
-      periodYear: p.periodYear,
-      periodMonth: p.periodMonth,
-      dueDate: p.filingDueDate,
-      readiness,
-    };
-  });
+  return payables.map((p) => ({
+    id: p.id,
+    taxType: p.taxType,
+    periodLabel: periodLabel(p.periodYear, p.periodMonth),
+    periodYear: p.periodYear,
+    periodMonth: p.periodMonth,
+    dueDate: p.filingDueDate,
+    readiness: readinessForPayable(p),
+  }));
+}
+
+export async function getVatReturns(linkedUserId: string) {
+  return getTaxReturns(linkedUserId, "VAT");
 }
 
 export async function getUnfiledItems(linkedUserId: string) {
@@ -198,7 +222,7 @@ export async function listFilings(
 export async function createFiling(
   linkedUserId: string,
   data: {
-    taxType: "VAT" | "WHT";
+    taxType: string;
     periodYear: number;
     periodMonth: number;
     amount: number;
@@ -211,12 +235,16 @@ export async function createFiling(
     vatRegistrationNumber?: string;
   },
 ) {
+  const taxType = data.taxType.trim().toUpperCase();
+  const allowed = await filingTaxTypeService.isActiveCode(taxType);
+  if (!allowed) return null;
+
   const dueDate =
     data.dueDate ??
     new Date(data.periodYear, data.periodMonth, 21);
   const paid = data.paymentStatus === "paid";
 
-  if (data.taxType === "VAT") {
+  if (taxType === "VAT") {
     const { vatFilingService } = await import("../../mobile/services/vatFilingService");
     return vatFilingService.submit(linkedUserId, {
       periodYear: data.periodYear,
@@ -232,7 +260,7 @@ export async function createFiling(
     });
   }
 
-  if (data.taxType === "WHT") {
+  if (taxType === "WHT") {
     const { whtFilingService } = await import("../../mobile/services/whtFilingService");
     return whtFilingService.submit(linkedUserId, {
       periodYear: data.periodYear,
@@ -246,7 +274,18 @@ export async function createFiling(
     });
   }
 
-  return null;
+  return genericTaxFilingService.submit(linkedUserId, taxType, {
+    periodYear: data.periodYear,
+    periodMonth: data.periodMonth,
+    amount: data.amount,
+    dueDate,
+    paymentStatus: paid ? "paid" : "not_paid",
+    receiptUrl: data.receiptUrl,
+    documentUrl: data.documentUrl,
+    evidenceVaultId: data.evidenceVaultId,
+    stateOfOperation: data.stateOfOperation,
+    vatRegistrationNumber: data.vatRegistrationNumber,
+  });
 }
 
 export async function submitClientVatReturn(
@@ -267,25 +306,64 @@ export async function getFilingReport(
     where: { id: filingId, userId: linkedUserId },
   });
   if (!payable) return null;
+
+  // Stored reports often use labels (e.g. "VAT Return Summary"), not raw taxType ("VAT").
   const report = await prisma.report.findFirst({
     where: {
       userId: linkedUserId,
       periodYear: payable.periodYear,
       periodMonth: payable.periodMonth,
-      reportType: payable.taxType,
+      OR: [
+        { reportType: payable.taxType },
+        {
+          reportType: {
+            contains: payable.taxType,
+            mode: "insensitive",
+          },
+        },
+      ],
     },
     orderBy: { generatedAt: "desc" },
   });
-  if (!report) return null;
+
+  const fallbackReport =
+    report ??
+    (await prisma.report.findFirst({
+      where: {
+        userId: linkedUserId,
+        periodYear: payable.periodYear,
+        periodMonth: payable.periodMonth,
+      },
+      orderBy: { generatedAt: "desc" },
+    }));
+
+  if (fallbackReport) {
+    return {
+      id: fallbackReport.id,
+      filingId: payable.id,
+      reportType: fallbackReport.reportType,
+      periodLabel: fallbackReport.periodLabel,
+      periodYear: fallbackReport.periodYear,
+      periodMonth: fallbackReport.periodMonth,
+      generatedAt: fallbackReport.generatedAt,
+      documentUrl:
+        fallbackReport.documentUrl ?? payable.documentUrl ?? undefined,
+      format: fallbackReport.format,
+      taxType: payable.taxType,
+    };
+  }
+
   return {
-    id: report.id,
+    id: null,
     filingId: payable.id,
-    reportType: report.reportType,
-    periodLabel: report.periodLabel,
-    periodYear: report.periodYear,
-    periodMonth: report.periodMonth,
-    generatedAt: report.generatedAt,
-    documentUrl: report.documentUrl ?? undefined,
-    format: report.format,
+    reportType: payable.taxType,
+    periodLabel: periodLabel(payable.periodYear, payable.periodMonth),
+    periodYear: payable.periodYear,
+    periodMonth: payable.periodMonth,
+    generatedAt: null,
+    documentUrl: payable.documentUrl ?? undefined,
+    format: undefined,
+    taxType: payable.taxType,
+    hasGeneratedReport: false,
   };
 }

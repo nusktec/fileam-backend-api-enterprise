@@ -11,6 +11,7 @@ import mobileRoutes from "./mobile/routes";
 import enterpriseRoutes from "./enterprise/routes";
 import aiRoutes from "./routes/aiRoutes";
 import webhookRoutes from "./routes/webhookRoutes";
+import publicRoutes from "./routes/publicRoutes";
 import mediaRoutes from "./routes/mediaRoutes";
 import {
   handleRequestAccept,
@@ -99,6 +100,7 @@ app.use(`/api/v${API_VERSION}/enterprise`, enterpriseRoutes);
 app.use(`/api/v${API_VERSION}/ai`, aiRoutes);
 app.use(`/api/v${API_VERSION}/media`, mediaRoutes);
 app.use(`/api/v${API_VERSION}/webhooks`, webhookRoutes);
+app.use(`/api/v${API_VERSION}/public`, publicRoutes);
 app.get(
   `/api/v${API_VERSION}/invitations/:id/accept/:code`,
   handleRequestAccept,

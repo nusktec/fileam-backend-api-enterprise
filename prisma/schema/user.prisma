@@ -28,6 +28,7 @@ model User {
   filingConfirmationsEnabled Boolean @default(true) @map("filing_confirmations_enabled")
   weeklySummaryEnabled    Boolean   @default(true) @map("weekly_summary_enabled")
   twoFactorEnabled       Boolean   @default(false) @map("two_factor_enabled")
+  requestDelete          Boolean   @default(false) @map("request_delete")
   nextSaleNumber         Int       @default(1) @map("next_sale_number")
   createdAt              DateTime  @default(now()) @map("created_at")
   updatedAt              DateTime  @updatedAt @map("updated_at")

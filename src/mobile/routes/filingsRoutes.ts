@@ -15,6 +15,12 @@ import {
   createOrUpdateWhtDraft,
   submitWhtFiling,
 } from "../controllers/whtFilingController";
+import { getMobileTaxFilingConstants } from "../controllers/taxFilingConstantsController";
+import {
+  getUnifiedTaxFilingPreview,
+  saveUnifiedTaxFilingDraft,
+  submitUnifiedTaxFiling,
+} from "../controllers/unifiedTaxFilingController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
 import { validateIdParam } from "../../middlewares/validations/mobileValidation";
@@ -23,6 +29,13 @@ import { withPagination } from "../../middlewares/paginationMiddleware";
 const router = express.Router();
 
 router.use(authenticate(), requireOnboardingComplete);
+
+router.get("/constants", getMobileTaxFilingConstants);
+
+// Unified by tax type (active codes from constants.taxTypes; must be before /:id)
+router.get("/tax/:taxType/preview", getUnifiedTaxFilingPreview);
+router.post("/tax/:taxType/draft", express.json(), saveUnifiedTaxFilingDraft);
+router.post("/tax/:taxType/submit", express.json(), submitUnifiedTaxFiling);
 
 // VAT (must be before /:id)
 router.get("/vat/calculation", getVatCalculation);

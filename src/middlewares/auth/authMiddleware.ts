@@ -66,6 +66,7 @@ const authHandler = ({ roles = [], permissions = [] }: AuthOptions = {}) => {
           filingConfirmationsEnabled: true,
           weeklySummaryEnabled: true,
           twoFactorEnabled: true,
+          requestDelete: true,
           createdAt: true,
           updatedAt: true,
           userRoles: {
