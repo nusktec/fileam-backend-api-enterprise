@@ -109,6 +109,7 @@ export const createExpense = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
+    const b = req.body ?? {};
     const {
       amount,
       description,
@@ -117,7 +118,9 @@ export const createExpense = async (
       vatInclusive,
       vatAmount,
       receiptUrl,
-    } = req.body;
+    } = b;
+    const supplierName = b.supplierName ?? b.Supplier_name;
+    const supplierId = b.supplierId ?? b.Supplier_Id;
     const expense = await expensesService.create(userId, {
       amount: Number(amount),
       description,
@@ -126,6 +129,14 @@ export const createExpense = async (
       vatInclusive: Boolean(vatInclusive),
       vatAmount: vatAmount != null ? Number(vatAmount) : undefined,
       receiptUrl,
+      supplierName:
+        supplierName != null && String(supplierName).trim() !== ""
+          ? String(supplierName).trim()
+          : undefined,
+      supplierId:
+        supplierId != null && String(supplierId).trim() !== ""
+          ? String(supplierId).trim()
+          : undefined,
     });
     res
       .status(HttpStatusCode.CREATED)

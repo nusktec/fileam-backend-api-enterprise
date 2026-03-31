@@ -54,6 +54,8 @@ export async function getClientTransactions(
       amount: decimalToNumber(s.totalAmount),
       status: s.status,
       type: "income",
+      customerName: s.customerName ?? null,
+      customerId: s.customerId ?? null,
       createdById: s.createdById ?? s.userId,
       createdBy: s.createdBy
         ? { id: s.createdBy.id, name: `${s.createdBy.firstName} ${s.createdBy.lastName}`.trim() }
@@ -66,6 +68,8 @@ export async function getClientTransactions(
       amount: -decimalToNumber(e.totalAmount),
       status: "Recorded",
       type: "expense",
+      supplierName: e.supplierName ?? null,
+      supplierId: e.supplierId ?? null,
       createdById: e.createdById ?? e.userId,
       createdBy: e.createdBy
         ? { id: e.createdBy.id, name: `${e.createdBy.firstName} ${e.createdBy.lastName}`.trim() }

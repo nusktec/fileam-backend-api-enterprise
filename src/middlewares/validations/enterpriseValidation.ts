@@ -245,6 +245,14 @@ const validateAddTransaction = [
   check("status").optional().trim().isString(),
   check("type").optional().trim().isString(),
   check("category").optional().trim().isString(),
+  check("supplierName").optional().trim().isString(),
+  check("supplierId").optional().trim().isString(),
+  check("customerName").optional().trim().isString(),
+  check("customerId").optional().trim().isString(),
+  check("Supplier_name").optional().trim().isString(),
+  check("Supplier_Id").optional().trim().isString(),
+  check("Customer_name").optional().trim().isString(),
+  check("Customer_id").optional().trim().isString(),
   handleValidation,
 ];
 

@@ -6,6 +6,7 @@ model Sale {
   description    String
   category       String?  @map("category")
   customerName   String?  @map("customer_name")
+  customerId     String?  @map("customer_id")
   amount         Decimal  @db.Decimal(14, 2)
   vatRate        Decimal  @default(0) @map("vat_rate") @db.Decimal(5, 2)
   vatAmount      Decimal  @default(0) @map("vat_amount") @db.Decimal(14, 2)

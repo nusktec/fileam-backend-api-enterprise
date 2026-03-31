@@ -234,6 +234,8 @@ export const employeesService = {
       date: dateStr,
       vatInclusive: false,
       createdById: createdById ?? userId,
+      supplierName: employee.fullName,
+      supplierId: employee.id,
     });
   },
 };

@@ -95,21 +95,30 @@ export const createSale = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
+    const b = req.body ?? {};
     const {
       amount,
       description,
       category,
-      customerName,
       paymentType,
       date,
       vatableIncome,
       serviceIncome,
-    } = req.body;
+    } = b;
+    const customerName = b.customerName ?? b.Customer_name;
+    const customerId = b.customerId ?? b.Customer_id;
     const sale = await salesService.create(userId, {
       amount: Number(amount),
       description,
       category,
-      customerName,
+      customerName:
+        customerName != null && String(customerName).trim() !== ""
+          ? String(customerName).trim()
+          : undefined,
+      customerId:
+        customerId != null && String(customerId).trim() !== ""
+          ? String(customerId).trim()
+          : undefined,
       paymentType,
       date,
       vatableIncome: Boolean(vatableIncome),

@@ -15,6 +15,9 @@ export const createSaleValidation = [
     .isIn(SALE_CATEGORIES)
     .withMessage(`category must be one of: ${SALE_CATEGORIES.join(", ")}`),
   check("customerName").optional().trim().isString(),
+  check("customerId").optional().trim().isString(),
+  check("Customer_name").optional().trim().isString(),
+  check("Customer_id").optional().trim().isString(),
   check("paymentType")
     .isIn(PAYMENT_TYPES)
     .withMessage(`paymentType must be one of: ${PAYMENT_TYPES.join(", ")}`),

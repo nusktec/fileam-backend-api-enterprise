@@ -212,9 +212,21 @@ export async function addTransaction(
     status?: string;
     type?: string;
     category?: string;
+    supplierName?: string;
+    supplierId?: string;
+    customerName?: string;
+    customerId?: string;
+    Supplier_name?: string;
+    Supplier_Id?: string;
+    Customer_name?: string;
+    Customer_id?: string;
   };
   const date = data.date ? new Date(data.date) : new Date();
   try {
+    const supplierName = data.supplierName ?? data.Supplier_name;
+    const supplierId = data.supplierId ?? data.Supplier_Id;
+    const customerName = data.customerName ?? data.Customer_name;
+    const customerId = data.customerId ?? data.Customer_id;
     const t = await enterpriseFinancialsService.addTransaction(
       companyId,
       {
@@ -224,6 +236,10 @@ export async function addTransaction(
         status: (data.status ?? "Pending").trim(),
         type: (data.type ?? "expense").trim(),
         category: data.category,
+        supplierName: supplierName?.trim(),
+        supplierId: supplierId?.trim(),
+        customerName: customerName?.trim(),
+        customerId: customerId?.trim(),
       },
       req.linkedUserId,
       req.user?.id,

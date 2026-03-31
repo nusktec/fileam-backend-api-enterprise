@@ -415,6 +415,10 @@ export const enterpriseFinancialsService = {
       status: string;
       type: string;
       category?: string;
+      supplierName?: string;
+      supplierId?: string;
+      customerName?: string;
+      customerId?: string;
     },
     linkedUserId?: string,
     createdById?: string,
@@ -438,6 +442,8 @@ export const enterpriseFinancialsService = {
           vatableIncome: false,
           serviceIncome: true,
           createdById: createdById ?? linkedUserId,
+          customerName: data.customerName?.trim() || undefined,
+          customerId: data.customerId?.trim() || undefined,
         });
         return sale
           ? {
@@ -457,6 +463,8 @@ export const enterpriseFinancialsService = {
         date: dateStr,
         vatInclusive: false,
         createdById: createdById ?? linkedUserId,
+        supplierName: data.supplierName?.trim() || undefined,
+        supplierId: data.supplierId?.trim() || undefined,
       });
       return expense
         ? {

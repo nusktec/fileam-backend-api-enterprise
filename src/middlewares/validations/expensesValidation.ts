@@ -17,5 +17,9 @@ export const createExpenseValidation = [
     .withMessage("vatInclusive must be boolean"),
   check("vatAmount").optional().isFloat({ min: 0 }),
   check("receiptUrl").optional().trim().isString(),
+  check("supplierName").optional().trim().isString(),
+  check("supplierId").optional().trim().isString(),
+  check("Supplier_name").optional().trim().isString(),
+  check("Supplier_Id").optional().trim().isString(),
   handleValidation,
 ];

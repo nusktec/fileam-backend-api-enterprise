@@ -87,6 +87,8 @@ export const salesService = {
         amount: decimalToNumber(s.amount),
         vatAmount: decimalToNumber(s.vatAmount),
         totalAmount: decimalToNumber(s.totalAmount),
+        customerName: s.customerName ?? null,
+        customerId: s.customerId ?? null,
       })),
       total,
       page,
@@ -108,6 +110,8 @@ export const salesService = {
       description: sale.description,
       category: sale.category ?? null,
       customer: sale.customerName,
+      customerName: sale.customerName ?? null,
+      customerId: sale.customerId ?? null,
       paymentType: sale.paymentType,
       date: sale.saleDate,
       baseAmount: decimalToNumber(sale.amount),
@@ -126,6 +130,7 @@ export const salesService = {
       description: string;
       category?: string;
       customerName?: string;
+      customerId?: string;
       paymentType: string;
       date: string;
       vatableIncome: boolean;
@@ -158,7 +163,8 @@ export const salesService = {
           invoiceNumber,
           description: data.description,
           category: data.category ?? null,
-          customerName: data.customerName ?? null,
+          customerName: data.customerName?.trim() || null,
+          customerId: data.customerId?.trim() || null,
           amount,
           vatRate,
           vatAmount,
@@ -183,6 +189,8 @@ export const salesService = {
       amount: decimalToNumber(sale.amount),
       vatAmount: decimalToNumber(sale.vatAmount),
       totalAmount: decimalToNumber(sale.totalAmount),
+      customerName: sale.customerName ?? null,
+      customerId: sale.customerId ?? null,
     };
   },
 
@@ -192,7 +200,8 @@ export const salesService = {
     data: Partial<{
       description: string;
       category: string;
-      customerName: string;
+      customerName: string | null;
+      customerId: string | null;
       amount: number;
       paymentType: string;
       date: string;
@@ -209,7 +218,18 @@ export const salesService = {
     const updateData: Record<string, unknown> = {};
     if (data.description != null) updateData.description = data.description;
     if (data.category != null) updateData.category = data.category;
-    if (data.customerName != null) updateData.customerName = data.customerName;
+    if (data.customerName !== undefined) {
+      updateData.customerName =
+        data.customerName === null || data.customerName === ""
+          ? null
+          : data.customerName.trim();
+    }
+    if (data.customerId !== undefined) {
+      updateData.customerId =
+        data.customerId === null || data.customerId === ""
+          ? null
+          : data.customerId.trim();
+    }
     if (data.paymentType != null) updateData.paymentType = data.paymentType;
     if (data.date != null) updateData.saleDate = new Date(data.date);
     if (data.vatableIncome != null) updateData.vatableIncome = data.vatableIncome;
@@ -238,6 +258,8 @@ export const salesService = {
       amount: decimalToNumber(updated.amount),
       vatAmount: decimalToNumber(updated.vatAmount),
       totalAmount: decimalToNumber(updated.totalAmount),
+      customerName: updated.customerName ?? null,
+      customerId: updated.customerId ?? null,
     };
   },
 };

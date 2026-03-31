@@ -87,6 +87,8 @@ export const expensesService = {
         category: e.category,
         amount: decimalToNumber(e.totalAmount),
         vatTag: e.vatInclusive,
+        supplierName: e.supplierName ?? null,
+        supplierId: e.supplierId ?? null,
       })),
       total,
       page,
@@ -114,6 +116,8 @@ export const expensesService = {
         expense.vatAmount != null ? decimalToNumber(expense.vatAmount) : null,
       total: decimalToNumber(expense.totalAmount),
       vatInclusive: expense.vatInclusive,
+      supplierName: expense.supplierName ?? null,
+      supplierId: expense.supplierId ?? null,
     };
   },
 
@@ -127,6 +131,8 @@ export const expensesService = {
       vatInclusive: boolean;
       vatAmount?: number;
       receiptUrl?: string;
+      supplierName?: string;
+      supplierId?: string;
       createdById?: string;
     },
   ) {
@@ -149,6 +155,8 @@ export const expensesService = {
         vatAmount,
         totalAmount,
         receiptUrl: data.receiptUrl ?? null,
+        supplierName: data.supplierName?.trim() || null,
+        supplierId: data.supplierId?.trim() || null,
         expenseDate: new Date(data.date),
       },
     });
@@ -161,6 +169,8 @@ export const expensesService = {
       category: expense.category,
       amount: decimalToNumber(expense.totalAmount),
       vatTag: expense.vatInclusive,
+      supplierName: expense.supplierName ?? null,
+      supplierId: expense.supplierId ?? null,
     };
   },
 
@@ -175,6 +185,8 @@ export const expensesService = {
       vatAmount: number;
       date: string;
       receiptUrl: string;
+      supplierName: string | null;
+      supplierId: string | null;
     }>,
   ) {
     const expense = await prisma.expense.findFirst({
@@ -188,6 +200,18 @@ export const expensesService = {
     if (data.date != null) updateData.expenseDate = new Date(data.date);
     if (data.vatInclusive != null) updateData.vatInclusive = data.vatInclusive;
     if (data.receiptUrl != null) updateData.receiptUrl = data.receiptUrl;
+    if (data.supplierName !== undefined) {
+      updateData.supplierName =
+        data.supplierName === null || data.supplierName === ""
+          ? null
+          : data.supplierName.trim();
+    }
+    if (data.supplierId !== undefined) {
+      updateData.supplierId =
+        data.supplierId === null || data.supplierId === ""
+          ? null
+          : data.supplierId.trim();
+    }
 
     if (data.amount != null || data.vatAmount != null) {
       const amount = data.amount != null ? new Decimal(data.amount) : expense.amount;
@@ -211,6 +235,8 @@ export const expensesService = {
       category: updated.category,
       amount: decimalToNumber(updated.totalAmount),
       vatTag: updated.vatInclusive,
+      supplierName: updated.supplierName ?? null,
+      supplierId: updated.supplierId ?? null,
     };
   },
 };
