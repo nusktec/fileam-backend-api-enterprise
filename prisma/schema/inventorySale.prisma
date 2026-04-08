@@ -1,0 +1,32 @@
+model InventorySale {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  soldAt        DateTime @default(now()) @map("sold_at")
+  totalAmount   Decimal  @map("total_amount") @db.Decimal(14, 2)
+  customerName  String?  @map("customer_name")
+  customerId    String?  @map("customer_id")
+
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lines       InventorySaleLine[]
+  movements   InventoryMovement[]
+
+  @@index([userId, soldAt])
+  @@map("inventory_sales")
+}
+
+model InventorySaleLine {
+  id              String   @id @default(uuid())
+  inventorySaleId String   @map("inventory_sale_id")
+  inventoryItemId String   @map("inventory_item_id")
+  quantity        Decimal  @db.Decimal(14, 2)
+  unitSellingPrice Decimal @map("unit_selling_price") @db.Decimal(14, 2)
+  unitCost        Decimal  @map("unit_cost") @db.Decimal(14, 2)
+  lineTotal       Decimal  @map("line_total") @db.Decimal(14, 2)
+
+  sale          InventorySale  @relation(fields: [inventorySaleId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem  @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+
+  @@index([inventorySaleId])
+  @@index([inventoryItemId])
+  @@map("inventory_sale_lines")
+}

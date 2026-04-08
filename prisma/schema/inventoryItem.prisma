@@ -1,0 +1,23 @@
+model InventoryItem {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  name                String
+  category            String
+  purchaseCost        Decimal  @map("purchase_cost") @db.Decimal(14, 2)
+  sellingPrice        Decimal  @map("selling_price") @db.Decimal(14, 2)
+  quantity            Decimal  @db.Decimal(14, 2)
+  lowStockAlertLevel  Decimal  @map("low_stock_alert_level") @db.Decimal(14, 2)
+  supplierName        String?  @map("supplier_name")
+  supplierId          String?  @map("supplier_id")
+  lastSaleAt          DateTime? @map("last_sale_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movements InventoryMovement[]
+  saleLines InventorySaleLine[]
+
+  @@index([userId])
+  @@index([userId, category])
+  @@map("inventory_items")
+}

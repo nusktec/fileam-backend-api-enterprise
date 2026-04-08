@@ -57,4 +57,7 @@ model User {
   teamMemberInvitationAccepted TeamMemberInvitation[] @relation("TeamMemberInvitationAccepted")
   consultantTeamMembers  ConsultantTeamMember[]   @relation("ConsultantTeamMembers")
   consultantTeamMemberOf ConsultantTeamMember[]    @relation("ConsultantTeamMemberOf")
+  inventoryItems         InventoryItem[]
+  inventorySales         InventorySale[]
+  inventoryMovements     InventoryMovement[]
 }
