@@ -18,6 +18,7 @@ import { prisma } from "../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
 import path from "path";
 import fs from "fs";
+import { seedInventoryDummyDataForUser } from "./inventoryDummySeed";
 
 const SALE_CATEGORIES = ["Consulting", "Product Sales", "Service Income", "Subscription", "Other"];
 const EXPENSE_CATEGORIES = ["Rent", "Tools & Software", "Marketing", "Internet", "Salary", "Other"];
@@ -573,6 +574,18 @@ async function runSeedDummy() {
           },
         });
       }
+    }
+  }
+
+  const inventorySeedEmails = [
+    config.users.consultant.email,
+    config.users.client.email,
+  ];
+  for (const email of inventorySeedEmails) {
+    const u = await prisma.user.findUnique({ where: { email } });
+    if (u) {
+      const seeded = await seedInventoryDummyDataForUser(u.id);
+      if (seeded) console.log("Seeded inventory dummy data for", email);
     }
   }
 
