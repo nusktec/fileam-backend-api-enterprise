@@ -1,5 +1,7 @@
 import { check, body } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import { SALE_CATEGORIES } from "../../constants/saleCategories";
+import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 
 export const validateAddInventoryItem = [
   check("name").trim().notEmpty().withMessage("name is required"),
@@ -34,6 +36,19 @@ export const validateInventorySell = [
     .withMessage("each line quantity must be positive"),
   check("customerName").optional().trim().isString(),
   check("customerId").optional().trim().isString(),
+  check("createSalesInvoice").optional().isBoolean().toBoolean(),
+  check("paymentType").optional().trim().isString(),
+  check("saleDate")
+    .optional()
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage("saleDate must be YYYY-MM-DD"),
+  check("vatableIncome").optional().isBoolean().toBoolean(),
+  check("serviceIncome").optional().isBoolean().toBoolean(),
+  check("saleCategory")
+    .optional()
+    .trim()
+    .isIn(SALE_CATEGORIES)
+    .withMessage(`saleCategory must be one of: ${SALE_CATEGORIES.join(", ")}`),
   handleValidation,
 ];
 
@@ -54,5 +69,25 @@ export const validateInventoryAdjustment = [
     .isFloat({ gt: 0 })
     .withMessage("quantity must be a positive number"),
   check("note").optional().trim().isString(),
+  check("createSalesInvoice").optional().isBoolean().toBoolean(),
+  check("paymentType").optional().trim().isString(),
+  check("saleDate")
+    .optional()
+    .matches(/^\d{4}-\d{2}-\d{2}$/)
+    .withMessage("saleDate must be YYYY-MM-DD"),
+  check("vatableIncome").optional().isBoolean().toBoolean(),
+  check("serviceIncome").optional().isBoolean().toBoolean(),
+  check("saleCategory")
+    .optional()
+    .trim()
+    .isIn(SALE_CATEGORIES)
+    .withMessage(`saleCategory must be one of: ${SALE_CATEGORIES.join(", ")}`),
+  check("expenseCategory")
+    .optional()
+    .trim()
+    .isIn(EXPENSE_CATEGORIES)
+    .withMessage(
+      `expenseCategory must be one of: ${EXPENSE_CATEGORIES.join(", ")}`,
+    ),
   handleValidation,
 ];

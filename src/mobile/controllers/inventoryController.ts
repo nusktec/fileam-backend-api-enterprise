@@ -98,6 +98,12 @@ export const sellFromInventory = async (
       lines: Array<{ inventoryItemId: string; quantity: number }>;
       customerName?: string;
       customerId?: string;
+      createSalesInvoice?: boolean;
+      paymentType?: string;
+      saleDate?: string;
+      vatableIncome?: boolean;
+      serviceIncome?: boolean;
+      saleCategory?: string;
     };
     const sale = await inventoryService.sellFromInventory(userId, {
       lines: data.lines.map((l) => ({
@@ -106,6 +112,12 @@ export const sellFromInventory = async (
       })),
       customerName: data.customerName,
       customerId: data.customerId,
+      createSalesInvoice: data.createSalesInvoice,
+      paymentType: data.paymentType,
+      saleDate: data.saleDate,
+      vatableIncome: data.vatableIncome,
+      serviceIncome: data.serviceIncome,
+      saleCategory: data.saleCategory,
     });
     res
       .status(HttpStatusCode.CREATED)
@@ -116,7 +128,8 @@ export const sellFromInventory = async (
       msg.includes("not found") ||
       msg.includes("Insufficient") ||
       msg.includes("lines required") ||
-      msg.includes("must be positive")
+      msg.includes("must be positive") ||
+      msg === "User not found"
     ) {
       res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, msg, null));
       return;
@@ -268,12 +281,32 @@ export const adjustInventoryItem = async (
       direction: "in" | "out";
       quantity: number;
       note?: string;
+      createSalesInvoice?: boolean;
+      paymentType?: string;
+      saleDate?: string;
+      vatableIncome?: boolean;
+      serviceIncome?: boolean;
+      saleCategory?: string;
+      expenseCategory?: string;
     };
     const detail = await inventoryService.adjustment(userId, id!, {
       direction: data.direction,
       quantity: Number(data.quantity),
       note: data.note,
+      createSalesInvoice: data.createSalesInvoice,
+      paymentType: data.paymentType,
+      saleDate: data.saleDate,
+      vatableIncome: data.vatableIncome,
+      serviceIncome: data.serviceIncome,
+      saleCategory: data.saleCategory,
+      expenseCategory: data.expenseCategory,
     });
+    if (!detail) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Inventory item not found", null));
+      return;
+    }
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Stock adjusted", detail));
@@ -286,7 +319,8 @@ export const adjustInventoryItem = async (
     if (
       msg.includes("quantity") ||
       msg.includes("direction") ||
-      msg.includes("Insufficient")
+      msg.includes("Insufficient") ||
+      msg === "User not found"
     ) {
       res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, msg, null));
       return;

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import {
@@ -5,6 +6,113 @@ import {
   INVENTORY_SLOW_MOVING_DAYS,
   INVENTORY_VELOCITY_DAYS,
 } from "../../constants/inventory";
+import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
+import { SALE_CATEGORIES } from "../../constants/saleCategories";
+
+const VAT_RATE_PERCENT = 7.5;
+const EXPENSE_COUNTER_ID = "expense_number";
+
+async function createLinkedSaleInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  input: {
+    baseAmount: Decimal;
+    description: string;
+    category: string | null;
+    customerName: string | null;
+    customerId: string | null;
+    paymentType: string;
+    saleDate: Date;
+    vatableIncome: boolean;
+    serviceIncome: boolean;
+  },
+) {
+  const userRow = await tx.user.findUnique({
+    where: { id: userId },
+  });
+  if (!userRow) throw new Error("User not found");
+  const nextNum =
+    Number((userRow as { nextSaleNumber?: number }).nextSaleNumber) || 1;
+  await tx.$executeRaw`
+    UPDATE "User" SET next_sale_number = ${nextNum + 1} WHERE id = ${userId}
+  `;
+  const amount = input.baseAmount;
+  const vatRate = input.vatableIncome
+    ? new Decimal(VAT_RATE_PERCENT)
+    : new Decimal(0);
+  const vatAmount = input.vatableIncome
+    ? amount.mul(VAT_RATE_PERCENT / 100)
+    : new Decimal(0);
+  const totalAmount = amount.add(vatAmount);
+  const sale = await tx.sale.create({
+    data: {
+      userId,
+      createdById: userId,
+      invoiceNumber: String(nextNum),
+      description: input.description,
+      category: input.category,
+      customerName: input.customerName,
+      customerId: input.customerId,
+      amount,
+      vatRate,
+      vatAmount,
+      totalAmount,
+      paymentType: input.paymentType,
+      saleDate: input.saleDate,
+      vatableIncome: input.vatableIncome,
+      serviceIncome: input.serviceIncome,
+      status: "Pending",
+    },
+  });
+  return {
+    id: sale.id,
+    invoiceNumber: sale.invoiceNumber,
+    amount: d(sale.amount),
+    vatAmount: d(sale.vatAmount),
+    totalAmount: d(sale.totalAmount),
+  };
+}
+
+async function createLinkedExpenseInTx(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  input: {
+    totalAmount: Decimal;
+    description: string;
+    category: string;
+    expenseDate: Date;
+    supplierName?: string | null;
+    supplierId?: string | null;
+  },
+) {
+  const counter = await tx.counter.upsert({
+    where: { id: EXPENSE_COUNTER_ID },
+    create: { id: EXPENSE_COUNTER_ID, lastNumber: 1 },
+    update: { lastNumber: { increment: 1 } },
+  });
+  const expenseNumber = `EXP-${String(counter.lastNumber).padStart(3, "0")}`;
+  const expense = await tx.expense.create({
+    data: {
+      userId,
+      createdById: userId,
+      expenseNumber,
+      description: input.description,
+      category: input.category,
+      amount: input.totalAmount,
+      vatInclusive: false,
+      vatAmount: null,
+      totalAmount: input.totalAmount,
+      supplierName: input.supplierName ?? null,
+      supplierId: input.supplierId ?? null,
+      expenseDate: input.expenseDate,
+    },
+  });
+  return {
+    id: expense.id,
+    expenseNumber: expense.expenseNumber,
+    totalAmount: d(expense.totalAmount),
+  };
+}
 
 function d(v: Decimal | null | undefined): number {
   if (v == null) return 0;
@@ -448,7 +556,18 @@ export const inventoryService = {
   async adjustment(
     userId: string,
     itemId: string,
-    data: { direction: "in" | "out"; quantity: number; note?: string },
+    data: {
+      direction: "in" | "out";
+      quantity: number;
+      note?: string;
+      createSalesInvoice?: boolean;
+      paymentType?: string;
+      saleDate?: string;
+      vatableIncome?: boolean;
+      serviceIncome?: boolean;
+      saleCategory?: string;
+      expenseCategory?: string;
+    },
   ) {
     const qty = data.quantity;
     if (qty <= 0) throw new Error("quantity must be positive");
@@ -456,35 +575,99 @@ export const inventoryService = {
       throw new Error("direction must be in or out");
     }
 
-    await prisma.$transaction(async (tx) => {
-      const item = await tx.inventoryItem.findFirst({
-        where: { id: itemId, userId },
-      });
-      if (!item) throw new Error("Inventory item not found");
-      const current = d(item.quantity);
-      const delta = data.direction === "in" ? qty : -qty;
-      const newQty = current + delta;
-      if (newQty < 0) throw new Error("Insufficient stock for adjustment out");
-      await tx.inventoryItem.update({
-        where: { id: itemId },
-        data: { quantity: dec(newQty) },
-      });
-      await tx.inventoryMovement.create({
-        data: {
-          userId,
-          inventoryItemId: itemId,
-          type:
-            data.direction === "in"
-              ? INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_IN
-              : INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_OUT,
-          quantityDelta: dec(delta),
-          quantityAfter: dec(newQty),
-          note: data.note?.trim() || null,
-        },
-      });
-    });
+    const { linkedSale, linkedExpense } = await prisma.$transaction(
+      async (tx) => {
+        const item = await tx.inventoryItem.findFirst({
+          where: { id: itemId, userId },
+        });
+        if (!item) throw new Error("Inventory item not found");
+        const current = d(item.quantity);
+        const delta = data.direction === "in" ? qty : -qty;
+        const newQty = current + delta;
+        if (newQty < 0) throw new Error("Insufficient stock for adjustment out");
+        await tx.inventoryItem.update({
+          where: { id: itemId },
+          data: { quantity: dec(newQty) },
+        });
+        await tx.inventoryMovement.create({
+          data: {
+            userId,
+            inventoryItemId: itemId,
+            type:
+              data.direction === "in"
+                ? INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_IN
+                : INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_OUT,
+            quantityDelta: dec(delta),
+            quantityAfter: dec(newQty),
+            note: data.note?.trim() || null,
+          },
+        });
 
-    return inventoryService.getItemDetail(userId, itemId);
+        const costTotal = item.purchaseCost.mul(qty);
+        const dateStr =
+          data.saleDate?.trim() || new Date().toISOString().split("T")[0];
+        const bookDate = new Date(`${dateStr}T12:00:00.000Z`);
+        const noteSuffix = data.note?.trim()
+          ? ` — ${data.note.trim()}`
+          : "";
+
+        let linkedSale: Awaited<ReturnType<typeof createLinkedSaleInTx>> | null =
+          null;
+        let linkedExpense: Awaited<
+          ReturnType<typeof createLinkedExpenseInTx>
+        > | null = null;
+
+        if (data.createSalesInvoice) {
+          if (data.direction === "out") {
+            const expCat =
+              data.expenseCategory?.trim() &&
+              (EXPENSE_CATEGORIES as readonly string[]).includes(
+                data.expenseCategory.trim(),
+              )
+                ? data.expenseCategory.trim()
+                : "Other";
+            linkedExpense = await createLinkedExpenseInTx(tx, userId, {
+              totalAmount: costTotal,
+              description: `Inventory adjustment out: ${item.name} (${qty} units)${noteSuffix}`,
+              category: expCat,
+              expenseDate: bookDate,
+              supplierName: item.supplierName,
+              supplierId: item.supplierId,
+            });
+          } else {
+            const rawSaleCat = data.saleCategory?.trim() || "Other";
+            const saleCat = (SALE_CATEGORIES as readonly string[]).includes(
+              rawSaleCat,
+            )
+              ? rawSaleCat
+              : "Other";
+            linkedSale = await createLinkedSaleInTx(tx, userId, {
+              baseAmount: costTotal,
+              description: `Inventory adjustment in: ${item.name} (${qty} units)${noteSuffix}`,
+              category: saleCat,
+              customerName: null,
+              customerId: null,
+              paymentType: data.paymentType?.trim() || "Cash",
+              saleDate: bookDate,
+              vatableIncome: data.vatableIncome === true,
+              serviceIncome: data.serviceIncome !== false,
+            });
+          }
+        }
+
+        return { linkedSale, linkedExpense };
+      },
+    );
+
+    const detail = await inventoryService.getItemDetail(userId, itemId);
+    if (!detail) return null;
+    const out: typeof detail & {
+      linkedSale?: NonNullable<typeof linkedSale>;
+      linkedExpense?: NonNullable<typeof linkedExpense>;
+    } = { ...detail };
+    if (linkedSale) out.linkedSale = linkedSale;
+    if (linkedExpense) out.linkedExpense = linkedExpense;
+    return out;
   },
 
   async addItem(
@@ -539,11 +722,17 @@ export const inventoryService = {
       lines: Array<{ inventoryItemId: string; quantity: number }>;
       customerName?: string;
       customerId?: string;
+      createSalesInvoice?: boolean;
+      paymentType?: string;
+      saleDate?: string;
+      vatableIncome?: boolean;
+      serviceIncome?: boolean;
+      saleCategory?: string;
     },
   ) {
     if (!data.lines?.length) throw new Error("lines required");
 
-    const result = await prisma.$transaction(async (tx) => {
+    const { invSaleId, linkedSale } = await prisma.$transaction(async (tx) => {
       let totalAmount = new Decimal(0);
       const lineRows: Array<{
         inventoryItemId: string;
@@ -552,6 +741,7 @@ export const inventoryService = {
         unitCost: Decimal;
         lineTotal: Decimal;
       }> = [];
+      const descParts: string[] = [];
 
       for (const line of data.lines) {
         const qty = line.quantity;
@@ -566,6 +756,7 @@ export const inventoryService = {
         const unitCost = item.purchaseCost;
         const lineTotal = unitPrice.mul(qty);
         totalAmount = totalAmount.add(lineTotal);
+        descParts.push(`${item.name} × ${qty}`);
         lineRows.push({
           inventoryItemId: item.id,
           quantity: dec(qty),
@@ -575,7 +766,7 @@ export const inventoryService = {
         });
       }
 
-      const sale = await tx.inventorySale.create({
+      const invSale = await tx.inventorySale.create({
         data: {
           userId,
           totalAmount,
@@ -614,17 +805,42 @@ export const inventoryService = {
             type: INVENTORY_MOVEMENT_TYPES.SALE,
             quantityDelta: dec(-d(l.quantity)),
             quantityAfter: dec(newQty),
-            inventorySaleId: sale.id,
+            inventorySaleId: invSale.id,
             note: "Inventory sale",
           },
         });
       }
 
-      return sale.id;
+      let linkedSale: Awaited<ReturnType<typeof createLinkedSaleInTx>> | null =
+        null;
+      if (data.createSalesInvoice) {
+        const dateStr =
+          data.saleDate?.trim() || soldAt.toISOString().split("T")[0];
+        const saleDate = new Date(`${dateStr}T12:00:00.000Z`);
+        const rawInvSaleCat = data.saleCategory?.trim() || "Product Sales";
+        const invSaleCat = (SALE_CATEGORIES as readonly string[]).includes(
+          rawInvSaleCat,
+        )
+          ? rawInvSaleCat
+          : "Product Sales";
+        linkedSale = await createLinkedSaleInTx(tx, userId, {
+          baseAmount: totalAmount,
+          description: `Inventory sale: ${descParts.join("; ")}`,
+          category: invSaleCat,
+          customerName: data.customerName?.trim() || null,
+          customerId: data.customerId?.trim() || null,
+          paymentType: data.paymentType?.trim() || "Cash",
+          saleDate,
+          vatableIncome: data.vatableIncome === true,
+          serviceIncome: data.serviceIncome !== false,
+        });
+      }
+
+      return { invSaleId: invSale.id, linkedSale };
     });
 
     const sale = await prisma.inventorySale.findFirst({
-      where: { id: result, userId },
+      where: { id: invSaleId, userId },
       include: {
         lines: {
           include: { inventoryItem: { select: { name: true, category: true } } },
@@ -632,7 +848,29 @@ export const inventoryService = {
       },
     });
     if (!sale) return null;
-    return {
+    const out: {
+      id: string;
+      soldAt: string;
+      totalAmount: number;
+      customerName: string | null;
+      customerId: string | null;
+      lines: Array<{
+        inventoryItemId: string;
+        itemName: string;
+        category: string;
+        quantity: number;
+        unitSellingPrice: number;
+        unitCost: number;
+        lineTotal: number;
+      }>;
+      linkedSale?: {
+        id: string;
+        invoiceNumber: string;
+        amount: number;
+        vatAmount: number;
+        totalAmount: number;
+      };
+    } = {
       id: sale.id,
       soldAt: sale.soldAt.toISOString(),
       totalAmount: d(sale.totalAmount),
@@ -648,6 +886,8 @@ export const inventoryService = {
         lineTotal: d(l.lineTotal),
       })),
     };
+    if (linkedSale) out.linkedSale = linkedSale;
+    return out;
   },
 
   async listSales(
