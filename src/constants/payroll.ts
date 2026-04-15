@@ -1,3 +1,5 @@
+import { PAYE_CONSOLIDATED_RELIEF_MIN_RATE, PERCENT } from "./percentages";
+
 /** Nigerian payroll constants (simplified). Pension: employee 8%, employer 10%. NHF 2.5%. */
 export const PENSION_EMPLOYEE_RATE = 8;
 export const PENSION_EMPLOYER_RATE = 10;
@@ -15,8 +17,11 @@ const PAYE_BRACKETS: { limit: number; rate: number }[] = [
 ];
 
 export function computePayeMonthly(grossAnnual: number): number {
-  const consolidatedRelief = Math.max(grossAnnual * 0.01, 200_000);
-  const pensionDeduction = grossAnnual * (PENSION_EMPLOYEE_RATE / 100);
+  const consolidatedRelief = Math.max(
+    grossAnnual * PAYE_CONSOLIDATED_RELIEF_MIN_RATE,
+    200_000,
+  );
+  const pensionDeduction = grossAnnual * (PENSION_EMPLOYEE_RATE / PERCENT);
   const taxableAnnual = Math.max(
     0,
     grossAnnual - pensionDeduction - consolidatedRelief,
@@ -27,7 +32,7 @@ export function computePayeMonthly(grossAnnual: number): number {
   for (const b of PAYE_BRACKETS) {
     if (taxableAnnual <= prevLimit) break;
     const band = Math.min(taxableAnnual - prevLimit, b.limit - prevLimit);
-    tax += (band * b.rate) / 100;
+    tax += (band * b.rate) / PERCENT;
     prevLimit = b.limit;
     if (taxableAnnual <= b.limit) break;
   }
@@ -35,13 +40,13 @@ export function computePayeMonthly(grossAnnual: number): number {
 }
 
 export function computePensionEmployee(grossMonthly: number): number {
-  return (grossMonthly * PENSION_EMPLOYEE_RATE) / 100;
+  return (grossMonthly * PENSION_EMPLOYEE_RATE) / PERCENT;
 }
 
 export function computePensionEmployer(grossMonthly: number): number {
-  return (grossMonthly * PENSION_EMPLOYER_RATE) / 100;
+  return (grossMonthly * PENSION_EMPLOYER_RATE) / PERCENT;
 }
 
 export function computeNhf(basicMonthly: number): number {
-  return (basicMonthly * NHF_RATE) / 100;
+  return (basicMonthly * NHF_RATE) / PERCENT;
 }

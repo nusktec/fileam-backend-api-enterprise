@@ -1,5 +1,6 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import { PERCENT } from "../../constants/percentages";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -120,7 +121,8 @@ export async function getClientDashboard(linkedUserId: string) {
     breakdown.VAT = comp.vat.netVatPayable;
   }
   if (taxConfig?.cit ?? true) {
-    const citPayable = Math.max(0, summary.netProfit) * (comp.cit.citRate / 100);
+    const citPayable =
+      Math.max(0, summary.netProfit) * (comp.cit.citRate / PERCENT);
     breakdown.CIT = citPayable;
   }
   if (taxConfig?.wht ?? true) {

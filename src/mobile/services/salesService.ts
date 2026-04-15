@@ -1,7 +1,6 @@
 import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
-
-const VAT_RATE = 7.5;
+import { PERCENT, VAT_RATE_PERCENT } from "../../constants/percentages";
 const EXPENSE_COUNTER_ID = "expense_number";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -139,9 +138,11 @@ export const salesService = {
     },
   ) {
     const amount = new Decimal(data.amount);
-    const vatRate = data.vatableIncome ? new Decimal(VAT_RATE) : new Decimal(0);
+    const vatRate = data.vatableIncome
+      ? new Decimal(VAT_RATE_PERCENT)
+      : new Decimal(0);
     const vatAmount = data.vatableIncome
-      ? amount.mul(VAT_RATE / 100)
+      ? amount.mul(VAT_RATE_PERCENT / PERCENT)
       : new Decimal(0);
     const totalAmount = amount.add(vatAmount);
 
@@ -236,11 +237,22 @@ export const salesService = {
     if (data.serviceIncome != null) updateData.serviceIncome = data.serviceIncome;
     if (data.status != null) updateData.status = data.status;
 
+    const vatable =
+      data.vatableIncome != null ? data.vatableIncome : sale.vatableIncome;
+
     if (data.amount != null) {
       const amount = new Decimal(data.amount);
-      const vatRate = (sale.vatableIncome ? VAT_RATE : 0) / 100;
+      const vatRate = (vatable ? VAT_RATE_PERCENT : 0) / PERCENT;
       const vatAmount = amount.mul(vatRate);
       updateData.amount = amount;
+      updateData.vatRate = new Decimal(vatable ? VAT_RATE_PERCENT : 0);
+      updateData.vatAmount = vatAmount;
+      updateData.totalAmount = amount.add(vatAmount);
+    } else if (data.vatableIncome != null) {
+      const amount = new Decimal(sale.amount);
+      const vatRate = (vatable ? VAT_RATE_PERCENT : 0) / PERCENT;
+      const vatAmount = amount.mul(vatRate);
+      updateData.vatRate = new Decimal(vatable ? VAT_RATE_PERCENT : 0);
       updateData.vatAmount = vatAmount;
       updateData.totalAmount = amount.add(vatAmount);
     }

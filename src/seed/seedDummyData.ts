@@ -19,6 +19,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import path from "path";
 import fs from "fs";
 import { seedInventoryDummyDataForUser } from "./inventoryDummySeed";
+import { PERCENT, VAT_RATE_PERCENT } from "../constants/percentages";
 
 const SALE_CATEGORIES = ["Consulting", "Product Sales", "Service Income", "Subscription", "Other"];
 const EXPENSE_CATEGORIES = ["Rent", "Tools & Software", "Marketing", "Internet", "Salary", "Other"];
@@ -334,9 +335,10 @@ async function runSeedDummy() {
         salesSum += amount;
         salesCreated++;
 
-        const vatRate = new Decimal(7.5);
-        const vatAmount = new Decimal(amount * 0.075);
-        const totalAmount = new Decimal(amount + amount * 0.075);
+        const vatRate = new Decimal(VAT_RATE_PERCENT);
+        const vatFraction = VAT_RATE_PERCENT / PERCENT;
+        const vatAmount = new Decimal(amount * vatFraction);
+        const totalAmount = new Decimal(amount + amount * vatFraction);
         const saleDate = new Date(year, month - 1, randomInt(1, 25));
 
         await prisma.sale.create({
@@ -479,10 +481,14 @@ async function runSeedDummy() {
           companyId: company.id,
           month,
           year,
-          vatPayable: new Decimal(Math.round(salesSum * 0.075)),
+          vatPayable: new Decimal(
+            Math.round(salesSum * (VAT_RATE_PERCENT / PERCENT)),
+          ),
         },
         update: {
-          vatPayable: new Decimal(Math.round(salesSum * 0.075)),
+          vatPayable: new Decimal(
+            Math.round(salesSum * (VAT_RATE_PERCENT / PERCENT)),
+          ),
         },
       });
     }

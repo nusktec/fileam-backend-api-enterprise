@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { matchedData } from "express-validator";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
@@ -145,5 +146,69 @@ export const createExpense = async (
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to add expense", null));
+  }
+};
+
+export const updateExpense = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const expenseId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const body = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as Record<string, unknown>;
+    const keys = Object.keys(body).filter((k) => body[k] !== undefined);
+    if (keys.length === 0) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Provide at least one field to update", null));
+      return;
+    }
+    const b = req.body ?? {};
+    const supplierName = b.supplierName ?? b.Supplier_name;
+    const supplierId = b.supplierId ?? b.Supplier_Id;
+    const updated = await expensesService.update(userId, expenseId!, {
+      description: body.description as string | undefined,
+      category: body.category as string | undefined,
+      amount: body.amount != null ? Number(body.amount) : undefined,
+      vatInclusive:
+        body.vatInclusive !== undefined
+          ? Boolean(body.vatInclusive)
+          : undefined,
+      vatAmount:
+        body.vatAmount != null ? Number(body.vatAmount) : undefined,
+      date: body.date as string | undefined,
+      receiptUrl: body.receiptUrl as string | undefined,
+      supplierName:
+        supplierName !== undefined
+          ? supplierName === null || String(supplierName).trim() === ""
+            ? null
+            : String(supplierName).trim()
+          : undefined,
+      supplierId:
+        supplierId !== undefined
+          ? supplierId === null || String(supplierId).trim() === ""
+            ? null
+            : String(supplierId).trim()
+          : undefined,
+    });
+    if (!updated) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Expense not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Expense updated", updated));
+  } catch {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to update expense", null));
   }
 };

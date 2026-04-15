@@ -23,7 +23,11 @@ import {
 } from "../controllers/unifiedTaxFilingController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
-import { validateIdParam } from "../../middlewares/validations/mobileValidation";
+import {
+  validateIdParam,
+  validateClientUserIdParam,
+} from "../../middlewares/validations/mobileValidation";
+import { submitConsultantTaxFilingForClient } from "../controllers/consultantTaxFilingController";
 import { withPagination } from "../../middlewares/paginationMiddleware";
 
 const router = express.Router();
@@ -36,6 +40,14 @@ router.get("/constants", getMobileTaxFilingConstants);
 router.get("/tax/:taxType/preview", getUnifiedTaxFilingPreview);
 router.post("/tax/:taxType/draft", express.json(), saveUnifiedTaxFilingDraft);
 router.post("/tax/:taxType/submit", express.json(), submitUnifiedTaxFiling);
+
+// Consultant submits on behalf of linked client (before /:id)
+router.post(
+  "/consultant/clients/:clientUserId/tax/:taxType/submit",
+  validateClientUserIdParam,
+  express.json(),
+  submitConsultantTaxFilingForClient,
+);
 
 // VAT (must be before /:id)
 router.get("/vat/calculation", getVatCalculation);

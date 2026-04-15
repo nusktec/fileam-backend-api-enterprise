@@ -1,6 +1,16 @@
 import { prisma } from "../../config/database";
 import type { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
+import {
+  BALANCE_SHEET_MOCK_CURRENT_ASSETS_OF_INCOME,
+  BALANCE_SHEET_MOCK_FIXED_ASSETS_OF_INCOME,
+  BALANCE_SHEET_MOCK_LIABILITIES_OF_EXPENSE,
+  BALANCE_SHEET_MOCK_TOTAL_ASSETS_OF_INCOME,
+  CIT_INDUSTRY_EXCEPTION_CATEGORIES,
+  KPI_PERCENT_ROUNDING_FACTOR,
+  PERCENT,
+  VAT_RATE_PERCENT,
+} from "../../constants/percentages";
 import type { FinancialDocumentUploadInput } from "../../interfaces/enterprise/financials";
 
 const DOCUMENT_TYPES = [
@@ -16,6 +26,151 @@ const CURRENCIES = ["USD", "NGN", "GBP", "EUR"];
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
+}
+
+export type ProfitAndLossQueryOpts = {
+  year?: number;
+  month?: number;
+  /** `thisMonth` | `thisYear` or custom via dateFrom/dateTo */
+  preset?: string;
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+function resolvePlDateRange(opts: ProfitAndLossQueryOpts): {
+  start: Date;
+  end: Date;
+  presetLabel: string;
+} {
+  const now = new Date();
+  const yNow = now.getFullYear();
+  const mNow = now.getMonth();
+
+  if (opts.dateFrom && opts.dateTo) {
+    const start = new Date(opts.dateFrom);
+    const end = new Date(opts.dateTo);
+    end.setHours(23, 59, 59, 999);
+    return { start, end, presetLabel: "custom" };
+  }
+
+  const p = (opts.preset || "").toLowerCase();
+  if (p === "thismonth") {
+    const start = new Date(yNow, mNow, 1);
+    const end = new Date(yNow, mNow + 1, 0, 23, 59, 59, 999);
+    return { start, end, presetLabel: "thisMonth" };
+  }
+  if (p === "thisyear") {
+    const start = new Date(yNow, 0, 1);
+    const endOfYear = new Date(yNow, 11, 31, 23, 59, 59, 999);
+    const end = now < endOfYear ? now : endOfYear;
+    end.setHours(23, 59, 59, 999);
+    return { start, end, presetLabel: "thisYear" };
+  }
+
+  if (opts.year != null && opts.month != null) {
+    const start = new Date(opts.year, opts.month - 1, 1);
+    const end = new Date(opts.year, opts.month, 0, 23, 59, 59, 999);
+    return {
+      start,
+      end,
+      presetLabel: `month:${opts.year}-${opts.month}`,
+    };
+  }
+
+  if (opts.year != null) {
+    return {
+      start: new Date(opts.year, 0, 1),
+      end: new Date(opts.year, 11, 31, 23, 59, 59, 999),
+      presetLabel: `year:${opts.year}`,
+    };
+  }
+
+  return {
+    start: new Date(yNow, 0, 1),
+    end: new Date(yNow, 11, 31, 23, 59, 59, 999),
+    presetLabel: `year:${yNow}`,
+  };
+}
+
+async function getEnterprisePlBreakdown(
+  companyId: string,
+  start: Date,
+  end: Date,
+) {
+  const txs = await prisma.enterpriseTransaction.findMany({
+    where: {
+      companyId,
+      date: { gte: start, lte: end },
+    },
+  });
+  let revenueTotal = 0;
+  let expenseTotal = 0;
+  const revenueByCategory: Record<string, number> = {};
+  const expensesByCategory: Record<string, number> = {};
+  const byMonthKey = new Map<
+    string,
+    { revenue: number; expenses: number; net: number }
+  >();
+
+  for (const t of txs) {
+    const amt = Math.abs(decimalToNumber(t.amount));
+    const d = new Date(t.date);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const isIncome = t.type === "income" || t.status === "Received";
+    if (isIncome) {
+      revenueTotal += amt;
+      revenueByCategory["Income"] = (revenueByCategory["Income"] ?? 0) + amt;
+    } else {
+      expenseTotal += amt;
+      expensesByCategory["Expenses"] =
+        (expensesByCategory["Expenses"] ?? 0) + amt;
+    }
+    const row = byMonthKey.get(key) ?? { revenue: 0, expenses: 0, net: 0 };
+    if (isIncome) row.revenue += amt;
+    else row.expenses += amt;
+    row.net = row.revenue - row.expenses;
+    byMonthKey.set(key, row);
+  }
+
+  const netProfit = revenueTotal - expenseTotal;
+  const profitMarginPercent =
+    revenueTotal > 0
+      ? Math.round(
+          (netProfit / revenueTotal) *
+            PERCENT *
+            KPI_PERCENT_ROUNDING_FACTOR,
+        ) / KPI_PERCENT_ROUNDING_FACTOR
+      : 0;
+
+  const monthlyBreakdown = [...byMonthKey.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([period, v]) => ({
+      period,
+      revenue: v.revenue,
+      expenses: v.expenses,
+      netProfit: v.net,
+    }));
+
+  return {
+    revenueTotal,
+    expenseTotal,
+    netProfit,
+    profitMarginPercent,
+    revenueByCategory,
+    expensesByCategory,
+    monthlyBreakdown,
+    recordCounts: { sales: 0, expenses: 0, transactions: txs.length },
+    formulas: {
+      netProfit:
+        "sum(income-class amounts) − sum(expense-class amounts) from enterprise_transactions in range",
+      profitMarginPercent:
+        "round((netProfit ÷ revenueTotal) × 100, 1 decimal) or 0 if revenue is 0",
+      citNote:
+        CIT_INDUSTRY_EXCEPTION_CATEGORIES.length === 0
+          ? "CIT is modeled annually from profit; industry exception categories are empty — extend CIT_INDUSTRY_EXCEPTION_CATEGORIES when needed."
+          : `Categories ${CIT_INDUSTRY_EXCEPTION_CATEGORIES.join(", ")} may require non-annual CIT handling.`,
+    },
+  };
 }
 
 /** One financial document may link to at most one invoice per company; clears any previous invoice using the same file. */
@@ -313,39 +468,68 @@ export const enterpriseFinancialsService = {
 
   async getProfitAndLoss(
     companyId: string,
-    year?: number,
-    month?: number,
-    linkedUserId?: string,
+    linkedUserId: string | undefined,
+    opts: ProfitAndLossQueryOpts = {},
   ) {
-    const y = year ?? new Date().getFullYear();
-    const flow = await this.getMonthlyCashFlow(companyId, y, linkedUserId);
-    if (!flow) return null;
-    const byMonth = flow.reduce(
-      (acc, m) => {
-        acc[m.month] = m.value;
-        return acc;
-      },
-      {} as Record<number, number>,
-    );
-    const { getClientFinancialSummary } = await import("./clientDataHelper");
-    const summary = linkedUserId
-      ? await getClientFinancialSummary(linkedUserId)
-      : await this.getSummary(companyId);
-    if (!summary) return null;
-    const monthData = month
-      ? { [month]: byMonth[month] ?? 0 }
-      : byMonth;
+    const { start, end, presetLabel } = resolvePlDateRange(opts);
+    const y = start.getFullYear();
+
+    if (linkedUserId) {
+      const {
+        getClientPlBreakdown,
+        getClientAttachmentGaps,
+      } = await import("./clientDataHelper");
+      const pl = await getClientPlBreakdown(linkedUserId, { start, end });
+      const gaps = await getClientAttachmentGaps(linkedUserId, { start, end });
+      return {
+        preset: presetLabel,
+        period: {
+          year: y,
+          month: opts.month,
+          rangeStart: pl.range.start,
+          rangeEnd: pl.range.end,
+        },
+        revenue: pl.revenueTotal,
+        expenses: pl.expenseTotal,
+        netProfit: pl.netProfit,
+        profitMarginPercent: pl.profitMarginPercent,
+        revenueByCategory: pl.revenueByCategory,
+        expensesByCategory: pl.expensesByCategory,
+        monthlyBreakdown: pl.monthlyBreakdown,
+        formulas: pl.formulas,
+        recordCounts: pl.recordCounts,
+        attachmentGaps: gaps,
+        citNote:
+          CIT_INDUSTRY_EXCEPTION_CATEGORIES.length === 0
+            ? "CIT is modeled annually from profit; add categories to CIT_INDUSTRY_EXCEPTION_CATEGORIES for industry-specific rules."
+            : `Industry categories flagged for non-default CIT: ${CIT_INDUSTRY_EXCEPTION_CATEGORIES.join(", ")}`,
+      };
+    }
+
+    const ent = await getEnterprisePlBreakdown(companyId, start, end);
     return {
-      period: { year: y, month: month ?? undefined },
-      revenue: summary.totalIncome,
-      expenses: summary.totalExpenses,
-      netProfit: summary.netProfit,
-      monthlyBreakdown: Object.entries(monthData).map(([m, v]) => ({
-        month: Number(m),
-        revenue: Math.max(0, v),
-        expenses: Math.abs(Math.min(0, v)),
-        netProfit: v,
-      })),
+      preset: presetLabel,
+      period: {
+        year: y,
+        month: opts.month,
+        rangeStart: start.toISOString(),
+        rangeEnd: end.toISOString(),
+      },
+      revenue: ent.revenueTotal,
+      expenses: ent.expenseTotal,
+      netProfit: ent.netProfit,
+      profitMarginPercent: ent.profitMarginPercent,
+      revenueByCategory: ent.revenueByCategory,
+      expensesByCategory: ent.expensesByCategory,
+      monthlyBreakdown: ent.monthlyBreakdown,
+      formulas: ent.formulas,
+      recordCounts: ent.recordCounts,
+      attachmentGaps: {
+        salesWithoutInvoiceOrVaultAttachment: null,
+        expensesWithoutReceipt: null,
+        note: "Attachment gaps require a linked mobile client (sales/expense records).",
+      },
+      citNote: ent.formulas.citNote,
     };
   },
 
@@ -363,14 +547,17 @@ export const enterpriseFinancialsService = {
     return {
       period: { year: y, month: month ?? undefined },
       assets: {
-        currentAssets: summary.totalIncome * 0.3,
-        fixedAssets: summary.totalIncome * 0.2,
-        total: summary.totalIncome * 0.5,
+        currentAssets:
+          summary.totalIncome * BALANCE_SHEET_MOCK_CURRENT_ASSETS_OF_INCOME,
+        fixedAssets:
+          summary.totalIncome * BALANCE_SHEET_MOCK_FIXED_ASSETS_OF_INCOME,
+        total: summary.totalIncome * BALANCE_SHEET_MOCK_TOTAL_ASSETS_OF_INCOME,
       },
       liabilities: {
-        currentLiabilities: summary.totalExpenses * 0.2,
+        currentLiabilities:
+          summary.totalExpenses * BALANCE_SHEET_MOCK_LIABILITIES_OF_EXPENSE,
         longTermLiabilities: 0,
-        total: summary.totalExpenses * 0.2,
+        total: summary.totalExpenses * BALANCE_SHEET_MOCK_LIABILITIES_OF_EXPENSE,
       },
       equity: summary.netProfit,
     };
@@ -614,7 +801,7 @@ export const enterpriseFinancialsService = {
         vendorTin: null,
         subtotalExclVat: doc.subTotalExclVat ? decimalToNumber(doc.subTotalExclVat) : decimalToNumber(doc.amount),
         vatAmount: doc.vatCalculated ? decimalToNumber(doc.vatCalculated) : 0,
-        vatRate: "7.5%",
+        vatRate: `${VAT_RATE_PERCENT}%`,
       },
       impactSummary: {
         eligibleAmount: decimalToNumber(doc.amount),

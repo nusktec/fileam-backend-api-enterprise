@@ -1,11 +1,12 @@
 import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
-
-const VAT_RATE = 7.5;
-const WHT_RATE_SERVICES = 5;
-const CIT_RATE_SMALL = 20;
-const VAT_THRESHOLD = 100_000_000;
-const CIT_THRESHOLD = 50_000_000;
+import {
+  PERCENT,
+  WHT_RATE_SERVICES_PERCENT,
+  CIT_RATE_SMALL_COMPANY_PERCENT,
+  VAT_TURNOVER_THRESHOLD_NGN,
+  CIT_PROFIT_THRESHOLD_NGN,
+} from "../../constants/percentages";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -48,14 +49,21 @@ export const taxComputationService = {
     const netProfit = totalIncome - totalExpenses;
 
     const netVatPayable = outputVat - inputVatClaimable;
-    const estimatedWhtDeducted = (serviceIncome * WHT_RATE_SERVICES) / 100;
+    const estimatedWhtDeducted =
+      (serviceIncome * WHT_RATE_SERVICES_PERCENT) / PERCENT;
     const monthlyProfit = netProfit;
     const annualizedProfit = monthlyProfit * 12;
-    const estimatedAnnualCit = (annualizedProfit * CIT_RATE_SMALL) / 100;
+    const estimatedAnnualCit =
+      (annualizedProfit * CIT_RATE_SMALL_COMPANY_PERCENT) / PERCENT;
 
-    const percentOfVatThreshold = (totalIncome / VAT_THRESHOLD) * 100;
-    const amountNeededToVatThreshold = Math.max(0, VAT_THRESHOLD - totalIncome);
-    const percentOfCitThreshold = (annualizedProfit / CIT_THRESHOLD) * 100;
+    const percentOfVatThreshold =
+      (totalIncome / VAT_TURNOVER_THRESHOLD_NGN) * PERCENT;
+    const amountNeededToVatThreshold = Math.max(
+      0,
+      VAT_TURNOVER_THRESHOLD_NGN - totalIncome,
+    );
+    const percentOfCitThreshold =
+      (annualizedProfit / CIT_PROFIT_THRESHOLD_NGN) * PERCENT;
 
     return {
       period: {
@@ -70,9 +78,9 @@ export const taxComputationService = {
       },
       vat: {
         summary: netVatPayable,
-        belowThreshold: totalIncome < VAT_THRESHOLD,
+        belowThreshold: totalIncome < VAT_TURNOVER_THRESHOLD_NGN,
         income: totalIncome,
-        vatThreshold: VAT_THRESHOLD,
+        vatThreshold: VAT_TURNOVER_THRESHOLD_NGN,
         percentOfThreshold: percentOfVatThreshold,
         amountNeededToThreshold: amountNeededToVatThreshold,
         outputVat,
@@ -82,17 +90,17 @@ export const taxComputationService = {
       wht: {
         summary: estimatedWhtDeducted,
         serviceIncome,
-        whtRateServices: WHT_RATE_SERVICES,
+        whtRateServices: WHT_RATE_SERVICES_PERCENT,
         estimatedWhtDeducted,
       },
       cit: {
         summary: estimatedAnnualCit,
-        smallCompanyRate: CIT_RATE_SMALL,
-        citThreshold: CIT_THRESHOLD,
+        smallCompanyRate: CIT_RATE_SMALL_COMPANY_PERCENT,
+        citThreshold: CIT_PROFIT_THRESHOLD_NGN,
         percentOfThreshold: percentOfCitThreshold,
         monthlyProfit,
         annualizedProfit,
-        citRate: CIT_RATE_SMALL,
+        citRate: CIT_RATE_SMALL_COMPANY_PERCENT,
         estimatedAnnualCit,
       },
     };

@@ -1,5 +1,10 @@
 import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
+import {
+  PERCENT,
+  WHT_RATE_SERVICES_PERCENT,
+  CIT_RATE_STANDARD_PERCENT,
+} from "../../constants/percentages";
 
 const VAT_TYPES = ["Standard Rate", "Reduced Rate", "Zero Rate", "Exempt"];
 const VAT_PERIODS = ["Monthly", "Quarterly", "Annual"];
@@ -86,7 +91,7 @@ export const enterpriseTaxComputationService = {
       if (purchaseAmountExclVat === 0) purchaseAmountExclVat = decimalToNumber(expenses._sum.totalAmount);
     }
 
-    const rate = data.vatRate / 100;
+    const rate = data.vatRate / PERCENT;
     const salesVat = salesAmountExclVat * rate;
     const purchaseVat = purchaseAmountExclVat * rate;
     const netVatPayable = salesVat - purchaseVat;
@@ -430,7 +435,7 @@ export const enterpriseTaxComputationService = {
           enabled: true,
           taxableProfit,
           citRate,
-          citPayable: (taxableProfit * 12 * citRate) / 100,
+          citPayable: (taxableProfit * 12 * citRate) / PERCENT,
         };
       }
 
@@ -476,18 +481,18 @@ export const enterpriseTaxComputationService = {
           enabled: true,
           serviceIncome: 0,
           estimatedWhtDeducted: 0,
-          whtRate: 5,
+          whtRate: WHT_RATE_SERVICES_PERCENT,
         };
       }
 
       if (taxConfig?.cit ?? true) {
         const taxableProfit = Math.max(0, summary.netProfit);
-        const citRate = 30;
+        const citRate = CIT_RATE_STANDARD_PERCENT;
         result.cit = {
           enabled: true,
           taxableProfit,
           citRate,
-          citPayable: taxableProfit * (citRate / 100),
+          citPayable: taxableProfit * (citRate / PERCENT),
         };
       }
 
@@ -594,7 +599,7 @@ export const enterpriseTaxComputationService = {
     return {
       period: { year: y, month: m, label: `${new Date(y, m - 1).toLocaleString("default", { month: "long" })} ${y}` },
       serviceIncome: 0,
-      whtRate: 5,
+      whtRate: WHT_RATE_SERVICES_PERCENT,
       estimatedWhtDeducted: 0,
       note: "WHT requires sales/expense data. Add transactions to compute.",
     };
@@ -636,14 +641,14 @@ export const enterpriseTaxComputationService = {
     const summary = await enterpriseFinancialsService.getSummary(companyId);
     if (!summary) return null;
     const taxableProfit = Math.max(0, summary.netProfit);
-    const citRate = 30;
+    const citRate = CIT_RATE_STANDARD_PERCENT;
     return {
       period: { year: y, month: m, label: `${new Date(y, m - 1).toLocaleString("default", { month: "long" })} ${y}` },
       monthlyProfit: summary.netProfit,
       annualizedProfit: summary.netProfit * 12,
       taxableProfit,
       citRate,
-      estimatedAnnualCit: taxableProfit * (citRate / 100),
+      estimatedAnnualCit: taxableProfit * (citRate / PERCENT),
     };
   },
 

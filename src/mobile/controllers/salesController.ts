@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { matchedData } from "express-validator";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
@@ -135,5 +136,69 @@ export const createSale = async (
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to add sale", null));
+  }
+};
+
+export const updateSale = async (req: IRequest, res: Response): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const saleId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const body = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as Record<string, unknown>;
+    const keys = Object.keys(body).filter(
+      (k) => body[k] !== undefined && k !== "",
+    );
+    if (keys.length === 0) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Provide at least one field to update", null));
+      return;
+    }
+    const b = req.body ?? {};
+    const customerName = b.customerName ?? b.Customer_name;
+    const customerId = b.customerId ?? b.Customer_id;
+    const updated = await salesService.update(userId, saleId!, {
+      description: body.description as string | undefined,
+      category: body.category as string | undefined,
+      customerName:
+        customerName !== undefined
+          ? customerName === null || String(customerName).trim() === ""
+            ? null
+            : String(customerName).trim()
+          : undefined,
+      customerId:
+        customerId !== undefined
+          ? customerId === null || String(customerId).trim() === ""
+            ? null
+            : String(customerId).trim()
+          : undefined,
+      amount: body.amount != null ? Number(body.amount) : undefined,
+      paymentType: body.paymentType as string | undefined,
+      date: body.date as string | undefined,
+      vatableIncome:
+        body.vatableIncome !== undefined
+          ? Boolean(body.vatableIncome)
+          : undefined,
+      serviceIncome:
+        body.serviceIncome !== undefined
+          ? Boolean(body.serviceIncome)
+          : undefined,
+      status: body.status as string | undefined,
+    });
+    if (!updated) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Sale not found", null));
+      return;
+    }
+    res.status(HttpStatusCode.OK).json(outJson(true, "Sale updated", updated));
+  } catch {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to update sale", null));
   }
 };

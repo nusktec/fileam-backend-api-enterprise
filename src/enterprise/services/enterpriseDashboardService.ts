@@ -1,5 +1,11 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import {
+  ENTERPRISE_POTENTIAL_TAX_SAVINGS_CAP_NGN,
+  ENTERPRISE_POTENTIAL_TAX_SAVINGS_RATE,
+  ENTERPRISE_POTENTIAL_TAX_SAVINGS_WEEKLY_CAP_NGN,
+  ENTERPRISE_POTENTIAL_TAX_SAVINGS_WEEKLY_RATE,
+} from "../../constants/percentages";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -106,8 +112,14 @@ export async function getGlobalDashboard(consultantUserId: string) {
     if (isOverdue) complianceRiskCount++;
   }
 
-  potentialTaxSavings = Math.min(taxDueThisMonth * 0.05, 500000);
-  potentialTaxSavingsThisWeek = Math.min(potentialTaxSavings * 0.2, 100000);
+  potentialTaxSavings = Math.min(
+    taxDueThisMonth * ENTERPRISE_POTENTIAL_TAX_SAVINGS_RATE,
+    ENTERPRISE_POTENTIAL_TAX_SAVINGS_CAP_NGN,
+  );
+  potentialTaxSavingsThisWeek = Math.min(
+    potentialTaxSavings * ENTERPRISE_POTENTIAL_TAX_SAVINGS_WEEKLY_RATE,
+    ENTERPRISE_POTENTIAL_TAX_SAVINGS_WEEKLY_CAP_NGN,
+  );
 
   const conns = connectionsWithUsers.filter((c) => c.createdAt >= weekStart);
   totalClientsThisWeek = conns.length;

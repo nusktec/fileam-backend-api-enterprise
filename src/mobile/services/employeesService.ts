@@ -7,6 +7,8 @@ import {
   computeNhf,
   PAYE_DUE_DAY,
 } from "../../constants/payroll";
+import { isContractorEmployment } from "../../constants/employmentTypes";
+import { PERCENT, WHT_RATE_SERVICES_PERCENT } from "../../constants/percentages";
 
 const EMPLOYEE_COUNTER_ID = "employee_id";
 
@@ -69,10 +71,14 @@ export const employeesService = {
     const list = employees.map((e) => {
       const gross = grossMonthly(e);
       monthlyPayroll += gross;
-      const pensionEmp = computePensionEmployee(gross);
-      const nhf = computeNhf(decimalToNumber(e.basicSalary));
-      const paye = computePayeMonthly(gross * 12);
-      const net = gross - pensionEmp - nhf - paye;
+      const contractor = isContractorEmployment(e.employmentType);
+      const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
+      const nhf = contractor ? 0 : computeNhf(decimalToNumber(e.basicSalary));
+      const paye = contractor ? 0 : computePayeMonthly(gross * 12);
+      const whtEstimated = contractor
+        ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
+        : 0;
+      const net = gross - pensionEmp - nhf - paye - whtEstimated;
       return {
         id: e.id,
         fullName: e.fullName,
@@ -81,6 +87,7 @@ export const employeesService = {
         employeeId: e.employeeId,
         grossPay: gross,
         paye,
+        estimatedWhtMonthly: contractor ? whtEstimated : undefined,
         netPay: net,
       };
     });
@@ -100,8 +107,13 @@ export const employeesService = {
     const employees = await prisma.employee.findMany({ where: { userId } });
     let totalPaye = 0;
     let totalPension = 0;
+    let totalContractorWht = 0;
     for (const e of employees) {
       const gross = grossMonthly(e);
+      if (isContractorEmployment(e.employmentType)) {
+        totalContractorWht += (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT;
+        continue;
+      }
       totalPaye += computePayeMonthly(gross * 12);
       totalPension +=
         computePensionEmployee(gross) + computePensionEmployer(gross);
@@ -114,12 +126,17 @@ export const employeesService = {
         amount: totalPaye,
         status: "Pending",
         dueDate,
-        note: "Due 10th of next month",
+        note: "PAYE applies to Part time / Full time only; contractors are excluded (see contractorWht).",
+      },
+      contractorWht: {
+        amount: totalContractorWht,
+        status: "Pending",
+        note: `Estimated WHT on professional fees at ${WHT_RATE_SERVICES_PERCENT}% of gross (Contract employment).`,
       },
       pension: {
         amount: totalPension,
         status: "Pending",
-        note: "Employee (8%) + Employer (10%) contribution",
+        note: "Employee (8%) + Employer (10%); contractors excluded from pension totals here.",
       },
     };
   },
@@ -131,11 +148,15 @@ export const employeesService = {
     if (!e) return null;
     const basic = decimalToNumber(e.basicSalary);
     const gross = grossMonthly(e);
-    const pensionEmp = computePensionEmployee(gross);
-    const nhf = computeNhf(basic);
-    const paye = computePayeMonthly(gross * 12);
-    const pensionEmployer = computePensionEmployer(gross);
-    const net = gross - pensionEmp - nhf - paye;
+    const contractor = isContractorEmployment(e.employmentType);
+    const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
+    const nhf = contractor ? 0 : computeNhf(basic);
+    const paye = contractor ? 0 : computePayeMonthly(gross * 12);
+    const whtEstimated = contractor
+      ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
+      : 0;
+    const pensionEmployer = contractor ? 0 : computePensionEmployer(gross);
+    const net = gross - pensionEmp - nhf - paye - whtEstimated;
     const totalMonthlyCost = gross + pensionEmployer;
     return {
       id: e.id,
@@ -159,6 +180,7 @@ export const employeesService = {
         pensionEmployee: pensionEmp,
         nhf,
         paye,
+        estimatedWhtMonthly: contractor ? whtEstimated : undefined,
         netPay: net,
       },
       employerObligations: {

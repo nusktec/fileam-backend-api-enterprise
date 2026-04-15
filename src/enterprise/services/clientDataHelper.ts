@@ -1,5 +1,6 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import { PERCENT, KPI_PERCENT_ROUNDING_FACTOR } from "../../constants/percentages";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -151,4 +152,140 @@ export async function getClientMonthlyCashFlow(userId: string, year: number) {
     year,
     value,
   }));
+}
+
+export type ClientPlRange = { start: Date; end: Date };
+
+/** Profit & loss for a client in [start, end] (inclusive by date). */
+export async function getClientPlBreakdown(userId: string, range: ClientPlRange) {
+  const start = new Date(range.start);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(range.end);
+  end.setHours(23, 59, 59, 999);
+
+  const [sales, expenses] = await Promise.all([
+    prisma.sale.findMany({
+      where: { userId, saleDate: { gte: start, lte: end } },
+    }),
+    prisma.expense.findMany({
+      where: { userId, expenseDate: { gte: start, lte: end } },
+    }),
+  ]);
+
+  const revenueTotal = sales.reduce(
+    (s, x) => s + decimalToNumber(x.totalAmount),
+    0,
+  );
+  const expenseTotal = expenses.reduce(
+    (s, x) => s + decimalToNumber(x.totalAmount),
+    0,
+  );
+  const netProfit = revenueTotal - expenseTotal;
+
+  const revenueByCategory: Record<string, number> = {};
+  for (const s of sales) {
+    const c = s.category?.trim() || "Uncategorized";
+    revenueByCategory[c] =
+      (revenueByCategory[c] ?? 0) + decimalToNumber(s.totalAmount);
+  }
+  const expensesByCategory: Record<string, number> = {};
+  for (const e of expenses) {
+    const c = e.category?.trim() || "Other";
+    expensesByCategory[c] =
+      (expensesByCategory[c] ?? 0) + decimalToNumber(e.totalAmount);
+  }
+
+  const byMonthKey = new Map<
+    string,
+    { revenue: number; expenses: number; net: number }
+  >();
+  for (const s of sales) {
+    const d = new Date(s.saleDate);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const row = byMonthKey.get(key) ?? { revenue: 0, expenses: 0, net: 0 };
+    row.revenue += decimalToNumber(s.totalAmount);
+    row.net = row.revenue - row.expenses;
+    byMonthKey.set(key, row);
+  }
+  for (const e of expenses) {
+    const d = new Date(e.expenseDate);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const row = byMonthKey.get(key) ?? { revenue: 0, expenses: 0, net: 0 };
+    row.expenses += decimalToNumber(e.totalAmount);
+    row.net = row.revenue - row.expenses;
+    byMonthKey.set(key, row);
+  }
+
+  const monthlyBreakdown = [...byMonthKey.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([period, v]) => ({
+      period,
+      revenue: v.revenue,
+      expenses: v.expenses,
+      netProfit: v.net,
+    }));
+
+  const profitMarginPercent =
+    revenueTotal > 0
+      ? Math.round(
+          (netProfit / revenueTotal) *
+            PERCENT *
+            KPI_PERCENT_ROUNDING_FACTOR,
+        ) / KPI_PERCENT_ROUNDING_FACTOR
+      : 0;
+
+  const formulas = {
+    netProfit: "sum(sale.totalAmount for saleDate in range) − sum(expense.totalAmount for expenseDate in range)",
+    profitMarginPercent:
+      "round((netProfit ÷ revenueTotal) × 100, 1 decimal) or 0 if revenue is 0",
+    revenueByCategory: "Per sale row: add totalAmount to bucket category || 'Uncategorized'",
+    expensesByCategory: "Per expense row: add totalAmount to bucket category || 'Other'",
+  };
+
+  return {
+    range: { start: start.toISOString(), end: end.toISOString() },
+    revenueTotal,
+    expenseTotal,
+    netProfit,
+    profitMarginPercent,
+    revenueByCategory,
+    expensesByCategory,
+    monthlyBreakdown,
+    formulas,
+    recordCounts: {
+      sales: sales.length,
+      expenses: expenses.length,
+    },
+  };
+}
+
+/** Sales with no documentUrl and no evidenceVaultId; expenses with no receiptUrl — in range. */
+export async function getClientAttachmentGaps(userId: string, range: ClientPlRange) {
+  const start = new Date(range.start);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(range.end);
+  end.setHours(23, 59, 59, 999);
+
+  const [salesMissing, expensesMissing] = await Promise.all([
+    prisma.sale.count({
+      where: {
+        userId,
+        saleDate: { gte: start, lte: end },
+        documentUrl: null,
+        evidenceVaultId: null,
+      },
+    }),
+    prisma.expense.count({
+      where: {
+        userId,
+        expenseDate: { gte: start, lte: end },
+        receiptUrl: null,
+      },
+    }),
+  ]);
+
+  return {
+    salesWithoutInvoiceOrVaultAttachment: salesMissing,
+    expensesWithoutReceipt: expensesMissing,
+  };
 }

@@ -12,6 +12,53 @@ function periodLabel(year: number, month: number): string {
 
 export type FilingDisplayStatus = "overdue" | "submitted" | "paid" | "pending";
 
+/** Filing record readiness: submitted, primary doc/receipt, vault evidence, amount set. */
+function computeFilingCompletionPercent(p: {
+  submittedAt: Date | null;
+  documentUrl: string | null;
+  evidenceVaultId: string | null;
+  receiptUrl: string | null;
+  totalPayable: Decimal | null;
+}): number {
+  let score = 0;
+  const max = 4;
+  if (p.submittedAt) score += 1;
+  if (p.documentUrl || p.receiptUrl) score += 1;
+  if (p.evidenceVaultId) score += 1;
+  if (decimalToNumber(p.totalPayable) > 0) score += 1;
+  return Math.round((score / max) * 100);
+}
+
+async function getPeriodAttachmentGaps(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<{
+  salesMissingEvidence: number;
+  expensesMissingReceipt: number;
+}> {
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+  const [salesMissingEvidence, expensesMissingReceipt] = await Promise.all([
+    prisma.sale.count({
+      where: {
+        userId,
+        saleDate: { gte: start, lte: end },
+        documentUrl: null,
+        evidenceVaultId: null,
+      },
+    }),
+    prisma.expense.count({
+      where: {
+        userId,
+        expenseDate: { gte: start, lte: end },
+        receiptUrl: null,
+      },
+    }),
+  ]);
+  return { salesMissingEvidence, expensesMissingReceipt };
+}
+
 function deriveDisplayStatus(payable: {
   status: string;
   submittedAt: Date | null;
@@ -77,31 +124,47 @@ export const filingsService = {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    let items = payables.map((p) => {
-      const totalPayable = decimalToNumber(p.totalPayable);
-      const totalPaid = p.payments.reduce(
-        (s, r) => s + decimalToNumber(r.amountPaid),
-        0,
-      );
-      const displayStatus = deriveDisplayStatus({
-        status: p.status,
-        submittedAt: p.submittedAt,
-        filingDueDate: p.filingDueDate,
-        totalPayable,
-        totalPaid,
-      });
-      return {
-        id: p.id,
-        taxType: p.taxType,
-        periodYear: p.periodYear,
-        periodMonth: p.periodMonth,
-        periodLabel: periodLabel(p.periodYear, p.periodMonth),
-        amount: totalPayable,
-        status: displayStatus,
-        dueDate: p.filingDueDate,
-        submittedDate: p.submittedAt ?? undefined,
-      };
-    });
+    let items = await Promise.all(
+      payables.map(async (p) => {
+        const totalPayable = decimalToNumber(p.totalPayable);
+        const totalPaid = p.payments.reduce(
+          (s, r) => s + decimalToNumber(r.amountPaid),
+          0,
+        );
+        const displayStatus = deriveDisplayStatus({
+          status: p.status,
+          submittedAt: p.submittedAt,
+          filingDueDate: p.filingDueDate,
+          totalPayable,
+          totalPaid,
+        });
+        const completionPercent = computeFilingCompletionPercent({
+          submittedAt: p.submittedAt,
+          documentUrl: p.documentUrl,
+          evidenceVaultId: p.evidenceVaultId,
+          receiptUrl: p.receiptUrl,
+          totalPayable: p.totalPayable,
+        });
+        const periodAttachmentGaps = await getPeriodAttachmentGaps(
+          userId,
+          p.periodYear,
+          p.periodMonth,
+        );
+        return {
+          id: p.id,
+          taxType: p.taxType,
+          periodYear: p.periodYear,
+          periodMonth: p.periodMonth,
+          periodLabel: periodLabel(p.periodYear, p.periodMonth),
+          amount: totalPayable,
+          status: displayStatus,
+          dueDate: p.filingDueDate,
+          submittedDate: p.submittedAt ?? undefined,
+          completionPercent,
+          periodAttachmentGaps,
+        };
+      }),
+    );
 
     const statusFilter = (filters?.status || "").toLowerCase();
     if (statusFilter && statusFilter !== "all") {
@@ -141,6 +204,18 @@ export const filingsService = {
       totalPayable,
       totalPaid,
     });
+    const completionPercent = computeFilingCompletionPercent({
+      submittedAt: p.submittedAt,
+      documentUrl: p.documentUrl,
+      evidenceVaultId: p.evidenceVaultId,
+      receiptUrl: p.receiptUrl,
+      totalPayable: p.totalPayable,
+    });
+    const periodAttachmentGaps = await getPeriodAttachmentGaps(
+      userId,
+      p.periodYear,
+      p.periodMonth,
+    );
 
     return {
       id: p.id,
@@ -157,6 +232,8 @@ export const filingsService = {
       stateOfOperation: p.stateOfOperation ?? undefined,
       vatRegistrationNumber: p.vatRegistrationNumber ?? undefined,
       receiptUrl: p.receiptUrl ?? undefined,
+      completionPercent,
+      periodAttachmentGaps,
       totalPaid,
       currency: p.currency,
       timeline: p.timeline.map((e) => ({

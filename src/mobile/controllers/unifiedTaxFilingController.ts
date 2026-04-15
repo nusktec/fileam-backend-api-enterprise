@@ -10,8 +10,8 @@ import {
 import { filingTaxTypeService } from "../../enterprise/services/filingTaxTypeService";
 import { vatFilingService } from "../services/vatFilingService";
 import { whtFilingService } from "../services/whtFilingService";
-import { genericTaxFilingService } from "../../services/genericTaxFilingService";
 import { upsertMinimalFilingDraft } from "../../services/genericFilingDraftService";
+import { submitUnifiedTaxFilingForUser } from "../services/unifiedTaxFilingSubmitService";
 
 function paramToString(v: string | string[] | undefined): string {
   if (v == null) return "";
@@ -193,126 +193,21 @@ export async function submitUnifiedTaxFiling(
 ): Promise<void> {
   try {
     const taxType = normalizeTaxType(req.params.taxType);
-    if (!(await filingTaxTypeService.isActiveCode(taxType))) {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(
-          outJson(
-            false,
-            "Unknown or inactive tax type; use GET /mobile/filings/constants",
-            null,
-          ),
-        );
-      return;
-    }
     const userId = getAuthUserId(req);
-    const body = req.body ?? {};
-    const {
-      periodYear,
-      periodMonth,
-      amount,
-      totalWht,
-      dueDate,
-      paymentStatus,
-      receiptUrl,
-      documentUrl,
-      evidenceVaultId,
-      stateOfOperation,
-      vatRegistrationNumber,
-    } = body;
-
-    if (periodYear == null || periodMonth == null) {
+    const result = await submitUnifiedTaxFilingForUser(
+      userId,
+      taxType,
+      req.body ?? {},
+    );
+    if (!result.ok) {
       res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(outJson(false, "periodYear and periodMonth required", null));
+        .status(result.status)
+        .json(outJson(false, result.message, null));
       return;
     }
-
-    const py = Number(periodYear);
-    const pm = Number(periodMonth);
-    const paid = paymentStatus === "paid" || paymentStatus === "Paid";
-    const due = dueDate
-      ? new Date(dueDate)
-      : new Date(py, pm, 21);
-
-    if (taxType === "VAT") {
-      if (amount == null) {
-        res
-          .status(HttpStatusCode.BAD_REQUEST)
-          .json(outJson(false, "amount is required for VAT", null));
-        return;
-      }
-      const data = await vatFilingService.submit(userId, {
-        periodYear: py,
-        periodMonth: pm,
-        amount: Number(amount),
-        dueDate: due,
-        paymentStatus: paid ? "paid" : "not_paid",
-        receiptUrl,
-        documentUrl,
-        evidenceVaultId,
-        stateOfOperation,
-        vatRegistrationNumber,
-      });
-      res
-        .status(HttpStatusCode.OK)
-        .json(outJson(true, "Filing submitted", { taxType, data }));
-      return;
-    }
-
-    if (taxType === "WHT") {
-      const whtAmount =
-        totalWht != null ? Number(totalWht) : amount != null ? Number(amount) : NaN;
-      if (Number.isNaN(whtAmount)) {
-        res
-          .status(HttpStatusCode.BAD_REQUEST)
-          .json(
-            outJson(
-              false,
-              "totalWht or amount is required for WHT (total WHT due)",
-              null,
-            ),
-          );
-        return;
-      }
-      const data = await whtFilingService.submit(userId, {
-        periodYear: py,
-        periodMonth: pm,
-        totalWht: whtAmount,
-        dueDate: due,
-        paymentStatus: paid ? "paid" : "not_paid",
-        receiptUrl,
-        documentUrl,
-        evidenceVaultId,
-      });
-      res
-        .status(HttpStatusCode.OK)
-        .json(outJson(true, "Filing submitted", { taxType, data }));
-      return;
-    }
-
-    if (amount == null) {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(outJson(false, "amount is required for this tax type", null));
-      return;
-    }
-
-    const data = await genericTaxFilingService.submit(userId, taxType, {
-      periodYear: py,
-      periodMonth: pm,
-      amount: Number(amount),
-      dueDate: due,
-      paymentStatus: paid ? "paid" : "not_paid",
-      receiptUrl,
-      documentUrl,
-      evidenceVaultId,
-      stateOfOperation,
-      vatRegistrationNumber,
-    });
     res
       .status(HttpStatusCode.OK)
-      .json(outJson(true, "Filing submitted", { taxType, data }));
+      .json(outJson(true, "Filing submitted", { taxType: result.taxType, data: result.data }));
   } catch {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)

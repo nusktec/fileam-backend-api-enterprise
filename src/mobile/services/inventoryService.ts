@@ -8,8 +8,14 @@ import {
 } from "../../constants/inventory";
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 import { SALE_CATEGORIES } from "../../constants/saleCategories";
+import {
+  PERCENT,
+  VAT_RATE_PERCENT,
+  INVENTORY_MOVING_LOW_STOCK_SHARE_PERCENT,
+  PERCENT_TWO_DECIMAL_ROUND,
+  MARGIN_PERCENT_NUMERATOR,
+} from "../../constants/percentages";
 
-const VAT_RATE_PERCENT = 7.5;
 const EXPENSE_COUNTER_ID = "expense_number";
 
 async function createLinkedSaleInTx(
@@ -41,7 +47,7 @@ async function createLinkedSaleInTx(
     ? new Decimal(VAT_RATE_PERCENT)
     : new Decimal(0);
   const vatAmount = input.vatableIncome
-    ? amount.mul(VAT_RATE_PERCENT / 100)
+    ? amount.mul(VAT_RATE_PERCENT / PERCENT)
     : new Decimal(0);
   const totalAmount = amount.add(vatAmount);
   const sale = await tx.sale.create({
@@ -246,7 +252,10 @@ export const inventoryService = {
       const alert = d(it.lowStockAlertLevel);
       if (qty <= 0 || qty <= alert) continue;
       const sold60 = await soldQtyInPeriod(it.id, velocityFrom, now);
-      const threshold = Math.max(1, Math.floor(qty * 0.05));
+      const threshold = Math.max(
+        1,
+        Math.floor(qty * (INVENTORY_MOVING_LOW_STOCK_SHARE_PERCENT / PERCENT)),
+      );
       if (sold60 < threshold) {
         movingLowCandidates.push({
           id: it.id,
@@ -261,7 +270,7 @@ export const inventoryService = {
     const potentialProfit = potentialRevenue - stockCost;
     const averageMarginPct =
       marginDenominator > 0
-        ? (marginNumerator / marginDenominator) * 100
+        ? (marginNumerator / marginDenominator) * PERCENT
         : 0;
 
     return {
@@ -275,7 +284,9 @@ export const inventoryService = {
         potentialRevenue,
         stockCost,
         potentialProfit,
-        averageMarginPct: Math.round(averageMarginPct * 100) / 100,
+        averageMarginPct:
+          Math.round(averageMarginPct * PERCENT_TWO_DECIMAL_ROUND) /
+          PERCENT_TWO_DECIMAL_ROUND,
       },
     };
   },
@@ -296,7 +307,10 @@ export const inventoryService = {
       const alert = d(it.lowStockAlertLevel);
       if (qty <= 0 || qty <= alert) continue;
       const sold60 = await soldQtyInPeriod(it.id, velocityFrom, now);
-      const threshold = Math.max(1, Math.floor(qty * 0.05));
+      const threshold = Math.max(
+        1,
+        Math.floor(qty * (INVENTORY_MOVING_LOW_STOCK_SHARE_PERCENT / PERCENT)),
+      );
       if (sold60 < threshold) movingLow.push(it);
     }
 
@@ -449,7 +463,9 @@ export const inventoryService = {
         profitIfAllSold,
         marginPct:
           revenueIfAllSold > 0
-            ? Math.round((profitIfAllSold / revenueIfAllSold) * 10000) / 100
+            ? Math.round(
+                (profitIfAllSold / revenueIfAllSold) * MARGIN_PERCENT_NUMERATOR,
+              ) / PERCENT_TWO_DECIMAL_ROUND
             : 0,
       },
       recentMovements: recentMovements.map((m) => ({

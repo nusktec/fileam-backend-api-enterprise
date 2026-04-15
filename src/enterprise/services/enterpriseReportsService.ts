@@ -1,5 +1,6 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import { PERCENT } from "../../constants/percentages";
 import type { FullReportData } from "../../services/template/pdfTemplates";
 import { mergePdfBuffers } from "../../utils/mergePdfBuffers";
 import type { ParsedDateRange } from "../../utils/dateRangeQuery";
@@ -90,7 +91,7 @@ export async function getCitComputationReport(linkedUserId: string) {
     now.getMonth() + 1,
   );
   const taxableProfit = Math.max(0, summary.netProfit);
-  const citPayable = taxableProfit * (comp.cit.citRate / 100);
+  const citPayable = taxableProfit * (comp.cit.citRate / PERCENT);
   return {
     netProfit: summary.netProfit,
     taxAdjustments: 0,

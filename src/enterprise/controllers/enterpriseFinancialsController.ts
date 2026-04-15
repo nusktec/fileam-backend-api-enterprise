@@ -115,12 +115,24 @@ export async function getProfitAndLoss(
   const companyId = req.companyId!;
   const year = req.query.year ? Number(req.query.year) : undefined;
   const month = req.query.month ? Number(req.query.month) : undefined;
+  const preset = req.query.preset
+    ? String(req.query.preset)
+    : undefined;
+  const dateFrom = req.query.dateFrom
+    ? String(req.query.dateFrom)
+    : undefined;
+  const dateTo = req.query.dateTo ? String(req.query.dateTo) : undefined;
   try {
     const data = await enterpriseFinancialsService.getProfitAndLoss(
       companyId,
-      year,
-      month,
       req.linkedUserId,
+      {
+        year,
+        month,
+        preset,
+        dateFrom,
+        dateTo,
+      },
     );
     if (!data) {
       sendNotFound(res, "Company not found");

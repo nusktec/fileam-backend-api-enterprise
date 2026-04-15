@@ -1,5 +1,9 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import {
+  PERCENT,
+  KPI_PERCENT_ROUNDING_FACTOR,
+} from "../../constants/percentages";
 import { taxComputationService } from "./taxComputationService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -46,22 +50,26 @@ export const analyticsService = {
 
     const percentChangeIncome =
       previous.income > 0
-        ? ((current.income - previous.income) / previous.income) * 100
+        ? ((current.income - previous.income) / previous.income) * PERCENT
         : 0;
     const percentChangeExpenses =
       previous.expenses > 0
-        ? ((current.expenses - previous.expenses) / previous.expenses) * 100
+        ? ((current.expenses - previous.expenses) / previous.expenses) * PERCENT
         : 0;
     const percentChangeNetProfit =
       previous.netProfit !== 0
         ? ((current.netProfit - previous.netProfit) /
             Math.abs(previous.netProfit)) *
-          100
+          PERCENT
         : 0;
     const margin =
-      current.income > 0 ? (current.netProfit / current.income) * 100 : 0;
+      current.income > 0
+        ? (current.netProfit / current.income) * PERCENT
+        : 0;
     const prevMargin =
-      previous.income > 0 ? (previous.netProfit / previous.income) * 100 : 0;
+      previous.income > 0
+        ? (previous.netProfit / previous.income) * PERCENT
+        : 0;
     const percentChangeMargin = prevMargin !== 0 ? margin - prevMargin : 0;
 
     const incomeTrend = await this.getIncomeTrend(userId, year, month);
@@ -85,16 +93,35 @@ export const analyticsService = {
         income: current.income,
         expenses: current.expenses,
         netProfit: current.netProfit,
-        margin: Math.round(margin * 10) / 10,
-        percentChangeIncome: Math.round(percentChangeIncome * 10) / 10,
-        percentChangeExpenses: Math.round(percentChangeExpenses * 10) / 10,
-        percentChangeNetProfit: Math.round(percentChangeNetProfit * 10) / 10,
-        percentChangeMargin: Math.round(percentChangeMargin * 10) / 10,
+        margin:
+          Math.round(margin * KPI_PERCENT_ROUNDING_FACTOR) /
+          KPI_PERCENT_ROUNDING_FACTOR,
+        percentChangeIncome:
+          Math.round(percentChangeIncome * KPI_PERCENT_ROUNDING_FACTOR) /
+          KPI_PERCENT_ROUNDING_FACTOR,
+        percentChangeExpenses:
+          Math.round(percentChangeExpenses * KPI_PERCENT_ROUNDING_FACTOR) /
+          KPI_PERCENT_ROUNDING_FACTOR,
+        percentChangeNetProfit:
+          Math.round(percentChangeNetProfit * KPI_PERCENT_ROUNDING_FACTOR) /
+          KPI_PERCENT_ROUNDING_FACTOR,
+        percentChangeMargin:
+          Math.round(percentChangeMargin * KPI_PERCENT_ROUNDING_FACTOR) /
+          KPI_PERCENT_ROUNDING_FACTOR,
       },
       profitAndLoss: {
         revenue: current.income,
         operatingExpenses: current.expenses,
         netProfit: current.netProfit,
+        /** Net profit as % of revenue (0–100), one decimal; uses PERCENT + KPI rounding. */
+        profitMarginPercent:
+          current.income > 0
+            ? Math.round(
+                (current.netProfit / current.income) *
+                  PERCENT *
+                  KPI_PERCENT_ROUNDING_FACTOR,
+              ) / KPI_PERCENT_ROUNDING_FACTOR
+            : 0,
       },
       incomeTrend,
       expenseBreakdown,
@@ -180,7 +207,9 @@ export const analyticsService = {
       category: c.category,
       amount: decimalToNumber(c._sum.totalAmount),
       percentageOfTotal:
-        total > 0 ? (decimalToNumber(c._sum.totalAmount) / total) * 100 : 0,
+        total > 0
+          ? (decimalToNumber(c._sum.totalAmount) / total) * PERCENT
+          : 0,
     }));
   },
 

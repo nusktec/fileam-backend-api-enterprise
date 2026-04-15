@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
+import { PERCENT } from "../../constants/percentages";
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 
 const EXPENSE_COUNTER_ID = "expense_number";
@@ -68,7 +69,7 @@ export const expensesService = {
         amount: decimalToNumber(c._sum.totalAmount),
         percentageOfTotal:
           totalAmount > 0
-            ? (decimalToNumber(c._sum.totalAmount) / totalAmount) * 100
+            ? (decimalToNumber(c._sum.totalAmount) / totalAmount) * PERCENT
             : 0,
       }))
       .sort((a, b) => b.amount - a.amount);

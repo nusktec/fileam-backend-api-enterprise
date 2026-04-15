@@ -1,5 +1,6 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import { PERCENT_TWO_DECIMAL_ROUND } from "../../constants/percentages";
 import type { EvidenceVaultUploadInput, EvidenceVaultSignInput } from "../../interfaces/enterprise/evidenceVault";
 import { enterpriseFinancialsService } from "./enterpriseFinancialsService";
 
@@ -121,7 +122,9 @@ export const enterpriseEvidenceVaultService = {
     for (const d of docs) totalKb += d.fileSizeKb ?? 0;
     const usedGb = totalKb / (1024 * 1024);
     return {
-      usedGb: Math.round(usedGb * 100) / 100,
+      usedGb:
+        Math.round(usedGb * PERCENT_TWO_DECIMAL_ROUND) /
+        PERCENT_TWO_DECIMAL_ROUND,
       limitGb: STORAGE_LIMIT_GB,
       usedKb: totalKb,
       label: `${usedGb.toFixed(2)} GB / ${STORAGE_LIMIT_GB} GB used`,

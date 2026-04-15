@@ -11,6 +11,16 @@ export const validateIdParam = [
   handleValidation,
 ];
 
+/** Consultant routes acting on a linked client user (UUID). */
+export const validateClientUserIdParam = [
+  param("clientUserId")
+    .notEmpty()
+    .trim()
+    .isUUID()
+    .withMessage("clientUserId must be a valid UUID"),
+  handleValidation,
+];
+
 /** Create employee: fullName, jobTitle, employmentType, basicSalary required. */
 export const validateCreateEmployee = [
   check("fullName").trim().notEmpty().withMessage("fullName is required"),
