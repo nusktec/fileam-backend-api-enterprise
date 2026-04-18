@@ -35,12 +35,19 @@ export type ProfitAndLossQueryOpts = {
   preset?: string;
   dateFrom?: string;
   dateTo?: string;
+  /**
+   * Consultant / linked-client company: P&L is month-oriented.
+   * With no year/month/preset/custom range, defaults to the current calendar month (not the full year).
+   */
+  linkedClientContext?: boolean;
 };
 
 function resolvePlDateRange(opts: ProfitAndLossQueryOpts): {
   start: Date;
   end: Date;
   presetLabel: string;
+  /** Set when the range is a single calendar month (1–12). */
+  periodMonth?: number;
 } {
   const now = new Date();
   const yNow = now.getFullYear();
@@ -50,14 +57,26 @@ function resolvePlDateRange(opts: ProfitAndLossQueryOpts): {
     const start = new Date(opts.dateFrom);
     const end = new Date(opts.dateTo);
     end.setHours(23, 59, 59, 999);
-    return { start, end, presetLabel: "custom" };
+    let periodMonth: number | undefined;
+    if (
+      start.getFullYear() === end.getFullYear() &&
+      start.getMonth() === end.getMonth()
+    ) {
+      periodMonth = start.getMonth() + 1;
+    }
+    return { start, end, presetLabel: "custom", periodMonth };
   }
 
   const p = (opts.preset || "").toLowerCase();
   if (p === "thismonth") {
     const start = new Date(yNow, mNow, 1);
     const end = new Date(yNow, mNow + 1, 0, 23, 59, 59, 999);
-    return { start, end, presetLabel: "thisMonth" };
+    return {
+      start,
+      end,
+      presetLabel: "thisMonth",
+      periodMonth: mNow + 1,
+    };
   }
   if (p === "thisyear") {
     const start = new Date(yNow, 0, 1);
@@ -74,6 +93,7 @@ function resolvePlDateRange(opts: ProfitAndLossQueryOpts): {
       start,
       end,
       presetLabel: `month:${opts.year}-${opts.month}`,
+      periodMonth: opts.month,
     };
   }
 
@@ -82,6 +102,39 @@ function resolvePlDateRange(opts: ProfitAndLossQueryOpts): {
       start: new Date(opts.year, 0, 1),
       end: new Date(opts.year, 11, 31, 23, 59, 59, 999),
       presetLabel: `year:${opts.year}`,
+    };
+  }
+
+  if (
+    opts.linkedClientContext &&
+    opts.month != null &&
+    opts.month >= 1 &&
+    opts.month <= 12 &&
+    !opts.preset &&
+    !(opts.dateFrom && opts.dateTo)
+  ) {
+    const start = new Date(yNow, opts.month - 1, 1);
+    const end = new Date(yNow, opts.month, 0, 23, 59, 59, 999);
+    return {
+      start,
+      end,
+      presetLabel: `month:${yNow}-${opts.month}`,
+      periodMonth: opts.month,
+    };
+  }
+
+  if (
+    opts.linkedClientContext &&
+    !opts.preset &&
+    !(opts.dateFrom && opts.dateTo)
+  ) {
+    const start = new Date(yNow, mNow, 1);
+    const end = new Date(yNow, mNow + 1, 0, 23, 59, 59, 999);
+    return {
+      start,
+      end,
+      presetLabel: `month:${yNow}-${mNow + 1}`,
+      periodMonth: mNow + 1,
     };
   }
 
@@ -471,8 +524,8 @@ export const enterpriseFinancialsService = {
     linkedUserId: string | undefined,
     opts: ProfitAndLossQueryOpts = {},
   ) {
-    const { start, end, presetLabel } = resolvePlDateRange(opts);
-    const y = start.getFullYear();
+    const { start, end, presetLabel, periodMonth } = resolvePlDateRange(opts);
+    const periodYear = start.getFullYear();
 
     if (linkedUserId) {
       const {
@@ -484,8 +537,8 @@ export const enterpriseFinancialsService = {
       return {
         preset: presetLabel,
         period: {
-          year: y,
-          month: opts.month,
+          year: periodYear,
+          month: periodMonth,
           rangeStart: pl.range.start,
           rangeEnd: pl.range.end,
         },
@@ -510,8 +563,8 @@ export const enterpriseFinancialsService = {
     return {
       preset: presetLabel,
       period: {
-        year: y,
-        month: opts.month,
+        year: periodYear,
+        month: periodMonth,
         rangeStart: start.toISOString(),
         rangeEnd: end.toISOString(),
       },

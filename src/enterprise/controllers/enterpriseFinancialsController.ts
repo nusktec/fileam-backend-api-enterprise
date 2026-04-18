@@ -108,13 +108,19 @@ export async function getProfitTrend(
   }
 }
 
+function parsePlQueryInt(v: unknown): number | undefined {
+  if (v == null || v === "") return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 export async function getProfitAndLoss(
   req: IRequest,
   res: Response,
 ): Promise<void> {
   const companyId = req.companyId!;
-  const year = req.query.year ? Number(req.query.year) : undefined;
-  const month = req.query.month ? Number(req.query.month) : undefined;
+  const year = parsePlQueryInt(req.query.year);
+  const month = parsePlQueryInt(req.query.month);
   const preset = req.query.preset
     ? String(req.query.preset)
     : undefined;
@@ -122,6 +128,7 @@ export async function getProfitAndLoss(
     ? String(req.query.dateFrom)
     : undefined;
   const dateTo = req.query.dateTo ? String(req.query.dateTo) : undefined;
+  const linkedClientContext = Boolean(req.linkedUserId);
   try {
     const data = await enterpriseFinancialsService.getProfitAndLoss(
       companyId,
@@ -132,6 +139,7 @@ export async function getProfitAndLoss(
         preset,
         dateFrom,
         dateTo,
+        linkedClientContext,
       },
     );
     if (!data) {
