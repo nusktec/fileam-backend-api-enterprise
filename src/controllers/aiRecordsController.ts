@@ -79,7 +79,7 @@ export async function getRecords(
       data = await filingsService.list(
         clientId,
         {
-          status: req.query.status as string | undefined,
+          displayStatus: req.query.status as string | undefined,
           taxType: req.query.taxType as string | undefined,
         },
         {

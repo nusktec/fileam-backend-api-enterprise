@@ -2,6 +2,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { genericTaxFilingService } from "../../services/genericTaxFilingService";
 import { filingTaxTypeService } from "./filingTaxTypeService";
+import { filingsService } from "../../mobile/services/filingsService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -167,56 +168,22 @@ export async function listFilings(
     dateTo?: Date;
   },
 ) {
-  const where: {
-    userId: string;
-    status?: string;
-    filingDueDate?: { gte?: Date; lte?: Date };
-  } = { userId: linkedUserId };
-  if (opts?.status && opts.status !== "all") where.status = opts.status;
-  if (opts?.dateFrom || opts?.dateTo) {
-    where.filingDueDate = {};
-    if (opts.dateFrom) where.filingDueDate.gte = opts.dateFrom;
-    if (opts.dateTo) where.filingDueDate.lte = opts.dateTo;
-  }
   const page = opts?.page ?? 1;
   const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
-  const [payables, total] = await Promise.all([
-    prisma.taxPayable.findMany({
-      where,
-      orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
-      skip: (page - 1) * limit,
-      take: limit,
-      include: { payments: { where: { status: "completed" } } },
-    }),
-    prisma.taxPayable.count({ where }),
-  ]);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const data = payables.map((p) => {
-    const totalPayable = decimalToNumber(p.totalPayable);
-    const totalPaid = p.payments.reduce(
-      (s, r) => s + decimalToNumber(r.amountPaid),
-      0,
-    );
-    const due = new Date(p.filingDueDate);
-    due.setHours(0, 0, 0, 0);
-    let status: "overdue" | "submitted" | "paid" | "pending" = "pending";
-    if (p.status === "paid" || totalPaid >= totalPayable) status = "paid";
-    else if (p.submittedAt) status = "submitted";
-    else if (due < today) status = "overdue";
-    return {
-      id: p.id,
-      taxType: p.taxType,
-      periodYear: p.periodYear,
-      periodMonth: p.periodMonth,
-      periodLabel: periodLabel(p.periodYear, p.periodMonth),
-      amount: totalPayable,
-      status,
-      dueDate: p.filingDueDate,
-      submittedAt: p.submittedAt ?? undefined,
-    };
-  });
-  return { data, total, page, limit };
+  return filingsService.list(
+    linkedUserId,
+    {
+      dbStatus: opts?.status,
+      taxType: undefined,
+    },
+    {
+      page,
+      limit,
+      sortOrder: "DESC",
+      dateFrom: opts?.dateFrom,
+      dateTo: opts?.dateTo,
+    },
+  );
 }
 
 export async function createFiling(

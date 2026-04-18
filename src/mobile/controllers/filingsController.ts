@@ -16,7 +16,7 @@ export const listFilings = async (
     const pagination = req.pagination;
     const data = await filingsService.list(
       userId,
-      { status, taxType },
+      { displayStatus: status, taxType },
       {
         page: pagination?.page,
         limit: pagination?.limit,
