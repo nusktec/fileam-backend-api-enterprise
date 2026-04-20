@@ -10,11 +10,24 @@ function decimalToNumber(d: Decimal | null | undefined): number {
 export async function getClientDashboard(linkedUserId: string) {
   const company = await prisma.company.findUnique({
     where: { linkedUserId },
-    select: { id: true },
+    select: { id: true, ownerId: true },
   });
   const companyId = company?.id;
 
-  const [user, business, thresholdStatus, payables, taxConfig] = await Promise.all([
+  const consultantConnectionPromise =
+    company?.ownerId != null
+      ? prisma.consultantConnection.findFirst({
+          where: {
+            consultantUserId: company.ownerId,
+            userId: linkedUserId,
+            status: "active",
+          },
+          select: { filingAuthorization: true },
+        })
+      : Promise.resolve(null);
+
+  const [user, business, thresholdStatus, payables, taxConfig, consultantConnection] =
+    await Promise.all([
     prisma.user.findUnique({
       where: { id: linkedUserId },
       select: { organizationName: true, firstName: true, lastName: true },
@@ -35,6 +48,7 @@ export async function getClientDashboard(linkedUserId: string) {
           where: { companyId },
         })
       : null,
+    consultantConnectionPromise,
   ]);
 
   if (!user) return null;
@@ -137,6 +151,7 @@ export async function getClientDashboard(linkedUserId: string) {
   return {
     businessName,
     status: vatRequired ? "VAT required" : "VAT not required",
+    filingAuthorization: consultantConnection?.filingAuthorization ?? null,
     metricData: {
       taxDueThisMonth,
       filingsCompleted,

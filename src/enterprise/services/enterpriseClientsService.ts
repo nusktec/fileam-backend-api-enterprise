@@ -4,6 +4,10 @@ import {
   sendConsultantRequestEmail,
   sendConsultantIncomingClientRequestEmail,
 } from "../../services/emailService";
+import {
+  aggregateFilingsStatusCountsByUserIds,
+  type FilingsStatusCounts,
+} from "./enterpriseFilingsService";
 
 export interface InvitationCard {
   id: string;
@@ -89,6 +93,10 @@ export interface ClientCard {
     stateOfResidence: string | null;
     streetAddress: string | null;
   };
+  /** Per-client tax filing row counts (accepted clients only). */
+  filingsStatus?: FilingsStatusCounts;
+  /** Client allowed consultant to file on their behalf (accepted clients only). */
+  filingAuthorization?: boolean;
 }
 
 export const enterpriseClientsService = {
@@ -337,6 +345,9 @@ export const enterpriseClientsService = {
     );
 
     const userIds = connections.map((c) => c.userId);
+    const filingsCountsByUser = await aggregateFilingsStatusCountsByUserIds(
+      userIds,
+    );
     const [businesses, nextPayables] = await Promise.all([
       prisma.business.findMany({ where: { userId: { in: userIds } } }),
       prisma.taxPayable.findMany({
@@ -380,6 +391,13 @@ export const enterpriseClientsService = {
         const vatStatus: ClientCard["vatStatus"] =
           vatStatusRaw === "registered" ? "Registered" : vatStatusRaw === "unregistered" ? "Unregistered" : "Pending";
         const nextFiling = nextByUser.get(conn.userId) ?? null;
+        const filingsStatus =
+          filingsCountsByUser.get(conn.userId) ?? {
+            paid: 0,
+            submitted: 0,
+            overdue: 0,
+            pending: 0,
+          };
         cards.push({
           id: conn.userId,
           connectionId: conn.id,
@@ -390,6 +408,8 @@ export const enterpriseClientsService = {
           status: statusLabel,
           vatStatus,
           nextFiling,
+          filingsStatus,
+          filingAuthorization: conn.filingAuthorization,
           email: user.email,
           tin: business?.tin ?? null,
           type: "accepted" as const,

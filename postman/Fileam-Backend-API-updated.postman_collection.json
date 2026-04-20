@@ -111,7 +111,8 @@
             {"name": "Update business profile", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"businessName\":\"Acme Ltd\",\"tin\":\"12345678-0001\",\"rcNumber\":\"RC1234567\",\"address\":\"123 Main St\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/business-profile"}},
             {"name": "Get notification settings", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings"}},
             {"name": "Update notification settings", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"taxDeadline\":true,\"filingConfirmations\":true,\"weeklySummary\":true,\"filingReminders\":true,\"payersNotifications\":true,\"complianceUpdates\":false,\"twoFactorEnabled\":false}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings"}},
-            {"name": "Get consultant", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.id){pm.collectionVariables.set('connectionId',j.data.id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant"}},
+            {"name": "Get consultant", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.id){pm.collectionVariables.set('connectionId',j.data.id);}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant", "description": "Includes filingAuthorization (client must opt in before consultant can POST .../filings/consultant/clients/:id/tax/:type/submit)."}},
+            {"name": "Set consultant filing authorization", "request": {"method": "PATCH", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"authorized\":true}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/filing-authorization", "description": "Toggle authorized. Email sent to consultant when changing false→true."}},
             {"name": "Revoke consultant", "request": {"method": "POST", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"connectionId\":\"{{connectionId}}\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/revoke"}},
             {"name": "Contacts and types", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/contacts-and-types"}},
             {"name": "Account deletion - reason categories", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/account-deletion/reason-categories"}},
@@ -379,14 +380,14 @@
             {
               "name": "List",
               "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.length>0){var c=j.data.find(function(x){return x.type==='client'})||j.data[0]; pm.collectionVariables.set('clientId',c.id); pm.collectionVariables.set('clientUserId',c.id);}"], "type": "text/javascript"}}],
-              "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/managed-entities?q="}
+              "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/managed-entities?q=", "description": "Client rows include filingAuthorization."}
             }
           ]
         },
         {
           "name": "Clients",
           "item": [
-            {"name": "List", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var arr=j.data||[]; if(j.status&&arr.length>0){var c=arr.find(function(x){return x.type==='accepted';}); if(c&&c.id){pm.collectionVariables.set('clientId',c.id); pm.collectionVariables.set('clientUserId',c.id);}}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients?q=&type=accepted", "description": "Use type=accepted so rows are linked clients (id = mobile user UUID). Pending rows use invitation id — do not use for {{clientId}}."}},
+            {"name": "List", "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); var arr=j.data||[]; if(j.status&&arr.length>0){var c=arr.find(function(x){return x.type==='accepted';}); if(c&&c.id){pm.collectionVariables.set('clientId',c.id); pm.collectionVariables.set('clientUserId',c.id);}}"], "type": "text/javascript"}}], "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients?q=&type=accepted", "description": "Accepted rows: filingsStatus counts, filingAuthorization (client allowed consultant to file on their behalf). id = mobile user UUID."}},
             {"name": "List available",
               "event": [{"listen": "test", "script": {"exec": ["var j=pm.response.json(); if(j.status&&j.data&&j.data.length>0){pm.collectionVariables.set('requestedUserId',j.data[0].id);}"], "type": "text/javascript"}}],
               "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/available?q="}},
@@ -397,8 +398,8 @@
                 {
                   "name": "Profile",
                   "item": [
-                    {"name": "Get details", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/details"}},
-                    {"name": "Get dashboard", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/dashboard"}},
+                    {"name": "Get details", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/details", "description": "filingAuthorization (boolean|null) top-level + consultantLink.filingAuthorization. filings.summary, filings.recent."}},
+                    {"name": "Get dashboard", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/dashboard", "description": "Includes filingAuthorization (boolean|null)."}},
                     {"name": "Update business profile", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"businessName\":\"Acme Ltd\",\"rcNumber\":\"RC1234567\",\"tin\":\"12345678-0001\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/client-business-profile"}},
                     {"name": "Update contact", "request": {"method": "PUT", "header": [{"key": "Content-Type","value": "application/json"}], "body": {"mode": "raw", "raw": "{\"address\":\"123 Main St\",\"phone\":\"+2348012345678\",\"email\":\"client@acme.com\"}"}, "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/client-contact"}},
                     {"name": "Business profile - Get", "request": {"method": "GET", "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/business-profile"}},

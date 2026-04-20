@@ -8,6 +8,7 @@ import {
   getNotificationSettings,
   updateNotificationSettings,
   getConsultant,
+  patchConsultantFilingAuthorization,
   revokeConsultant,
 } from "../controllers/userController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
@@ -35,6 +36,11 @@ router.put(
   updateNotificationSettings,
 );
 router.get("/consultant", getConsultant);
+router.patch(
+  "/consultant/filing-authorization",
+  express.json(),
+  patchConsultantFilingAuthorization,
+);
 router.post("/consultant/revoke", express.json(), revokeConsultant);
 
 export default router;

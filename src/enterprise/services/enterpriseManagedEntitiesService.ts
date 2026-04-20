@@ -10,6 +10,8 @@ export interface ManagedEntityCard {
   email: string | null;
   status: string;
   createdAt: Date;
+  /** Client allowed consultant to file on their behalf (clients only). */
+  filingAuthorization?: boolean;
 }
 
 export async function listManagedEntities(
@@ -73,6 +75,7 @@ export async function listManagedEntities(
       email: user.email ?? null,
       status: "Active",
       createdAt: company?.createdAt ?? conn.createdAt,
+      filingAuthorization: conn.filingAuthorization,
     };
   });
 

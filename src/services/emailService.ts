@@ -337,6 +337,43 @@ const sendInvitationToJoinEmail = async (
   }
 };
 
+/** Consultant notified when a linked client enables filing authorization. */
+const sendConsultantFilingAuthorizationEmail = async (
+  to: string,
+  consultantGreetingName: string,
+  businessDisplayName: string,
+): Promise<{ success: boolean; error?: unknown }> => {
+  try {
+    const htmlContent = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"/></head>
+<body style="font-family:system-ui,sans-serif;line-height:1.5;color:#111;max-width:560px;">
+  <p>Hi ${escapeHtml(consultantGreetingName)},</p>
+  <p><strong>${escapeHtml(businessDisplayName)}</strong> has authorized you to file tax returns on their behalf in Fileam.</p>
+  <p>You can submit filings for this client from your consultant workflow when you are ready.</p>
+  <p style="color:#666;font-size:14px;">If you were not expecting this, the client can turn off filing authorization in their app under Consultant settings.</p>
+  <p>— Fileam</p>
+</body></html>`;
+    return await sendEmail(
+      to,
+      "Client authorized you to file on their behalf - Fileam",
+      htmlContent,
+      EMAIL_CATEGORIES.NOTIFICATION,
+    );
+  } catch (error) {
+    console.error("Failed to send filing authorization email:", error);
+    return { success: false, error };
+  }
+};
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 const sendTeamInvitationEmail = async (
   to: string,
   name: string,
@@ -396,6 +433,7 @@ export {
   SendInviteMail,
   sendConsultantRequestEmail,
   sendConsultantIncomingClientRequestEmail,
+  sendConsultantFilingAuthorizationEmail,
   sendInvitationToJoinEmail,
   sendTeamInvitationEmail,
   EmailCategoryEnum,

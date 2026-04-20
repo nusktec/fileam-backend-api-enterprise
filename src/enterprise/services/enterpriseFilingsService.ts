@@ -74,6 +74,91 @@ export async function getFilingsSummary(linkedUserId: string) {
   };
 }
 
+/** Aligns with mobile filing display: paid, submitted, overdue, pending. */
+export type ConsultantFilingDisplayStatus =
+  | "paid"
+  | "submitted"
+  | "overdue"
+  | "pending";
+
+export function deriveConsultantFilingDisplayStatus(p: {
+  status: string;
+  submittedAt: Date | null;
+  filingDueDate: Date;
+  totalPayable: Decimal | null;
+  payments: { amountPaid: Decimal }[];
+}): ConsultantFilingDisplayStatus {
+  const totalPayable = decimalToNumber(p.totalPayable);
+  const totalPaid = p.payments.reduce(
+    (s, r) => s + decimalToNumber(r.amountPaid),
+    0,
+  );
+  if (p.status === "paid" || p.status === "overpaid") return "paid";
+  if (totalPayable > 0 && totalPaid >= totalPayable) return "paid";
+  if (p.submittedAt) return "submitted";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(p.filingDueDate);
+  due.setHours(0, 0, 0, 0);
+  if (due < today) return "overdue";
+  return "pending";
+}
+
+export type FilingsStatusCounts = {
+  paid: number;
+  submitted: number;
+  overdue: number;
+  pending: number;
+};
+
+/** Batch counts per client user (consultant clients list). */
+export async function aggregateFilingsStatusCountsByUserIds(
+  userIds: string[],
+): Promise<Map<string, FilingsStatusCounts>> {
+  const map = new Map<string, FilingsStatusCounts>();
+  if (userIds.length === 0) return map;
+  for (const id of userIds) {
+    map.set(id, { paid: 0, submitted: 0, overdue: 0, pending: 0 });
+  }
+  const payables = await prisma.taxPayable.findMany({
+    where: { userId: { in: userIds } },
+    include: { payments: { where: { status: "completed" } } },
+  });
+  for (const p of payables) {
+    const st = deriveConsultantFilingDisplayStatus(p);
+    const row = map.get(p.userId);
+    if (!row) continue;
+    if (st === "paid") row.paid += 1;
+    else if (st === "submitted") row.submitted += 1;
+    else if (st === "overdue") row.overdue += 1;
+    else row.pending += 1;
+  }
+  return map;
+}
+
+export async function getRecentFilingsForClientConsultant(
+  linkedUserId: string,
+  take = 15,
+) {
+  const payables = await prisma.taxPayable.findMany({
+    where: { userId: linkedUserId },
+    include: { payments: { where: { status: "completed" } } },
+    orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
+    take,
+  });
+  return payables.map((p) => ({
+    id: p.id,
+    taxType: p.taxType,
+    periodYear: p.periodYear,
+    periodMonth: p.periodMonth,
+    periodLabel: periodLabel(p.periodYear, p.periodMonth),
+    dueDate: p.filingDueDate,
+    amount: decimalToNumber(p.totalPayable),
+    status: deriveConsultantFilingDisplayStatus(p),
+    submittedAt: p.submittedAt ?? undefined,
+  }));
+}
+
 function readinessForPayable(p: {
   status: string;
   submittedAt: Date | null;

@@ -3,7 +3,7 @@ import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
-import { assertConsultantClientAccess } from "../../utils/consultantClientAccess";
+import { assertConsultantFilingAuthorized } from "../../utils/consultantClientAccess";
 import { submitUnifiedTaxFilingForUser } from "../services/unifiedTaxFilingSubmitService";
 
 function normalizeTaxType(raw: string | string[] | undefined): string {
@@ -38,11 +38,28 @@ export async function submitConsultantTaxFilingForClient(
         );
       return;
     }
-    const ok = await assertConsultantClientAccess(consultantId, clientUserId!);
-    if (!ok) {
+    const auth = await assertConsultantFilingAuthorized(
+      consultantId,
+      clientUserId!,
+    );
+    if (!auth.ok) {
+      if (auth.reason === "no_connection") {
+        res
+          .status(HttpStatusCode.FORBIDDEN)
+          .json(
+            outJson(false, "No active consultant link for this client", null),
+          );
+        return;
+      }
       res
         .status(HttpStatusCode.FORBIDDEN)
-        .json(outJson(false, "No active consultant link for this client", null));
+        .json(
+          outJson(
+            false,
+            "Filing on behalf of this client is not authorized. The client must enable filing authorization in the mobile app (Settings / Consultant).",
+            { code: "FILING_NOT_AUTHORIZED" },
+          ),
+        );
       return;
     }
     const result = await submitUnifiedTaxFilingForUser(

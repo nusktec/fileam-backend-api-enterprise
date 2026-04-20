@@ -340,6 +340,7 @@ export const userService = {
       name: consultantName,
       managingTaxForms: taxForms,
       status: conn.status,
+      filingAuthorization: conn.filingAuthorization,
       consultant: conn.consultant
         ? {
             id: conn.consultant.id,
@@ -351,6 +352,76 @@ export const userService = {
           }
         : null,
     };
+  },
+
+  async setConsultantFilingAuthorization(
+    userId: string,
+    authorized: boolean,
+  ): Promise<
+    | { ok: true; filingAuthorization: boolean; emailSent: boolean }
+    | { ok: false; code: "NO_ACTIVE_CONSULTANT" }
+  > {
+    const conn = await prisma.consultantConnection.findFirst({
+      where: { userId, status: "active" },
+      include: {
+        consultant: {
+          select: {
+            email: true,
+            firstName: true,
+            lastName: true,
+            organizationName: true,
+          },
+        },
+      },
+    });
+    if (!conn) return { ok: false, code: "NO_ACTIVE_CONSULTANT" };
+
+    const previous = conn.filingAuthorization;
+    if (previous === authorized) {
+      return {
+        ok: true,
+        filingAuthorization: authorized,
+        emailSent: false,
+      };
+    }
+
+    await prisma.consultantConnection.update({
+      where: { id: conn.id },
+      data: { filingAuthorization: authorized },
+    });
+
+    let emailSent = false;
+    if (authorized && !previous && conn.consultant?.email) {
+      const client = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          organizationName: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      });
+      const businessDisplayName =
+        client?.organizationName?.trim() ||
+        `${client?.firstName ?? ""} ${client?.lastName ?? ""}`.trim() ||
+        client?.email ||
+        "Your client";
+      const consultantGreeting =
+        `${conn.consultant.firstName} ${conn.consultant.lastName}`.trim() ||
+        conn.consultant.organizationName ||
+        conn.consultant.email;
+      const { sendConsultantFilingAuthorizationEmail } = await import(
+        "../../services/emailService"
+      );
+      const sent = await sendConsultantFilingAuthorizationEmail(
+        conn.consultant.email,
+        consultantGreeting,
+        businessDisplayName,
+      );
+      emailSent = sent.success;
+    }
+
+    return { ok: true, filingAuthorization: authorized, emailSent };
   },
 
   async revokeConsultant(userId: string, connectionId: string) {

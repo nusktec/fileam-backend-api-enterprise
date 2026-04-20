@@ -237,6 +237,51 @@ export const getConsultant = async (
   }
 };
 
+/** Client toggles whether the linked consultant may file tax returns on their behalf. */
+export const patchConsultantFilingAuthorization = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const authorized = (req.body as { authorized?: unknown })?.authorized;
+    if (typeof authorized !== "boolean") {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Body must include authorized: true or false", null));
+      return;
+    }
+    const result = await userService.setConsultantFilingAuthorization(
+      userId,
+      authorized,
+    );
+    if (!result.ok) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(
+          outJson(
+            false,
+            "No active consultant connection. Connect a consultant first.",
+            null,
+          ),
+        );
+      return;
+    }
+    res.status(HttpStatusCode.OK).json(
+      outJson(true, "Filing authorization updated", {
+        filingAuthorization: result.filingAuthorization,
+        emailSent: result.emailSent,
+      }),
+    );
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(
+        outJson(false, "Failed to update filing authorization", null),
+      );
+  }
+};
+
 export const revokeConsultant = async (
   req: IRequest,
   res: Response,

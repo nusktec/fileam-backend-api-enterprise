@@ -1,7 +1,12 @@
 import { prisma } from "../../config/database";
+import {
+  getFilingsSummary,
+  getRecentFilingsForClientConsultant,
+} from "./enterpriseFilingsService";
 
 export async function getClientDetails(companyId: string, linkedUserId: string) {
-  const [user, business, taxConfig, thresholdStatus] = await Promise.all([
+  const [user, business, taxConfig, thresholdStatus, companyRow] =
+    await Promise.all([
     prisma.user.findUnique({
       where: { id: linkedUserId },
       select: {
@@ -23,9 +28,29 @@ export async function getClientDetails(companyId: string, linkedUserId: string) 
     prisma.enterpriseThresholdStatus.findUnique({
       where: { companyId },
     }),
+    prisma.company.findFirst({
+      where: { id: companyId },
+      select: { ownerId: true },
+    }),
   ]);
 
   if (!user) return null;
+
+  const [consultantConnection, filingsSummary, filingsRecent] =
+    await Promise.all([
+      companyRow?.ownerId != null
+        ? prisma.consultantConnection.findFirst({
+            where: {
+              consultantUserId: companyRow.ownerId,
+              userId: linkedUserId,
+              status: "active",
+            },
+            select: { filingAuthorization: true },
+          })
+        : Promise.resolve(null),
+      getFilingsSummary(linkedUserId),
+      getRecentFilingsForClientConsultant(linkedUserId, 15),
+    ]);
 
   return {
     client: {
@@ -68,5 +93,14 @@ export async function getClientDetails(companyId: string, linkedUserId: string) 
     vatThresholdStatus: thresholdStatus
       ? { status: thresholdStatus.status, message: thresholdStatus.message }
       : null,
+    consultantLink: consultantConnection
+      ? { filingAuthorization: consultantConnection.filingAuthorization }
+      : null,
+    /** Same as consultantLink.filingAuthorization; null if no active link. */
+    filingAuthorization: consultantConnection?.filingAuthorization ?? null,
+    filings: {
+      summary: filingsSummary,
+      recent: filingsRecent,
+    },
   };
 }

@@ -14,6 +14,8 @@ model ConsultantConnection {
   managingTaxForms        String?                      @map("managing_tax_forms")
   consultantDisplayName   String?                      @map("consultant_display_name")
   status                  ConsultantConnectionStatus   @default(active)
+  /** Client (mobile) must opt in before consultant can submit filings on their behalf. */
+  filingAuthorization     Boolean                      @default(false) @map("filing_authorization")
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
 
