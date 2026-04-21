@@ -102,6 +102,10 @@ export const taxComputationService = {
         annualizedProfit,
         citRate: CIT_RATE_SMALL_COMPANY_PERCENT,
         estimatedAnnualCit,
+        /** Placeholder until book records track allowances; 0 means not supplied in-app. */
+        capitalAllowances: 0,
+        /** Loss brought forward applied before tax (not tracked in-app; 0 = none). */
+        lossCarryForward: 0,
       },
     };
   },

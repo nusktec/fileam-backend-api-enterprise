@@ -41,6 +41,8 @@ export interface ReportDataPayload {
     annualizedProfit: number;
     citRate: number;
     estimatedAnnualCit: number;
+    capitalAllowances: number;
+    lossCarryForward: number;
   };
   filings: Array<{
     taxType: string;
@@ -149,6 +151,8 @@ export async function getReportDataForPeriod(
       annualizedProfit: computation.cit.annualizedProfit,
       citRate: computation.cit.citRate,
       estimatedAnnualCit: computation.cit.estimatedAnnualCit,
+      capitalAllowances: computation.cit.capitalAllowances,
+      lossCarryForward: computation.cit.lossCarryForward,
     },
     filings: payables.map((p) => ({
       taxType: p.taxType,

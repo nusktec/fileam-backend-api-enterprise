@@ -509,14 +509,18 @@ export async function listFinancialDocuments(
 ): Promise<void> {
   const companyId = req.companyId!;
   const pagination = req.pagination;
-  const documentStatus = req.query.documentStatus as string | undefined;
   try {
+    const status =
+      (req.query.status as string | undefined)?.trim() ||
+      (req.query.documentStatus as string | undefined)?.trim();
+    const q = (req.query.q as string | undefined)?.trim();
     const result =
       await enterpriseFinancialsService.listFinancialDocuments(companyId, {
         page: pagination?.page,
         limit: pagination?.limit,
         sortOrder: pagination?.sortOrder,
-        documentStatus,
+        status: status || undefined,
+        q,
         dateFrom: pagination?.dateFrom,
         dateTo: pagination?.dateTo,
       });

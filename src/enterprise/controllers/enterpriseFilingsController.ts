@@ -21,6 +21,7 @@ import {
   getTaxReturns,
   submitClientVatReturn,
 } from "../services/enterpriseFilingsService";
+import { filingsService } from "../../mobile/services/filingsService";
 import { filingTaxTypeService } from "../services/filingTaxTypeService";
 import { getTaxFilingConstants } from "../../services/taxFilingConstantsService";
 
@@ -363,5 +364,24 @@ export async function getFilingReportHandler(
     sendResult(res, "Filing report", report);
   } catch {
     sendServerError(res, "Failed to get filing report");
+  }
+}
+
+/** Same payload as mobile `GET /filings/:id` — timeline, completion, attachments. */
+export async function getFilingByIdHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId!;
+  const filingId = getParam(req.params, "filingId");
+  try {
+    const data = await filingsService.getById(linkedUserId, filingId);
+    if (!data) {
+      sendNotFound(res, "Filing not found");
+      return;
+    }
+    sendResult(res, "Filing", data);
+  } catch {
+    sendServerError(res, "Failed to get filing");
   }
 }

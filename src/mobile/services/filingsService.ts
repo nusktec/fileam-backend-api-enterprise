@@ -124,13 +124,13 @@ function buildFilingCompletion(
 
   items.push({
     key: "tax_amount_set",
-    label: "Tax amount set (total payable > 0)",
+    label: "Amount due set on this filing",
     met: decimalToNumber(p.totalPayable) > 0,
     category: "filing_record",
   });
   items.push({
     key: "filing_document_or_payment_proof",
-    label: "Filing PDF / acknowledgement or payment receipt URL",
+    label: "Filing document, acknowledgement, or payment proof added",
     met: Boolean(
       (p.documentUrl && p.documentUrl.trim() !== "") ||
         (p.receiptUrl && p.receiptUrl.trim() !== ""),
@@ -139,7 +139,7 @@ function buildFilingCompletion(
   });
   items.push({
     key: "filing_evidence_vault",
-    label: "Evidence vault document linked on this filing",
+    label: "Evidence vault document linked",
     met: Boolean(p.evidenceVaultId && p.evidenceVaultId.trim() !== ""),
     category: "filing_record",
   });
@@ -147,8 +147,8 @@ function buildFilingCompletion(
     key: "period_sales_invoiced",
     label:
       period.saleCount === 0
-        ? "No sales in this period (invoice/vault N/A)"
-        : "All sales in period have invoice file or vault link (book evidence)",
+        ? "No sales this period (invoices not required)"
+        : "All invoices uploaded or linked from vault",
     met: salesComplete,
     category: "period_records",
   });
@@ -156,8 +156,8 @@ function buildFilingCompletion(
     key: "period_expenses_receipted",
     label:
       period.expenseCount === 0
-        ? "No expenses in this period (receipts N/A)"
-        : "All expenses in period have receipt uploads",
+        ? "No expenses this period (receipts not required)"
+        : "All expense receipts uploaded",
     met: expensesComplete,
     category: "period_records",
   });
@@ -165,13 +165,13 @@ function buildFilingCompletion(
   if (tt === "VAT") {
     items.push({
       key: "vat_state_of_operation",
-      label: "State of operation on filing (VAT)",
+      label: "State of operation added (VAT)",
       met: Boolean(p.stateOfOperation && p.stateOfOperation.trim() !== ""),
       category: "tax_specific",
     });
     items.push({
       key: "vat_registration_number",
-      label: "VAT registration / TIN on filing",
+      label: "VAT / TIN on filing",
       met: Boolean(
         p.vatRegistrationNumber && p.vatRegistrationNumber.trim() !== "",
       ),
@@ -180,7 +180,7 @@ function buildFilingCompletion(
   } else if (tt === "WHT" && whtLineCount !== null) {
     items.push({
       key: "wht_schedule_lines",
-      label: "WHT draft schedule has at least one line item",
+      label: "WHT schedule has line items",
       met: whtLineCount > 0,
       category: "tax_specific",
     });
@@ -188,7 +188,7 @@ function buildFilingCompletion(
 
   items.push({
     key: "submitted_to_authority",
-    label: "Return submitted (record)",
+    label: "Return submitted",
     met: p.submittedAt != null,
     category: "workflow",
   });

@@ -4,6 +4,7 @@ import {
   listFilingsHandler,
   createFilingHandler,
   getFilingReportHandler,
+  getFilingByIdHandler,
   getFilingsSummaryHandler,
   getVatReturnsHandler,
   getTaxReturnsHandler,
@@ -36,6 +37,11 @@ router.get(
   "/:filingId/report",
   ...enterpriseValidations.validateFilingIdParam,
   getFilingReportHandler,
+);
+router.get(
+  "/:filingId",
+  ...enterpriseValidations.validateFilingIdParam,
+  getFilingByIdHandler,
 );
 router.get("/", listFilingsHandler);
 router.post(

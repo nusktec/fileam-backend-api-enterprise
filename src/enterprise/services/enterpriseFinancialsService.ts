@@ -28,6 +28,24 @@ function decimalToNumber(d: Decimal | null | undefined): number {
   return Number(d);
 }
 
+/** Matches list display: `documentStatus ?? processingStatus` */
+function whereEffectiveDocumentStatus(
+  status: string,
+): Prisma.EnterpriseFinancialDocumentWhereInput {
+  const s = status.trim();
+  return {
+    OR: [
+      { documentStatus: { equals: s, mode: "insensitive" } },
+      {
+        AND: [
+          { OR: [{ documentStatus: null }, { documentStatus: "" }] },
+          { processingStatus: { equals: s, mode: "insensitive" } },
+        ],
+      },
+    ],
+  };
+}
+
 export type ProfitAndLossQueryOpts = {
   year?: number;
   month?: number;
@@ -823,7 +841,30 @@ export const enterpriseFinancialsService = {
     });
     if (!doc) return null;
     const extractionId = `ext-${fileId}-${Date.now()}`;
-    return { extractionId };
+    const subTotalExclVat = new Decimal("8500.00");
+    const vatCalculated = new Decimal("765.00");
+    const totalWithVat = subTotalExclVat.add(vatCalculated);
+    await prisma.enterpriseFinancialDocument.update({
+      where: { id: fileId },
+      data: {
+        processingStatus: "processed",
+        documentStatus: "clean",
+        vendor: "Demo Supplies Ltd",
+        invoiceNumber: `INV-OCR-${fileId.slice(0, 8)}`,
+        confidence: 91,
+        description: doc.description ?? "Invoice (mock OCR)",
+        subTotalExclVat,
+        vatCalculated,
+        totalWithVat,
+        amount: totalWithVat,
+        format: "pdf",
+      },
+    });
+    return {
+      extractionId,
+      financialDocumentId: fileId,
+      message: "OCR applied; document row updated for financial documents list",
+    };
   },
 
   async mockVendorIdentify(companyId: string, extractionId: string) {
@@ -908,7 +949,12 @@ export const enterpriseFinancialsService = {
       page?: number;
       limit?: number;
       sortOrder?: "ASC" | "DESC";
+      /** @deprecated use status — kept for backward compatibility */
       documentStatus?: string;
+      /** Effective status: matches `documentStatus ?? processingStatus` */
+      status?: string;
+      /** Search vendor, invoice #, description, document type */
+      q?: string;
       dateFrom?: Date;
       dateTo?: Date;
     },
@@ -920,12 +966,32 @@ export const enterpriseFinancialsService = {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
-    const where: {
-      companyId: string;
-      documentStatus?: string;
-      documentDate?: { gte?: Date; lte?: Date };
-    } = { companyId };
-    if (opts?.documentStatus) where.documentStatus = opts.documentStatus;
+    const statusFilter =
+      (opts?.status && opts.status.trim()) ||
+      (opts?.documentStatus && opts.documentStatus.trim()) ||
+      "";
+    const q = opts?.q?.trim();
+    const where: Prisma.EnterpriseFinancialDocumentWhereInput = { companyId };
+    if (statusFilter) {
+      Object.assign(where, whereEffectiveDocumentStatus(statusFilter));
+    }
+    if (q) {
+      where.AND = [
+        ...(Array.isArray(where.AND)
+          ? where.AND
+          : where.AND
+            ? [where.AND]
+            : []),
+        {
+          OR: [
+            { vendor: { contains: q, mode: "insensitive" } },
+            { invoiceNumber: { contains: q, mode: "insensitive" } },
+            { description: { contains: q, mode: "insensitive" } },
+            { documentType: { contains: q, mode: "insensitive" } },
+          ],
+        },
+      ];
+    }
     if (opts?.dateFrom || opts?.dateTo) {
       where.documentDate = {};
       if (opts.dateFrom) where.documentDate.gte = opts.dateFrom;
