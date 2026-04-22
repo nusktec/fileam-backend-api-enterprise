@@ -146,22 +146,23 @@ export const consultantRequestService = {
       "Client";
 
     const now = new Date();
-    let clientCompany = await prisma.company.findFirst({
-      where: {
+    // `linkedUserId` is unique per company: one client profile row. Reuse and
+    // reassign `ownerId` for this consultant (e.g. after revoke, or if the row
+    // existed with another owner) instead of a second `create` that would fail
+    // the unique on `linked_user_id`.
+    const clientCompany = await prisma.company.upsert({
+      where: { linkedUserId: targetUserId },
+      create: {
+        name: clientCompanyName,
         ownerId: inv.consultantUserId,
         linkedUserId: targetUserId,
+        managedByCompanyId: null,
+      },
+      update: {
+        name: clientCompanyName,
+        ownerId: inv.consultantUserId,
       },
     });
-    if (!clientCompany) {
-      clientCompany = await prisma.company.create({
-        data: {
-          name: clientCompanyName,
-          ownerId: inv.consultantUserId,
-          linkedUserId: targetUserId,
-          managedByCompanyId: null,
-        },
-      });
-    }
 
     await prisma.$transaction([
       prisma.consultantConnection.create({
