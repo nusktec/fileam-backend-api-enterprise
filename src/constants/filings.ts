@@ -17,6 +17,7 @@ export const TAX_FILING_PREVIEW_KIND = {
   WHT: "schedule",
   CIT: "manual",
   PAYE: "manual",
+  PIT: "manual",
 } as const;
 
 export type TaxFilingPreviewKind =

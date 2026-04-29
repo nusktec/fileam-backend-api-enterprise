@@ -5,6 +5,7 @@ model ClientTaxConfiguration {
   paye        Boolean  @default(false) @map("paye")
   wht         Boolean  @default(false) @map("wht")
   cit         Boolean  @default(false) @map("cit")
+  pit         Boolean  @default(false) @map("pit")
   stampDuties  Boolean  @default(false) @map("stamp_duties")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

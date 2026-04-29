@@ -14,6 +14,7 @@ const ENTERPRISE_TAX_COMPUTATION_PATHS: Record<string, string> = {
   VAT: "tax-computation/vat",
   WHT: "tax-computation/wht",
   CIT: "tax-computation/cit",
+  PIT: "tax-computation/pit",
   PAYE: "tax-computation/paye",
   STAMP_DUTIES: "tax-computation/stamp-duties",
 };

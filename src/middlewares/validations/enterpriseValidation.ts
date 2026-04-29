@@ -188,6 +188,7 @@ const validateTaxConfiguration = [
   check("paye").optional().isBoolean(),
   check("wht").optional().isBoolean(),
   check("cit").optional().isBoolean(),
+  check("pit").optional().isBoolean(),
   check("stampDuties").optional().isBoolean(),
   handleValidation,
 ];

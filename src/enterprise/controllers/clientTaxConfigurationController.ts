@@ -17,6 +17,7 @@ export async function putTaxConfiguration(
     paye?: boolean;
     wht?: boolean;
     cit?: boolean;
+    pit?: boolean;
     stampDuties?: boolean;
   };
   try {
@@ -26,6 +27,7 @@ export async function putTaxConfiguration(
       paye: config.paye,
       wht: config.wht,
       cit: config.cit,
+      pit: config.pit,
       stampDuties: config.stampDuties,
     });
   } catch {

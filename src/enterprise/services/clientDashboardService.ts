@@ -84,6 +84,7 @@ export async function getClientDashboard(linkedUserId: string) {
     VAT: 0,
     WHT: 0,
     PAYE: 0,
+    PIT: 0,
   };
 
   for (const p of payables) {
@@ -146,6 +147,9 @@ export async function getClientDashboard(linkedUserId: string) {
     const { employeesService } = await import("../../mobile/services/employeesService");
     const obligations = await employeesService.getObligations(linkedUserId);
     breakdown.PAYE = obligations.paye.amount;
+  }
+  if (taxConfig?.pit ?? false) {
+    breakdown.PIT = comp.pit.estimatedAnnualPit / 12;
   }
 
   return {

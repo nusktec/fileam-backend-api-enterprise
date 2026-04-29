@@ -415,6 +415,30 @@ export async function getCitComputation(
   }
 }
 
+export async function getPitComputation(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const companyId = req.companyId!;
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  try {
+    const data = await enterpriseTaxComputationService.getPitComputation(
+      companyId,
+      year,
+      month,
+      req.linkedUserId,
+    );
+    if (!data) {
+      sendNotFound(res, "Company not found");
+      return;
+    }
+    sendResult(res, "PIT computation", data);
+  } catch {
+    sendServerError(res, "Failed to get PIT computation");
+  }
+}
+
 export async function getStampDutiesComputation(
   req: IRequest,
   res: Response,

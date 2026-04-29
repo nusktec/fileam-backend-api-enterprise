@@ -13,6 +13,7 @@ import {
   submitClientWhtReturnHandler,
   submitClientCitReturnHandler,
   submitClientPayeReturnHandler,
+  submitClientPitReturnHandler,
   listFilingTaxTypesHandler,
   updateFilingTaxTypesHandler,
 } from "../controllers/enterpriseFilingsController";
@@ -63,6 +64,11 @@ router.post(
   "/paye/submit-return",
   ...enterpriseValidations.validateSubmitVatFiling,
   submitClientPayeReturnHandler,
+);
+router.post(
+  "/pit/submit-return",
+  ...enterpriseValidations.validateSubmitVatFiling,
+  submitClientPitReturnHandler,
 );
 router.post(
   "/",

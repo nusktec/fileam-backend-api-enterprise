@@ -1,4 +1,8 @@
 import dotenv from "dotenv";
+// Load `.env` first (same source Prisma uses via prisma.config). Then `.env.dev` for any
+// extra keys without replacing DATABASE_URL etc. — use override in .env.dev only if you
+// intentionally shadow keys (DATABASE_URL duplicates then point at the same DB as migrate).
+dotenv.config();
 dotenv.config({ path: ".env.dev" });
 
 import bcrypt from "bcryptjs";
@@ -156,10 +160,35 @@ export async function runSeed() {
   console.log("Seed completed!");
 }
 
+function hintIfDatabaseMissing(err: unknown): void {
+  const text = `${err}`;
+  const url = process.env.DATABASE_URL;
+  if (!text.includes("does not exist") || !url?.includes("/")) return;
+  let dbName: string | undefined;
+  try {
+    const u = new URL(url.replace(/^postgresql:/i, "http:"));
+    dbName = u.pathname.replace(/^\//, "").split("?")[0] || undefined;
+  } catch {
+    return;
+  }
+  console.error(`
+PostgreSQL reports the database "${dbName}" does not exist.
+Create it, apply migrations, then seed again:
+
+  createdb "${dbName}"     # local Postgres with peer/trust auth, or:
+
+  psql -U postgres -h HOST -p PORT -d postgres \\
+    -c "CREATE DATABASE \\"${dbName}\\";"
+
+Then: npm run prisma:migrate:deploy && npm run seed
+`);
+}
+
 if (require.main === module) {
   runSeed()
     .then(() => process.exit(0))
     .catch((err) => {
+      hintIfDatabaseMissing(err);
       console.error("Seed failed:", err);
       process.exit(1);
     });

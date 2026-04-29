@@ -7,6 +7,8 @@ import {
   VAT_TURNOVER_THRESHOLD_NGN,
   CIT_PROFIT_THRESHOLD_NGN,
 } from "../../constants/percentages";
+import { resolveTaxpayerComputationContext } from "../../constants/taxpayerComputationProfile";
+import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -18,14 +20,36 @@ export const taxComputationService = {
     const start = new Date(year, month - 1, 1);
     const end = new Date(year, month, 0, 23, 59, 59, 999);
 
-    const [sales, expenses] = await Promise.all([
+    const [sales, expenses, onboarding] = await Promise.all([
       prisma.sale.findMany({
         where: { userId, saleDate: { gte: start, lte: end } },
       }),
       prisma.expense.findMany({
         where: { userId, expenseDate: { gte: start, lte: end } },
       }),
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          roleDescription: true,
+          purpose: true,
+          organizationName: true,
+          businesses: {
+            take: 1,
+            orderBy: { updatedAt: "desc" },
+            select: { businessType: true, incomeType: true },
+          },
+        },
+      }),
     ]);
+
+    const b = onboarding?.businesses?.[0];
+    const taxpayerContext = resolveTaxpayerComputationContext({
+      roleDescription: onboarding?.roleDescription,
+      purpose: onboarding?.purpose,
+      organizationName: onboarding?.organizationName,
+      businessType: b?.businessType,
+      incomeType: b?.incomeType,
+    });
 
     const totalIncome = sales.reduce(
       (s, x) => s + decimalToNumber(x.totalAmount),
@@ -56,6 +80,10 @@ export const taxComputationService = {
     const estimatedAnnualCit =
       (annualizedProfit * CIT_RATE_SMALL_COMPANY_PERCENT) / PERCENT;
 
+    const pitFromBooks = estimateAnnualPersonalIncomeTaxNg(
+      Math.max(0, annualizedProfit),
+    );
+
     const percentOfVatThreshold =
       (totalIncome / VAT_TURNOVER_THRESHOLD_NGN) * PERCENT;
     const amountNeededToVatThreshold = Math.max(
@@ -66,6 +94,7 @@ export const taxComputationService = {
       (annualizedProfit / CIT_PROFIT_THRESHOLD_NGN) * PERCENT;
 
     return {
+      taxpayerContext,
       period: {
         year,
         month,
@@ -106,6 +135,14 @@ export const taxComputationService = {
         capitalAllowances: 0,
         /** Loss brought forward applied before tax (not tracked in-app; 0 = none). */
         lossCarryForward: 0,
+      },
+      pit: {
+        summary: pitFromBooks.estimatedAnnualPitNgn,
+        monthlyProfit,
+        annualizedProfit,
+        chargeableIncomeProxyAnnual: pitFromBooks.chargeableIncomeProxyAnnualNgn,
+        estimatedAnnualPit: pitFromBooks.estimatedAnnualPitNgn,
+        methodology: pitFromBooks.methodology,
       },
     };
   },

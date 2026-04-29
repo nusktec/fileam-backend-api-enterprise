@@ -87,6 +87,7 @@ export async function getClientDetails(companyId: string, linkedUserId: string) 
           paye: taxConfig.paye,
           wht: taxConfig.wht,
           cit: taxConfig.cit,
+          pit: taxConfig.pit,
           stampDuties: taxConfig.stampDuties,
         }
       : null,

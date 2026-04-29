@@ -39,38 +39,111 @@ export type PeriodRecordCompliance = {
   expensesMissingReceipt: number;
 };
 
-async function getPeriodRecordCompliance(
+/** Which rows lack invoice/vault attachment or receipts (bounded lists for UI). */
+export type MissingEvidenceSaleRow = {
+  saleId: string;
+  invoiceNumber: string;
+  description: string;
+  totalAmount: number;
+  saleDate: Date;
+};
+export type MissingEvidenceExpenseRow = {
+  expenseId: string;
+  expenseNumber: string;
+  category: string;
+  description: string;
+  totalAmount: number;
+  expenseDate: Date;
+};
+
+async function fetchPeriodEvidenceCompliance(
   userId: string,
   year: number,
   month: number,
-): Promise<PeriodRecordCompliance> {
+): Promise<{
+  compliance: PeriodRecordCompliance;
+  missingSalesWithoutInvoiceOrVault: MissingEvidenceSaleRow[];
+  missingExpensesWithoutReceipt: MissingEvidenceExpenseRow[];
+}> {
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0, 23, 59, 59, 999);
   const saleDate = { gte: start, lte: end };
   const expenseDate = { gte: start, lte: end };
-  const [saleCount, expenseCount, salesMissingEvidence, expensesMissingReceipt] =
-    await Promise.all([
-      prisma.sale.count({ where: { userId, saleDate } }),
-      prisma.expense.count({ where: { userId, expenseDate } }),
-      prisma.sale.count({
-        where: {
-          userId,
-          saleDate,
-          documentUrl: null,
-          evidenceVaultId: null,
-        },
-      }),
-      prisma.expense.count({
-        where: { userId, expenseDate, receiptUrl: null },
-      }),
-    ]);
-  return {
+  const gapWhere = {
+    userId,
+    saleDate,
+    documentUrl: null,
+    evidenceVaultId: null,
+  };
+  const expGapWhere = { userId, expenseDate, receiptUrl: null };
+  /** Rows returned under this cap; totals may be higher (`listTruncated` on API). */
+  const listLimit = 100;
+
+  const [
+    saleCount,
+    expenseCount,
+    salesMissingEvidence,
+    expensesMissingReceipt,
+    missingSalesRows,
+    missingExpenseRows,
+  ] = await Promise.all([
+    prisma.sale.count({ where: { userId, saleDate } }),
+    prisma.expense.count({ where: { userId, expenseDate } }),
+    prisma.sale.count({ where: gapWhere }),
+    prisma.expense.count({ where: expGapWhere }),
+    prisma.sale.findMany({
+      where: gapWhere,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        description: true,
+        totalAmount: true,
+        saleDate: true,
+      },
+      orderBy: { saleDate: "desc" },
+      take: listLimit,
+    }),
+    prisma.expense.findMany({
+      where: expGapWhere,
+      select: {
+        id: true,
+        expenseNumber: true,
+        category: true,
+        description: true,
+        totalAmount: true,
+        expenseDate: true,
+      },
+      orderBy: { expenseDate: "desc" },
+      take: listLimit,
+    }),
+  ]);
+
+  const compliance: PeriodRecordCompliance = {
     saleCount,
     expenseCount,
     salesWithInvoiceOrVault: saleCount - salesMissingEvidence,
     expensesWithReceipt: expenseCount - expensesMissingReceipt,
     salesMissingEvidence,
     expensesMissingReceipt,
+  };
+
+  return {
+    compliance,
+    missingSalesWithoutInvoiceOrVault: missingSalesRows.map((s) => ({
+      saleId: s.id,
+      invoiceNumber: s.invoiceNumber,
+      description: s.description,
+      totalAmount: decimalToNumber(s.totalAmount),
+      saleDate: s.saleDate,
+    })),
+    missingExpensesWithoutReceipt: missingExpenseRows.map((e) => ({
+      expenseId: e.id,
+      expenseNumber: e.expenseNumber,
+      category: e.category,
+      description: e.description,
+      totalAmount: decimalToNumber(e.totalAmount),
+      expenseDate: e.expenseDate,
+    })),
   };
 }
 
@@ -207,6 +280,22 @@ function buildFilingCompletion(
   };
 }
 
+function buildMissingEvidenceBreakdown(
+  compliance: PeriodRecordCompliance,
+  salesRows: MissingEvidenceSaleRow[],
+  expenseRows: MissingEvidenceExpenseRow[],
+) {
+  const listCap = 100;
+  return {
+    salesWithoutInvoiceOrVault: salesRows,
+    expensesWithoutReceipt: expenseRows,
+    listTruncated: {
+      sales: compliance.salesMissingEvidence > listCap,
+      expenses: compliance.expensesMissingReceipt > listCap,
+    },
+  };
+}
+
 function deriveDisplayStatus(payable: {
   status: string;
   submittedAt: Date | null;
@@ -288,10 +377,22 @@ export const filingsService = {
     }
     const uniquePeriods = [...periodKeySet.values()];
     const complianceByPeriodKey = new Map<string, PeriodRecordCompliance>();
+    const missingSalesByPeriodKey = new Map<string, MissingEvidenceSaleRow[]>();
+    const missingExpensesByPeriodKey =
+      new Map<string, MissingEvidenceExpenseRow[]>();
     await Promise.all(
       uniquePeriods.map(async ({ year, month }) => {
-        const c = await getPeriodRecordCompliance(userId, year, month);
-        complianceByPeriodKey.set(`${year}-${month}`, c);
+        const k = `${year}-${month}`;
+        const ev = await fetchPeriodEvidenceCompliance(userId, year, month);
+        complianceByPeriodKey.set(k, ev.compliance);
+        missingSalesByPeriodKey.set(
+          k,
+          ev.missingSalesWithoutInvoiceOrVault,
+        );
+        missingExpensesByPeriodKey.set(
+          k,
+          ev.missingExpensesWithoutReceipt,
+        );
       }),
     );
 
@@ -412,6 +513,11 @@ export const filingsService = {
           salesMissingEvidence: periodRecordCompliance.salesMissingEvidence,
           expensesMissingReceipt: periodRecordCompliance.expensesMissingReceipt,
         },
+        missingEvidenceBreakdown: buildMissingEvidenceBreakdown(
+          periodRecordCompliance,
+          missingSalesByPeriodKey.get(pk) ?? [],
+          missingExpensesByPeriodKey.get(pk) ?? [],
+        ),
       };
     });
 
@@ -453,11 +559,12 @@ export const filingsService = {
       totalPayable,
       totalPaid,
     });
-    const periodRecordCompliance = await getPeriodRecordCompliance(
+    const evidenceState = await fetchPeriodEvidenceCompliance(
       userId,
       p.periodYear,
       p.periodMonth,
     );
+    const periodRecordCompliance = evidenceState.compliance;
     let stateOfOperation: string | null = p.stateOfOperation;
     let vatRegistrationNumber: string | null = p.vatRegistrationNumber;
     if (p.taxType.trim().toUpperCase() === "VAT") {
@@ -522,6 +629,11 @@ export const filingsService = {
         salesMissingEvidence: periodRecordCompliance.salesMissingEvidence,
         expensesMissingReceipt: periodRecordCompliance.expensesMissingReceipt,
       },
+      missingEvidenceBreakdown: buildMissingEvidenceBreakdown(
+        periodRecordCompliance,
+        evidenceState.missingSalesWithoutInvoiceOrVault,
+        evidenceState.missingExpensesWithoutReceipt,
+      ),
       totalPaid,
       currency: p.currency,
       timeline: p.timeline.map((e) => ({

@@ -94,7 +94,7 @@ export async function getFilingsConstantsHandler(
 async function submitClientFilingReturnForType(
   req: IRequest,
   res: Response,
-  taxType: "WHT" | "CIT" | "PAYE",
+  taxType: "WHT" | "CIT" | "PAYE" | "PIT",
   successMessage: string,
 ): Promise<void> {
   const linkedUserId = req.linkedUserId!;
@@ -171,6 +171,18 @@ export async function submitClientPayeReturnHandler(
     res,
     "PAYE",
     "PAYE return submitted",
+  );
+}
+
+export async function submitClientPitReturnHandler(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  await submitClientFilingReturnForType(
+    req,
+    res,
+    "PIT",
+    "PIT return submitted",
   );
 }
 

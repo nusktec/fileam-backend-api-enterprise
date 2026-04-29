@@ -17,6 +17,7 @@ import {
   getPayeComputation,
   getWhtComputation,
   getCitComputation,
+  getPitComputation,
   getStampDutiesComputation,
   getTaxComputationChart,
   getTaxAssumptions,
@@ -49,6 +50,7 @@ router.get("/tax-computation/vat", getVatComputation);
 router.get("/tax-computation/paye", getPayeComputation);
 router.get("/tax-computation/wht", getWhtComputation);
 router.get("/tax-computation/cit", getCitComputation);
+router.get("/tax-computation/pit", getPitComputation);
 router.get("/tax-computation/stamp-duties", getStampDutiesComputation);
 router.get("/tax-computation/threshold-status", getThresholdStatus);
 router.get("/tax-computation/threshold-info", getThresholdInfo);

@@ -5,6 +5,7 @@ export type TaxConfigurationUpdate = {
   paye?: boolean;
   wht?: boolean;
   cit?: boolean;
+  pit?: boolean;
   stampDuties?: boolean;
 };
 
@@ -20,6 +21,7 @@ export async function upsertTaxConfiguration(
       paye: data.paye ?? false,
       wht: data.wht ?? false,
       cit: data.cit ?? false,
+      pit: data.pit ?? false,
       stampDuties: data.stampDuties ?? false,
     },
     update: {
@@ -27,6 +29,7 @@ export async function upsertTaxConfiguration(
       ...(data.paye !== undefined && { paye: data.paye }),
       ...(data.wht !== undefined && { wht: data.wht }),
       ...(data.cit !== undefined && { cit: data.cit }),
+      ...(data.pit !== undefined && { pit: data.pit }),
       ...(data.stampDuties !== undefined && { stampDuties: data.stampDuties }),
     },
   });

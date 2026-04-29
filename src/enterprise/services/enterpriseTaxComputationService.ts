@@ -5,6 +5,7 @@ import {
   WHT_RATE_SERVICES_PERCENT,
   CIT_RATE_STANDARD_PERCENT,
 } from "../../constants/percentages";
+import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
 
 const VAT_TYPES = ["Standard Rate", "Reduced Rate", "Zero Rate", "Exempt"];
 const VAT_PERIODS = ["Monthly", "Quarterly", "Annual"];
@@ -372,6 +373,12 @@ export const enterpriseTaxComputationService = {
         citRate: number;
         citPayable: number;
       };
+      pit?: {
+        enabled: boolean;
+        chargeableIncomeProxyAnnual: number;
+        pitPayableAnnual: number;
+        methodology: string;
+      };
       stampDuties?: {
         enabled: boolean;
         amount: number;
@@ -439,6 +446,17 @@ export const enterpriseTaxComputationService = {
         };
       }
 
+      if (taxConfig?.pit ?? false) {
+        const chargeableAnnual = Math.max(0, summary.netProfit * 12);
+        const pit = estimateAnnualPersonalIncomeTaxNg(chargeableAnnual);
+        result.pit = {
+          enabled: true,
+          chargeableIncomeProxyAnnual: chargeableAnnual,
+          pitPayableAnnual: pit.estimatedAnnualPitNgn,
+          methodology: pit.methodology,
+        };
+      }
+
       if (taxConfig?.stampDuties ?? false) {
         result.stampDuties = {
           enabled: true,
@@ -493,6 +511,17 @@ export const enterpriseTaxComputationService = {
           taxableProfit,
           citRate,
           citPayable: taxableProfit * (citRate / PERCENT),
+        };
+      }
+
+      if (taxConfig?.pit ?? false) {
+        const chargeableAnnual = Math.max(0, summary.netProfit * 12);
+        const pit = estimateAnnualPersonalIncomeTaxNg(chargeableAnnual);
+        result.pit = {
+          enabled: true,
+          chargeableIncomeProxyAnnual: chargeableAnnual,
+          pitPayableAnnual: pit.estimatedAnnualPitNgn,
+          methodology: pit.methodology,
         };
       }
 
@@ -649,6 +678,48 @@ export const enterpriseTaxComputationService = {
       taxableProfit,
       citRate,
       estimatedAnnualCit: taxableProfit * (citRate / PERCENT),
+    };
+  },
+
+  async getPitComputation(
+    companyId: string,
+    year?: number,
+    month?: number,
+    linkedUserId?: string,
+  ) {
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+    });
+    if (!company) return null;
+    const now = new Date();
+    const y = year ?? now.getFullYear();
+    const m = month ?? now.getMonth() + 1;
+
+    if (linkedUserId) {
+      const { taxComputationService } = await import("../../mobile/services/taxComputationService");
+      const comp = await taxComputationService.getForPeriod(linkedUserId, y, m);
+      return {
+        period: comp.period,
+        monthlyProfit: comp.pit.monthlyProfit,
+        annualizedProfit: comp.pit.annualizedProfit,
+        chargeableIncomeProxyAnnual: comp.pit.chargeableIncomeProxyAnnual,
+        estimatedAnnualPit: comp.pit.estimatedAnnualPit,
+        methodology: comp.pit.methodology,
+      };
+    }
+
+    const { enterpriseFinancialsService } = await import("./enterpriseFinancialsService");
+    const summary = await enterpriseFinancialsService.getSummary(companyId);
+    if (!summary) return null;
+    const chargeableAnnual = Math.max(0, summary.netProfit * 12);
+    const pit = estimateAnnualPersonalIncomeTaxNg(chargeableAnnual);
+    return {
+      period: { year: y, month: m, label: `${new Date(y, m - 1).toLocaleString("default", { month: "long" })} ${y}` },
+      monthlyProfit: summary.netProfit,
+      annualizedProfit: summary.netProfit * 12,
+      chargeableIncomeProxyAnnual: chargeableAnnual,
+      estimatedAnnualPit: pit.estimatedAnnualPitNgn,
+      methodology: pit.methodology,
     };
   },
 
