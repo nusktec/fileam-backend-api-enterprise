@@ -9,6 +9,7 @@ import {
 } from "../../constants/percentages";
 import { resolveTaxpayerComputationContext } from "../../constants/taxpayerComputationProfile";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
+import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -33,6 +34,8 @@ export const taxComputationService = {
           roleDescription: true,
           purpose: true,
           organizationName: true,
+          taxPersona: true,
+          solopreneurRegistration: true,
           businesses: {
             take: 1,
             orderBy: { updatedAt: "desc" },
@@ -49,7 +52,14 @@ export const taxComputationService = {
       organizationName: onboarding?.organizationName,
       businessType: b?.businessType,
       incomeType: b?.incomeType,
+      taxPersona: onboarding?.taxPersona,
+      solopreneurRegistration: onboarding?.solopreneurRegistration,
     });
+
+    const taxPersonaGuidance = buildTaxPersonaGuidancePayload(
+      onboarding?.taxPersona,
+      onboarding?.solopreneurRegistration,
+    );
 
     const totalIncome = sales.reduce(
       (s, x) => s + decimalToNumber(x.totalAmount),
@@ -95,6 +105,7 @@ export const taxComputationService = {
 
     return {
       taxpayerContext,
+      taxPersonaGuidance,
       period: {
         year,
         month,

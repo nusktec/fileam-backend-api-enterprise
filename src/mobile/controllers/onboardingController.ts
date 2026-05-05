@@ -104,6 +104,37 @@ export async function stepPassword(
     .json(outJson(true, "Account created", result.data));
 }
 
+export async function stepTaxPersona(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const payload = req.onboardingPayload!;
+  const { taxPersona, solopreneurRegistration } = req.body as {
+    taxPersona?: string;
+    solopreneurRegistration?: string;
+  };
+  if (!taxPersona || typeof taxPersona !== "string") {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, "taxPersona is required", null));
+    return;
+  }
+  const result = await onboardingService.stepTaxPersona(
+    payload,
+    taxPersona,
+    solopreneurRegistration,
+  );
+  if (!result.success) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, result.message, null));
+    return;
+  }
+  res
+    .status(HttpStatusCode.OK)
+    .json(outJson(true, "Tax persona saved", result.data));
+}
+
 export async function stepIncomeType(
   req: IRequest,
   res: Response,

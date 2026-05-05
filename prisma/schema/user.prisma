@@ -11,6 +11,10 @@ model User {
   lga                    String?
   purpose                String?
   roleDescription        String?   @map("role_description")
+  /** SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER — drives tax guidance UX */
+  taxPersona             String?   @map("tax_persona")
+  /** NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY — required when taxPersona is SOLOPRENEUR */
+  solopreneurRegistration String?  @map("solopreneur_registration")
   teamSize               Int?
   adminCount             Int?      @map("admin_count")
   organizationName      String?   @map("organization_name")

@@ -3,6 +3,7 @@ import {
   getFilingsSummary,
   getRecentFilingsForClientConsultant,
 } from "./enterpriseFilingsService";
+import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 
 export async function getClientDetails(companyId: string, linkedUserId: string) {
   const [user, business, taxConfig, thresholdStatus, companyRow] =
@@ -17,6 +18,8 @@ export async function getClientDetails(companyId: string, linkedUserId: string) 
         phone: true,
         address: true,
         organizationName: true,
+        taxPersona: true,
+        solopreneurRegistration: true,
       },
     }),
     prisma.business.findFirst({
@@ -64,6 +67,8 @@ export async function getClientDetails(companyId: string, linkedUserId: string) 
         user.organizationName ??
         business?.name ??
         `${user.firstName} ${user.lastName}`.trim(),
+      taxPersona: user.taxPersona ?? null,
+      solopreneurRegistration: user.solopreneurRegistration ?? null,
     },
     business: business
       ? {
@@ -103,5 +108,9 @@ export async function getClientDetails(companyId: string, linkedUserId: string) 
       summary: filingsSummary,
       recent: filingsRecent,
     },
+    taxPersonaGuidance: buildTaxPersonaGuidancePayload(
+      user.taxPersona,
+      user.solopreneurRegistration,
+    ),
   };
 }

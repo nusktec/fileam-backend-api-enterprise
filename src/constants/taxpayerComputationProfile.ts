@@ -2,12 +2,21 @@
  * Maps onboarding / profile text into which tax computations are emphasized for UI.
  * This does not replace compliance rules — it informs presentation (PIT vs CIT, gig vs SME, etc.).
  */
+import {
+  buildComputationContextFromTaxPersona,
+  normalizeSolopreneurRegistration,
+  normalizeTaxPersona,
+} from "./taxPersona";
+
 export type TaxpayerComputationProfileCode =
   | "unspecified"
   | "gig_freelancer"
   | "solopreneur"
   | "personal_income_focus"
-  | "sme_business";
+  | "sme_business"
+  | "trader"
+  | "payee_side_income"
+  | "remote_worker";
 
 export type TaxSectionRelevance =
   | "primary"
@@ -64,7 +73,14 @@ export function resolveTaxpayerComputationContext(parts: {
   businessType?: string | null;
   incomeType?: string | null;
   organizationName?: string | null;
+  taxPersona?: string | null;
+  solopreneurRegistration?: string | null;
 }): TaxpayerComputationContext {
+  const p = normalizeTaxPersona(parts.taxPersona);
+  const reg = normalizeSolopreneurRegistration(parts.solopreneurRegistration);
+  const fromPersona = buildComputationContextFromTaxPersona(p, reg);
+  if (fromPersona) return fromPersona;
+
   const blob = profileSourceText(parts);
 
   /** Personal-income / PAYE-heavy framing (often salaried or PIT wording). */

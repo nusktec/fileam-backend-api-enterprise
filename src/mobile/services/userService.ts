@@ -1,5 +1,9 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../../config/database";
+import {
+  normalizeSolopreneurRegistration,
+  normalizeTaxPersona,
+} from "../../constants/taxPersona";
 
 type BusinessWithExtras = {
   rcNumber?: string | null;
@@ -46,6 +50,8 @@ export const userService = {
         organizationAddress: true,
         logo: true,
         onboardingComplete: true,
+        taxPersona: true,
+        solopreneurRegistration: true,
         createdAt: true,
         updatedAt: true,
         userRoles: { include: { role: { select: { id: true, name: true } } } },
@@ -75,8 +81,50 @@ export const userService = {
       organizationName?: string;
       organizationAddress?: string;
       logo?: string;
+      taxPersona?: string | null;
+      solopreneurRegistration?: string | null;
     },
   ) {
+    const existing = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { taxPersona: true, solopreneurRegistration: true },
+    });
+
+    const personaPatch =
+      data.taxPersona !== undefined
+        ? normalizeTaxPersona(
+            data.taxPersona === null || data.taxPersona === ""
+              ? undefined
+              : data.taxPersona,
+          )
+        : undefined;
+
+    const regPatch =
+      data.solopreneurRegistration !== undefined
+        ? normalizeSolopreneurRegistration(
+            data.solopreneurRegistration === null ||
+              data.solopreneurRegistration === ""
+              ? undefined
+              : data.solopreneurRegistration,
+          )
+        : undefined;
+
+    const effectivePersona =
+      personaPatch ??
+      normalizeTaxPersona(existing?.taxPersona ?? undefined);
+    const effectiveReg =
+      regPatch ??
+      normalizeSolopreneurRegistration(
+        existing?.solopreneurRegistration ?? undefined,
+      );
+
+    const personaAfterTaxPatch =
+      data.taxPersona !== undefined
+        ? data.taxPersona === null || data.taxPersona === ""
+          ? null
+          : personaPatch
+        : normalizeTaxPersona(existing?.taxPersona ?? undefined);
+
     const updated = await prisma.user.update({
       where: { id: userId },
       data: {
@@ -98,6 +146,26 @@ export const userService = {
           organizationAddress: data.organizationAddress,
         }),
         ...(data.logo !== undefined && { logo: data.logo }),
+        ...(data.taxPersona !== undefined && {
+          taxPersona:
+            data.taxPersona === null || data.taxPersona === ""
+              ? null
+              : personaPatch,
+        }),
+        ...(data.taxPersona !== undefined &&
+          (data.taxPersona === null ||
+            data.taxPersona === "" ||
+            (personaPatch && personaPatch !== "SOLOPRENEUR")) && {
+            solopreneurRegistration: null,
+          }),
+        ...(data.solopreneurRegistration !== undefined &&
+          personaAfterTaxPatch === "SOLOPRENEUR" && {
+            solopreneurRegistration:
+              data.solopreneurRegistration === null ||
+              data.solopreneurRegistration === ""
+                ? null
+                : regPatch,
+          }),
       },
       select: {
         id: true,
@@ -118,6 +186,8 @@ export const userService = {
         onboardingComplete: true,
         currentOnboardingStep: true,
         onboardingCompletedAt: true,
+        taxPersona: true,
+        solopreneurRegistration: true,
         filingRemindersEnabled: true,
         payersNotificationsEnabled: true,
         complianceUpdatesEnabled: true,

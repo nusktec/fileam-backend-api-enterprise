@@ -52,6 +52,8 @@ export const updateProfile = async (
       organizationName?: string;
       organizationAddress?: string;
       logo?: string;
+      taxPersona?: string | null;
+      solopreneurRegistration?: string | null;
     };
 
     const updated = await userService.updateProfile(userId, {
@@ -67,6 +69,8 @@ export const updateProfile = async (
       organizationName: data.organizationName,
       organizationAddress: data.organizationAddress,
       logo: data.logo,
+      taxPersona: data.taxPersona,
+      solopreneurRegistration: data.solopreneurRegistration,
     });
 
     res

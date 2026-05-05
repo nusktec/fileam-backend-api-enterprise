@@ -164,7 +164,7 @@ export const onboardingService = {
         firstName: firstName?.trim() || "User",
         lastName: lastName?.trim() || "",
         verified: true,
-        currentOnboardingStep: "income_type",
+        currentOnboardingStep: "tax_persona",
         userRoles: { create: { roleId: businessRole.id } },
       },
       include: { userRoles: { include: { role: true } } },
@@ -174,7 +174,7 @@ export const onboardingService = {
       success: true as const,
       data: {
         user: userPayload,
-        currentOnboardingStep: created.currentOnboardingStep ?? "income_type",
+        currentOnboardingStep: created.currentOnboardingStep ?? "tax_persona",
       },
     };
   },
@@ -203,6 +203,74 @@ export const onboardingService = {
     });
   },
 
+  async stepTaxPersona(
+    tokenPayload: OnboardingTokenPayload,
+    taxPersona: string,
+    solopreneurRegistration?: string,
+  ) {
+    const user = await this.getUserByEmail(tokenPayload.email);
+    if (!user)
+      return {
+        success: false as const,
+        message: "User not found. Complete password step first.",
+      };
+    if (user.onboardingComplete) {
+      return {
+        success: false as const,
+        message: "You have already completed mobile onboarding. Use login to access your account.",
+      };
+    }
+    const {
+      normalizeTaxPersona,
+      normalizeSolopreneurRegistration,
+      listTaxPersonasForOnboarding,
+      listSolopreneurRegistrationsForOnboarding,
+      buildTaxPersonaGuidancePayload,
+    } = await import("../constants/taxPersona");
+
+    const persona = normalizeTaxPersona(taxPersona);
+    if (!persona) {
+      return {
+        success: false as const,
+        message: `Invalid taxPersona. Use one of: ${listTaxPersonasForOnboarding().map((x) => x.code).join(", ")}.`,
+      };
+    }
+
+    let regStored: string | null = null;
+    if (persona === "SOLOPRENEUR") {
+      const reg = normalizeSolopreneurRegistration(solopreneurRegistration);
+      if (!reg) {
+        return {
+          success: false as const,
+          message:
+            "solopreneurRegistration is required when taxPersona is SOLOPRENEUR (NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY).",
+        };
+      }
+      regStored = reg;
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        taxPersona: persona,
+        solopreneurRegistration: regStored,
+        currentOnboardingStep: "income_type",
+      },
+    });
+
+    const preview = buildTaxPersonaGuidancePayload(persona, regStored);
+    return {
+      success: true as const,
+      data: {
+        taxPersona: persona,
+        solopreneurRegistration: regStored,
+        taxGuidancePreview: preview,
+        currentOnboardingStep:
+          updatedUser.currentOnboardingStep ?? "income_type",
+      },
+    };
+  },
+
   async stepIncomeType(
     tokenPayload: OnboardingTokenPayload,
     incomeType: string,
@@ -217,6 +285,13 @@ export const onboardingService = {
       return {
         success: false as const,
         message: "You have already completed mobile onboarding. Use login to access your account.",
+      };
+    }
+    if (user.currentOnboardingStep === "tax_persona") {
+      return {
+        success: false as const,
+        message:
+          "Select your tax persona first (POST /api/v1/onboarding/step/tax-persona).",
       };
     }
 
@@ -488,6 +563,10 @@ export const onboardingService = {
   async getOnboardingProfile(tokenPayload: OnboardingTokenPayload) {
     const user = await this.getUserByEmail(tokenPayload.email);
     if (!user) {
+      const {
+        listTaxPersonasForOnboarding,
+        listSolopreneurRegistrationsForOnboarding,
+      } = await import("../constants/taxPersona");
       return {
         success: true as const,
         data: {
@@ -496,10 +575,20 @@ export const onboardingService = {
           onboardingComplete: false,
           user: null,
           business: null,
+          taxPersonaOptions: listTaxPersonasForOnboarding(),
+          solopreneurRegistrationOptions:
+            listSolopreneurRegistrationsForOnboarding(),
+          taxPersonaGuidance: null,
         },
       };
     }
     const business = user.businesses[0] ?? null;
+    const {
+      listTaxPersonasForOnboarding,
+      listSolopreneurRegistrationsForOnboarding,
+      buildTaxPersonaGuidancePayload,
+    } = await import("../constants/taxPersona");
+
     const profile = {
       id: user.id,
       email: user.email,
@@ -508,7 +597,9 @@ export const onboardingService = {
       phone: user.phone,
       verified: user.verified,
       onboardingComplete: user.onboardingComplete,
-      currentOnboardingStep: user.currentOnboardingStep ?? "income_type",
+      currentOnboardingStep: user.currentOnboardingStep ?? "tax_persona",
+      taxPersona: user.taxPersona ?? null,
+      solopreneurRegistration: user.solopreneurRegistration ?? null,
     };
     const businessData = business
       ? {
@@ -524,14 +615,23 @@ export const onboardingService = {
           primaryTaxOffice: business.primaryTaxOffice,
         }
       : null;
+    const guidance = buildTaxPersonaGuidancePayload(
+      user.taxPersona,
+      user.solopreneurRegistration,
+    );
+
     return {
       success: true as const,
       data: {
         email: user.email,
-        currentOnboardingStep: user.currentOnboardingStep ?? "income_type",
+        currentOnboardingStep: user.currentOnboardingStep ?? "tax_persona",
         onboardingComplete: user.onboardingComplete,
         user: profile,
         business: businessData,
+        taxPersonaOptions: listTaxPersonasForOnboarding(),
+        solopreneurRegistrationOptions:
+          listSolopreneurRegistrationsForOnboarding(),
+        taxPersonaGuidance: guidance,
       },
     };
   },

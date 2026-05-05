@@ -1,6 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { PERCENT } from "../../constants/percentages";
+import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -30,7 +31,13 @@ export async function getClientDashboard(linkedUserId: string) {
     await Promise.all([
     prisma.user.findUnique({
       where: { id: linkedUserId },
-      select: { organizationName: true, firstName: true, lastName: true },
+      select: {
+        organizationName: true,
+        firstName: true,
+        lastName: true,
+        taxPersona: true,
+        solopreneurRegistration: true,
+      },
     }),
     prisma.business.findFirst({ where: { userId: linkedUserId } }),
     companyId
@@ -152,6 +159,11 @@ export async function getClientDashboard(linkedUserId: string) {
     breakdown.PIT = comp.pit.estimatedAnnualPit / 12;
   }
 
+  const taxPersonaGuidance = buildTaxPersonaGuidancePayload(
+    user.taxPersona,
+    user.solopreneurRegistration,
+  );
+
   return {
     businessName,
     status: vatRequired ? "VAT required" : "VAT not required",
@@ -163,5 +175,6 @@ export async function getClientDashboard(linkedUserId: string) {
     },
     taxObligations,
     taxBreakdownByType: breakdown,
+    taxPersonaGuidance,
   };
 }

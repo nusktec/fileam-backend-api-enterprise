@@ -49,6 +49,8 @@ const authHandler = ({ roles = [], permissions = [] }: AuthOptions = {}) => {
           lga: true,
           purpose: true,
           roleDescription: true,
+          taxPersona: true,
+          solopreneurRegistration: true,
           teamSize: true,
           adminCount: true,
           organizationName: true,

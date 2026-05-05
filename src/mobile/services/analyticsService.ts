@@ -4,6 +4,7 @@ import {
   PERCENT,
   KPI_PERCENT_ROUNDING_FACTOR,
 } from "../../constants/percentages";
+import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 import { taxComputationService } from "./taxComputationService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -80,6 +81,15 @@ export const analyticsService = {
     );
     const businessHealth = await this.getBusinessHealth(userId);
 
+    const personaRow = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { taxPersona: true, solopreneurRegistration: true },
+    });
+    const taxPersonaGuidance = buildTaxPersonaGuidancePayload(
+      personaRow?.taxPersona,
+      personaRow?.solopreneurRegistration,
+    );
+
     const label =
       range === "month"
         ? periodLabel(year, month)
@@ -126,6 +136,7 @@ export const analyticsService = {
       incomeTrend,
       expenseBreakdown,
       businessHealth,
+      taxPersonaGuidance,
     };
   },
 

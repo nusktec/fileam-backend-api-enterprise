@@ -5,6 +5,7 @@ import {
   stepEmailVerify,
   resendStepEmail,
   stepPassword,
+  stepTaxPersona,
   stepIncomeType,
   stepTaxObligations,
   stepBusinessDetails,
@@ -24,6 +25,11 @@ router.post("/step/email-resend", resendStepEmail);
 router.post("/step/email-verify", stepEmailVerify);
 
 router.post("/step/password", requireOnboardingOrAccessToken, stepPassword);
+router.post(
+  "/step/tax-persona",
+  requireOnboardingOrAccessToken,
+  stepTaxPersona,
+);
 router.post(
   "/step/income-type",
   requireOnboardingOrAccessToken,

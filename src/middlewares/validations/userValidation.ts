@@ -1,5 +1,9 @@
 import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import {
+  normalizeSolopreneurRegistration,
+  normalizeTaxPersona,
+} from "../../constants/taxPersona";
 
 const updateProfileValidation = [
   check("firstName")
@@ -22,6 +26,24 @@ const updateProfileValidation = [
   check("organizationName").optional().isString(),
   check("organizationAddress").optional().isString(),
   check("logo").optional().isString(),
+  check("taxPersona")
+    .optional({ nullable: true })
+    .custom((v) => {
+      if (v === null || v === undefined || v === "") return true;
+      return normalizeTaxPersona(String(v)) !== null;
+    })
+    .withMessage(
+      "Invalid taxPersona (SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER)",
+    ),
+  check("solopreneurRegistration")
+    .optional({ nullable: true })
+    .custom((v) => {
+      if (v === null || v === undefined || v === "") return true;
+      return normalizeSolopreneurRegistration(String(v)) !== null;
+    })
+    .withMessage(
+      "Invalid solopreneurRegistration (NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY)",
+    ),
   handleValidation,
 ];
 

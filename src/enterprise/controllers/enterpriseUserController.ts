@@ -52,8 +52,25 @@ export const updateProfile = async (
       organizationName?: string;
       organizationAddress?: string;
       logo?: string;
+      taxPersona?: string | null;
+      solopreneurRegistration?: string | null;
     };
-    const updated = await userService.updateProfile(userId, data);
+    const updated = await userService.updateProfile(userId, {
+      firstName: data.firstName,
+      lastName: data.lastName,
+      address: data.address,
+      state: data.state,
+      lga: data.lga,
+      purpose: data.purpose,
+      roleDescription: data.roleDescription,
+      teamSize: data.teamSize,
+      adminCount: data.adminCount,
+      organizationName: data.organizationName,
+      organizationAddress: data.organizationAddress,
+      logo: data.logo,
+      taxPersona: data.taxPersona,
+      solopreneurRegistration: data.solopreneurRegistration,
+    });
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Profile updated", updated));
