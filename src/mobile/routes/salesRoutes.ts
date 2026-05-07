@@ -6,6 +6,8 @@ import {
   createSale,
   updateSale,
   downloadSaleInvoice,
+  markInvoicePaid,
+  deleteSale,
 } from "../controllers/salesController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
@@ -19,6 +21,8 @@ const router = express.Router();
 router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/", withPagination("saleDate"), listSales);
+router.delete("/:id", validateIdParam, deleteSale);
+router.post("/:id/mark-paid", validateIdParam, markInvoicePaid);
 router.get("/:id/details", validateIdParam, getSaleDetails);
 router.get("/:id/download-invoice", validateIdParam, downloadSaleInvoice);
 router.patch(

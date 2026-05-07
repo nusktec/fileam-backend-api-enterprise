@@ -212,3 +212,27 @@ export const updateExpense = async (
       .json(outJson(false, "Failed to update expense", null));
   }
 };
+
+export const deleteExpense = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const expenseId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const ok = await expensesService.deleteForUser(userId, expenseId!);
+    if (!ok) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Expense not found", null));
+      return;
+    }
+    res.status(HttpStatusCode.OK).json(outJson(true, "Expense deleted", null));
+  } catch {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to delete expense", null));
+  }
+};

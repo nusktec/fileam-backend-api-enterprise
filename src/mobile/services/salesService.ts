@@ -1,11 +1,62 @@
 import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
 import { PERCENT, VAT_RATE_PERCENT } from "../../constants/percentages";
-const EXPENSE_COUNTER_ID = "expense_number";
+import {
+  initialSaleStatusForPaymentType,
+  isInvoicePaymentType,
+} from "../../constants/salePaymentRules";
+import { HttpReplyError } from "../../utils/httpReplyError";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
+}
+
+function resolveSaleStatusAfterPatch(
+  sale: { paymentType: string; status: string },
+  data: Partial<{ paymentType: string; status: string }>,
+): string {
+  const effectivePt = data.paymentType ?? sale.paymentType;
+
+  if (!isInvoicePaymentType(effectivePt)) {
+    return "Paid";
+  }
+
+  if (data.status != null) {
+    const allowed = ["Paid", "Pending", "Overdue"];
+    if (!allowed.includes(data.status)) {
+      throw new HttpReplyError(
+        400,
+        `status must be one of: ${allowed.join(", ")} for Invoice sales`,
+      );
+    }
+    if (data.status === "Pending" && sale.status === "Paid") {
+      throw new HttpReplyError(
+        400,
+        "Paid sales cannot be set back to Pending",
+      );
+    }
+    if (
+      data.status === "Paid" &&
+      !["Pending", "Overdue", "Paid"].includes(sale.status)
+    ) {
+      throw new HttpReplyError(
+        400,
+        "Only Pending or Overdue invoice sales can be marked Paid via status",
+      );
+    }
+    return data.status;
+  }
+
+  if (
+    data.paymentType != null &&
+    data.paymentType !== sale.paymentType &&
+    isInvoicePaymentType(data.paymentType)
+  ) {
+    return "Pending";
+  }
+
+  return sale.status;
 }
 
 export const salesService = {
@@ -145,6 +196,7 @@ export const salesService = {
       ? amount.mul(VAT_RATE_PERCENT / PERCENT)
       : new Decimal(0);
     const totalAmount = amount.add(vatAmount);
+    const status = initialSaleStatusForPaymentType(data.paymentType);
 
     const sale = await prisma.$transaction(async (tx) => {
       const userRow = await tx.user.findUnique({
@@ -174,7 +226,7 @@ export const salesService = {
           saleDate: new Date(data.date),
           vatableIncome: data.vatableIncome,
           serviceIncome: data.serviceIncome,
-          status: "Pending",
+          status,
         },
       });
     });
@@ -235,7 +287,6 @@ export const salesService = {
     if (data.date != null) updateData.saleDate = new Date(data.date);
     if (data.vatableIncome != null) updateData.vatableIncome = data.vatableIncome;
     if (data.serviceIncome != null) updateData.serviceIncome = data.serviceIncome;
-    if (data.status != null) updateData.status = data.status;
 
     const vatable =
       data.vatableIncome != null ? data.vatableIncome : sale.vatableIncome;
@@ -257,6 +308,8 @@ export const salesService = {
       updateData.totalAmount = amount.add(vatAmount);
     }
 
+    updateData.status = resolveSaleStatusAfterPatch(sale, data);
+
     const updated = await prisma.sale.update({
       where: { id: saleId },
       data: updateData,
@@ -273,5 +326,66 @@ export const salesService = {
       customerName: updated.customerName ?? null,
       customerId: updated.customerId ?? null,
     };
+  },
+
+  async markInvoicePaid(userId: string, saleId: string) {
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, userId },
+    });
+    if (!sale) return null;
+
+    if (!isInvoicePaymentType(sale.paymentType)) {
+      throw new HttpReplyError(
+        400,
+        "mark-paid applies only to sales with paymentType Invoice",
+      );
+    }
+
+    if (sale.status === "Paid") {
+      return {
+        id: sale.id,
+        invoiceNumber: sale.invoiceNumber,
+        status: sale.status,
+        description: sale.description,
+        date: sale.saleDate,
+        amount: decimalToNumber(sale.amount),
+        vatAmount: decimalToNumber(sale.vatAmount),
+        totalAmount: decimalToNumber(sale.totalAmount),
+        customerName: sale.customerName ?? null,
+        customerId: sale.customerId ?? null,
+      };
+    }
+
+    if (!["Pending", "Overdue"].includes(sale.status)) {
+      throw new HttpReplyError(
+        400,
+        "Only Pending or Overdue invoice sales can be marked Paid",
+      );
+    }
+
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: { status: "Paid" },
+    });
+
+    return {
+      id: updated.id,
+      invoiceNumber: updated.invoiceNumber,
+      status: updated.status,
+      description: updated.description,
+      date: updated.saleDate,
+      amount: decimalToNumber(updated.amount),
+      vatAmount: decimalToNumber(updated.vatAmount),
+      totalAmount: decimalToNumber(updated.totalAmount),
+      customerName: updated.customerName ?? null,
+      customerId: updated.customerId ?? null,
+    };
+  },
+
+  async deleteForUser(userId: string, saleId: string): Promise<boolean> {
+    const result = await prisma.sale.deleteMany({
+      where: { id: saleId, userId },
+    });
+    return result.count > 0;
   },
 };

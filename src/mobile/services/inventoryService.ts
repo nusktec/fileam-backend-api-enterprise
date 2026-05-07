@@ -15,6 +15,7 @@ import {
   PERCENT_TWO_DECIMAL_ROUND,
   MARGIN_PERCENT_NUMERATOR,
 } from "../../constants/percentages";
+import { initialSaleStatusForPaymentType } from "../../constants/salePaymentRules";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 
@@ -67,7 +68,7 @@ async function createLinkedSaleInTx(
       saleDate: input.saleDate,
       vatableIncome: input.vatableIncome,
       serviceIncome: input.serviceIncome,
-      status: "Pending",
+      status: initialSaleStatusForPaymentType(input.paymentType),
     },
   });
   return {

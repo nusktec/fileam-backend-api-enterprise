@@ -181,6 +181,9 @@ export const taxPayablesService = {
       prisma.taxPayable.count({ where }),
     ]);
 
+    const { taxpayerContext, taxPersonaGuidance } =
+      await taxComputationService.getPersonaPayloadForUser(userId);
+
     const data = payables.map((p) => ({
       id: p.id,
       taxType: p.taxType,
@@ -200,6 +203,8 @@ export const taxPayablesService = {
       paymentLink: getPaymentLink(p.id, p.paymentLink),
     }));
     return {
+      taxpayerContext,
+      taxPersonaGuidance,
       data,
       total,
       page,
@@ -214,10 +219,14 @@ export const taxPayablesService = {
       include: { payments: { orderBy: { paidAt: "desc" } } },
     });
     if (!p) return null;
+    const { taxpayerContext, taxPersonaGuidance } =
+      await taxComputationService.getPersonaPayloadForUser(userId);
     const totalPaid = p.payments
       .filter((r) => r.status === "completed")
       .reduce((s, r) => s + decimalToNumber(r.amountPaid), 0);
     return {
+      taxpayerContext,
+      taxPersonaGuidance,
       id: p.id,
       taxType: p.taxType,
       periodYear: p.periodYear,

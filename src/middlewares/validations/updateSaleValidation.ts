@@ -24,6 +24,9 @@ export const updateSaleValidation = [
   check("date").optional().isISO8601(),
   check("vatableIncome").optional().isBoolean(),
   check("serviceIncome").optional().isBoolean(),
-  check("status").optional().trim().isString(),
+  check("status")
+    .optional()
+    .isIn(["Paid", "Pending", "Overdue"])
+    .withMessage("status must be Paid, Pending, or Overdue"),
   handleValidation,
 ];

@@ -6,6 +6,7 @@ import {
   createExpense,
   updateExpense,
   downloadExpenseReceipt,
+  deleteExpense,
 } from "../controllers/expensesController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
@@ -19,6 +20,7 @@ const router = express.Router();
 router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/", withPagination("expenseDate"), listExpenses);
+router.delete("/:id", validateIdParam, deleteExpense);
 router.get("/:id/details", validateIdParam, getExpenseDetails);
 router.get("/:id/download-receipt", validateIdParam, downloadExpenseReceipt);
 router.patch(

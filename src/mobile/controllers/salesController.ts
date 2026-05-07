@@ -5,6 +5,15 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { salesService } from "../services/salesService";
+import { HttpReplyError } from "../../utils/httpReplyError";
+
+function replySaleError(res: Response, error: unknown): boolean {
+  if (error instanceof HttpReplyError) {
+    res.status(error.statusCode).json(outJson(false, error.message, null));
+    return true;
+  }
+  return false;
+}
 
 export const listSales = async (
   req: IRequest,
@@ -133,6 +142,7 @@ export const createSale = async (
     }
     res.status(HttpStatusCode.CREATED).json(outJson(true, "Sale added", sale));
   } catch (error) {
+    if (replySaleError(res, error)) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to add sale", null));
@@ -196,9 +206,59 @@ export const updateSale = async (req: IRequest, res: Response): Promise<void> =>
       return;
     }
     res.status(HttpStatusCode.OK).json(outJson(true, "Sale updated", updated));
-  } catch {
+  } catch (error) {
+    if (replySaleError(res, error)) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to update sale", null));
+  }
+};
+
+export const markInvoicePaid = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const saleId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const updated = await salesService.markInvoicePaid(userId, saleId!);
+    if (!updated) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Sale not found", null));
+      return;
+    }
+    res.status(HttpStatusCode.OK).json(outJson(true, "Sale marked paid", updated));
+  } catch (error) {
+    if (replySaleError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to mark sale paid", null));
+  }
+};
+
+export const deleteSale = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const saleId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const ok = await salesService.deleteForUser(userId, saleId!);
+    if (!ok) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Sale not found", null));
+      return;
+    }
+    res.status(HttpStatusCode.OK).json(outJson(true, "Sale deleted", null));
+  } catch {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to delete sale", null));
   }
 };

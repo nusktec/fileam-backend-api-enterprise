@@ -1,6 +1,9 @@
 import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
-import { PERCENT } from "../../constants/percentages";
+import {
+  PERCENT,
+  VAT_RATE_PERCENT,
+} from "../../constants/percentages";
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 
 const EXPENSE_COUNTER_ID = "expense_number";
@@ -214,14 +217,35 @@ export const expensesService = {
           : data.supplierId.trim();
     }
 
-    if (data.amount != null || data.vatAmount != null) {
-      const amount = data.amount != null ? new Decimal(data.amount) : expense.amount;
-      const vatAmount =
-        data.vatAmount != null ? new Decimal(data.vatAmount) : expense.vatAmount ?? new Decimal(0);
-      const vatNum = Number(vatAmount);
-      updateData.amount = amount;
-      updateData.vatAmount = vatNum > 0 ? vatAmount : null;
-      updateData.totalAmount = vatNum > 0 ? amount.add(vatAmount) : amount;
+    const touchesFinancial =
+      data.amount != null ||
+      data.vatAmount !== undefined ||
+      data.vatInclusive !== undefined;
+
+    if (touchesFinancial) {
+      const base =
+        data.amount != null ? new Decimal(data.amount) : expense.amount;
+      const vatInclusive =
+        data.vatInclusive !== undefined
+          ? data.vatInclusive
+          : expense.vatInclusive;
+
+      if (data.vatAmount != null) {
+        const vat = new Decimal(data.vatAmount);
+        const vatNum = Number(vat);
+        updateData.amount = base;
+        updateData.vatAmount = vatNum > 0 ? vat : null;
+        updateData.totalAmount = vatNum > 0 ? base.add(vat) : base;
+      } else if (vatInclusive) {
+        const vat = base.mul(VAT_RATE_PERCENT / PERCENT);
+        updateData.amount = base;
+        updateData.vatAmount = vat;
+        updateData.totalAmount = base.add(vat);
+      } else {
+        updateData.amount = base;
+        updateData.vatAmount = null;
+        updateData.totalAmount = base;
+      }
     }
 
     const updated = await prisma.expense.update({
@@ -239,5 +263,12 @@ export const expensesService = {
       supplierName: updated.supplierName ?? null,
       supplierId: updated.supplierId ?? null,
     };
+  },
+
+  async deleteForUser(userId: string, expenseId: string): Promise<boolean> {
+    const result = await prisma.expense.deleteMany({
+      where: { id: expenseId, userId },
+    });
+    return result.count > 0;
   },
 };
