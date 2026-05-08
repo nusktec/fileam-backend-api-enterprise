@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import {
   normalizeSolopreneurRegistration,
@@ -52,6 +53,7 @@ export const userService = {
         onboardingComplete: true,
         taxPersona: true,
         solopreneurRegistration: true,
+        employmentGrossSalaryMonthly: true,
         createdAt: true,
         updatedAt: true,
         userRoles: { include: { role: { select: { id: true, name: true } } } },
@@ -59,8 +61,13 @@ export const userService = {
     });
     if (!user) return null;
     const primaryRole = user.userRoles?.[0]?.role;
+    const { employmentGrossSalaryMonthly, ...rest } = user;
     return {
-      ...user,
+      ...rest,
+      employmentGrossSalaryMonthly:
+        employmentGrossSalaryMonthly != null
+          ? Number(employmentGrossSalaryMonthly)
+          : null,
       role: primaryRole ?? null,
       userRoles: undefined,
     };
@@ -83,6 +90,7 @@ export const userService = {
       logo?: string;
       taxPersona?: string | null;
       solopreneurRegistration?: string | null;
+      employmentGrossSalaryMonthly?: number | null;
     },
   ) {
     const existing = await prisma.user.findUnique({
@@ -166,6 +174,12 @@ export const userService = {
                 ? null
                 : regPatch,
           }),
+        ...(data.employmentGrossSalaryMonthly !== undefined && {
+          employmentGrossSalaryMonthly:
+            data.employmentGrossSalaryMonthly === null
+              ? null
+              : new Decimal(Number(data.employmentGrossSalaryMonthly)),
+        }),
       },
       select: {
         id: true,
@@ -188,6 +202,7 @@ export const userService = {
         onboardingCompletedAt: true,
         taxPersona: true,
         solopreneurRegistration: true,
+        employmentGrossSalaryMonthly: true,
         filingRemindersEnabled: true,
         payersNotificationsEnabled: true,
         complianceUpdatesEnabled: true,
@@ -198,8 +213,12 @@ export const userService = {
       },
     });
     const primaryRole = updated.userRoles?.[0]?.role;
+    const { employmentGrossSalaryMonthly: salaryDec, ...updatedRest } =
+      updated;
     return {
-      ...updated,
+      ...updatedRest,
+      employmentGrossSalaryMonthly:
+        salaryDec != null ? Number(salaryDec) : null,
       role: primaryRole ?? null,
       userRoles: undefined,
     };

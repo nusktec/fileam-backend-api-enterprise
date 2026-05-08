@@ -9,6 +9,7 @@ import {
 } from "../../constants/percentages";
 import { resolveTaxpayerComputationContext } from "../../constants/taxpayerComputationProfile";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
+import { computePayeMonthly } from "../../constants/payroll";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -27,6 +28,7 @@ export const taxComputationService = {
         organizationName: true,
         taxPersona: true,
         solopreneurRegistration: true,
+        employmentGrossSalaryMonthly: true,
         businesses: {
           take: 1,
           orderBy: { updatedAt: "desc" },
@@ -48,7 +50,15 @@ export const taxComputationService = {
       onboarding?.taxPersona,
       onboarding?.solopreneurRegistration,
     );
-    return { taxpayerContext, taxPersonaGuidance };
+    const employmentGrossSalaryMonthly =
+      onboarding?.employmentGrossSalaryMonthly != null
+        ? decimalToNumber(onboarding.employmentGrossSalaryMonthly)
+        : null;
+    return {
+      taxpayerContext,
+      taxPersonaGuidance,
+      employmentGrossSalaryMonthly,
+    };
   },
 
   async getForPeriod(userId: string, year: number, month: number) {
@@ -65,7 +75,13 @@ export const taxComputationService = {
       this.getPersonaPayloadForUser(userId),
     ]);
 
-    const { taxpayerContext, taxPersonaGuidance } = personaPayload;
+    const { taxpayerContext, taxPersonaGuidance, employmentGrossSalaryMonthly } =
+      personaPayload;
+
+    const salaryMonthlyCaptured =
+      employmentGrossSalaryMonthly != null && employmentGrossSalaryMonthly > 0
+        ? employmentGrossSalaryMonthly
+        : 0;
 
     const totalIncome = sales.reduce(
       (s, x) => s + decimalToNumber(x.totalAmount),
@@ -99,6 +115,15 @@ export const taxComputationService = {
     const pitFromBooks = estimateAnnualPersonalIncomeTaxNg(
       Math.max(0, annualizedProfit),
     );
+
+    const flags = taxPersonaGuidance.applicableTaxes;
+
+    const employmentGrossAnnual = salaryMonthlyCaptured * 12;
+    const payeMonthlyEstimate =
+      flags.paye && employmentGrossAnnual > 0
+        ? computePayeMonthly(employmentGrossAnnual)
+        : 0;
+    const payeAnnualEstimate = payeMonthlyEstimate * 12;
 
     const percentOfVatThreshold =
       (totalIncome / VAT_TURNOVER_THRESHOLD_NGN) * PERCENT;
@@ -160,6 +185,31 @@ export const taxComputationService = {
         chargeableIncomeProxyAnnual: pitFromBooks.chargeableIncomeProxyAnnualNgn,
         estimatedAnnualPit: pitFromBooks.estimatedAnnualPitNgn,
         methodology: pitFromBooks.methodology,
+      },
+      /**
+       * PAYE (Pay As You Earn) — salary withholding. Distinct from tax persona **PAYEE**.
+       * Uses `User.employmentGrossSalaryMonthly` (NGN) when PAYE is persona-applicable.
+       */
+      paye: {
+        applicable: flags.paye,
+        employmentGrossSalaryMonthlyCaptured:
+          salaryMonthlyCaptured > 0 ? salaryMonthlyCaptured : null,
+        summaryMonthlyEstimate: payeMonthlyEstimate,
+        summaryAnnualEstimate: payeAnnualEstimate,
+        methodology:
+          flags.paye && salaryMonthlyCaptured > 0
+            ? "Estimated PAYE using simplified Nigerian PAYE brackets (consolidated relief + employee pension allowance). Employers withhold differently — reconcile with payslips. Freelance/side income remains under WHT / PIT."
+            : flags.paye && salaryMonthlyCaptured <= 0
+              ? "PAYE applies to salary — set employmentGrossSalaryMonthly on your mobile profile to populate estimates."
+              : "PAYE mainly applies when your tax persona is PAYEE (employee + side income).",
+      },
+      /** Placeholder until local levy amounts are modeled from location/trade data. */
+      localGovLevies: {
+        applicable: flags.localGovLevies,
+        summaryMonthlyEstimate: 0,
+        methodology: flags.localGovLevies
+          ? "Local/trade levies vary by state and LGA; amounts are not estimated from books in this release."
+          : "Not emphasized for your current tax persona.",
       },
     };
   },

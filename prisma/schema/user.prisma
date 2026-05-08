@@ -15,6 +15,8 @@ model User {
   taxPersona             String?   @map("tax_persona")
   /** NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY — required when taxPersona is SOLOPRENEUR */
   solopreneurRegistration String?  @map("solopreneur_registration")
+  /** Total gross employment salary per month (NGN); drives PAYE estimate when persona marks PAYE applicable */
+  employmentGrossSalaryMonthly Decimal? @map("employment_gross_salary_monthly") @db.Decimal(14, 2)
   teamSize               Int?
   adminCount             Int?      @map("admin_count")
   organizationName      String?   @map("organization_name")

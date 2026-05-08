@@ -1,8 +1,12 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { taxComputationService } from "./taxComputationService";
-import { VAT_FILING_DAY } from "../../constants/taxPayable";
-import type { TaxType, PayableStatus } from "../../constants/taxPayable";
+import {
+  VAT_FILING_DAY,
+  TAX_PAYABLES_SCOPE_NOTE,
+  type TaxType,
+  type PayableStatus,
+} from "../../constants/taxPayable";
 
 const PAYMENT_BASE_URL =
   process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
@@ -78,6 +82,24 @@ export const taxPayablesService = {
           year,
           month,
           amountDue: computation.cit.summary / 12,
+          penalties: 0,
+        });
+      }
+      if (computation.pit.summary > 0) {
+        payablesToUpsert.push({
+          taxType: "PIT",
+          year,
+          month,
+          amountDue: computation.pit.summary / 12,
+          penalties: 0,
+        });
+      }
+      if (computation.paye.summaryMonthlyEstimate > 0) {
+        payablesToUpsert.push({
+          taxType: "PAYE",
+          year,
+          month,
+          amountDue: computation.paye.summaryMonthlyEstimate,
           penalties: 0,
         });
       }
@@ -205,6 +227,7 @@ export const taxPayablesService = {
     return {
       taxpayerContext,
       taxPersonaGuidance,
+      payablesScopeNote: TAX_PAYABLES_SCOPE_NOTE,
       data,
       total,
       page,
@@ -227,6 +250,7 @@ export const taxPayablesService = {
     return {
       taxpayerContext,
       taxPersonaGuidance,
+      payablesScopeNote: TAX_PAYABLES_SCOPE_NOTE,
       id: p.id,
       taxType: p.taxType,
       periodYear: p.periodYear,

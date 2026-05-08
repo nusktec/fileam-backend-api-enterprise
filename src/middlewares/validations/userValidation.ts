@@ -44,6 +44,12 @@ const updateProfileValidation = [
     .withMessage(
       "Invalid solopreneurRegistration (NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY)",
     ),
+  check("employmentGrossSalaryMonthly")
+    .optional({ nullable: true })
+    .isFloat({ min: 0 })
+    .withMessage(
+      "employmentGrossSalaryMonthly must be a non-negative number or null",
+    ),
   handleValidation,
 ];
 
