@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../config/database";
 import { EmailVerificationService } from "./emailVerificationService";
 import {
@@ -207,6 +208,7 @@ export const onboardingService = {
     tokenPayload: OnboardingTokenPayload,
     taxPersona: string,
     solopreneurRegistration?: string,
+    employmentGrossSalaryMonthly?: number | null,
   ) {
     const user = await this.getUserByEmail(tokenPayload.email);
     if (!user)
@@ -255,15 +257,26 @@ export const onboardingService = {
         taxPersona: persona,
         solopreneurRegistration: regStored,
         currentOnboardingStep: "income_type",
+        ...(employmentGrossSalaryMonthly !== undefined && {
+          employmentGrossSalaryMonthly:
+            employmentGrossSalaryMonthly === null
+              ? null
+              : new Decimal(employmentGrossSalaryMonthly),
+        }),
       },
     });
 
     const preview = buildTaxPersonaGuidancePayload(persona, regStored);
+    const salaryOut =
+      updatedUser.employmentGrossSalaryMonthly != null
+        ? Number(updatedUser.employmentGrossSalaryMonthly)
+        : null;
     return {
       success: true as const,
       data: {
         taxPersona: persona,
         solopreneurRegistration: regStored,
+        employmentGrossSalaryMonthly: salaryOut,
         taxGuidancePreview: preview,
         currentOnboardingStep:
           updatedUser.currentOnboardingStep ?? "income_type",
@@ -600,6 +613,10 @@ export const onboardingService = {
       currentOnboardingStep: user.currentOnboardingStep ?? "tax_persona",
       taxPersona: user.taxPersona ?? null,
       solopreneurRegistration: user.solopreneurRegistration ?? null,
+      employmentGrossSalaryMonthly:
+        user.employmentGrossSalaryMonthly != null
+          ? Number(user.employmentGrossSalaryMonthly)
+          : null,
     };
     const businessData = business
       ? {

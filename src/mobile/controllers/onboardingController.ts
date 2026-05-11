@@ -109,20 +109,43 @@ export async function stepTaxPersona(
   res: Response,
 ): Promise<void> {
   const payload = req.onboardingPayload!;
-  const { taxPersona, solopreneurRegistration } = req.body as {
-    taxPersona?: string;
-    solopreneurRegistration?: string;
-  };
+  const { taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly } =
+    req.body as {
+      taxPersona?: string;
+      solopreneurRegistration?: string;
+      employmentGrossSalaryMonthly?: unknown;
+    };
   if (!taxPersona || typeof taxPersona !== "string") {
     res
       .status(HttpStatusCode.BAD_REQUEST)
       .json(outJson(false, "taxPersona is required", null));
     return;
   }
+  let salaryPatch: number | null | undefined = undefined;
+  if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "employmentGrossSalaryMonthly")) {
+    const v = employmentGrossSalaryMonthly;
+    if (v === null) {
+      salaryPatch = null;
+    } else if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+      salaryPatch = v;
+    } else {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(
+            false,
+            "employmentGrossSalaryMonthly must be a non-negative number or null",
+            null,
+          ),
+        );
+      return;
+    }
+  }
   const result = await onboardingService.stepTaxPersona(
     payload,
     taxPersona,
     solopreneurRegistration,
+    salaryPatch,
   );
   if (!result.success) {
     res
