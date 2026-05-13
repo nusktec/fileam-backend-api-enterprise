@@ -4,6 +4,8 @@ model Sale {
   createdById    String?  @map("created_by_id")
   invoiceNumber  String   @map("invoice_number")
   description    String
+  /** Optional display label for the sold item or service line */
+  itemName       String?  @map("item_name")
   category       String?  @map("category")
   customerName   String?  @map("customer_name")
   customerId     String?  @map("customer_id")
@@ -17,6 +19,8 @@ model Sale {
   serviceIncome  Boolean  @default(true) @map("service_income")
   status         String   @default("Pending")
   documentUrl    String?  @map("document_url")
+  /** Optional URL to a payment receipt or supplementary proof (Media upload URL, etc.) */
+  receiptUrl     String?  @map("receipt_url")
   evidenceVaultId String? @map("evidence_vault_id")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")

@@ -24,6 +24,7 @@ export async function generatePdfForDocument(
   userId: string,
   compositeId: string,
 ): Promise<{ buffer: Buffer; filename: string } | null> {
+  if (compositeId.startsWith("sale-receipt-")) return null;
   const entityId = compositeId.replace(/^(sale|expense|payable|payable-receipt|report)-/, "");
   const prefix = compositeId.startsWith("sale-")
     ? "sale"

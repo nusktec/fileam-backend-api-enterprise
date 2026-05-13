@@ -259,7 +259,7 @@ export async function getClientPlBreakdown(userId: string, range: ClientPlRange)
   };
 }
 
-/** Sales with no documentUrl and no evidenceVaultId; expenses with no receiptUrl — in range. */
+/** Sales with no documentUrl, no evidenceVaultId, and no receiptUrl; expenses with no receiptUrl — in range. */
 export async function getClientAttachmentGaps(userId: string, range: ClientPlRange) {
   const start = new Date(range.start);
   start.setHours(0, 0, 0, 0);
@@ -273,6 +273,7 @@ export async function getClientAttachmentGaps(userId: string, range: ClientPlRan
         saleDate: { gte: start, lte: end },
         documentUrl: null,
         evidenceVaultId: null,
+        receiptUrl: null,
       },
     }),
     prisma.expense.count({

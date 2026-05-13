@@ -114,6 +114,8 @@ export const createSale = async (
       date,
       vatableIncome,
       serviceIncome,
+      itemName,
+      receiptUrl,
     } = b;
     const customerName = b.customerName ?? b.Customer_name;
     const customerId = b.customerId ?? b.Customer_id;
@@ -128,6 +130,14 @@ export const createSale = async (
       customerId:
         customerId != null && String(customerId).trim() !== ""
           ? String(customerId).trim()
+          : undefined,
+      itemName:
+        itemName != null && String(itemName).trim() !== ""
+          ? String(itemName).trim()
+          : undefined,
+      receiptUrl:
+        receiptUrl != null && String(receiptUrl).trim() !== ""
+          ? String(receiptUrl).trim()
           : undefined,
       paymentType,
       date,
@@ -171,8 +181,22 @@ export const updateSale = async (req: IRequest, res: Response): Promise<void> =>
     const b = req.body ?? {};
     const customerName = b.customerName ?? b.Customer_name;
     const customerId = b.customerId ?? b.Customer_id;
+    const itemName = b.itemName;
+    const receiptUrl = b.receiptUrl;
     const updated = await salesService.update(userId, saleId!, {
       description: body.description as string | undefined,
+      itemName:
+        itemName !== undefined
+          ? itemName === null || String(itemName).trim() === ""
+            ? null
+            : String(itemName).trim()
+          : undefined,
+      receiptUrl:
+        receiptUrl !== undefined
+          ? receiptUrl === null || String(receiptUrl).trim() === ""
+            ? null
+            : String(receiptUrl).trim()
+          : undefined,
       category: body.category as string | undefined,
       customerName:
         customerName !== undefined

@@ -18,6 +18,8 @@ export const createSaleValidation = [
   check("customerId").optional().trim().isString(),
   check("Customer_name").optional().trim().isString(),
   check("Customer_id").optional().trim().isString(),
+  check("itemName").optional().trim().isString(),
+  check("receiptUrl").optional().trim().isString(),
   check("paymentType")
     .isIn(PAYMENT_TYPES)
     .withMessage(`paymentType must be one of: ${PAYMENT_TYPES.join(", ")}`),

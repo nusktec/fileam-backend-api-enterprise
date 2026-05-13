@@ -17,6 +17,8 @@ export const updateSaleValidation = [
   check("customerId").optional({ nullable: true }).trim(),
   check("Customer_name").optional().trim(),
   check("Customer_id").optional().trim(),
+  check("itemName").optional({ nullable: true }).trim(),
+  check("receiptUrl").optional({ nullable: true }).trim(),
   check("paymentType")
     .optional()
     .isIn(PAYMENT_TYPES)

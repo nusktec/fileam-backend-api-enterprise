@@ -97,6 +97,37 @@ export const evidenceVaultService = {
         evidenceVaultId: s.evidenceVaultId ?? null,
         downloadPath: !s.documentUrl ? `/mobile/evidence-vault/documents/${docId}/download` : null,
       });
+
+      const receiptUrl = s.receiptUrl?.trim();
+      if (receiptUrl) {
+        const receiptBase = `Receipt - Sale ${s.invoiceNumber}`;
+        const itemLabel =
+          s.itemName != null && String(s.itemName).trim() !== ""
+            ? String(s.itemName).trim()
+            : null;
+        const receiptName = itemLabel
+          ? `${receiptBase} (${itemLabel})`
+          : s.customerName
+            ? `${receiptBase} - ${s.customerName}`
+            : receiptBase;
+        if (
+          searchLower &&
+          !receiptName.toLowerCase().includes(searchLower) &&
+          !s.description.toLowerCase().includes(searchLower)
+        )
+          continue;
+        docs.push({
+          id: `sale-receipt-${s.id}`,
+          documentId: `DOC-R-${s.id.slice(0, 8).toUpperCase()}`,
+          name: receiptName,
+          category: "Receipts",
+          source: "Sales",
+          date: s.saleDate,
+          fileSizeKb: null,
+          documentUrl: receiptUrl,
+          evidenceVaultId: null,
+        });
+      }
     }
 
     for (const e of expenses) {
@@ -241,8 +272,10 @@ export const evidenceVaultService = {
 
   canGeneratePdf(compositeId: string): boolean {
     return (
-      compositeId.startsWith("sale-") ||
-      (compositeId.startsWith("payable-") && !compositeId.startsWith("payable-receipt-")) ||
+      (compositeId.startsWith("sale-") &&
+        !compositeId.startsWith("sale-receipt-")) ||
+      (compositeId.startsWith("payable-") &&
+        !compositeId.startsWith("payable-receipt-")) ||
       compositeId.startsWith("report-")
     );
   },

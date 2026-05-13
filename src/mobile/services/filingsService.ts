@@ -74,6 +74,7 @@ async function fetchPeriodEvidenceCompliance(
     saleDate,
     documentUrl: null,
     evidenceVaultId: null,
+    receiptUrl: null,
   };
   const expGapWhere = { userId, expenseDate, receiptUrl: null };
   /** Rows returned under this cap; totals may be higher (`listTruncated` on API). */
@@ -220,8 +221,8 @@ function buildFilingCompletion(
     key: "period_sales_invoiced",
     label:
       period.saleCount === 0
-        ? "No sales this period (invoices not required)"
-        : "All invoices uploaded or linked from vault",
+        ? "No sales this period (proof not required)"
+        : "All sales have invoice/vault attachment or sale receipt URL",
     met: salesComplete,
     category: "period_records",
   });

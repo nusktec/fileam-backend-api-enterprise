@@ -12,6 +12,14 @@ function decimalToNumber(d: Decimal | null | undefined): number {
   return Number(d);
 }
 
+function nullableTrimmed(
+  value: string | null | undefined,
+): string | null {
+  if (value === undefined || value === null) return null;
+  const t = String(value).trim();
+  return t === "" ? null : t;
+}
+
 function resolveSaleStatusAfterPatch(
   sale: { paymentType: string; status: string },
   data: Partial<{ paymentType: string; status: string }>,
@@ -132,6 +140,7 @@ export const salesService = {
         invoiceNumber: s.invoiceNumber,
         status: s.status,
         description: s.description,
+        itemName: s.itemName ?? null,
         category: s.category ?? null,
         date: s.saleDate,
         amount: decimalToNumber(s.amount),
@@ -139,6 +148,7 @@ export const salesService = {
         totalAmount: decimalToNumber(s.totalAmount),
         customerName: s.customerName ?? null,
         customerId: s.customerId ?? null,
+        receiptUrl: s.receiptUrl ?? null,
       })),
       total,
       page,
@@ -158,10 +168,12 @@ export const salesService = {
       status: sale.status,
       totalAmount: decimalToNumber(sale.totalAmount),
       description: sale.description,
+      itemName: sale.itemName ?? null,
       category: sale.category ?? null,
       customer: sale.customerName,
       customerName: sale.customerName ?? null,
       customerId: sale.customerId ?? null,
+      receiptUrl: sale.receiptUrl ?? null,
       paymentType: sale.paymentType,
       date: sale.saleDate,
       baseAmount: decimalToNumber(sale.amount),
@@ -178,6 +190,8 @@ export const salesService = {
     data: {
       amount: number;
       description: string;
+      itemName?: string | null;
+      receiptUrl?: string | null;
       category?: string;
       customerName?: string;
       customerId?: string;
@@ -215,6 +229,7 @@ export const salesService = {
           createdById: data.createdById ?? userId,
           invoiceNumber,
           description: data.description,
+          itemName: nullableTrimmed(data.itemName),
           category: data.category ?? null,
           customerName: data.customerName?.trim() || null,
           customerId: data.customerId?.trim() || null,
@@ -227,6 +242,7 @@ export const salesService = {
           vatableIncome: data.vatableIncome,
           serviceIncome: data.serviceIncome,
           status,
+          receiptUrl: nullableTrimmed(data.receiptUrl),
         },
       });
     });
@@ -238,12 +254,14 @@ export const salesService = {
       invoiceNumber: sale.invoiceNumber,
       status: sale.status,
       description: sale.description,
+      itemName: sale.itemName ?? null,
       date: sale.saleDate,
       amount: decimalToNumber(sale.amount),
       vatAmount: decimalToNumber(sale.vatAmount),
       totalAmount: decimalToNumber(sale.totalAmount),
       customerName: sale.customerName ?? null,
       customerId: sale.customerId ?? null,
+      receiptUrl: sale.receiptUrl ?? null,
     };
   },
 
@@ -252,6 +270,8 @@ export const salesService = {
     saleId: string,
     data: Partial<{
       description: string;
+      itemName: string | null;
+      receiptUrl: string | null;
       category: string;
       customerName: string | null;
       customerId: string | null;
@@ -270,6 +290,14 @@ export const salesService = {
 
     const updateData: Record<string, unknown> = {};
     if (data.description != null) updateData.description = data.description;
+    if (data.itemName !== undefined) {
+      updateData.itemName =
+        data.itemName === null ? null : nullableTrimmed(data.itemName);
+    }
+    if (data.receiptUrl !== undefined) {
+      updateData.receiptUrl =
+        data.receiptUrl === null ? null : nullableTrimmed(data.receiptUrl);
+    }
     if (data.category != null) updateData.category = data.category;
     if (data.customerName !== undefined) {
       updateData.customerName =
@@ -319,12 +347,14 @@ export const salesService = {
       invoiceNumber: updated.invoiceNumber,
       status: updated.status,
       description: updated.description,
+      itemName: updated.itemName ?? null,
       date: updated.saleDate,
       amount: decimalToNumber(updated.amount),
       vatAmount: decimalToNumber(updated.vatAmount),
       totalAmount: decimalToNumber(updated.totalAmount),
       customerName: updated.customerName ?? null,
       customerId: updated.customerId ?? null,
+      receiptUrl: updated.receiptUrl ?? null,
     };
   },
 
@@ -347,12 +377,14 @@ export const salesService = {
         invoiceNumber: sale.invoiceNumber,
         status: sale.status,
         description: sale.description,
+        itemName: sale.itemName ?? null,
         date: sale.saleDate,
         amount: decimalToNumber(sale.amount),
         vatAmount: decimalToNumber(sale.vatAmount),
         totalAmount: decimalToNumber(sale.totalAmount),
         customerName: sale.customerName ?? null,
         customerId: sale.customerId ?? null,
+        receiptUrl: sale.receiptUrl ?? null,
       };
     }
 
@@ -373,12 +405,14 @@ export const salesService = {
       invoiceNumber: updated.invoiceNumber,
       status: updated.status,
       description: updated.description,
+      itemName: updated.itemName ?? null,
       date: updated.saleDate,
       amount: decimalToNumber(updated.amount),
       vatAmount: decimalToNumber(updated.vatAmount),
       totalAmount: decimalToNumber(updated.totalAmount),
       customerName: updated.customerName ?? null,
       customerId: updated.customerId ?? null,
+      receiptUrl: updated.receiptUrl ?? null,
     };
   },
 
