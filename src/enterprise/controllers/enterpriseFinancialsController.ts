@@ -805,3 +805,103 @@ export async function createInvoice(
     sendServerError(res, "Failed to create invoice");
   }
 }
+
+export async function getClientCashFlowInsight(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId;
+  if (!linkedUserId) {
+    sendBadRequest(res, "Linked client required");
+    return;
+  }
+  try {
+    const { getClientCashFlow } = await import(
+      "../services/clientFinancialsInsightsService"
+    );
+    const data = await getClientCashFlow(linkedUserId, {
+      dateFrom: req.query.dateFrom ? String(req.query.dateFrom) : undefined,
+      dateTo: req.query.dateTo ? String(req.query.dateTo) : undefined,
+      preset: req.query.preset ? String(req.query.preset) : undefined,
+    });
+    sendResult(res, "Cash flow", data);
+  } catch {
+    sendServerError(res, "Failed to get cash flow");
+  }
+}
+
+export async function getClientTaxLiabilityInsight(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId;
+  if (!linkedUserId) {
+    sendBadRequest(res, "Linked client required");
+    return;
+  }
+  const year =
+    req.query.year != null && req.query.year !== ""
+      ? Number(req.query.year)
+      : new Date().getFullYear();
+  if (!Number.isFinite(year) || year < 2000 || year > 2100) {
+    sendBadRequest(res, "Invalid year");
+    return;
+  }
+  try {
+    const { getClientTaxLiability } = await import(
+      "../services/clientFinancialsInsightsService"
+    );
+    const data = await getClientTaxLiability(linkedUserId, year);
+    sendResult(res, "Tax liability", data);
+  } catch {
+    sendServerError(res, "Failed to get tax liability");
+  }
+}
+
+export async function getClientRevenueAnalyticsInsight(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId;
+  if (!linkedUserId) {
+    sendBadRequest(res, "Linked client required");
+    return;
+  }
+  try {
+    const { getClientRevenueAnalytics } = await import(
+      "../services/clientFinancialsInsightsService"
+    );
+    const data = await getClientRevenueAnalytics(linkedUserId, {
+      dateFrom: req.query.dateFrom ? String(req.query.dateFrom) : undefined,
+      dateTo: req.query.dateTo ? String(req.query.dateTo) : undefined,
+      preset: req.query.preset ? String(req.query.preset) : undefined,
+    });
+    sendResult(res, "Revenue analytics", data);
+  } catch {
+    sendServerError(res, "Failed to get revenue analytics");
+  }
+}
+
+export async function getClientExpenseIntelligenceInsight(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const linkedUserId = req.linkedUserId;
+  if (!linkedUserId) {
+    sendBadRequest(res, "Linked client required");
+    return;
+  }
+  try {
+    const { getClientExpenseIntelligence } = await import(
+      "../services/clientFinancialsInsightsService"
+    );
+    const data = await getClientExpenseIntelligence(linkedUserId, {
+      dateFrom: req.query.dateFrom ? String(req.query.dateFrom) : undefined,
+      dateTo: req.query.dateTo ? String(req.query.dateTo) : undefined,
+      preset: req.query.preset ? String(req.query.preset) : undefined,
+    });
+    sendResult(res, "Expense intelligence", data);
+  } catch {
+    sendServerError(res, "Failed to get expense intelligence");
+  }
+}

@@ -7,6 +7,10 @@ import {
   getExpenseBreakdown,
   getProfitAndLoss,
   getBalanceSheet,
+  getClientCashFlowInsight,
+  getClientTaxLiabilityInsight,
+  getClientRevenueAnalyticsInsight,
+  getClientExpenseIntelligenceInsight,
   getMonthlyCashFlow,
   addTransaction,
   getDocumentTypes,
@@ -41,6 +45,10 @@ router.get("/transactions/recent", getRecentTransactions);
 router.get("/transactions", withPagination("date"), getAllTransactions);
 router.get("/summary", getSummary);
 router.get("/profit-loss", getProfitAndLoss);
+router.get("/cash-flow", getClientCashFlowInsight);
+router.get("/tax-liability", getClientTaxLiabilityInsight);
+router.get("/revenue-analytics", getClientRevenueAnalyticsInsight);
+router.get("/expense-intelligence", getClientExpenseIntelligenceInsight);
 router.get("/balance-sheet", getBalanceSheet);
 router.get("/profit-analysis/trend", getProfitTrend);
 router.get("/profit-analysis/expense-breakdown", getExpenseBreakdown);

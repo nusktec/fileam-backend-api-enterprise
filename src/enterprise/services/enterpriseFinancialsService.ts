@@ -60,7 +60,7 @@ export type ProfitAndLossQueryOpts = {
   linkedClientContext?: boolean;
 };
 
-function resolvePlDateRange(opts: ProfitAndLossQueryOpts): {
+export function resolvePlDateRange(opts: ProfitAndLossQueryOpts): {
   start: Date;
   end: Date;
   presetLabel: string;
