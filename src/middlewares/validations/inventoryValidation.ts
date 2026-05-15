@@ -1,7 +1,5 @@
 import { check, body } from "express-validator";
 import { handleValidation } from "../errorHandler";
-import { SALE_CATEGORIES } from "../../constants/saleCategories";
-import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 
 export const validateAddInventoryItem = [
   check("name").trim().notEmpty().withMessage("name is required"),
@@ -45,10 +43,11 @@ export const validateInventorySell = [
   check("vatableIncome").optional().isBoolean().toBoolean(),
   check("serviceIncome").optional().isBoolean().toBoolean(),
   check("saleCategory")
-    .optional()
+    .optional({ values: "null" })
     .trim()
-    .isIn(SALE_CATEGORIES)
-    .withMessage(`saleCategory must be one of: ${SALE_CATEGORIES.join(", ")}`),
+    .isString()
+    .isLength({ min: 1, max: 255 })
+    .withMessage("saleCategory must be 1–255 characters when provided"),
   handleValidation,
 ];
 
@@ -78,16 +77,16 @@ export const validateInventoryAdjustment = [
   check("vatableIncome").optional().isBoolean().toBoolean(),
   check("serviceIncome").optional().isBoolean().toBoolean(),
   check("saleCategory")
-    .optional()
+    .optional({ values: "null" })
     .trim()
-    .isIn(SALE_CATEGORIES)
-    .withMessage(`saleCategory must be one of: ${SALE_CATEGORIES.join(", ")}`),
+    .isString()
+    .isLength({ min: 1, max: 255 })
+    .withMessage("saleCategory must be 1–255 characters when provided"),
   check("expenseCategory")
-    .optional()
+    .optional({ values: "null" })
     .trim()
-    .isIn(EXPENSE_CATEGORIES)
-    .withMessage(
-      `expenseCategory must be one of: ${EXPENSE_CATEGORIES.join(", ")}`,
-    ),
+    .isString()
+    .isLength({ min: 1, max: 255 })
+    .withMessage("expenseCategory must be 1–255 characters when provided"),
   handleValidation,
 ];

@@ -1,15 +1,16 @@
 import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
-import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 
 /** PATCH /mobile/expenses/:id — all fields optional. */
 export const updateExpenseValidation = [
   check("amount").optional().isFloat({ min: 0 }),
   check("description").optional().trim().notEmpty(),
   check("category")
-    .optional()
-    .isIn([...EXPENSE_CATEGORIES])
-    .withMessage(`category must be one of: ${EXPENSE_CATEGORIES.join(", ")}`),
+    .optional({ values: "null" })
+    .trim()
+    .isString()
+    .isLength({ min: 1, max: 255 })
+    .withMessage("category must be 1–255 characters when provided"),
   check("date").optional().isISO8601(),
   check("vatInclusive").optional().isBoolean(),
   check("vatAmount").optional().isFloat({ min: 0 }),

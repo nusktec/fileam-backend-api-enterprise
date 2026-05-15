@@ -6,8 +6,6 @@ import {
   INVENTORY_SLOW_MOVING_DAYS,
   INVENTORY_VELOCITY_DAYS,
 } from "../../constants/inventory";
-import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
-import { SALE_CATEGORIES } from "../../constants/saleCategories";
 import {
   PERCENT,
   VAT_RATE_PERCENT,
@@ -636,13 +634,9 @@ export const inventoryService = {
 
         if (data.createSalesInvoice) {
           if (data.direction === "out") {
+            const expRaw = data.expenseCategory?.trim();
             const expCat =
-              data.expenseCategory?.trim() &&
-              (EXPENSE_CATEGORIES as readonly string[]).includes(
-                data.expenseCategory.trim(),
-              )
-                ? data.expenseCategory.trim()
-                : "Other";
+              expRaw && expRaw.length > 0 ? expRaw : "Other";
             linkedExpense = await createLinkedExpenseInTx(tx, userId, {
               totalAmount: costTotal,
               description: `Inventory adjustment out: ${item.name} (${qty} units)${noteSuffix}`,
@@ -652,12 +646,9 @@ export const inventoryService = {
               supplierId: item.supplierId,
             });
           } else {
-            const rawSaleCat = data.saleCategory?.trim() || "Other";
-            const saleCat = (SALE_CATEGORIES as readonly string[]).includes(
-              rawSaleCat,
-            )
-              ? rawSaleCat
-              : "Other";
+            const rawSaleCat = data.saleCategory?.trim();
+            const saleCat =
+              rawSaleCat && rawSaleCat.length > 0 ? rawSaleCat : "Other";
             linkedSale = await createLinkedSaleInTx(tx, userId, {
               baseAmount: costTotal,
               description: `Inventory adjustment in: ${item.name} (${qty} units)${noteSuffix}`,
@@ -834,12 +825,11 @@ export const inventoryService = {
         const dateStr =
           data.saleDate?.trim() || soldAt.toISOString().split("T")[0];
         const saleDate = new Date(`${dateStr}T12:00:00.000Z`);
-        const rawInvSaleCat = data.saleCategory?.trim() || "Product Sales";
-        const invSaleCat = (SALE_CATEGORIES as readonly string[]).includes(
-          rawInvSaleCat,
-        )
-          ? rawInvSaleCat
-          : "Product Sales";
+        const rawInvSaleCat = data.saleCategory?.trim();
+        const invSaleCat =
+          rawInvSaleCat && rawInvSaleCat.length > 0
+            ? rawInvSaleCat
+            : "Product Sales";
         linkedSale = await createLinkedSaleInTx(tx, userId, {
           baseAmount: totalAmount,
           description: `Inventory sale: ${descParts.join("; ")}`,
