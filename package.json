@@ -9,6 +9,7 @@
     "build": "tsc && cp -r src/services/template dist/services/",
     "start": "node dist/app.js",
     "seed": "ts-node src/seed/seed.ts",
+    "seed:admin": "ts-node src/seed/seedAdmin.ts",
     "seed:dummy": "ts-node src/seed/seedDummyData.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

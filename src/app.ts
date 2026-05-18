@@ -9,6 +9,7 @@ import http from "http";
 import { prisma } from "./config/database";
 import mobileRoutes from "./mobile/routes";
 import enterpriseRoutes from "./enterprise/routes";
+import adminRoutes from "./admin/routes";
 import aiRoutes from "./routes/aiRoutes";
 import webhookRoutes from "./routes/webhookRoutes";
 import publicRoutes from "./routes/publicRoutes";
@@ -41,6 +42,8 @@ const getAllowedOriginsSet = (): Set<string> => {
 
   const devOrigins = [
     "*",
+    "http://localhost:5173",
+    "http://localhost:5174",
   ];
 
   return new Set([...fromEnv, ...devOrigins]);
@@ -97,6 +100,7 @@ const API_VERSION = process.env.API_VERSION || "1";
 
 app.use(`/api/v${API_VERSION}/mobile`, mobileRoutes);
 app.use(`/api/v${API_VERSION}/enterprise`, enterpriseRoutes);
+app.use(`/api/v${API_VERSION}/admin`, adminRoutes);
 app.use(`/api/v${API_VERSION}/ai`, aiRoutes);
 app.use(`/api/v${API_VERSION}/media`, mediaRoutes);
 app.use(`/api/v${API_VERSION}/webhooks`, webhookRoutes);

@@ -1,0 +1,14 @@
+model Admin {
+  id          String    @id @default(uuid())
+  email       String    @unique
+  password    String
+  firstName   String    @map("first_name")
+  lastName    String    @map("last_name")
+  role        String    @default("admin")
+  active      Boolean   @default(true)
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("admins")
+}
