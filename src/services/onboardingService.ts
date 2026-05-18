@@ -13,6 +13,7 @@ import {
   saveRefreshToken,
 } from "../utils/jwt";
 import { authService } from "../mobile/services/authService";
+import { signupEmailRejectionMessage } from "../utils/emailPolicy";
 
 const ONBOARDING_VERIFICATION_TYPE = "onboarding_verification";
 
@@ -43,6 +44,10 @@ function shapeBusinessForResponse(business: {
 
 export const onboardingService = {
   async stepEmail(email: string, firstName?: string, _invitationId?: string) {
+    const plusRejected = signupEmailRejectionMessage(email);
+    if (plusRejected) {
+      return { success: false as const, message: plusRejected };
+    }
     const existing = await prisma.user.findUnique({
       where: { email },
       select: { verified: true, onboardingComplete: true, firstName: true },
@@ -72,6 +77,10 @@ export const onboardingService = {
   },
 
   async resendStepEmail(email: string, firstName?: string) {
+    const plusRejected = signupEmailRejectionMessage(email);
+    if (plusRejected) {
+      return { success: false as const, message: plusRejected };
+    }
     const existing = await prisma.user.findUnique({
       where: { email },
       select: { verified: true, onboardingComplete: true, firstName: true },
@@ -107,6 +116,10 @@ export const onboardingService = {
     invitationId?: string,
     consultantUserId?: string,
   ) {
+    const plusRejected = signupEmailRejectionMessage(email);
+    if (plusRejected) {
+      return { success: false as const, message: plusRejected };
+    }
     const result = await EmailVerificationService.verifyOtp(email, code);
     if (!result.success)
       return { success: false as const, message: result.message };

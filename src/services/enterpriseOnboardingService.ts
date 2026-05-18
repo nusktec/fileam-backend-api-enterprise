@@ -12,6 +12,7 @@ import {
   saveRefreshToken,
 } from "../utils/jwt";
 import { authService } from "../mobile/services/authService";
+import { signupEmailRejectionMessage } from "../utils/emailPolicy";
 
 const ONBOARDING_VERIFICATION_TYPE = "onboarding_verification";
 const ACCOUNT_VERIFICATION_TYPE = "account_verification";
@@ -20,6 +21,10 @@ const ENTERPRISE_FIRST_STEP = "company_creation";
 
 export const enterpriseOnboardingService = {
   async stepEmail(email: string, firstName?: string) {
+    const plusRejected = signupEmailRejectionMessage(email);
+    if (plusRejected) {
+      return { success: false as const, message: plusRejected };
+    }
     const existing = (await prisma.user.findUnique({
       where: { email },
     })) as { firstName: string; enterpriseOnboardingComplete?: boolean } | null;
@@ -42,6 +47,10 @@ export const enterpriseOnboardingService = {
   },
 
   async resendStepEmail(email: string, firstName?: string) {
+    const plusRejected = signupEmailRejectionMessage(email);
+    if (plusRejected) {
+      return { success: false as const, message: plusRejected };
+    }
     const existing = await prisma.user.findUnique({
       where: { email },
       select: { firstName: true, enterpriseOnboardingComplete: true },
@@ -73,6 +82,10 @@ export const enterpriseOnboardingService = {
     invitationId?: string,
     companyId?: string,
   ) {
+    const plusRejected = signupEmailRejectionMessage(email);
+    if (plusRejected) {
+      return { success: false as const, message: plusRejected };
+    }
     const result = await EmailVerificationService.verifyOtp(email, code);
     if (!result.success)
       return { success: false as const, message: result.message };

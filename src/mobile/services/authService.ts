@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../../config/database";
 import { EmailVerificationService } from "../../services/emailVerificationService";
+import { signupEmailRejectionMessage } from "../../utils/emailPolicy";
 
 const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -37,6 +38,10 @@ export const authService = {
     firstName: string;
     lastName: string;
   }) {
+    const plusRejected = signupEmailRejectionMessage(data.email);
+    if (plusRejected) {
+      return { success: false as const, message: plusRejected };
+    }
     const existing = await prisma.user.findUnique({
       where: { email: data.email },
     });
@@ -96,6 +101,10 @@ export const authService = {
     organizationAddress?: string;
     logo?: string;
   }) {
+    const plusRejected = signupEmailRejectionMessage(data.email);
+    if (plusRejected) {
+      return { success: false as const, message: plusRejected };
+    }
     const existing = await prisma.user.findUnique({
       where: { email: data.email },
     });

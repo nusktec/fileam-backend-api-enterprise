@@ -18,8 +18,6 @@
     "prisma:migrate:checksum": "node scripts/print-migration-checksum.cjs",
     "prisma:studio": "prisma studio",
     "db:setup": "pnpm run prisma:migrate && pnpm run seed",
-    "docker:build": "docker build -t file-am .",
-    "docker:run": "docker run -p 3000:80 --env-file .env file-am",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:postman": "newman run postman/Fileam-Backend-API.postman_collection.json"
   },

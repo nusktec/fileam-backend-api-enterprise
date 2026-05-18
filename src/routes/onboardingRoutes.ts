@@ -1,5 +1,6 @@
 import express from "express";
 import { requireOnboardingOrAccessToken } from "../middlewares/onboardingMiddleware";
+import { onboardingValidations } from "../middlewares/validations/onboardingValidation";
 import {
   stepEmail,
   stepEmailVerify,
@@ -20,9 +21,17 @@ import {
 const router = express.Router();
 
 router.get("/profile", requireOnboardingOrAccessToken, getOnboardingProfile);
-router.post("/step/email", stepEmail);
-router.post("/step/email-resend", resendStepEmail);
-router.post("/step/email-verify", stepEmailVerify);
+router.post("/step/email", onboardingValidations.validateStepEmail, stepEmail);
+router.post(
+  "/step/email-resend",
+  onboardingValidations.validateStepEmail,
+  resendStepEmail,
+);
+router.post(
+  "/step/email-verify",
+  onboardingValidations.validateStepEmailVerify,
+  stepEmailVerify,
+);
 
 router.post("/step/password", requireOnboardingOrAccessToken, stepPassword);
 router.post(

@@ -1,5 +1,20 @@
 import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import {
+  hasEmailPlusAlias,
+  PLUS_ALIAS_EMAIL_MESSAGE,
+} from "../../utils/emailPolicy";
+
+function rejectPlusAliasEmail(field = "email") {
+  return check(field).custom((value) => {
+    if (value == null || value === "") return true;
+    if (typeof value !== "string") return true;
+    if (hasEmailPlusAlias(value)) {
+      throw new Error(PLUS_ALIAS_EMAIL_MESSAGE);
+    }
+    return true;
+  });
+}
 
 const validateLoginRequest = [
   check("email").trim().isEmail().withMessage("Enter a valid email"),
@@ -28,7 +43,12 @@ const validateEmailVerificationOTPRequest = [
 ];
 
 const registerUserValidation = [
-  check("email").trim().isEmail().withMessage("Enter a valid email"),
+  check("email")
+    .trim()
+    .isEmail()
+    .withMessage("Enter a valid email")
+    .bail(),
+  rejectPlusAliasEmail("email"),
   check("firstName")
     .trim()
     .isString()
