@@ -10,6 +10,10 @@ import {
   enterpriseClientsService,
   type ClientCard,
 } from "../services/enterpriseClientsService";
+import {
+  parseInvitationDirectionFilter,
+  parseInvitationSenderTypeFilter,
+} from "../../utils/invitationPresenter";
 
 const VALID_INVITATION_STATUSES = ["pending", "accepted", "rejected", "expired"];
 
@@ -36,9 +40,19 @@ export async function listClientInvitations(
     }
   }
   try {
+    const senderType = parseInvitationSenderTypeFilter(
+      req.query.senderType as string | undefined,
+    );
+    const direction = parseInvitationDirectionFilter(
+      req.query.direction as string | undefined,
+    );
     const invitations = await enterpriseClientsService.listInvitations(
       consultantUserId,
       statusTrimmed || undefined,
+      {
+        ...(senderType && { senderType }),
+        ...(direction && { direction }),
+      },
     );
     sendResult(res, "Client invitations", invitations);
   } catch {

@@ -14,6 +14,7 @@ import {
 } from "../utils/jwt";
 import { authService } from "../mobile/services/authService";
 import { signupEmailRejectionMessage } from "../utils/emailPolicy";
+import { invitationFieldsForMobile } from "../utils/invitationPresenter";
 
 const ONBOARDING_VERIFICATION_TYPE = "onboarding_verification";
 
@@ -702,6 +703,7 @@ export const onboardingService = {
         consultantName,
         invitedEmail: invitation.invitedEmail,
         invitedBusinessName: invitation.invitedBusinessName,
+        ...invitationFieldsForMobile(invitation.initiator),
       },
     };
   },

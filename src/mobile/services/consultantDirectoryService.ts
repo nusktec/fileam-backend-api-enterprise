@@ -2,6 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import { RandomAscii } from "../../utils/tools";
 import { sendConsultantIncomingClientRequestEmail } from "../../services/emailService";
+import { invitationFieldsForMobile } from "../../utils/invitationPresenter";
+import { consultantRequestService } from "../../services/consultantRequestService";
 
 export interface ConsultantListItem {
   id: string;
@@ -216,6 +218,11 @@ export async function requestConsultantConnection(
       id: invitation.id,
       status: "pending",
       expiresAt: invitation.expiresAt,
+      ...invitationFieldsForMobile(invitation.initiator),
     },
   };
+}
+
+export async function listPendingOutgoingInvitations(clientUserId: string) {
+  return consultantRequestService.listOutgoingPendingForUser(clientUserId);
 }

@@ -7,9 +7,11 @@ import {
   sendNotFound,
 } from "../utils/controllerHelpers";
 import { listAvailableMobileUsers } from "../services/enterpriseAvailableClientsService";
+import { enterpriseClientsService } from "../services/enterpriseClientsService";
 import { prisma } from "../../config/database";
 import { RandomAscii } from "../../utils/tools";
 import { sendConsultantRequestEmail } from "../../services/emailService";
+import { invitationFieldsForConsultant } from "../../utils/invitationPresenter";
 
 export async function listAvailableClients(
   req: IRequest,
@@ -26,6 +28,26 @@ export async function listAvailableClients(
     sendResult(res, "Available mobile users (no consultant)", users);
   } catch {
     sendServerError(res, "Failed to list available clients");
+  }
+}
+
+export async function listIncomingClientRequests(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const consultantUserId = req.user?.id;
+  if (!consultantUserId) {
+    sendBadRequest(res, "Authentication required.");
+    return;
+  }
+  try {
+    const list =
+      await enterpriseClientsService.listIncomingClientRequests(
+        consultantUserId,
+      );
+    sendResult(res, "Incoming client connection requests", list);
+  } catch {
+    sendServerError(res, "Failed to list incoming client requests");
   }
 }
 
@@ -189,6 +211,7 @@ export async function sendClientRequest(
       requestedUserId,
       status: "pending",
       expiresAt,
+      ...invitationFieldsForConsultant("consultant_to_client"),
     });
   } catch {
     sendServerError(res, "Failed to send request");

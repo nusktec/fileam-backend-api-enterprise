@@ -34,6 +34,7 @@ import {
 import { getGlobalDashboard } from "../controllers/enterpriseDashboardController";
 import {
   listAvailableClients,
+  listIncomingClientRequests,
   sendClientRequest,
 } from "../controllers/enterpriseClientRequestsController";
 import { getContactsAndTypes } from "../controllers/contactsAndTypesController";
@@ -119,6 +120,12 @@ router.get(
   authenticate(),
   requireEnterpriseOnboardingComplete,
   listAvailableClients,
+);
+router.get(
+  "/client-requests",
+  authenticate(),
+  requireEnterpriseOnboardingComplete,
+  listIncomingClientRequests,
 );
 router.post(
   "/client-requests",

@@ -3,6 +3,7 @@ import { IRequest } from "../../interfaces/CustomRequest";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { consultantRequestService } from "../../services/consultantRequestService";
+import { parseInvitationDirectionFilter } from "../../utils/invitationPresenter";
 
 export async function listConsultantRequests(
   req: IRequest,
@@ -16,7 +17,10 @@ export async function listConsultantRequests(
     return;
   }
   try {
-    const list = await consultantRequestService.listForUser(userId);
+    const direction = parseInvitationDirectionFilter(
+      req.query.direction as string | undefined,
+    );
+    const list = await consultantRequestService.listForUser(userId, direction);
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Consultant requests", list));

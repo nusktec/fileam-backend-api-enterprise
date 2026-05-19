@@ -1,4 +1,5 @@
 import { prisma } from "../../config/database";
+import { invitationFieldsForConsultant } from "../../utils/invitationPresenter";
 import { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
@@ -367,7 +368,7 @@ export const adminListService = {
         invitedEmail: i.invitedEmail,
         invitedContactName: i.invitedContactName,
         status: i.status,
-        initiator: i.initiator,
+        ...invitationFieldsForConsultant(i.initiator),
         consultant: i.consultantUser,
         createdAt: i.createdAt,
       })),

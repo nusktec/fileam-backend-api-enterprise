@@ -4,6 +4,7 @@ import { IRequest } from "../../interfaces/CustomRequest";
 import { outJson } from "../../utils/renders";
 import {
   listAvailableConsultants,
+  listPendingOutgoingInvitations,
   requestConsultantConnection,
 } from "../services/consultantDirectoryService";
 
@@ -28,6 +29,29 @@ export async function listConsultants(
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to list consultants", null));
+  }
+}
+
+export async function listPendingSentInvitations(
+  req: IRequest,
+  res: Response,
+): Promise<void> {
+  const userId = req.user?.id;
+  if (!userId) {
+    res
+      .status(HttpStatusCode.UNAUTHORIZED)
+      .json(outJson(false, "Unauthorized", null));
+    return;
+  }
+  try {
+    const list = await listPendingOutgoingInvitations(userId);
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Pending invitations you sent", list));
+  } catch {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to list pending invitations", null));
   }
 }
 

@@ -1,9 +1,18 @@
 import { prisma } from "../config/database";
 import { sendEmail } from "./emailService";
+import {
+  invitationFieldsForMobile,
+  parseInvitationDirectionFilter,
+  type InvitationDirection,
+  type InvitationSenderType,
+} from "../utils/invitationPresenter";
 
 export interface ConsultantRequestItem {
   id: string;
   initiator: "consultant_to_client" | "client_to_consultant";
+  senderType: InvitationSenderType;
+  /** Relative to mobile user: incoming = consultant invited you; outgoing = you requested consultant */
+  direction: InvitationDirection;
   consultantUserId: string;
   consultant: {
     id: string;
@@ -22,7 +31,10 @@ export interface ConsultantRequestItem {
 }
 
 export const consultantRequestService = {
-  async listForUser(userId: string): Promise<ConsultantRequestItem[]> {
+  async listForUser(
+    userId: string,
+    directionFilter?: InvitationDirection,
+  ): Promise<ConsultantRequestItem[]> {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { email: true },
@@ -53,14 +65,14 @@ export const consultantRequestService = {
       orderBy: { createdAt: "desc" },
     });
 
-    return invitations.map((inv) => {
+    const items = invitations.map((inv) => {
       const name =
         `${inv.consultantUser.firstName} ${inv.consultantUser.lastName}`.trim() ||
         inv.consultantUser.organizationName ||
         "Consultant";
       return {
         id: inv.id,
-        initiator: inv.initiator,
+        ...invitationFieldsForMobile(inv.initiator),
         consultantUserId: inv.consultantUserId,
         consultant: {
           id: inv.consultantUser.id,
@@ -78,6 +90,18 @@ export const consultantRequestService = {
         createdAt: inv.createdAt,
       };
     });
+    if (!directionFilter) return items;
+    return items.filter((i) => i.direction === directionFilter);
+  },
+
+  /** Pending invitations the mobile user sent to consultants. */
+  async listOutgoingPendingForUser(userId: string): Promise<ConsultantRequestItem[]> {
+    return this.listForUser(userId, "outgoing");
+  },
+
+  /** Pending invitations received from consultants (email invite or client-request). */
+  async listIncomingPendingForUser(userId: string): Promise<ConsultantRequestItem[]> {
+    return this.listForUser(userId, "incoming");
   },
 
   async acceptForUser(userId: string, invitationId: string) {

@@ -8,11 +8,20 @@ import {
   aggregateFilingsStatusCountsByUserIds,
   type FilingsStatusCounts,
 } from "./enterpriseFilingsService";
+import {
+  invitationFieldsForConsultant,
+  type InvitationDirection,
+  type InvitationSenderType,
+} from "../../utils/invitationPresenter";
 
 export interface InvitationCard {
   id: string;
   consultantUserId?: string;
-  initiator?: "consultant_to_client" | "client_to_consultant";
+  initiator: "consultant_to_client" | "client_to_consultant";
+  /** `consultant` = enterprise user sent it; `mobile_user` = client sent it */
+  senderType: InvitationSenderType;
+  /** Relative to the consultant: incoming = client requested; outgoing = you invited */
+  direction: InvitationDirection;
   invitedEmail: string;
   invitedBusinessName: string | null;
   invitedContactName: string | null;
@@ -51,10 +60,11 @@ function shapeInvitationToCard(inv: {
       parsedTaxTypes = [inv.taxTypesManaged];
     }
   }
+  const initiator = inv.initiator ?? "consultant_to_client";
   return {
     id: inv.id,
     ...(inv.consultantUserId && { consultantUserId: inv.consultantUserId }),
-    ...(inv.initiator && { initiator: inv.initiator }),
+    ...invitationFieldsForConsultant(initiator),
     invitedEmail: inv.invitedEmail,
     invitedBusinessName: inv.invitedBusinessName ?? null,
     invitedContactName: inv.invitedContactName ?? null,
@@ -82,6 +92,9 @@ export interface ClientCard {
   email: string;
   tin: string | null;
   invitationId?: string;
+  initiator?: "consultant_to_client" | "client_to_consultant";
+  senderType?: InvitationSenderType;
+  direction?: InvitationDirection;
   type?: "accepted" | "pending";
   company?: { id: string; name: string };
   business?: {
@@ -103,6 +116,10 @@ export const enterpriseClientsService = {
   async listInvitations(
     consultantUserId: string,
     status?: string,
+    filters?: {
+      senderType?: InvitationSenderType;
+      direction?: InvitationDirection;
+    },
   ): Promise<InvitationCard[]> {
     const now = new Date();
     const statusParam = (status ?? "").trim().toLowerCase();
@@ -151,7 +168,21 @@ export const enterpriseClientsService = {
       orderBy: { createdAt: "desc" },
     });
 
-    return invitations.map(shapeInvitationToCard);
+    let cards = invitations.map(shapeInvitationToCard);
+    if (filters?.senderType) {
+      cards = cards.filter((c) => c.senderType === filters.senderType);
+    }
+    if (filters?.direction) {
+      cards = cards.filter((c) => c.direction === filters.direction);
+    }
+    return cards;
+  },
+
+  /** Pending invitations initiated by mobile users (client → consultant). */
+  async listIncomingClientRequests(consultantUserId: string) {
+    return this.listInvitations(consultantUserId, "pending", {
+      direction: "incoming",
+    });
   },
 
   async getInvitationById(
@@ -460,6 +491,7 @@ export const enterpriseClientsService = {
           email,
           tin: null,
           invitationId: inv.id,
+          ...invitationFieldsForConsultant(inv.initiator),
           type: "pending" as const,
         });
       }
