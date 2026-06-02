@@ -37,12 +37,12 @@ export async function getClientTransactions(
   const [sales, expenses] = await Promise.all([
     prisma.sale.findMany({
       where: saleWhere,
-      orderBy: { saleDate: order },
+      orderBy: [{ saleDate: order }, { createdAt: order }],
       include: { createdBy: { select: { id: true, firstName: true, lastName: true } } },
     }),
     prisma.expense.findMany({
       where: expenseWhere,
-      orderBy: { expenseDate: order },
+      orderBy: [{ expenseDate: order }, { createdAt: order }],
       include: { createdBy: { select: { id: true, firstName: true, lastName: true } } },
     }),
   ]);

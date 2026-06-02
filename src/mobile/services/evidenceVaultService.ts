@@ -65,11 +65,11 @@ export const evidenceVaultService = {
     const [sales, expenses, payables, reports] = await Promise.all([
       prisma.sale.findMany({
         where: saleWhere,
-        orderBy: { saleDate: "desc" },
+        orderBy: [{ saleDate: "desc" }, { createdAt: "desc" }],
       }),
       prisma.expense.findMany({
         where: expenseWhere,
-        orderBy: { expenseDate: "desc" },
+        orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
       }),
       prisma.taxPayable.findMany({
         where: { userId },

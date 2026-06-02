@@ -58,12 +58,49 @@ export const adminDashboardService = {
       prisma.user.count({ where: { requestDelete: true } }),
     ]);
 
+    const salesVolume = n(totalSales._sum.totalAmount);
+    const expensesVolume = n(totalExpenses._sum.totalAmount);
+    const salesVolumeThisMonth = n(salesThisMonth._sum.totalAmount);
+    const salesCount = totalSales._count;
+    const expensesCount = totalExpenses._count;
+
     return {
       users: {
         total: totalUsers,
         verified: verifiedUsers,
         onboardingComplete,
         accountDeletionRequests,
+        unverified: totalUsers - verifiedUsers,
+      },
+      consultants: {
+        onboarded: enterpriseConsultants,
+        companies: totalCompanies,
+        linkedClients,
+        activeConnections,
+        pendingInvitations,
+      },
+      usage: {
+        salesCount,
+        expensesCount,
+        salesVolume,
+        expensesVolume,
+        salesVolumeThisMonth,
+        salesCountThisMonth: salesThisMonth._count,
+        expensesVolumeThisMonth: n(expensesThisMonth._sum.totalAmount),
+        expensesCountThisMonth: expensesThisMonth._count,
+        netPlatformVolume: salesVolume - expensesVolume,
+        taxPayablesPending,
+      },
+      sales: {
+        totalVolume: salesVolume,
+        totalCount: salesCount,
+        volumeThisMonth: salesVolumeThisMonth,
+        countThisMonth: salesThisMonth._count,
+      },
+      onboarding: {
+        usersOnboarded: onboardingComplete,
+        consultantPending: pendingConsultantOnboarding,
+        invitationsPending: pendingInvitations,
       },
       enterprise: {
         consultantsOnboarded: enterpriseConsultants,
@@ -77,16 +114,15 @@ export const adminDashboardService = {
         taxPayablesPending,
       },
       books: {
-        salesVolume: n(totalSales._sum.totalAmount),
-        salesCount: totalSales._count,
-        salesVolumeThisMonth: n(salesThisMonth._sum.totalAmount),
+        salesVolume,
+        salesCount,
+        salesVolumeThisMonth,
         salesCountThisMonth: salesThisMonth._count,
-        expensesVolume: n(totalExpenses._sum.totalAmount),
-        expensesCount: totalExpenses._count,
+        expensesVolume,
+        expensesCount,
         expensesVolumeThisMonth: n(expensesThisMonth._sum.totalAmount),
         expensesCountThisMonth: expensesThisMonth._count,
-        netPlatformVolume:
-          n(totalSales._sum.totalAmount) - n(totalExpenses._sum.totalAmount),
+        netPlatformVolume: salesVolume - expensesVolume,
       },
     };
   },

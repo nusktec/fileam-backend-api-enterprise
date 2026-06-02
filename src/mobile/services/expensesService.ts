@@ -50,7 +50,7 @@ export const expensesService = {
     const [expenses, total, summary, byCategory] = await Promise.all([
       prisma.expense.findMany({
         where,
-        orderBy: { expenseDate: order },
+        orderBy: [{ expenseDate: order }, { createdAt: order }],
         skip: (page - 1) * limit,
         take: limit,
       }),

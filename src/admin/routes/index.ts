@@ -20,6 +20,14 @@ import {
   adminListTaxPayables,
   adminListInvitations,
   adminListConsultantOnboarding,
+  adminExportUsers,
+  adminExportCompanies,
+  adminExportSales,
+  adminExportExpenses,
+  adminExportTaxPayables,
+  adminExportInvitations,
+  adminExportConsultantOnboarding,
+  adminExportMetrics,
 } from "../controllers/adminController";
 
 const router = express.Router();
@@ -55,5 +63,14 @@ router.get(
   ...paginated,
   adminListConsultantOnboarding,
 );
+
+router.get("/export/metrics", adminExportMetrics);
+router.get("/export/users", adminExportUsers);
+router.get("/export/companies", adminExportCompanies);
+router.get("/export/sales", adminExportSales);
+router.get("/export/expenses", adminExportExpenses);
+router.get("/export/tax-payables", adminExportTaxPayables);
+router.get("/export/invitations", adminExportInvitations);
+router.get("/export/consultant-onboarding", adminExportConsultantOnboarding);
 
 export default router;

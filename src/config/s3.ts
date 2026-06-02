@@ -62,6 +62,16 @@ export const MEDIA_CONFIG = {
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/csv",
+    "application/csv",
+    "application/xml",
+    "text/xml",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "text/plain",
+    "application/rtf",
   ],
   MAX_FILE_SIZE: 10 * 1024 * 1024, // 10MB
   UPLOAD_FOLDERS: {

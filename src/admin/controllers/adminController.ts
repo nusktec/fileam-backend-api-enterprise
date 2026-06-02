@@ -6,8 +6,16 @@ import { PaginationRequest } from "../../middlewares/paginationMiddleware";
 import { RequestWithAdmin } from "../middlewares/adminAuthMiddleware";
 import { adminAuthService } from "../services/adminAuthService";
 import { adminDashboardService } from "../services/adminDashboardService";
+import { adminExportService } from "../services/adminExportService";
 import { adminListService } from "../services/adminListService";
+import { toAdminExportOpts } from "../utils/adminExportQuery";
 import { toAdminListOpts } from "../utils/adminListQuery";
+
+function sendCsv(res: Response, filename: string, csv: string) {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  res.status(HttpStatusCode.OK).send("\uFEFF" + csv);
+}
 
 export async function adminLogin(req: RequestWithAdmin, res: Response) {
   const { email, password } = matchedData(req, { locations: ["body"] }) as {
@@ -115,4 +123,52 @@ export async function adminListConsultantOnboarding(
   res
     .status(HttpStatusCode.OK)
     .json(outJson(true, "Consultant onboarding sessions", data));
+}
+
+export async function adminExportUsers(req: RequestWithAdmin, res: Response) {
+  const csv = await adminExportService.exportUsers(toAdminExportOpts(req));
+  sendCsv(res, "users.csv", csv);
+}
+
+export async function adminExportCompanies(req: RequestWithAdmin, res: Response) {
+  const csv = await adminExportService.exportCompanies(toAdminExportOpts(req));
+  sendCsv(res, "companies.csv", csv);
+}
+
+export async function adminExportSales(req: RequestWithAdmin, res: Response) {
+  const csv = await adminExportService.exportSales(toAdminExportOpts(req));
+  sendCsv(res, "sales.csv", csv);
+}
+
+export async function adminExportExpenses(req: RequestWithAdmin, res: Response) {
+  const csv = await adminExportService.exportExpenses(toAdminExportOpts(req));
+  sendCsv(res, "expenses.csv", csv);
+}
+
+export async function adminExportTaxPayables(
+  req: RequestWithAdmin,
+  res: Response,
+) {
+  const csv = await adminExportService.exportTaxPayables(toAdminExportOpts(req));
+  sendCsv(res, "tax-payables.csv", csv);
+}
+
+export async function adminExportInvitations(req: RequestWithAdmin, res: Response) {
+  const csv = await adminExportService.exportInvitations(toAdminExportOpts(req));
+  sendCsv(res, "invitations.csv", csv);
+}
+
+export async function adminExportConsultantOnboarding(
+  req: RequestWithAdmin,
+  res: Response,
+) {
+  const csv = await adminExportService.exportConsultantOnboarding(
+    toAdminExportOpts(req),
+  );
+  sendCsv(res, "consultant-onboarding.csv", csv);
+}
+
+export async function adminExportMetrics(_req: RequestWithAdmin, res: Response) {
+  const csv = await adminExportService.exportMetricsSummary();
+  sendCsv(res, "admin-metrics.csv", csv);
 }

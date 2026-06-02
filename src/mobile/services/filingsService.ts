@@ -101,7 +101,7 @@ async function fetchPeriodEvidenceCompliance(
         totalAmount: true,
         saleDate: true,
       },
-      orderBy: { saleDate: "desc" },
+      orderBy: [{ saleDate: "desc" }, { createdAt: "desc" }],
       take: listLimit,
     }),
     prisma.expense.findMany({
@@ -114,7 +114,7 @@ async function fetchPeriodEvidenceCompliance(
         totalAmount: true,
         expenseDate: true,
       },
-      orderBy: { expenseDate: "desc" },
+      orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
       take: listLimit,
     }),
   ]);

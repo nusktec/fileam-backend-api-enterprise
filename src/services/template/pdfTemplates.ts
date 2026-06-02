@@ -4,6 +4,15 @@
  */
 import PDFDocument from "pdfkit";
 import type { Decimal } from "@prisma/client/runtime/library";
+import {
+  amountColumnX,
+  drawKeyValueBox,
+  ensurePageSpace,
+  getPdfLayout,
+  tableColumns,
+  textHeight,
+  truncateText,
+} from "./pdfLayout";
 
 const PRIMARY_COLOR = "#008b8b";
 const DOMAIN = "https://fileam.app";
@@ -61,108 +70,117 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const pageWidth = doc.page.width - 100;
-    const col1 = 50;
-    const col2 = pageWidth / 2 + 25;
+    const layout = getPdfLayout(doc);
+    const { left, contentWidth, rightEdge, amtColW, gap } = layout;
+    const totalX = amountColumnX(layout, 0);
+    const vatX = amountColumnX(layout, 1);
+    const amountX = amountColumnX(layout, 2);
+    const descW = Math.max(80, amountX - left - gap - 10);
+    const descText = truncateText(data.description, 120);
+    const rowH = Math.max(28, textHeight(doc, descText, descW, 8) + 14);
+    const headerH = 22;
 
     doc
       .fontSize(22)
       .fillColor(PRIMARY_COLOR)
-      .text("INVOICE", col1, 50, { width: pageWidth })
-      .moveDown(0.5);
+      .text("INVOICE", left, 50, { width: contentWidth });
 
-    doc
-      .fontSize(8)
-      .fillColor("#6c757d")
-      .text(`Invoice #${data.invoiceNumber}`, col1)
-      .text(`Date: ${formatDate(data.saleDate)}`, col1)
-      .text(`Status: ${data.status}`, col1)
-      .moveDown(1);
+    let y = doc.y + 12;
+    doc.fontSize(8).fillColor("#6c757d");
+    doc.text(`Invoice #${data.invoiceNumber}`, left, y, { width: contentWidth });
+    y = doc.y + 2;
+    doc.text(`Date: ${formatDate(data.saleDate)}`, left, y, { width: contentWidth });
+    y = doc.y + 2;
+    doc.text(`Status: ${data.status}`, left, y, { width: contentWidth });
+    y = doc.y + 14;
 
     doc.fillColor("#1a1a1a").fontSize(9);
     if (data.businessName) {
-      doc.text("From:", col1).fontSize(8).text(data.businessName, col1);
-      if (data.businessAddress) doc.text(data.businessAddress, col1);
-      doc.moveDown(1).fontSize(9);
+      doc.text("From:", left, y, { width: contentWidth });
+      y = doc.y + 2;
+      doc.fontSize(8).text(data.businessName, left, y, { width: contentWidth });
+      if (data.businessAddress) {
+        y = doc.y + 2;
+        doc.text(data.businessAddress, left, y, { width: contentWidth });
+      }
+      y = doc.y + 12;
+      doc.fontSize(9);
     }
 
-    doc.text("Bill To:", col1).fontSize(8);
-    doc.text(data.customerName || "Customer", col1);
-    doc.moveDown(1.5).fontSize(9);
+    doc.text("Bill To:", left, y, { width: contentWidth });
+    y = doc.y + 2;
+    doc.fontSize(8).text(data.customerName || "Customer", left, y, { width: contentWidth });
+    y = doc.y + 18;
 
-    const tableTop = doc.y;
-    const rightEdge = col1 + pageWidth;
-    const AMT_W = 115;
-    const GAP = 10;
-    const totalX = rightEdge - AMT_W;
-    const vatX = totalX - GAP - AMT_W;
-    const amountX = vatX - GAP - AMT_W;
-    const descW = amountX - col1 - GAP - 10;
-    doc
-      .rect(col1, tableTop, pageWidth, 22)
-      .fillAndStroke("#f8f9fa", PRIMARY_COLOR);
+    const tableTop = y;
+    doc.rect(left, tableTop, contentWidth, headerH).fillAndStroke("#f8f9fa", PRIMARY_COLOR);
     doc
       .fillColor("#1a1a1a")
-      .fontSize(8)
+      .fontSize(7)
       .font("Helvetica-Bold")
-      .text("Description", col1 + 10, tableTop + 6, { width: descW })
-      .text("Amount", amountX, tableTop + 6, { width: AMT_W })
-      .text("VAT", vatX, tableTop + 6, { width: AMT_W })
-      .text("Total", totalX, tableTop + 6, { width: AMT_W })
+      .text("Description", left + 8, tableTop + 7, { width: descW })
+      .text("Amount", amountX, tableTop + 7, { width: amtColW, align: "right" })
+      .text("VAT", vatX, tableTop + 7, { width: amtColW, align: "right" })
+      .text("Total", totalX, tableTop + 7, { width: amtColW, align: "right" })
       .font("Helvetica");
 
-    doc
-      .rect(col1, tableTop + 22, pageWidth, 28)
-      .stroke(PRIMARY_COLOR);
+    const rowTop = tableTop + headerH;
+    doc.rect(left, rowTop, contentWidth, rowH).stroke(PRIMARY_COLOR);
     doc
       .fillColor("#4a4a4a")
       .fontSize(8)
-      .text(data.description, col1 + 10, tableTop + 30, { width: descW })
-      .text(formatCurrency(data.amount), amountX, tableTop + 30, { width: AMT_W })
+      .text(descText, left + 8, rowTop + 6, { width: descW })
+      .text(formatCurrency(data.amount), amountX, rowTop + 6, {
+        width: amtColW,
+        align: "right",
+      })
       .text(
-        `${data.vatRate}% - ${formatCurrency(data.vatAmount)}`,
+        truncateText(`${data.vatRate}% · ${formatCurrency(data.vatAmount)}`, 28),
         vatX,
-        tableTop + 30,
-        { width: AMT_W },
+        rowTop + 6,
+        { width: amtColW, align: "right" },
       )
-      .text(formatCurrency(data.totalAmount), totalX, tableTop + 30, {
-        width: AMT_W,
+      .text(formatCurrency(data.totalAmount), totalX, rowTop + 6, {
+        width: amtColW,
+        align: "right",
       });
 
-    doc.moveDown(2);
-    const totalY = doc.y;
-    doc
-      .rect(col1, totalY, 250, 40)
-      .fillAndStroke("#e6f7f7", PRIMARY_COLOR);
+    y = rowTop + rowH + 16;
+    const totalBoxH = 44;
+    const totalBoxW = Math.min(contentWidth, 280);
+    doc.rect(left, y, totalBoxW, totalBoxH).fillAndStroke("#e6f7f7", PRIMARY_COLOR);
     doc
       .font("Helvetica-Bold")
       .fontSize(10)
       .fillColor("#004d4d")
-      .text("Total Amount", col1 + 15, totalY + 8)
-      .text(formatCurrency(data.totalAmount), col1 + 15, totalY + 26);
+      .text("Total Amount", left + 12, y + 10, { width: totalBoxW - 24 })
+      .text(formatCurrency(data.totalAmount), left + 12, y + 26, {
+        width: totalBoxW - 24,
+      });
     doc.font("Helvetica").fillColor("#1a1a1a");
 
-    doc
-      .fontSize(7)
-      .fillColor("#6c757d")
-      .text(`Payment: ${data.paymentType}`, col1, totalY + 55)
-      .text(
-        data.vatableIncome ? "Vatable Income: Yes" : "Vatable Income: No",
-        col1,
-        totalY + 68,
-      )
-      .text(
-        data.serviceIncome ? "Service Income: Yes" : "Service Income: No",
-        col1,
-        totalY + 81,
-      );
-
-    doc
-      .moveDown(3)
-      .fontSize(7)
-      .fillColor("#6c757d")
-      .text("Thank you for your business.", col1)
-      .text(`Generated by Fileam · ${DOMAIN}`, col1);
+    y += totalBoxH + 12;
+    doc.fontSize(7).fillColor("#6c757d");
+    doc.text(`Payment: ${data.paymentType}`, left, y, { width: contentWidth });
+    y = doc.y + 2;
+    doc.text(
+      data.vatableIncome ? "Vatable income: Yes" : "Vatable income: No",
+      left,
+      y,
+      { width: contentWidth },
+    );
+    y = doc.y + 2;
+    doc.text(
+      data.serviceIncome ? "Service income: Yes" : "Service income: No",
+      left,
+      y,
+      { width: contentWidth },
+    );
+    y = doc.y + 20;
+    doc.text("Thank you for your business.", left, y, { width: contentWidth });
+    doc.text(`Generated by Fileam · ${DOMAIN}`, left, doc.y + 2, {
+      width: contentWidth,
+    });
 
     doc.end();
   });
@@ -188,75 +206,65 @@ export function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const pageWidth = doc.page.width - 100;
-    const col1 = 50;
+    const layout = getPdfLayout(doc);
+    const { left, contentWidth } = layout;
 
-    doc
-      .fontSize(22)
-      .fillColor(PRIMARY_COLOR)
-      .text("RECEIPT", col1, 50, { width: pageWidth })
-      .moveDown(0.5);
+    doc.fontSize(22).fillColor(PRIMARY_COLOR).text("RECEIPT", left, 50, {
+      width: contentWidth,
+    });
 
-    doc
-      .fontSize(8)
-      .fillColor("#6c757d")
-      .text(`Receipt #${data.expenseNumber}`, col1)
-      .text(`Date: ${formatDate(data.expenseDate)}`, col1)
-      .text(`Category: ${data.category}`, col1)
-      .moveDown(1.5);
+    let y = doc.y + 12;
+    doc.fontSize(8).fillColor("#6c757d");
+    doc.text(`Receipt #${data.expenseNumber}`, left, y, { width: contentWidth });
+    y = doc.y + 2;
+    doc.text(`Date: ${formatDate(data.expenseDate)}`, left, y, { width: contentWidth });
+    y = doc.y + 2;
+    doc.text(`Category: ${truncateText(data.category, 60)}`, left, y, {
+      width: contentWidth,
+    });
+    y = doc.y + 14;
 
-    doc.fillColor("#1a1a1a").fontSize(9);
     if (data.businessName) {
-      doc.text("From:", col1).fontSize(8).text(data.businessName, col1);
-      doc.moveDown(1).fontSize(9);
+      doc.fillColor("#1a1a1a").fontSize(9).text("From:", left, y, { width: contentWidth });
+      y = doc.y + 2;
+      doc.fontSize(8).text(data.businessName, left, y, { width: contentWidth });
+      y = doc.y + 14;
     }
 
-    doc.fontSize(10).text("Description", col1).moveDown(0.3);
+    doc.fontSize(10).fillColor("#1a1a1a").text("Description", left, y, {
+      width: contentWidth,
+    });
+    y = doc.y + 4;
     doc
       .fontSize(9)
       .fillColor("#4a4a4a")
-      .text(data.description, col1, doc.y, { width: pageWidth })
-      .moveDown(1.5);
+      .text(truncateText(data.description, 200), left, y, { width: contentWidth });
+    y = doc.y + 16;
 
-    doc
-      .rect(col1, doc.y, pageWidth, 90)
-      .fillAndStroke("#f8fafc", PRIMARY_COLOR);
-    const boxTop = doc.y;
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor("#1a1a1a")
-      .text("Amount", col1 + 15, boxTop + 15)
-      .text("VAT", col1 + 15, boxTop + 40)
-      .text("Total", col1 + 15, boxTop + 65)
-      .font("Helvetica");
-    doc
-      .fontSize(9)
-      .fillColor("#4a4a4a")
-      .text(
-        formatCurrency(data.amount),
-        col1 + 200,
-        boxTop + 15,
-        { width: 150 },
-      )
-      .text(
-        data.vatInclusive
+    y = drawKeyValueBox(doc, layout, y, [
+      { label: "Amount", value: formatCurrency(data.amount) },
+      {
+        label: "VAT",
+        value: data.vatInclusive
           ? `Inclusive (${formatCurrency(data.vatAmount ?? 0)})`
           : "Exclusive",
-        col1 + 200,
-        boxTop + 40,
-        { width: 150 },
-      )
-      .text(formatCurrency(data.totalAmount), col1 + 200, boxTop + 65, {
-        width: 150,
-      });
+      },
+      { label: "Total", value: formatCurrency(data.totalAmount) },
+    ]);
 
+    y += 20;
     doc
-      .moveDown(2)
       .fontSize(7)
       .fillColor("#6c757d")
-      .text("This is an official receipt for the transaction listed above.", col1)
-      .text(`Generated by Fileam · ${DOMAIN}`, col1);
+      .text(
+        "This is an official receipt for the transaction listed above.",
+        left,
+        y,
+        { width: contentWidth },
+      );
+    doc.text(`Generated by Fileam · ${DOMAIN}`, left, doc.y + 2, {
+      width: contentWidth,
+    });
 
     doc.end();
   });
@@ -285,78 +293,65 @@ export function generateTaxFilingPdf(data: TaxFilingData): Promise<Buffer> {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const pageWidth = doc.page.width - 100;
-    const col1 = 50;
+    const layout = getPdfLayout(doc);
+    const { left, contentWidth } = layout;
     const periodLabel = `${new Date(data.periodYear, data.periodMonth - 1).toLocaleString("default", { month: "long" })} ${data.periodYear}`;
 
     doc
-      .fontSize(22)
+      .fontSize(20)
       .fillColor(PRIMARY_COLOR)
-      .text(`${data.taxType} FILING`, col1, 50, { width: pageWidth })
-      .moveDown(0.5);
+      .text(`${truncateText(data.taxType, 40)} FILING`, left, 50, {
+        width: contentWidth,
+      });
 
-    doc
-      .fontSize(8)
-      .fillColor("#6c757d")
-      .text(`Period: ${periodLabel}`, col1)
-      .text(`Due Date: ${formatDate(data.filingDueDate)}`, col1)
-      .text(`Status: ${data.status}`, col1);
+    let y = doc.y + 12;
+    doc.fontSize(8).fillColor("#6c757d");
+    doc.text(`Period: ${periodLabel}`, left, y, { width: contentWidth });
+    y = doc.y + 2;
+    doc.text(`Due date: ${formatDate(data.filingDueDate)}`, left, y, {
+      width: contentWidth,
+    });
+    y = doc.y + 2;
+    doc.text(`Status: ${data.status}`, left, y, { width: contentWidth });
     if (data.vatRegistrationNumber) {
-      doc.text(`VAT Reg: ${data.vatRegistrationNumber}`, col1);
+      y = doc.y + 2;
+      doc.text(`VAT reg: ${data.vatRegistrationNumber}`, left, y, {
+        width: contentWidth,
+      });
     }
     if (data.stateOfOperation) {
-      doc.text(`State: ${data.stateOfOperation}`, col1);
+      y = doc.y + 2;
+      doc.text(`State: ${data.stateOfOperation}`, left, y, { width: contentWidth });
     }
-    doc.moveDown(1.5);
+    y = doc.y + 16;
 
-    doc
-      .rect(col1, doc.y, pageWidth, 120)
-      .fillAndStroke("#f8fafc", PRIMARY_COLOR);
-    const boxTop = doc.y;
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(9)
-      .fillColor("#1a1a1a")
-      .text("Amount Due", col1 + 15, boxTop + 15)
-      .text("Penalties", col1 + 15, boxTop + 45)
-      .text("Total Payable", col1 + 15, boxTop + 75)
-      .font("Helvetica");
-    doc
-      .fontSize(9)
-      .fillColor("#4a4a4a")
-      .text(
-        formatCurrency(data.amountDue, data.currency),
-        col1 + 250,
-        boxTop + 15,
-        { width: 150 },
-      )
-      .text(
-        formatCurrency(data.penalties, data.currency),
-        col1 + 250,
-        boxTop + 45,
-        { width: 150 },
-      )
-      .text(
-        formatCurrency(data.totalPayable, data.currency),
-        col1 + 250,
-        boxTop + 75,
-        { width: 150 },
-      );
+    y = drawKeyValueBox(doc, layout, y, [
+      { label: "Amount due", value: formatCurrency(data.amountDue, data.currency) },
+      { label: "Penalties", value: formatCurrency(data.penalties, data.currency) },
+      {
+        label: "Total payable",
+        value: formatCurrency(data.totalPayable, data.currency),
+      },
+    ]);
 
     if (data.submittedAt) {
+      y += 12;
       doc
-        .moveDown(1)
         .fontSize(7)
         .fillColor("#6c757d")
-        .text(`Submitted: ${formatDate(data.submittedAt)}`, col1);
+        .text(`Submitted: ${formatDate(data.submittedAt)}`, left, y, {
+          width: contentWidth,
+        });
     }
 
+    y = doc.y + 20;
     doc
-      .moveDown(2)
       .fontSize(7)
       .fillColor("#6c757d")
-      .text("Official tax filing document.", col1)
-      .text(`Generated by Fileam · ${DOMAIN}`, col1);
+      .text("Official tax filing document.", left, y, { width: contentWidth });
+    doc.text(`Generated by Fileam · ${DOMAIN}`, left, doc.y + 2, {
+      width: contentWidth,
+    });
 
     doc.end();
   });
@@ -452,246 +447,265 @@ export function generateFullReportPdf(
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const pageWidth = doc.page.width - 100;
-    const col1 = 50;
-    const col2 = pageWidth / 2 + 25;
-    const rightEdge = col1 + pageWidth;
-    const AMT_W = 115; // Width for amount columns (NGN 12,345,678.90)
-    const GAP = 8;
+    const layout = getPdfLayout(doc);
+    const { left, contentWidth, amtColW } = layout;
     let y = 50;
 
-    // Header with logo
     if (logoBuffer) {
       try {
-        doc.image(logoBuffer, col1, y, { width: 120, height: 40 });
+        doc.image(logoBuffer, left, y, { width: 120, height: 40 });
       } catch {
-        // Fallback if image fails
+        /* ignore */
       }
       y += 50;
     } else {
-      doc.fontSize(20).fillColor(PRIMARY_COLOR).text("FILEAM", col1, y);
+      doc.fontSize(20).fillColor(PRIMARY_COLOR).text("FILEAM", left, y);
       y += 35;
     }
 
     doc
       .fontSize(18)
       .fillColor(PRIMARY_COLOR)
-      .text("Summary Tax Report", col1, y, { width: pageWidth });
-    y += 28;
+      .text("Summary Tax Report", left, y, { width: contentWidth });
+    y = doc.y + 20;
 
     doc.fontSize(7).fillColor("#6c757d");
-    doc.text(`Period: ${data.periodLabel}`, col1);
-    doc.text(`Generated: ${formatDate(data.generatedAt)}`, col1);
-    if (data.businessName) doc.text(`Business: ${data.businessName}`, col1);
-    doc.text(`Format: ${data.format} | Status: ${data.status} | Currency: NGN`, col1);
+    doc.text(`Period: ${data.periodLabel}`, left, y, { width: contentWidth });
+    y = doc.y + 2;
+    doc.text(`Generated: ${formatDate(data.generatedAt)}`, left, y, {
+      width: contentWidth,
+    });
+    if (data.businessName) {
+      y = doc.y + 2;
+      doc.text(`Business: ${truncateText(data.businessName, 80)}`, left, y, {
+        width: contentWidth,
+      });
+    }
+    y = doc.y + 2;
+    doc.text(
+      `Format: ${data.format} | Status: ${data.status} | Currency: NGN`,
+      left,
+      y,
+      { width: contentWidth },
+    );
     y = doc.y + 16;
 
     const drawSection = (title: string, content: () => void) => {
-      if (doc.y > 700) {
-        doc.addPage();
-        y = 50;
-      }
+      y = ensurePageSpace(doc, y, 40);
       doc
         .fontSize(9)
         .font("Helvetica-Bold")
         .fillColor(PRIMARY_COLOR)
-        .text(title, col1)
-        .moveDown(0.3)
-        .font("Helvetica")
-        .fillColor("#1a1a1a");
+        .text(title, left, y, { width: contentWidth });
+      y = doc.y + 10;
+      doc.font("Helvetica").fillColor("#1a1a1a");
       content();
-      doc.moveDown(0.8);
+      y += 12;
     };
 
-    // VAT Return Summary
+    const isAmountColumn = (key: string) =>
+      key === "Amount" ||
+      key === "VAT" ||
+      key === "Total" ||
+      key === "Amount Due";
+
+    const drawTableHeader = (tableTop: number, cols: ReturnType<typeof tableColumns>) => {
+      const headerH = 20;
+      doc.rect(left, tableTop, contentWidth, headerH).fillAndStroke("#e6f7f7", PRIMARY_COLOR);
+      doc.fontSize(6).font("Helvetica-Bold").fillColor("#004d4d");
+      for (const [key, col] of Object.entries(cols)) {
+        doc.text(key, col.x, tableTop + 6, {
+          width: col.w,
+          align: isAmountColumn(key) ? "right" : "left",
+        });
+      }
+      doc.font("Helvetica").fillColor("#4a4a4a");
+      return headerH;
+    };
+
+    const drawDataTable = (
+      cols: ReturnType<typeof tableColumns>,
+      rows: Record<string, string>[],
+      rowH = 17,
+    ) => {
+      const headerH = 20;
+      let tableTop = ensurePageSpace(doc, y, headerH + rowH);
+      const headerHActual = drawTableHeader(tableTop, cols);
+      let rowY = tableTop + headerHActual;
+      for (const row of rows) {
+        const prevY = rowY;
+        rowY = ensurePageSpace(doc, rowY, rowH);
+        if (rowY < prevY) {
+          tableTop = rowY;
+          const h = drawTableHeader(tableTop, cols);
+          rowY = tableTop + h;
+        }
+        doc.rect(left, rowY, contentWidth, rowH).stroke("#e9ecef");
+        for (const [key, col] of Object.entries(cols)) {
+          doc.text(row[key] ?? "—", col.x, rowY + 4, {
+            width: col.w,
+            align: isAmountColumn(key) ? "right" : "left",
+          });
+        }
+        rowY += rowH;
+      }
+      y = rowY + 8;
+    };
+
     drawSection("1. VAT RETURN SUMMARY", () => {
+      y = drawKeyValueBox(doc, layout, y, [
+        { label: "Output VAT (Sales)", value: formatNaira(data.vatSummary.outputVat) },
+        { label: "Input VAT (Purchases)", value: formatNaira(data.vatSummary.inputVatClaimable) },
+        { label: "Net VAT Payable", value: formatNaira(data.vatSummary.netVatPayable) },
+      ]);
+      y += 4;
       doc
-        .rect(col1, doc.y, pageWidth, 95)
-        .fillAndStroke("#f8fafc", PRIMARY_COLOR);
-      const boxTop = doc.y;
-      doc.fontSize(7).fillColor("#4a4a4a");
-      doc.text("Output VAT (Sales)", col1 + 12, boxTop + 12);
-      doc.text(formatNaira(data.vatSummary.outputVat), rightEdge - AMT_W - 12, boxTop + 12, { width: AMT_W });
-      doc.text("Input VAT (Purchases)", col1 + 12, boxTop + 28);
-      doc.text(formatNaira(data.vatSummary.inputVatClaimable), rightEdge - AMT_W - 12, boxTop + 28, { width: AMT_W });
-      doc.font("Helvetica-Bold").text("Net VAT Payable", col1 + 12, boxTop + 48);
-      doc.text(formatNaira(data.vatSummary.netVatPayable), rightEdge - AMT_W - 12, boxTop + 48, { width: AMT_W });
-      doc.font("Helvetica");
-      doc.text(`Threshold: ${formatNaira(data.vatSummary.vatThreshold)} | ${data.vatSummary.percentOfThreshold.toFixed(1)}% of threshold`, col1 + 12, boxTop + 68);
-      doc.text(data.vatSummary.belowThreshold ? "Below VAT registration threshold" : "Above VAT threshold", col1 + 12, boxTop + 82);
+        .fontSize(7)
+        .fillColor("#4a4a4a")
+        .text(
+          `Threshold: ${formatNaira(data.vatSummary.vatThreshold)} · ${data.vatSummary.percentOfThreshold.toFixed(1)}%`,
+          left,
+          y,
+          { width: contentWidth },
+        );
+      y = doc.y + 2;
+      doc.text(
+        data.vatSummary.belowThreshold
+          ? "Below VAT registration threshold"
+          : "Above VAT threshold",
+        left,
+        y,
+        { width: contentWidth },
+      );
+      y = doc.y;
     });
 
-    // WHT Schedule
     drawSection("2. WHT SCHEDULE", () => {
-      doc
-        .rect(col1, doc.y, pageWidth, 60)
-        .fillAndStroke("#f8fafc", PRIMARY_COLOR);
-      const boxTop = doc.y;
-      doc.fontSize(7).fillColor("#4a4a4a");
-      doc.text("Service Income", col1 + 12, boxTop + 12);
-      doc.text(formatNaira(data.whtSummary.serviceIncome), rightEdge - AMT_W - 12, boxTop + 12, { width: AMT_W });
-      doc.text(`WHT Rate: ${data.whtSummary.whtRate}%`, col1 + 12, boxTop + 28);
-      doc.text("Estimated WHT Deducted", col1 + 12, boxTop + 44);
-      doc.font("Helvetica-Bold").text(formatNaira(data.whtSummary.estimatedWhtDeducted), rightEdge - AMT_W - 12, boxTop + 44, { width: AMT_W });
-      doc.font("Helvetica");
+      y = drawKeyValueBox(doc, layout, y, [
+        { label: "Service Income", value: formatNaira(data.whtSummary.serviceIncome) },
+        { label: "WHT Rate", value: `${data.whtSummary.whtRate}%` },
+        {
+          label: "Estimated WHT Deducted",
+          value: formatNaira(data.whtSummary.estimatedWhtDeducted),
+        },
+      ]);
     });
 
-    // CIT Summary
     drawSection("3. CIT SUMMARY", () => {
-      doc
-        .rect(col1, doc.y, pageWidth, 70)
-        .fillAndStroke("#f8fafc", PRIMARY_COLOR);
-      const boxTop = doc.y;
-      doc.fontSize(7).fillColor("#4a4a4a");
-      doc.text("Monthly Profit", col1 + 12, boxTop + 12);
-      doc.text(formatNaira(data.citSummary.monthlyProfit), rightEdge - AMT_W - 12, boxTop + 12, { width: AMT_W });
-      doc.text("Annualized Profit", col1 + 12, boxTop + 28);
-      doc.text(formatNaira(data.citSummary.annualizedProfit), rightEdge - AMT_W - 12, boxTop + 28, { width: AMT_W });
-      doc.text(`CIT Rate: ${data.citSummary.citRate}%`, col1 + 12, boxTop + 44);
-      doc.text("Estimated Annual CIT", col1 + 12, boxTop + 58);
-      doc.font("Helvetica-Bold").text(formatNaira(data.citSummary.estimatedAnnualCit), rightEdge - AMT_W - 12, boxTop + 58, { width: AMT_W });
-      doc.font("Helvetica");
+      y = drawKeyValueBox(doc, layout, y, [
+        { label: "Monthly Profit", value: formatNaira(data.citSummary.monthlyProfit) },
+        { label: "Annualized Profit", value: formatNaira(data.citSummary.annualizedProfit) },
+        { label: "CIT Rate", value: `${data.citSummary.citRate}%` },
+        {
+          label: "Estimated Annual CIT",
+          value: formatNaira(data.citSummary.estimatedAnnualCit),
+        },
+      ]);
     });
 
-    // Filing History
     drawSection("4. FILING HISTORY", () => {
       if (data.filings.length === 0) {
-        doc.fontSize(7).fillColor("#6c757d").text("No filings for this period.", col1);
+        doc.fontSize(7).fillColor("#6c757d").text("No filings for this period.", left, y, {
+          width: contentWidth,
+        });
+        y = doc.y;
       } else {
-        const tableTop = doc.y;
-        const fTotalX = rightEdge - AMT_W;
-        const fAmtDueX = fTotalX - GAP - AMT_W;
-        const fStatusW = 72;
-        const fStatusX = fAmtDueX - GAP - fStatusW;
-        const fPeriodW = 72;
-        const fPeriodX = col1 + 8 + 58 + GAP;
-        const fTaxTypeX = col1 + 8;
-        const fTaxTypeW = 58;
-        doc.rect(col1, tableTop, pageWidth, 22).fillAndStroke("#e6f7f7", PRIMARY_COLOR);
-        doc.fontSize(6).font("Helvetica-Bold").fillColor("#004d4d");
-        doc.text("Tax Type", fTaxTypeX, tableTop + 6, { width: fTaxTypeW });
-        doc.text("Period", fTaxTypeX + fTaxTypeW + GAP, tableTop + 6, { width: fPeriodW });
-        doc.text("Status", fStatusX, tableTop + 6, { width: fStatusW });
-        doc.text("Amount Due", fAmtDueX, tableTop + 6, { width: AMT_W });
-        doc.text("Total", fTotalX, tableTop + 6, { width: AMT_W });
-        doc.font("Helvetica").fillColor("#4a4a4a");
-        let rowY = tableTop + 22;
-        for (const f of data.filings) {
-          if (rowY > 720) {
-            doc.addPage();
-            rowY = 50;
-            doc.rect(col1, rowY - 22, pageWidth, 22).stroke(PRIMARY_COLOR);
-          }
-          doc.rect(col1, rowY, pageWidth, 18).stroke("#e9ecef");
-          doc.text(f.taxType, fTaxTypeX, rowY + 4, { width: fTaxTypeW });
-          doc.text(f.periodLabel, fTaxTypeX + fTaxTypeW + GAP, rowY + 4, { width: fPeriodW });
-          doc.text(f.status, fStatusX, rowY + 4, { width: fStatusW });
-          doc.text(formatNaira(f.amountDue), fAmtDueX, rowY + 4, { width: AMT_W });
-          doc.text(formatNaira(f.totalPayable), fTotalX, rowY + 4, { width: AMT_W });
-          rowY += 18;
-        }
-        doc.y = rowY + 4;
+        const cols = tableColumns(layout, 8, [
+          { key: "Tax Type", width: 52 },
+          { key: "Period", width: 68 },
+          { key: "Status", width: 58 },
+          { key: "Amount Due", width: amtColW, fromRight: true },
+          { key: "Total", width: amtColW, fromRight: true },
+        ]);
+        drawDataTable(
+          cols,
+          data.filings.map((f) => ({
+            "Tax Type": truncateText(f.taxType, 14),
+            Period: truncateText(f.periodLabel, 16),
+            Status: truncateText(f.status, 12),
+            "Amount Due": formatNaira(f.amountDue),
+            Total: formatNaira(f.totalPayable),
+          })),
+        );
       }
     });
 
-    // Sales (Financial Records)
     drawSection("5. SALES / INVOICES", () => {
       if (data.sales.length === 0) {
-        doc.fontSize(7).fillColor("#6c757d").text("No sales for this period.", col1);
+        doc.fontSize(7).fillColor("#6c757d").text("No sales for this period.", left, y, {
+          width: contentWidth,
+        });
+        y = doc.y;
       } else {
-        const tableTop = doc.y;
-        const sTotalX = rightEdge - AMT_W;
-        const sVatX = sTotalX - GAP - AMT_W;
-        const sAmtX = sVatX - GAP - AMT_W;
-        const sInvW = 70;
-        const sCustW = sAmtX - col1 - 8 - GAP * 2 - sInvW;
-        doc.rect(col1, tableTop, pageWidth, 20).fillAndStroke("#e6f7f7", PRIMARY_COLOR);
-        doc.fontSize(6).font("Helvetica-Bold").fillColor("#004d4d");
-        doc.text("Invoice", col1 + 8, tableTop + 5, { width: sInvW });
-        doc.text("Customer", col1 + 8 + sInvW + GAP, tableTop + 5, { width: sCustW });
-        doc.text("Amount", sAmtX, tableTop + 5, { width: AMT_W });
-        doc.text("VAT", sVatX, tableTop + 5, { width: AMT_W });
-        doc.text("Total", sTotalX, tableTop + 5, { width: AMT_W });
-        doc.font("Helvetica").fillColor("#4a4a4a");
-        let rowY = tableTop + 20;
-        for (const s of data.sales) {
-          if (rowY > 730) {
-            doc.addPage();
-            rowY = 50;
-          }
-          doc.rect(col1, rowY, pageWidth, 16).stroke("#e9ecef");
-          doc.text(s.invoiceNumber, col1 + 8, rowY + 3, { width: sInvW });
-          doc.text((s.customerName || "-").slice(0, 22), col1 + 8 + sInvW + GAP, rowY + 3, { width: sCustW });
-          doc.text(formatNaira(s.amount), sAmtX, rowY + 3, { width: AMT_W });
-          doc.text(formatNaira(s.vatAmount), sVatX, rowY + 3, { width: AMT_W });
-          doc.text(formatNaira(s.totalAmount), sTotalX, rowY + 3, { width: AMT_W });
-          rowY += 16;
-        }
-        doc.y = rowY + 4;
+        const cols = tableColumns(layout, 8, [
+          { key: "Invoice", width: 62 },
+          { key: "Customer", width: 80 },
+          { key: "Amount", width: amtColW, fromRight: true },
+          { key: "VAT", width: amtColW, fromRight: true },
+          { key: "Total", width: amtColW, fromRight: true },
+        ]);
+        drawDataTable(
+          cols,
+          data.sales.map((s) => ({
+            Invoice: truncateText(s.invoiceNumber, 16),
+            Customer: truncateText(s.customerName || "—", 28),
+            Amount: formatNaira(s.amount),
+            VAT: formatNaira(s.vatAmount),
+            Total: formatNaira(s.totalAmount),
+          })),
+        );
       }
     });
 
-    // Expenses
     drawSection("6. EXPENSES", () => {
       if (data.expenses.length === 0) {
-        doc.fontSize(7).fillColor("#6c757d").text("No expenses for this period.", col1);
+        doc.fontSize(7).fillColor("#6c757d").text("No expenses for this period.", left, y, {
+          width: contentWidth,
+        });
+        y = doc.y;
       } else {
-        const tableTop = doc.y;
-        const eTotalX = rightEdge - AMT_W;
-        const eVatX = eTotalX - GAP - AMT_W;
-        const eAmtX = eVatX - GAP - AMT_W;
-        const eReceiptW = 70;
-        const eCatW = eAmtX - col1 - 8 - GAP * 2 - eReceiptW;
-        doc.rect(col1, tableTop, pageWidth, 20).fillAndStroke("#e6f7f7", PRIMARY_COLOR);
-        doc.fontSize(6).font("Helvetica-Bold").fillColor("#004d4d");
-        doc.text("Receipt #", col1 + 8, tableTop + 5, { width: eReceiptW });
-        doc.text("Category", col1 + 8 + eReceiptW + GAP, tableTop + 5, { width: eCatW });
-        doc.text("Amount", eAmtX, tableTop + 5, { width: AMT_W });
-        doc.text("VAT", eVatX, tableTop + 5, { width: AMT_W });
-        doc.text("Total", eTotalX, tableTop + 5, { width: AMT_W });
-        doc.font("Helvetica").fillColor("#4a4a4a");
-        let rowY = tableTop + 20;
-        for (const e of data.expenses) {
-          if (rowY > 730) {
-            doc.addPage();
-            rowY = 50;
-          }
-          doc.rect(col1, rowY, pageWidth, 16).stroke("#e9ecef");
-          doc.text(e.expenseNumber, col1 + 8, rowY + 3, { width: eReceiptW });
-          doc.text(e.category.slice(0, 22), col1 + 8 + eReceiptW + GAP, rowY + 3, { width: eCatW });
-          doc.text(formatNaira(e.amount), eAmtX, rowY + 3, { width: AMT_W });
-          doc.text(formatNaira(e.vatAmount), eVatX, rowY + 3, { width: AMT_W });
-          doc.text(formatNaira(e.totalAmount), eTotalX, rowY + 3, { width: AMT_W });
-          rowY += 16;
-        }
-        doc.y = rowY + 4;
+        const cols = tableColumns(layout, 8, [
+          { key: "Receipt #", width: 62 },
+          { key: "Category", width: 80 },
+          { key: "Amount", width: amtColW, fromRight: true },
+          { key: "VAT", width: amtColW, fromRight: true },
+          { key: "Total", width: amtColW, fromRight: true },
+        ]);
+        drawDataTable(
+          cols,
+          data.expenses.map((e) => ({
+            "Receipt #": truncateText(e.expenseNumber, 16),
+            Category: truncateText(e.category, 28),
+            Amount: formatNaira(e.amount),
+            VAT: formatNaira(e.vatAmount),
+            Total: formatNaira(e.totalAmount),
+          })),
+        );
       }
     });
 
-    // Compliance Summary
     drawSection("7. COMPLIANCE SUMMARY", () => {
-      doc
-        .rect(col1, doc.y, pageWidth, 70)
-        .fillAndStroke("#f8fafc", PRIMARY_COLOR);
-      const boxTop = doc.y;
-      doc.fontSize(7).fillColor("#4a4a4a");
-      doc.text("Total Filings", col1 + 12, boxTop + 12);
-      doc.text(String(data.compliance.totalFilings), col2 + 80, boxTop + 12, { width: 120 });
-      doc.text("Submitted/Paid", col1 + 12, boxTop + 28);
-      doc.text(String(data.compliance.submittedCount), col2 + 80, boxTop + 28, { width: 120 });
-      doc.text("Pending", col1 + 12, boxTop + 44);
-      doc.text(String(data.compliance.pendingCount), col2 + 80, boxTop + 44, { width: 120 });
-      doc.text("Overdue", col1 + 12, boxTop + 58);
-      doc.text(String(data.compliance.overdueCount), col2 + 80, boxTop + 58, { width: 120 });
+      y = drawKeyValueBox(doc, layout, y, [
+        { label: "Total Filings", value: String(data.compliance.totalFilings) },
+        { label: "Submitted/Paid", value: String(data.compliance.submittedCount) },
+        { label: "Pending", value: String(data.compliance.pendingCount) },
+        { label: "Overdue", value: String(data.compliance.overdueCount) },
+      ]);
     });
 
-    // Footer
+    y = ensurePageSpace(doc, y, 40);
     doc
-      .moveDown(1.5)
       .fontSize(7)
       .fillColor("#6c757d")
-      .text("Official report document. This report covers all VAT records, financial transactions, and filing status for the stated period.", col1, undefined, { width: pageWidth })
-      .text(`Generated by Fileam · ${DOMAIN}`, col1);
+      .text(
+        "Official report document. This report covers VAT records, financial transactions, and filing status for the stated period.",
+        left,
+        y,
+        { width: contentWidth },
+      );
+    doc.text(`Generated by Fileam · ${DOMAIN}`, left, doc.y + 2, {
+      width: contentWidth,
+    });
 
     doc.end();
   });

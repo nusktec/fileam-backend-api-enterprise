@@ -206,10 +206,11 @@ export const adminListService = {
       if (opts.dateTo) where.saleDate.lte = opts.dateTo;
     }
 
+    const order = opts.sortOrder === "asc" ? "asc" : "desc";
     const [rows, total] = await Promise.all([
       prisma.sale.findMany({
         where,
-        orderBy: { saleDate: opts.sortOrder },
+        orderBy: [{ saleDate: order }, { createdAt: order }],
         skip: (opts.page - 1) * opts.limit,
         take: opts.limit,
         include: {
@@ -259,10 +260,11 @@ export const adminListService = {
       if (opts.dateTo) where.expenseDate.lte = opts.dateTo;
     }
 
+    const order = opts.sortOrder === "asc" ? "asc" : "desc";
     const [rows, total] = await Promise.all([
       prisma.expense.findMany({
         where,
-        orderBy: { expenseDate: opts.sortOrder },
+        orderBy: [{ expenseDate: order }, { createdAt: order }],
         skip: (opts.page - 1) * opts.limit,
         take: opts.limit,
         include: {
