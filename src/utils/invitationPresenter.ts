@@ -65,7 +65,7 @@ export function invitationFieldsForMobile(
   };
 }
 
-export function invitationFieldsForConsultant(
+export function invitationFieldsForConsultant( 
   initiator: InvitationInitiator | InvitationInitiatorValue | string,
 ) {
   const base = invitationSenderFields(initiator);
