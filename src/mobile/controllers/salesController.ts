@@ -6,10 +6,22 @@ import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { salesService } from "../services/salesService";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { monetaryAmountLimitMessage } from "../../utils/monetaryAmount";
 
 function replySaleError(res: Response, error: unknown): boolean {
   if (error instanceof HttpReplyError) {
     res.status(error.statusCode).json(outJson(false, error.message, null));
+    return true;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: string }).code === "P2000"
+  ) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, monetaryAmountLimitMessage("Amount"), null));
     return true;
   }
   return false;

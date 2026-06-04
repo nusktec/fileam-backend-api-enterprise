@@ -5,12 +5,30 @@ import {
   VAT_RATE_PERCENT,
 } from "../../constants/percentages";
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
+import { assertMonetaryAmountInRange } from "../../utils/monetaryAmount";
+import {
+  calendarPeriodFromDate,
+  toCalendarDate,
+} from "../../utils/dateRangeQuery";
+import { taxPayablesService } from "./taxPayablesService";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
+}
+
+function assertExpenseFinancials(
+  base: Decimal,
+  vatAmount: Decimal | null,
+  totalAmount: Decimal,
+): void {
+  assertMonetaryAmountInRange(Number(base), "Amount");
+  if (vatAmount != null) {
+    assertMonetaryAmountInRange(Number(vatAmount), "VAT amount");
+  }
+  assertMonetaryAmountInRange(Number(totalAmount), "Total amount");
 }
 
 async function nextExpenseNumber(): Promise<string> {
@@ -144,8 +162,10 @@ export const expensesService = {
     const vatAmount =
       data.vatAmount != null ? new Decimal(data.vatAmount) : null;
     const totalAmount = vatAmount ? amount.add(vatAmount) : amount;
+    assertExpenseFinancials(amount, vatAmount, totalAmount);
 
     const expenseNumber = await nextExpenseNumber();
+    const expenseDate = toCalendarDate(data.date);
 
     const expense = await prisma.expense.create({
       data: {
@@ -161,9 +181,13 @@ export const expensesService = {
         receiptUrl: data.receiptUrl ?? null,
         supplierName: data.supplierName?.trim() || null,
         supplierId: data.supplierId?.trim() || null,
-        expenseDate: new Date(data.date),
+        expenseDate,
       },
     });
+
+    await taxPayablesService.syncPayablesForPeriods(userId, [
+      calendarPeriodFromDate(expenseDate),
+    ]);
 
     return {
       id: expense.id,
@@ -198,10 +222,16 @@ export const expensesService = {
     });
     if (!expense) return null;
 
+    const periodsToSync = [calendarPeriodFromDate(expense.expenseDate)];
+
     const updateData: Record<string, unknown> = {};
     if (data.description != null) updateData.description = data.description;
     if (data.category != null) updateData.category = data.category;
-    if (data.date != null) updateData.expenseDate = new Date(data.date);
+    if (data.date != null) {
+      const expenseDate = toCalendarDate(data.date);
+      updateData.expenseDate = expenseDate;
+      periodsToSync.push(calendarPeriodFromDate(expenseDate));
+    }
     if (data.vatInclusive != null) updateData.vatInclusive = data.vatInclusive;
     if (data.receiptUrl != null) updateData.receiptUrl = data.receiptUrl;
     if (data.supplierName !== undefined) {
@@ -230,28 +260,40 @@ export const expensesService = {
           ? data.vatInclusive
           : expense.vatInclusive;
 
+      let nextBase = base;
+      let nextVat: Decimal | null = null;
+      let nextTotal = base;
+
       if (data.vatAmount != null) {
         const vat = new Decimal(data.vatAmount);
         const vatNum = Number(vat);
-        updateData.amount = base;
-        updateData.vatAmount = vatNum > 0 ? vat : null;
-        updateData.totalAmount = vatNum > 0 ? base.add(vat) : base;
+        nextBase = base;
+        nextVat = vatNum > 0 ? vat : null;
+        nextTotal = vatNum > 0 ? base.add(vat) : base;
       } else if (vatInclusive) {
         const vat = base.mul(VAT_RATE_PERCENT / PERCENT);
-        updateData.amount = base;
-        updateData.vatAmount = vat;
-        updateData.totalAmount = base.add(vat);
+        nextBase = base;
+        nextVat = vat;
+        nextTotal = base.add(vat);
       } else {
-        updateData.amount = base;
-        updateData.vatAmount = null;
-        updateData.totalAmount = base;
+        nextBase = base;
+        nextVat = null;
+        nextTotal = base;
       }
+
+      assertExpenseFinancials(nextBase, nextVat, nextTotal);
+      updateData.amount = nextBase;
+      updateData.vatAmount = nextVat;
+      updateData.totalAmount = nextTotal;
     }
 
     const updated = await prisma.expense.update({
       where: { id: expenseId },
       data: updateData,
     });
+
+    await taxPayablesService.syncPayablesForPeriods(userId, periodsToSync);
+
     return {
       id: updated.id,
       expenseNumber: updated.expenseNumber,
@@ -266,9 +308,18 @@ export const expensesService = {
   },
 
   async deleteForUser(userId: string, expenseId: string): Promise<boolean> {
+    const expense = await prisma.expense.findFirst({
+      where: { id: expenseId, userId },
+      select: { expenseDate: true },
+    });
+    if (!expense) return false;
+    const period = calendarPeriodFromDate(expense.expenseDate);
     const result = await prisma.expense.deleteMany({
       where: { id: expenseId, userId },
     });
+    if (result.count > 0) {
+      await taxPayablesService.syncPayablesForPeriods(userId, [period]);
+    }
     return result.count > 0;
   },
 };

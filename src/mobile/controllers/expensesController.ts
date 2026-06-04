@@ -5,6 +5,27 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { expensesService } from "../services/expensesService";
+import { HttpReplyError } from "../../utils/httpReplyError";
+import { monetaryAmountLimitMessage } from "../../utils/monetaryAmount";
+
+function replyExpenseError(res: Response, error: unknown): boolean {
+  if (error instanceof HttpReplyError) {
+    res.status(error.statusCode).json(outJson(false, error.message, null));
+    return true;
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: string }).code === "P2000"
+  ) {
+    res
+      .status(HttpStatusCode.BAD_REQUEST)
+      .json(outJson(false, monetaryAmountLimitMessage("Amount"), null));
+    return true;
+  }
+  return false;
+}
 
 export const listExpenses = async (
   req: IRequest,
@@ -143,6 +164,7 @@ export const createExpense = async (
       .status(HttpStatusCode.CREATED)
       .json(outJson(true, "Expense added", expense));
   } catch (error) {
+    if (replyExpenseError(res, error)) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to add expense", null));
@@ -206,7 +228,8 @@ export const updateExpense = async (
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Expense updated", updated));
-  } catch {
+  } catch (error) {
+    if (replyExpenseError(res, error)) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to update expense", null));

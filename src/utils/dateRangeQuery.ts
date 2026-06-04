@@ -69,3 +69,41 @@ export function parseDateRangeQuery(q: Record<string, unknown>): {
 
   return { ok: true, range };
 }
+
+/** Parse `YYYY-MM` or `YYYY-M` period selector (e.g. tax overview month navigation). */
+export function parsePeriodQuery(value: unknown): { year: number; month: number } | null {
+  if (value == null) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+  const match = s.match(/^(\d{4})-(\d{1,2})$/);
+  if (!match) return null;
+  const year = parseInt(match[1]!, 10);
+  const month = parseInt(match[2]!, 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return null;
+  }
+  return { year, month };
+}
+
+/** Calendar month for a stored `@db.Date` / book date (UTC date parts). */
+export function calendarPeriodFromDate(d: Date): { year: number; month: number } {
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+}
+
+/** Normalize API date strings to a calendar date for Prisma `@db.Date` columns. */
+export function toCalendarDate(value: string): Date {
+  const d = parseQueryDate(value);
+  if (!d) throw new Error("Invalid date");
+  return d;
+}
+
+/** Inclusive UTC calendar month range for `@db.Date` book fields (sales/expenses). */
+export function monthDateRangeUtc(
+  year: number,
+  month: number,
+): { start: Date; end: Date } {
+  return {
+    start: new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0)),
+    end: new Date(Date.UTC(year, month, 0, 23, 59, 59, 999)),
+  };
+}

@@ -1,10 +1,12 @@
 import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import {
+  optionalMonetaryAmount,
+  requiredMonetaryAmount,
+} from "./monetaryAmountValidation";
 
 export const createExpenseValidation = [
-  check("amount")
-    .isFloat({ min: 0 })
-    .withMessage("Amount must be a positive number"),
+  requiredMonetaryAmount("amount", "Amount"),
   check("description").trim().notEmpty().withMessage("Description is required"),
   check("category")
     .trim()
@@ -17,7 +19,7 @@ export const createExpenseValidation = [
     .optional()
     .isBoolean()
     .withMessage("vatInclusive must be boolean"),
-  check("vatAmount").optional().isFloat({ min: 0 }),
+  optionalMonetaryAmount("vatAmount", "VAT amount"),
   check("receiptUrl").optional().trim().isString(),
   check("supplierName").optional().trim().isString(),
   check("supplierId").optional().trim().isString(),

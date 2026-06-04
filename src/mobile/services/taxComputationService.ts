@@ -11,6 +11,7 @@ import { resolveTaxpayerComputationContext } from "../../constants/taxpayerCompu
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
 import { computePayeMonthly } from "../../constants/payroll";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
+import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -62,8 +63,7 @@ export const taxComputationService = {
   },
 
   async getForPeriod(userId: string, year: number, month: number) {
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 0, 23, 59, 59, 999);
+    const { start, end } = monthDateRangeUtc(year, month);
 
     const [sales, expenses, personaPayload] = await Promise.all([
       prisma.sale.findMany({

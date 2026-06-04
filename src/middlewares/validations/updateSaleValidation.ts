@@ -1,11 +1,12 @@
 import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import { optionalMonetaryAmount } from "./monetaryAmountValidation";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
 
 /** PATCH /mobile/sales/:id — all fields optional; at least one should be sent. */
 export const updateSaleValidation = [
-  check("amount").optional().isFloat({ min: 0 }),
+  optionalMonetaryAmount("amount", "Amount"),
   check("description").optional().trim().notEmpty(),
   check("category")
     .optional({ values: "null" })

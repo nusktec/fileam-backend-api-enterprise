@@ -4,6 +4,7 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { taxPayablesService } from "../services/taxPayablesService";
+import { parsePeriodQuery } from "../../utils/dateRangeQuery";
 
 export const listPayables = async (
   req: IRequest,
@@ -14,6 +15,15 @@ export const listPayables = async (
     const status = req.query.status as string | undefined;
     const taxType = req.query.taxType as string | undefined;
     const pagination = req.pagination;
+    const period = parsePeriodQuery(req.query.period);
+    if (req.query.period && !period) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(false, "Invalid period. Use YYYY-MM (e.g. 2026-02)", null),
+        );
+      return;
+    }
     const data = await taxPayablesService.list(
       userId,
       { status, taxType },
@@ -21,8 +31,10 @@ export const listPayables = async (
         page: pagination?.page,
         limit: pagination?.limit,
         sortOrder: pagination?.sortOrder,
-        dateFrom: pagination?.dateFrom,
-        dateTo: pagination?.dateTo,
+        dateFrom: period ? undefined : pagination?.dateFrom,
+        dateTo: period ? undefined : pagination?.dateTo,
+        periodYear: period?.year,
+        periodMonth: period?.month,
       },
     );
     res

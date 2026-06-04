@@ -1,5 +1,6 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -65,8 +66,7 @@ async function fetchPeriodEvidenceCompliance(
   missingSalesWithoutInvoiceOrVault: MissingEvidenceSaleRow[];
   missingExpensesWithoutReceipt: MissingEvidenceExpenseRow[];
 }> {
-  const start = new Date(year, month - 1, 1);
-  const end = new Date(year, month, 0, 23, 59, 59, 999);
+  const { start, end } = monthDateRangeUtc(year, month);
   const saleDate = { gte: start, lte: end };
   const expenseDate = { gte: start, lte: end };
   const gapWhere = {
@@ -332,6 +332,8 @@ export const filingsService = {
       sortOrder?: "ASC" | "DESC";
       dateFrom?: Date;
       dateTo?: Date;
+      periodYear?: number;
+      periodMonth?: number;
     },
   ) {
     const where: {
@@ -339,12 +341,17 @@ export const filingsService = {
       taxType?: string;
       status?: string;
       filingDueDate?: { gte?: Date; lte?: Date };
+      periodYear?: number;
+      periodMonth?: number;
     } = { userId };
     if (filters?.taxType) where.taxType = filters.taxType;
     if (filters?.dbStatus && filters.dbStatus !== "all") {
       where.status = filters.dbStatus;
     }
-    if (opts?.dateFrom || opts?.dateTo) {
+    if (opts?.periodYear != null && opts?.periodMonth != null) {
+      where.periodYear = opts.periodYear;
+      where.periodMonth = opts.periodMonth;
+    } else if (opts?.dateFrom || opts?.dateTo) {
       where.filingDueDate = {};
       if (opts.dateFrom) where.filingDueDate.gte = opts.dateFrom;
       if (opts.dateTo) where.filingDueDate.lte = opts.dateTo;

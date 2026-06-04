@@ -1,12 +1,11 @@
 import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import { requiredMonetaryAmount } from "./monetaryAmountValidation";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
 
 export const createSaleValidation = [
-  check("amount")
-    .isFloat({ min: 0 })
-    .withMessage("Amount must be a positive number"),
+  requiredMonetaryAmount("amount", "Amount"),
   check("description").trim().notEmpty().withMessage("Description is required"),
   check("category")
     .optional({ values: "null" })

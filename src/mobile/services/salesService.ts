@@ -6,6 +6,12 @@ import {
   isInvoicePaymentType,
 } from "../../constants/salePaymentRules";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { assertMonetaryAmountInRange } from "../../utils/monetaryAmount";
+import {
+  calendarPeriodFromDate,
+  toCalendarDate,
+} from "../../utils/dateRangeQuery";
+import { taxPayablesService } from "./taxPayablesService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -18,6 +24,16 @@ function nullableTrimmed(
   if (value === undefined || value === null) return null;
   const t = String(value).trim();
   return t === "" ? null : t;
+}
+
+function assertSaleFinancials(
+  amount: Decimal,
+  vatAmount: Decimal,
+  totalAmount: Decimal,
+): void {
+  assertMonetaryAmountInRange(Number(amount), "Amount");
+  assertMonetaryAmountInRange(Number(vatAmount), "VAT amount");
+  assertMonetaryAmountInRange(Number(totalAmount), "Total amount");
 }
 
 function resolveSaleStatusAfterPatch(
@@ -210,7 +226,9 @@ export const salesService = {
       ? amount.mul(VAT_RATE_PERCENT / PERCENT)
       : new Decimal(0);
     const totalAmount = amount.add(vatAmount);
+    assertSaleFinancials(amount, vatAmount, totalAmount);
     const status = initialSaleStatusForPaymentType(data.paymentType);
+    const saleDate = toCalendarDate(data.date);
 
     const sale = await prisma.$transaction(async (tx) => {
       const userRow = await tx.user.findUnique({
@@ -238,7 +256,7 @@ export const salesService = {
           vatAmount,
           totalAmount,
           paymentType: data.paymentType,
-          saleDate: new Date(data.date),
+          saleDate,
           vatableIncome: data.vatableIncome,
           serviceIncome: data.serviceIncome,
           status,
@@ -248,6 +266,10 @@ export const salesService = {
     });
 
     if (!sale) return null;
+
+    await taxPayablesService.syncPayablesForPeriods(userId, [
+      calendarPeriodFromDate(saleDate),
+    ]);
 
     return {
       id: sale.id,
@@ -288,6 +310,8 @@ export const salesService = {
     });
     if (!sale) return null;
 
+    const periodsToSync = [calendarPeriodFromDate(sale.saleDate)];
+
     const updateData: Record<string, unknown> = {};
     if (data.description != null) updateData.description = data.description;
     if (data.itemName !== undefined) {
@@ -312,7 +336,11 @@ export const salesService = {
           : data.customerId.trim();
     }
     if (data.paymentType != null) updateData.paymentType = data.paymentType;
-    if (data.date != null) updateData.saleDate = new Date(data.date);
+    if (data.date != null) {
+      const saleDate = toCalendarDate(data.date);
+      updateData.saleDate = saleDate;
+      periodsToSync.push(calendarPeriodFromDate(saleDate));
+    }
     if (data.vatableIncome != null) updateData.vatableIncome = data.vatableIncome;
     if (data.serviceIncome != null) updateData.serviceIncome = data.serviceIncome;
 
@@ -323,17 +351,21 @@ export const salesService = {
       const amount = new Decimal(data.amount);
       const vatRate = (vatable ? VAT_RATE_PERCENT : 0) / PERCENT;
       const vatAmount = amount.mul(vatRate);
+      const totalAmount = amount.add(vatAmount);
+      assertSaleFinancials(amount, vatAmount, totalAmount);
       updateData.amount = amount;
       updateData.vatRate = new Decimal(vatable ? VAT_RATE_PERCENT : 0);
       updateData.vatAmount = vatAmount;
-      updateData.totalAmount = amount.add(vatAmount);
+      updateData.totalAmount = totalAmount;
     } else if (data.vatableIncome != null) {
       const amount = new Decimal(sale.amount);
       const vatRate = (vatable ? VAT_RATE_PERCENT : 0) / PERCENT;
       const vatAmount = amount.mul(vatRate);
+      const totalAmount = amount.add(vatAmount);
+      assertSaleFinancials(amount, vatAmount, totalAmount);
       updateData.vatRate = new Decimal(vatable ? VAT_RATE_PERCENT : 0);
       updateData.vatAmount = vatAmount;
-      updateData.totalAmount = amount.add(vatAmount);
+      updateData.totalAmount = totalAmount;
     }
 
     updateData.status = resolveSaleStatusAfterPatch(sale, data);
@@ -342,6 +374,9 @@ export const salesService = {
       where: { id: saleId },
       data: updateData,
     });
+
+    await taxPayablesService.syncPayablesForPeriods(userId, periodsToSync);
+
     return {
       id: updated.id,
       invoiceNumber: updated.invoiceNumber,
@@ -417,9 +452,18 @@ export const salesService = {
   },
 
   async deleteForUser(userId: string, saleId: string): Promise<boolean> {
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, userId },
+      select: { saleDate: true },
+    });
+    if (!sale) return false;
+    const period = calendarPeriodFromDate(sale.saleDate);
     const result = await prisma.sale.deleteMany({
       where: { id: saleId, userId },
     });
+    if (result.count > 0) {
+      await taxPayablesService.syncPayablesForPeriods(userId, [period]);
+    }
     return result.count > 0;
   },
 };

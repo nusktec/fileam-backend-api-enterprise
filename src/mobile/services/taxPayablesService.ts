@@ -37,123 +37,149 @@ function derivePayableStatus(
   return "partially_paid";
 }
 
+function periodKey(year: number, month: number): string {
+  return `${year}-${month}`;
+}
+
+function amountsFromComputation(
+  computation: Awaited<ReturnType<typeof taxComputationService.getForPeriod>>,
+): Array<{ taxType: TaxType; amountDue: number }> {
+  return [
+    { taxType: "VAT", amountDue: Math.max(0, computation.vat.netVatPayable) },
+    {
+      taxType: "WHT",
+      amountDue: Math.max(0, computation.wht.estimatedWhtDeducted),
+    },
+    {
+      taxType: "CIT",
+      amountDue:
+        computation.cit.summary > 0 ? computation.cit.summary / 12 : 0,
+    },
+    {
+      taxType: "PIT",
+      amountDue:
+        computation.pit.summary > 0 ? computation.pit.summary / 12 : 0,
+    },
+    {
+      taxType: "PAYE",
+      amountDue: Math.max(0, computation.paye.summaryMonthlyEstimate),
+    },
+  ];
+}
+
 export const taxPayablesService = {
-  async ensurePayablesForUser(userId: string, monthsBack = 12) {
-    const now = new Date();
-    const payablesToUpsert: Array<{
-      taxType: TaxType;
-      year: number;
-      month: number;
-      amountDue: number;
-      penalties: number;
-    }> = [];
-
-    for (let i = 0; i <= monthsBack; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const year = d.getFullYear();
-      const month = d.getMonth() + 1;
-      const computation = await taxComputationService.getForPeriod(
-        userId,
-        year,
-        month,
-      );
-
-      if (computation.vat.netVatPayable > 0) {
-        payablesToUpsert.push({
-          taxType: "VAT",
-          year,
-          month,
-          amountDue: computation.vat.netVatPayable,
-          penalties: 0,
-        });
-      }
-      if (computation.wht.estimatedWhtDeducted > 0) {
-        payablesToUpsert.push({
-          taxType: "WHT",
-          year,
-          month,
-          amountDue: computation.wht.estimatedWhtDeducted,
-          penalties: 0,
-        });
-      }
-      if (computation.cit.summary > 0) {
-        payablesToUpsert.push({
-          taxType: "CIT",
-          year,
-          month,
-          amountDue: computation.cit.summary / 12,
-          penalties: 0,
-        });
-      }
-      if (computation.pit.summary > 0) {
-        payablesToUpsert.push({
-          taxType: "PIT",
-          year,
-          month,
-          amountDue: computation.pit.summary / 12,
-          penalties: 0,
-        });
-      }
-      if (computation.paye.summaryMonthlyEstimate > 0) {
-        payablesToUpsert.push({
-          taxType: "PAYE",
-          year,
-          month,
-          amountDue: computation.paye.summaryMonthlyEstimate,
-          penalties: 0,
-        });
-      }
+  /** Recompute stored payables for specific book periods (after sales/expenses change). */
+  async syncPayablesForPeriods(
+    userId: string,
+    periods: Array<{ year: number; month: number }>,
+  ) {
+    const seen = new Set<string>();
+    for (const p of periods) {
+      const key = periodKey(p.year, p.month);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      await this.syncPeriodPayables(userId, p.year, p.month);
     }
+  },
 
-    for (const p of payablesToUpsert) {
-      const totalPayable = p.amountDue + p.penalties;
-      const filingDueDate = getFilingDueDate(p.year, p.month);
+  async syncPeriodPayables(userId: string, year: number, month: number) {
+    const computation = await taxComputationService.getForPeriod(
+      userId,
+      year,
+      month,
+    );
+    const filingDueDate = getFilingDueDate(year, month);
+
+    for (const { taxType, amountDue } of amountsFromComputation(computation)) {
+      const existing = await prisma.taxPayable.findUnique({
+        where: {
+          userId_taxType_periodYear_periodMonth: {
+            userId,
+            taxType,
+            periodYear: year,
+            periodMonth: month,
+          },
+        },
+        include: {
+          payments: { where: { status: "completed" } },
+        },
+      });
+
+      const totalPaid = existing
+        ? existing.payments.reduce(
+            (s, r) => s + decimalToNumber(r.amountPaid),
+            0,
+          )
+        : 0;
+      const hasSubmission = existing?.submittedAt != null;
+
+      if (amountDue <= 0) {
+        if (
+          existing &&
+          totalPaid === 0 &&
+          !hasSubmission &&
+          existing.status === "pending"
+        ) {
+          await prisma.taxPayable.delete({ where: { id: existing.id } });
+        } else if (existing) {
+          const totalPayable = amountDue + decimalToNumber(existing.penalties);
+          const status = derivePayableStatus(totalPayable, totalPaid);
+          await prisma.taxPayable.update({
+            where: { id: existing.id },
+            data: {
+              amountDue: new Decimal(0),
+              totalPayable: new Decimal(Math.max(0, totalPayable)),
+              status,
+            },
+          });
+        }
+        continue;
+      }
+
+      const penalties = existing
+        ? decimalToNumber(existing.penalties)
+        : 0;
+      const totalPayable = amountDue + penalties;
+      const status = derivePayableStatus(totalPayable, totalPaid);
+
       await prisma.taxPayable.upsert({
         where: {
           userId_taxType_periodYear_periodMonth: {
             userId,
-            taxType: p.taxType,
-            periodYear: p.year,
-            periodMonth: p.month,
+            taxType,
+            periodYear: year,
+            periodMonth: month,
           },
         },
         create: {
           userId,
-          taxType: p.taxType,
-          periodYear: p.year,
-          periodMonth: p.month,
-          amountDue: new Decimal(p.amountDue),
-          penalties: new Decimal(p.penalties),
+          taxType,
+          periodYear: year,
+          periodMonth: month,
+          amountDue: new Decimal(amountDue),
+          penalties: new Decimal(penalties),
           totalPayable: new Decimal(totalPayable),
           filingDueDate,
-          status: "pending",
+          status,
         },
         update: {
-          amountDue: new Decimal(p.amountDue),
-          penalties: new Decimal(p.penalties),
+          amountDue: new Decimal(amountDue),
           totalPayable: new Decimal(totalPayable),
+          filingDueDate,
+          status,
         },
       });
     }
+  },
 
-    const updated = await prisma.taxPayable.findMany({
-      where: { userId },
-      include: { payments: { where: { status: "completed" } } },
-    });
-    for (const tp of updated) {
-      const totalPayable = decimalToNumber(tp.totalPayable);
-      const totalPaid = tp.payments.reduce(
-        (s, r) => s + decimalToNumber(r.amountPaid),
-        0,
-      );
-      const status = derivePayableStatus(totalPayable, totalPaid);
-      if (tp.status !== status) {
-        await prisma.taxPayable.update({
-          where: { id: tp.id },
-          data: { status },
-        });
-      }
+  async ensurePayablesForUser(userId: string, monthsBack = 12) {
+    const now = new Date();
+    const periods: Array<{ year: number; month: number }> = [];
+    for (let i = 0; i <= monthsBack; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      periods.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
     }
+    await this.syncPayablesForPeriods(userId, periods);
   },
 
   async list(
@@ -165,6 +191,8 @@ export const taxPayablesService = {
       sortOrder?: "ASC" | "DESC";
       dateFrom?: Date;
       dateTo?: Date;
+      periodYear?: number;
+      periodMonth?: number;
     },
   ) {
     await this.ensurePayablesForUser(userId);
@@ -173,12 +201,17 @@ export const taxPayablesService = {
       status?: string;
       taxType?: string;
       filingDueDate?: { gte?: Date; lte?: Date };
+      periodYear?: number;
+      periodMonth?: number;
     } = {
       userId,
     };
     if (filters?.status) where.status = filters.status;
     if (filters?.taxType) where.taxType = filters.taxType;
-    if (opts?.dateFrom || opts?.dateTo) {
+    if (opts?.periodYear != null && opts?.periodMonth != null) {
+      where.periodYear = opts.periodYear;
+      where.periodMonth = opts.periodMonth;
+    } else if (opts?.dateFrom || opts?.dateTo) {
       where.filingDueDate = {};
       if (opts.dateFrom) where.filingDueDate.gte = opts.dateFrom;
       if (opts.dateTo) where.filingDueDate.lte = opts.dateTo;
