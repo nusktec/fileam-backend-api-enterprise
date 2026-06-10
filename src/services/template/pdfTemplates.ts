@@ -427,14 +427,6 @@ export interface FullReportData extends ReportData {
   };
 }
 
-/** Legacy minimal report PDF (kept for backward compatibility). */
-export function generateReportPdf(data: ReportData): Promise<Buffer> {
-  return generateFullReportPdf(
-    { ...data, vatSummary: { outputVat: 0, inputVatClaimable: 0, netVatPayable: 0, belowThreshold: true, vatThreshold: 0, percentOfThreshold: 0 }, whtSummary: { serviceIncome: 0, whtRate: 0, estimatedWhtDeducted: 0 }, citSummary: { monthlyProfit: 0, annualizedProfit: 0, citRate: 0, estimatedAnnualCit: 0, capitalAllowances: 0, lossCarryForward: 0 }, filings: [], sales: [], expenses: [], compliance: { totalFilings: 0, submittedCount: 0, pendingCount: 0, overdueCount: 0 } },
-    null,
-  );
-}
-
 /** Full report PDF with VAT summary, financial records, logo, and professional design. */
 export function generateFullReportPdf(
   data: FullReportData,

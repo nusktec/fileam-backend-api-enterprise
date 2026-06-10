@@ -1,58 +1,3 @@
-interface EmailCategoryInterface {
-  PASSWORD_RESET: string;
-  ORDER_CONFIRMATION: string;
-  SHIPPING_NOTIFICATION: string;
-  ACCOUNT_CREATION: string;
-  INVOICE: string;
-  PROMOTIONAL: string;
-  NEWSLETTER: string;
-  EVENT_INVITATION: string;
-  PRODUCT_LAUNCH: string;
-  ABANDONED_CART: string;
-  CUSTOMER_SUPPORT: string;
-  FEEDBACK_SURVEYS: string;
-  ISSUE_RESOLUTION: string;
-  ACCOUNT_ALERTS: string;
-  SYSTEM_ALERTS: string;
-  USAGE_REPORTS: string;
-  SUBSCRIPTION_RENEWAL: string;
-  PRIVACY_POLICY_UPDATE: string;
-  GDPR_COMPLIANCE: string;
-  TEAM_ANNOUNCEMENTS: string;
-  MEETING_INVITATIONS: string;
-  NEW_FOLLOWER_CONNECTION: string;
-  COMMENT_MENTION: string;
-  FRIEND_REQUEST: string;
-  GENERAL: string;
-}
-
-type EmailCategoryType =
-  | "Password Reset"
-  | "Order Confirmation"
-  | "Shipping Notification"
-  | "Account Creation"
-  | "Invoice"
-  | "Promotional"
-  | "Newsletter"
-  | "Event Invitation"
-  | "Product Launch"
-  | "Abandoned Cart"
-  | "Customer Support"
-  | "Feedback/Surveys"
-  | "Issue Resolution"
-  | "Account Alerts"
-  | "System Alerts"
-  | "Usage Reports"
-  | "Subscription Renewal"
-  | "Privacy Policy Update"
-  | "GDPR Compliance"
-  | "Team Announcements"
-  | "Meeting Invitations"
-  | "New Follower/Connection"
-  | "Comment or Mention"
-  | "General Information"
-  | "Friend Request";
-
 const HttpStatusCode = Object.freeze({
   CONTINUE: 100,
   SWITCHING_PROTOCOLS: 101,
@@ -121,4 +66,4 @@ const HttpStatusCode = Object.freeze({
 
 type HttpStatusCode = (typeof HttpStatusCode)[keyof typeof HttpStatusCode];
 
-export { EmailCategoryType, EmailCategoryInterface, HttpStatusCode };
+export { HttpStatusCode };

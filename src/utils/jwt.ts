@@ -32,32 +32,11 @@ export const saveRefreshToken = async (
   });
 };
 
-export const validateRefreshToken = async (
-  refreshToken: string,
-  userId: string
-): Promise<boolean> => {
-  const tokenRecord = await prisma.token.findFirst({
-    where: {
-      token: refreshToken,
-      userId,
-      type: "refresh",
-      expiresAt: { gt: new Date() },
-    },
-  });
-  return !!tokenRecord;
-};
-
 export const revokeRefreshToken = async (
   refreshToken: string,
   userId: string
 ): Promise<void> => {
   await prisma.token.deleteMany({
     where: { token: refreshToken, userId, type: "refresh" },
-  });
-};
-
-export const revokeAllUserRefreshTokens = async (userId: string): Promise<void> => {
-  await prisma.token.deleteMany({
-    where: { userId, type: "refresh" },
   });
 };

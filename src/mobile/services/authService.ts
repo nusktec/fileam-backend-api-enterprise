@@ -3,8 +3,6 @@ import { prisma } from "../../config/database";
 import { EmailVerificationService } from "../../services/emailVerificationService";
 import { signupEmailRejectionMessage } from "../../utils/emailPolicy";
 
-const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
-
 export interface AuthUserPayload {
   id: string;
   firstName: string;
@@ -196,17 +194,6 @@ export const authService = {
     };
   },
 
-  async saveRefreshToken(
-    userId: string,
-    token: string,
-    expiresIn = REFRESH_TOKEN_EXPIRY_MS,
-  ) {
-    const expiresAt = new Date(Date.now() + expiresIn);
-    await prisma.token.create({
-      data: { userId, token, type: "refresh", expiresAt },
-    });
-  },
-
   async findValidRefreshToken(token: string) {
     return prisma.token.findFirst({
       where: {
@@ -240,12 +227,6 @@ export const authService = {
     return prisma.token.findFirst({
       where: { token, type: "refresh" },
       select: { userId: true },
-    });
-  },
-
-  async revokeRefreshToken(token: string, userId: string) {
-    await prisma.token.deleteMany({
-      where: { token, userId, type: "refresh" },
     });
   },
 

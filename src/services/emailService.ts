@@ -7,7 +7,6 @@ import {
   EMAIL_TEMPLATE_TYPES,
   validateEmailConfig,
 } from "../config/smtp";
-import { EmailCategoryInterface } from "../interfaces/system";
 import {
   EmailTemplate_PASSWORD_RESET,
   EmailTemplate_TEAM_INVITATION,
@@ -179,50 +178,6 @@ const sendPasswordResetEmail = async (
     );
   } catch (error) {
     console.error("Failed to send password reset email:", error);
-    return { success: false, error };
-  }
-};
-
-const SendMail = async (
-  category: string,
-  subject: string,
-  name: string,
-  body: string,
-  to: string,
-): Promise<{ success: boolean; data?: any; error?: any }> => {
-  try {
-    const template = getEmailTemplate("verification");
-    if (!template) {
-      throw new Error("Verification template not found");
-    }
-
-    const htmlContent = renderTemplate(template, { body, name });
-
-    return await sendEmail(to, subject, htmlContent, category);
-  } catch (error) {
-    console.error("Failed to send legacy email:", error);
-    return { success: false, error };
-  }
-};
-
-const SendInviteMail = async (
-  category: string,
-  subject: string,
-  name: string,
-  body: string,
-  to: string,
-): Promise<{ success: boolean; data?: any; error?: any }> => {
-  try {
-    const template = getEmailTemplate("verification");
-    if (!template) {
-      throw new Error("Verification template not found");
-    }
-
-    const htmlContent = renderTemplate(template, { body, name });
-
-    return await sendEmail(to, subject, htmlContent, category);
-  } catch (error) {
-    console.error("Failed to send invite email:", error);
     return { success: false, error };
   }
 };
@@ -400,43 +355,12 @@ const sendTeamInvitationEmail = async (
   }
 };
 
-const EmailCategoryEnum: EmailCategoryInterface = Object.freeze({
-  PASSWORD_RESET: "Password Reset",
-  ORDER_CONFIRMATION: "Order Confirmation",
-  SHIPPING_NOTIFICATION: "Shipping Notification",
-  ACCOUNT_CREATION: "Account Creation",
-  INVOICE: "Invoice",
-  PROMOTIONAL: "Promotional",
-  NEWSLETTER: "Newsletter",
-  EVENT_INVITATION: "Event Invitation",
-  PRODUCT_LAUNCH: "Product Launch",
-  ABANDONED_CART: "Abandoned Cart",
-  CUSTOMER_SUPPORT: "Customer Support",
-  FEEDBACK_SURVEYS: "Feedback/Surveys",
-  ISSUE_RESOLUTION: "Issue Resolution",
-  ACCOUNT_ALERTS: "Account Alerts",
-  SYSTEM_ALERTS: "System Alerts",
-  USAGE_REPORTS: "Usage Reports",
-  SUBSCRIPTION_RENEWAL: "Subscription Renewal",
-  PRIVACY_POLICY_UPDATE: "Privacy Policy Update",
-  GDPR_COMPLIANCE: "GDPR Compliance",
-  TEAM_ANNOUNCEMENTS: "Team Announcements",
-  MEETING_INVITATIONS: "Meeting Invitations",
-  NEW_FOLLOWER_CONNECTION: "New Follower/Connection",
-  COMMENT_MENTION: "Comment or Mention",
-  FRIEND_REQUEST: "Friend Request",
-  GENERAL: "General Information",
-});
-
 export {
-  SendMail,
-  SendInviteMail,
   sendConsultantRequestEmail,
   sendConsultantIncomingClientRequestEmail,
   sendConsultantFilingAuthorizationEmail,
   sendInvitationToJoinEmail,
   sendTeamInvitationEmail,
-  EmailCategoryEnum,
   sendEmail,
   sendVerificationEmail,
   sendOtpEmail,

@@ -93,22 +93,6 @@ export async function listManagedEntities(
   );
 }
 
-export async function canAccessCompany(
-  userId: string,
-  companyId: string,
-): Promise<{ allowed: boolean; linkedUserId?: string }> {
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { ownerId: true, linkedUserId: true },
-  });
-  if (!company) return { allowed: false };
-
-  if (company.ownerId === userId)
-    return { allowed: true, linkedUserId: company.linkedUserId ?? undefined };
-
-  return { allowed: false };
-}
-
 export async function canAccessClient(
   consultantUserId: string,
   clientId: string,
