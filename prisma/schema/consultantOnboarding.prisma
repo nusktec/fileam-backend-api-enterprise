@@ -7,13 +7,13 @@ model ConsultantOnboardingSession {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  user          User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
-  firmIdentity  ConsultantFirmIdentity?
-  partners      ConsultantPartner[]
-  scope         ConsultantScope?
-  subscription  ConsultantSubscription?
-  paymentSetup  ConsultantPaymentSetup?
-  compliance    ConsultantCompliance?
+  user         User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  firmIdentity ConsultantFirmIdentity?
+  partners     ConsultantPartner[]
+  scope        ConsultantScope?
+  subscription ConsultantSubscription?
+  paymentSetup ConsultantPaymentSetup?
+  compliance   ConsultantCompliance?
 
   @@map("consultant_onboarding_sessions")
 }
@@ -26,7 +26,7 @@ model ConsultantFirmIdentity {
   registrationType      String   @map("registration_type")
   rcNumber              String?  @map("rc_number")
   yearOfIncorporation   Int?     @map("year_of_incorporation")
-  countryOfRegistration String  @map("country_of_registration")
+  countryOfRegistration String   @map("country_of_registration")
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
@@ -36,17 +36,17 @@ model ConsultantFirmIdentity {
 }
 
 model ConsultantPartner {
-  id               String   @id @default(uuid())
-  sessionId        String   @map("session_id")
-  fullName         String   @map("full_name")
-  email            String?
-  phone            String?
-  yearsOfExperience Int?    @map("years_of_experience")
-  isPrincipal      Boolean  @default(false) @map("is_principal")
-  role             String?
-  sortOrder        Int      @default(0) @map("sort_order")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(uuid())
+  sessionId         String   @map("session_id")
+  fullName          String   @map("full_name")
+  email             String?
+  phone             String?
+  yearsOfExperience Int?     @map("years_of_experience")
+  isPrincipal       Boolean  @default(false) @map("is_principal")
+  role              String?
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
   session        ConsultantOnboardingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   certifications ConsultantCertification[]
@@ -55,13 +55,13 @@ model ConsultantPartner {
 }
 
 model ConsultantCertification {
-  id               String   @id @default(uuid())
-  partnerId        String   @map("partner_id")
-  qualificationName String  @map("qualification_name")
-  issuingBody      String   @map("issuing_body")
-  year             Int?
-  national         String?
-  createdAt        DateTime @default(now()) @map("created_at")
+  id                String   @id @default(uuid())
+  partnerId         String   @map("partner_id")
+  qualificationName String   @map("qualification_name")
+  issuingBody       String   @map("issuing_body")
+  year              Int?
+  national          String?
+  createdAt         DateTime @default(now()) @map("created_at")
 
   partner ConsultantPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
 
@@ -69,14 +69,14 @@ model ConsultantCertification {
 }
 
 model ConsultantScope {
-  id                 String   @id @default(uuid())
-  sessionId          String   @unique @map("session_id")
-  primaryState       String   @map("primary_state")
-  additionalStates   Json     @map("additional_states")
-  taxTypesSpecializations Json @map("tax_types_specializations")
-  businessSizeServed String   @map("business_size_served")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                      String   @id @default(uuid())
+  sessionId               String   @unique @map("session_id")
+  primaryState            String   @map("primary_state")
+  additionalStates        Json     @map("additional_states")
+  taxTypesSpecializations Json     @map("tax_types_specializations")
+  businessSizeServed      String   @map("business_size_served")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
 
   session ConsultantOnboardingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
@@ -87,7 +87,7 @@ model ConsultantSubscription {
   id              String   @id @default(uuid())
   sessionId       String   @unique @map("session_id")
   billingOption   String   @map("billing_option")
-  enableReminders Boolean @default(false) @map("enable_reminders")
+  enableReminders Boolean  @default(false) @map("enable_reminders")
   reminderConfig  Json?    @map("reminder_config")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -113,19 +113,19 @@ model ConsultantPaymentSetup {
 }
 
 model ConsultantCompliance {
-  id                        String    @id @default(uuid())
-  sessionId                 String    @unique @map("session_id")
-  cacDocumentUrl            String?   @map("cac_document_url")
-  principalPartnerIdUrl     String?   @map("principal_partner_id_url")
-  professionalCertificateUrl String?  @map("professional_certificate_url")
-  amlDocumentUrl            String?   @map("aml_document_url")
-  firmProfileUrl            String?   @map("firm_profile_url")
-  declarationAccuracy       Boolean   @default(false) @map("declaration_accuracy")
-  declarationFirsCompliance Boolean   @default(false) @map("declaration_firs_compliance")
-  declarationSuspensionPolicy Boolean @default(false) @map("declaration_suspension_policy")
-  submittedAt               DateTime? @map("submitted_at")
-  createdAt                 DateTime  @default(now()) @map("created_at")
-  updatedAt                 DateTime  @updatedAt @map("updated_at")
+  id                          String    @id @default(uuid())
+  sessionId                   String    @unique @map("session_id")
+  cacDocumentUrl              String?   @map("cac_document_url")
+  principalPartnerIdUrl       String?   @map("principal_partner_id_url")
+  professionalCertificateUrl  String?   @map("professional_certificate_url")
+  amlDocumentUrl              String?   @map("aml_document_url")
+  firmProfileUrl              String?   @map("firm_profile_url")
+  declarationAccuracy         Boolean   @default(false) @map("declaration_accuracy")
+  declarationFirsCompliance   Boolean   @default(false) @map("declaration_firs_compliance")
+  declarationSuspensionPolicy Boolean   @default(false) @map("declaration_suspension_policy")
+  submittedAt                 DateTime? @map("submitted_at")
+  createdAt                   DateTime  @default(now()) @map("created_at")
+  updatedAt                   DateTime  @updatedAt @map("updated_at")
 
   session ConsultantOnboardingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
