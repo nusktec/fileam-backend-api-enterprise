@@ -136,6 +136,7 @@ export const createExpense = async (
       amount,
       description,
       category,
+      expenseType,
       date,
       vatInclusive,
       vatAmount,
@@ -147,6 +148,7 @@ export const createExpense = async (
       amount: Number(amount),
       description,
       category,
+      expenseType,
       date,
       vatInclusive: Boolean(vatInclusive),
       vatAmount: vatAmount != null ? Number(vatAmount) : undefined,
@@ -197,6 +199,7 @@ export const updateExpense = async (
     const updated = await expensesService.update(userId, expenseId!, {
       description: body.description as string | undefined,
       category: body.category as string | undefined,
+      expenseType: body.expenseType as string | undefined,
       amount: body.amount != null ? Number(body.amount) : undefined,
       vatInclusive:
         body.vatInclusive !== undefined
@@ -230,6 +233,11 @@ export const updateExpense = async (
       .json(outJson(true, "Expense updated", updated));
   } catch (error) {
     if (replyExpenseError(res, error)) return;
+    const msg = error instanceof Error ? error.message : "";
+    if (msg.includes("expenseType must be one of")) {
+      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, msg, null));
+      return;
+    }
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to update expense", null));

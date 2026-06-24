@@ -84,7 +84,7 @@ export const taxComputationService = {
         : 0;
 
     const totalIncome = sales.reduce(
-      (s, x) => s + decimalToNumber(x.totalAmount),
+      (s, x) => s + decimalToNumber(x.amount),
       0,
     );
     const outputVat = sales.reduce(
@@ -95,7 +95,7 @@ export const taxComputationService = {
       .filter((x) => x.serviceIncome)
       .reduce((s, x) => s + decimalToNumber(x.amount), 0);
     const totalExpenses = expenses.reduce(
-      (s, x) => s + decimalToNumber(x.totalAmount),
+      (s, x) => s + decimalToNumber(x.amount),
       0,
     );
     const inputVatClaimable = expenses.reduce(

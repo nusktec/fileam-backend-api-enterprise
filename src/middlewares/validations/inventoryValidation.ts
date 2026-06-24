@@ -90,3 +90,27 @@ export const validateInventoryAdjustment = [
     .withMessage("expenseCategory must be 1–255 characters when provided"),
   handleValidation,
 ];
+
+export const validateUpdateInventoryItem = [
+  check("name").optional().trim().notEmpty().withMessage("name cannot be empty"),
+  check("category")
+    .optional()
+    .trim()
+    .notEmpty()
+    .withMessage("category cannot be empty"),
+  check("purchaseCost")
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage("purchaseCost must be a non-negative number"),
+  check("sellingPrice")
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage("sellingPrice must be a non-negative number"),
+  check("lowStockAlertLevel")
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage("lowStockAlertLevel must be non-negative"),
+  check("supplierName").optional({ nullable: true }).trim().isString(),
+  check("supplierId").optional({ nullable: true }).trim().isString(),
+  handleValidation,
+];

@@ -45,3 +45,24 @@ export const validateCreateEmployee = [
   check("pensionRsa").optional().trim().isString(),
   handleValidation,
 ];
+
+/** PATCH /mobile/employees/:id — all fields optional. */
+export const validateUpdateEmployee = [
+  check("fullName").optional().trim().notEmpty(),
+  check("jobTitle").optional().trim().notEmpty(),
+  check("employmentType")
+    .optional()
+    .trim()
+    .isIn(EMPLOYMENT_TYPES)
+    .withMessage(`employmentType must be one of: ${EMPLOYMENT_TYPES.join(", ")}`),
+  check("basicSalary").optional().isFloat({ min: 0 }),
+  check("housingAllowance").optional().isFloat({ min: 0 }),
+  check("transportAllowance").optional().isFloat({ min: 0 }),
+  check("mealAllowance").optional().isFloat({ min: 0 }),
+  check("otherAllowances").optional().isFloat({ min: 0 }),
+  check("stateOfResidence").optional({ nullable: true }).trim().isString(),
+  check("startDate").optional().isISO8601(),
+  check("tin").optional({ nullable: true }).trim().isString(),
+  check("pensionRsa").optional({ nullable: true }).trim().isString(),
+  handleValidation,
+];

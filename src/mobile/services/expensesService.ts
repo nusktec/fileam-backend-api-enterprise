@@ -5,6 +5,7 @@ import {
   VAT_RATE_PERCENT,
 } from "../../constants/percentages";
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
+import { EXPENSE_TYPES, isValidExpenseType } from "../../constants/expenseTypes";
 import { assertMonetaryAmountInRange } from "../../utils/monetaryAmount";
 import {
   calendarPeriodFromDate,
@@ -40,7 +41,7 @@ async function nextExpenseNumber(): Promise<string> {
   return `EXP-${String(counter.lastNumber).padStart(3, "0")}`;
 }
 
-export { EXPENSE_CATEGORIES };
+export { EXPENSE_CATEGORIES, EXPENSE_TYPES };
 export const expensesService = {
   async list(
     userId: string,
@@ -107,6 +108,7 @@ export const expensesService = {
         description: e.description,
         date: e.expenseDate,
         category: e.category,
+        expenseType: e.expenseType,
         amount: decimalToNumber(e.totalAmount),
         vatTag: e.vatInclusive,
         supplierName: e.supplierName ?? null,
@@ -130,6 +132,7 @@ export const expensesService = {
       totalAmount: decimalToNumber(expense.totalAmount),
       description: expense.description,
       category: expense.category,
+      expenseType: expense.expenseType,
       date: expense.expenseDate,
       receipt: expense.receiptUrl ? "Receipt uploaded" : "No receipt uploaded",
       receiptUrl: expense.receiptUrl,
@@ -149,6 +152,7 @@ export const expensesService = {
       amount: number;
       description: string;
       category: string;
+      expenseType?: string;
       date: string;
       vatInclusive: boolean;
       vatAmount?: number;
@@ -167,6 +171,11 @@ export const expensesService = {
     const expenseNumber = await nextExpenseNumber();
     const expenseDate = toCalendarDate(data.date);
 
+    const expenseType =
+      data.expenseType != null && isValidExpenseType(data.expenseType)
+        ? data.expenseType
+        : "OPEX";
+
     const expense = await prisma.expense.create({
       data: {
         userId,
@@ -174,6 +183,7 @@ export const expensesService = {
         expenseNumber,
         description: data.description,
         category: data.category,
+        expenseType,
         amount,
         vatInclusive: data.vatInclusive,
         vatAmount,
@@ -195,6 +205,7 @@ export const expensesService = {
       description: expense.description,
       date: expense.expenseDate,
       category: expense.category,
+      expenseType: expense.expenseType,
       amount: decimalToNumber(expense.totalAmount),
       vatTag: expense.vatInclusive,
       supplierName: expense.supplierName ?? null,
@@ -208,6 +219,7 @@ export const expensesService = {
     data: Partial<{
       description: string;
       category: string;
+      expenseType: string;
       amount: number;
       vatInclusive: boolean;
       vatAmount: number;
@@ -227,6 +239,14 @@ export const expensesService = {
     const updateData: Record<string, unknown> = {};
     if (data.description != null) updateData.description = data.description;
     if (data.category != null) updateData.category = data.category;
+    if (data.expenseType != null) {
+      if (!isValidExpenseType(data.expenseType)) {
+        throw new Error(
+          `expenseType must be one of: ${EXPENSE_TYPES.join(", ")}`,
+        );
+      }
+      updateData.expenseType = data.expenseType;
+    }
     if (data.date != null) {
       const expenseDate = toCalendarDate(data.date);
       updateData.expenseDate = expenseDate;
@@ -300,6 +320,7 @@ export const expensesService = {
       description: updated.description,
       date: updated.expenseDate,
       category: updated.category,
+      expenseType: updated.expenseType,
       amount: decimalToNumber(updated.totalAmount),
       vatTag: updated.vatInclusive,
       supplierName: updated.supplierName ?? null,

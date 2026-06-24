@@ -30,11 +30,11 @@ export const financialOverviewService = {
     const [salesAgg, expensesAgg, payables] = await Promise.all([
       prisma.sale.aggregate({
         where: { userId, saleDate: { gte: start, lte: end } },
-        _sum: { totalAmount: true },
+        _sum: { amount: true },
       }),
       prisma.expense.aggregate({
         where: { userId, expenseDate: { gte: start, lte: end } },
-        _sum: { totalAmount: true },
+        _sum: { amount: true },
       }),
       prisma.taxPayable.findMany({
         where: { userId, periodYear: year },
@@ -42,9 +42,9 @@ export const financialOverviewService = {
       }),
     ]);
 
-    const annualRevenue = roundMoney(decimalToNumber(salesAgg._sum.totalAmount));
+    const annualRevenue = roundMoney(decimalToNumber(salesAgg._sum.amount));
     const annualExpense = roundMoney(
-      decimalToNumber(expensesAgg._sum.totalAmount),
+      decimalToNumber(expensesAgg._sum.amount),
     );
 
     const taxLiabilityByType: Record<string, number> = {};
@@ -81,7 +81,7 @@ export const financialOverviewService = {
       potentialSavings,
       taxLiabilityByType,
       note:
-        "Revenue and expenses are book totals for the calendar year. Tax liability is unpaid balance on synced payables for that year. Potential savings is an indicative estimate (5% of liability, capped) — consult a tax adviser for actual planning.",
+        "Revenue and expenses are ex-VAT book totals for the calendar year. Tax liability is unpaid balance on synced payables for that year. Potential savings is an indicative estimate (5% of liability, capped) — consult a tax adviser for actual planning.",
     };
   },
 };

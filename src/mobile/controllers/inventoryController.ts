@@ -5,6 +5,7 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { PaginationRequest } from "../../middlewares/paginationMiddleware";
+import { HttpReplyError } from "../../utils/httpReplyError";
 import { inventoryService } from "../services/inventoryService";
 
 export const getInventoryOverview = async (
@@ -173,6 +174,10 @@ export const addInventoryItem = async (
       .status(HttpStatusCode.CREATED)
       .json(outJson(true, "Inventory item created", detail));
   } catch (e: unknown) {
+    if (e instanceof HttpReplyError) {
+      res.status(e.statusCode).json(outJson(false, e.message, null));
+      return;
+    }
     const msg = e instanceof Error ? e.message : "Failed to create item";
     if (msg.includes("openingQuantity")) {
       res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, msg, null));
@@ -328,5 +333,99 @@ export const adjustInventoryItem = async (
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to adjust stock", null));
+  }
+};
+
+export const updateInventoryItem = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const data = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as Record<string, unknown>;
+    const keys = Object.keys(data).filter((k) => data[k] !== undefined);
+    if (keys.length === 0) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Provide at least one field to update", null));
+      return;
+    }
+    const detail = await inventoryService.updateItem(userId, id!, {
+      name: data.name as string | undefined,
+      category: data.category as string | undefined,
+      purchaseCost:
+        data.purchaseCost != null ? Number(data.purchaseCost) : undefined,
+      sellingPrice:
+        data.sellingPrice != null ? Number(data.sellingPrice) : undefined,
+      lowStockAlertLevel:
+        data.lowStockAlertLevel != null
+          ? Number(data.lowStockAlertLevel)
+          : undefined,
+      supplierName:
+        data.supplierName !== undefined
+          ? (data.supplierName as string | null)
+          : undefined,
+      supplierId:
+        data.supplierId !== undefined
+          ? (data.supplierId as string | null)
+          : undefined,
+    });
+    if (!detail) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Inventory item not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Inventory item updated", detail));
+  } catch (e: unknown) {
+    if (e instanceof HttpReplyError) {
+      res.status(e.statusCode).json(outJson(false, e.message, null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to update inventory item", null));
+  }
+};
+
+export const deleteInventoryItem = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const result = await inventoryService.deleteItem(userId, id!);
+    if (result === "not_found") {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Inventory item not found", null));
+      return;
+    }
+    if (result === "blocked") {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(
+            false,
+            "Cannot delete item with remaining stock or past sale history. Adjust stock to zero first.",
+            null,
+          ),
+        );
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Inventory item deleted", null));
+  } catch {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to delete inventory item", null));
   }
 };

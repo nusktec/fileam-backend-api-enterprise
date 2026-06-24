@@ -115,6 +115,80 @@ export const createEmployee = async (
   }
 };
 
+export const updateEmployee = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const body = req.body ?? {};
+    const keys = Object.keys(body).filter((k) => body[k] !== undefined);
+    if (keys.length === 0) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Provide at least one field to update", null));
+      return;
+    }
+    const data = await employeesService.update(userId, id!, {
+      fullName: body.fullName,
+      jobTitle: body.jobTitle,
+      employmentType: body.employmentType,
+      basicSalary:
+        body.basicSalary != null ? Number(body.basicSalary) : undefined,
+      housingAllowance:
+        body.housingAllowance != null ? Number(body.housingAllowance) : undefined,
+      transportAllowance:
+        body.transportAllowance != null
+          ? Number(body.transportAllowance)
+          : undefined,
+      mealAllowance:
+        body.mealAllowance != null ? Number(body.mealAllowance) : undefined,
+      otherAllowances:
+        body.otherAllowances != null ? Number(body.otherAllowances) : undefined,
+      stateOfResidence: body.stateOfResidence,
+      startDate: body.startDate,
+      tin: body.tin,
+      pensionRsa: body.pensionRsa,
+    });
+    if (!data) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Employee not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Employee updated", data));
+  } catch {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to update employee", null));
+  }
+};
+
+export const deleteEmployee = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const ok = await employeesService.deleteForUser(userId, id!);
+    if (!ok) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Employee not found", null));
+      return;
+    }
+    res.status(HttpStatusCode.OK).json(outJson(true, "Employee deleted", null));
+  } catch {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to delete employee", null));
+  }
+};
+
 export const fileEmployeeAsExpense = async (
   req: IRequest,
   res: Response,

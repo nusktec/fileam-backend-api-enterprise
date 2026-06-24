@@ -4,6 +4,7 @@ import { prisma } from "../../config/database";
 import {
   INVENTORY_MOVEMENT_TYPES,
   INVENTORY_SLOW_MOVING_DAYS,
+  INVENTORY_SLOW_MOVING_GRACE_DAYS,
   INVENTORY_VELOCITY_DAYS,
 } from "../../constants/inventory";
 import {
@@ -14,6 +15,7 @@ import {
   MARGIN_PERCENT_NUMERATOR,
 } from "../../constants/percentages";
 import { initialSaleStatusForPaymentType } from "../../constants/salePaymentRules";
+import { HttpReplyError } from "../../utils/httpReplyError";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 
@@ -144,6 +146,68 @@ async function soldQtyInPeriod(
   return rows.reduce((s, r) => s + Math.abs(d(r.quantityDelta)), 0);
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function daysSince(date: Date, now: Date): number {
+  return (now.getTime() - date.getTime()) / MS_PER_DAY;
+}
+
+function isWithinSlowMovingGracePeriod(createdAt: Date, now: Date): boolean {
+  return daysSince(createdAt, now) < INVENTORY_SLOW_MOVING_GRACE_DAYS;
+}
+
+/** Last activity reference for slow-moving: most recent sale, else when stock was introduced. */
+function slowMovingReferenceDate(
+  lastSaleAt: Date | null,
+  createdAt: Date,
+): Date {
+  return lastSaleAt ?? createdAt;
+}
+
+function isSlowMovingStock(
+  item: { lastSaleAt: Date | null; createdAt: Date },
+  now: Date,
+  slowCutoff: Date,
+): boolean {
+  if (isWithinSlowMovingGracePeriod(item.createdAt, now)) return false;
+  return slowMovingReferenceDate(item.lastSaleAt, item.createdAt) < slowCutoff;
+}
+
+async function findInventoryItemByName(
+  userId: string,
+  name: string,
+  excludeItemId?: string,
+) {
+  const normalized = name.trim();
+  if (!normalized) return null;
+  const existing = await prisma.inventoryItem.findMany({
+    where: { userId },
+    select: { id: true, name: true },
+  });
+  const lower = normalized.toLowerCase();
+  return (
+    existing.find(
+      (row) =>
+        row.name.trim().toLowerCase() === lower &&
+        row.id !== excludeItemId,
+    ) ?? null
+  );
+}
+
+async function assertUniqueInventoryName(
+  userId: string,
+  name: string,
+  excludeItemId?: string,
+): Promise<void> {
+  const duplicate = await findInventoryItemByName(userId, name, excludeItemId);
+  if (duplicate) {
+    throw new HttpReplyError(
+      409,
+      "An inventory item with this name already exists",
+    );
+  }
+}
+
 export const inventoryService = {
   async overview(userId: string) {
     const items = await prisma.inventoryItem.findMany({
@@ -204,7 +268,7 @@ export const inventoryService = {
 
       if (qty > 0) {
         const last = it.lastSaleAt;
-        if (!last || last < slowCutoff) {
+        if (isSlowMovingStock(it, now, slowCutoff)) {
           slowMoving.push({
             id: it.id,
             name: it.name,
@@ -250,6 +314,7 @@ export const inventoryService = {
       const qty = d(it.quantity);
       const alert = d(it.lowStockAlertLevel);
       if (qty <= 0 || qty <= alert) continue;
+      if (isWithinSlowMovingGracePeriod(it.createdAt, now)) continue;
       const sold60 = await soldQtyInPeriod(it.id, velocityFrom, now);
       const threshold = Math.max(
         1,
@@ -305,6 +370,7 @@ export const inventoryService = {
       const qty = d(it.quantity);
       const alert = d(it.lowStockAlertLevel);
       if (qty <= 0 || qty <= alert) continue;
+      if (isWithinSlowMovingGracePeriod(it.createdAt, now)) continue;
       const sold60 = await soldQtyInPeriod(it.id, velocityFrom, now);
       const threshold = Math.max(
         1,
@@ -694,6 +760,8 @@ export const inventoryService = {
     const opening = data.openingQuantity;
     if (opening < 0) throw new Error("openingQuantity must be non-negative");
 
+    await assertUniqueInventoryName(userId, data.name);
+
     const item = await prisma.$transaction(async (tx) => {
       const row = await tx.inventoryItem.create({
         data: {
@@ -722,6 +790,79 @@ export const inventoryService = {
     });
 
     return inventoryService.getItemDetail(userId, item.id);
+  },
+
+  async updateItem(
+    userId: string,
+    itemId: string,
+    data: Partial<{
+      name: string;
+      category: string;
+      purchaseCost: number;
+      sellingPrice: number;
+      lowStockAlertLevel: number;
+      supplierName: string | null;
+      supplierId: string | null;
+    }>,
+  ) {
+    const existing = await prisma.inventoryItem.findFirst({
+      where: { id: itemId, userId },
+    });
+    if (!existing) return null;
+
+    if (data.name != null) {
+      await assertUniqueInventoryName(userId, data.name, itemId);
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (data.name != null) updateData.name = data.name.trim();
+    if (data.category != null) updateData.category = data.category.trim();
+    if (data.purchaseCost != null)
+      updateData.purchaseCost = dec(data.purchaseCost);
+    if (data.sellingPrice != null)
+      updateData.sellingPrice = dec(data.sellingPrice);
+    if (data.lowStockAlertLevel != null)
+      updateData.lowStockAlertLevel = dec(data.lowStockAlertLevel);
+    if (data.supplierName !== undefined) {
+      updateData.supplierName = data.supplierName?.trim() || null;
+    }
+    if (data.supplierId !== undefined) {
+      updateData.supplierId = data.supplierId?.trim() || null;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return inventoryService.getItemDetail(userId, itemId);
+    }
+
+    await prisma.inventoryItem.update({
+      where: { id: itemId },
+      data: updateData,
+    });
+
+    return inventoryService.getItemDetail(userId, itemId);
+  },
+
+  async deleteItem(userId: string, itemId: string): Promise<"ok" | "not_found" | "blocked"> {
+    const existing = await prisma.inventoryItem.findFirst({
+      where: { id: itemId, userId },
+    });
+    if (!existing) return "not_found";
+
+    if (d(existing.quantity) > 0) {
+      return "blocked";
+    }
+
+    const saleLineCount = await prisma.inventorySaleLine.count({
+      where: { inventoryItemId: itemId },
+    });
+    if (saleLineCount > 0) {
+      return "blocked";
+    }
+
+    await prisma.inventoryItem.delete({
+      where: { id: itemId },
+    });
+    return "ok";
   },
 
   async sellFromInventory(

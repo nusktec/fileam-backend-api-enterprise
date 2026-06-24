@@ -20,5 +20,10 @@ export const updateExpenseValidation = [
   check("supplierId").optional({ nullable: true }).trim(),
   check("Supplier_name").optional().trim(),
   check("Supplier_Id").optional().trim(),
+  check("expenseType")
+    .optional()
+    .trim()
+    .isIn(["OPEX", "COGS", "CAPEX", "Tax"])
+    .withMessage("expenseType must be one of: OPEX, COGS, CAPEX, Tax"),
   handleValidation,
 ];

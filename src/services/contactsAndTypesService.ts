@@ -3,6 +3,7 @@ import { enterpriseBusinessProfileService } from "../enterprise/services/enterpr
 import { enterpriseFinancialsService } from "../enterprise/services/enterpriseFinancialsService";
 import { enterpriseTaxComputationService } from "../enterprise/services/enterpriseTaxComputationService";
 import { EXPENSE_CATEGORIES } from "../constants/expenseCategories";
+import { EXPENSE_TYPES } from "../constants/expenseTypes";
 import { REPORT_TYPES } from "../constants/filings";
 import { EMPLOYMENT_TYPES } from "../constants/employmentTypes";
 import { SALE_CATEGORIES } from "../constants/saleCategories";
@@ -18,6 +19,7 @@ export interface AllTypes {
   vatPeriods: string[];
   reportTypes: { id: string; name: string }[];
   expenseCategories: string[];
+  expenseTypes: string[];
   paymentTypes: string[];
   employmentTypes: string[];
   saleCategories: string[];
@@ -34,6 +36,7 @@ export const contactsAndTypesService = {
       vatPeriods: enterpriseTaxComputationService.getVatPeriods(),
       reportTypes: REPORT_TYPES.map((t) => ({ id: t, name: t })),
       expenseCategories: [...EXPENSE_CATEGORIES],
+      expenseTypes: [...EXPENSE_TYPES],
       paymentTypes: [...PAYMENT_TYPES],
       employmentTypes: [...EMPLOYMENT_TYPES],
       saleCategories: [...SALE_CATEGORIES],

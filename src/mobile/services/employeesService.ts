@@ -235,6 +235,71 @@ export const employeesService = {
     return this.getById(userId, employee.id);
   },
 
+  async update(
+    userId: string,
+    employeeId: string,
+    data: Partial<{
+      fullName: string;
+      jobTitle: string;
+      employmentType: string;
+      basicSalary: number;
+      housingAllowance: number;
+      transportAllowance: number;
+      mealAllowance: number;
+      otherAllowances: number;
+      stateOfResidence: string | null;
+      startDate: string;
+      tin: string | null;
+      pensionRsa: string | null;
+    }>,
+  ) {
+    const existing = await prisma.employee.findFirst({
+      where: { id: employeeId, userId },
+    });
+    if (!existing) return null;
+
+    const updateData: Record<string, unknown> = {};
+    if (data.fullName != null) updateData.fullName = data.fullName.trim();
+    if (data.jobTitle != null) updateData.jobTitle = data.jobTitle.trim();
+    if (data.employmentType != null)
+      updateData.employmentType = data.employmentType;
+    if (data.basicSalary != null)
+      updateData.basicSalary = new Decimal(data.basicSalary);
+    if (data.housingAllowance != null)
+      updateData.housingAllowance = new Decimal(data.housingAllowance);
+    if (data.transportAllowance != null)
+      updateData.transportAllowance = new Decimal(data.transportAllowance);
+    if (data.mealAllowance != null)
+      updateData.mealAllowance = new Decimal(data.mealAllowance);
+    if (data.otherAllowances != null)
+      updateData.otherAllowances = new Decimal(data.otherAllowances);
+    if (data.stateOfResidence !== undefined) {
+      updateData.stateOfResidence = data.stateOfResidence?.trim() || null;
+    }
+    if (data.startDate != null) updateData.startDate = new Date(data.startDate);
+    if (data.tin !== undefined) updateData.tin = data.tin?.trim() || null;
+    if (data.pensionRsa !== undefined) {
+      updateData.pensionRsa = data.pensionRsa?.trim() || null;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return this.getById(userId, employeeId);
+    }
+
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: updateData,
+    });
+    return this.getById(userId, employeeId);
+  },
+
+  async deleteForUser(userId: string, employeeId: string): Promise<boolean> {
+    const result = await prisma.employee.deleteMany({
+      where: { id: employeeId, userId },
+    });
+    return result.count > 0;
+  },
+
   async fileAsExpense(userId: string, employeeId: string, createdById?: string) {
     const employee = await prisma.employee.findFirst({
       where: { id: employeeId, userId },
@@ -253,6 +318,7 @@ export const employeesService = {
       amount: totalMonthlyCost,
       description,
       category: "Salary",
+      expenseType: "OPEX",
       date: dateStr,
       vatInclusive: false,
       createdById: createdById ?? userId,

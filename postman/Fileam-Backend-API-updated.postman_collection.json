@@ -1234,7 +1234,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/overview",
-                "description": "totalStockValue, lowStockAlertCount, lowStockItems, topSelling (units last 120d), slowMoving (no sale 90d+), movingLowPreview (velocity), stats: potentialRevenue, stockCost, potentialProfit, averageMarginPct."
+                "description": "totalStockValue, lowStockAlertCount, lowStockItems, topSelling (units last 120d), slowMoving (no sale 45d+ after 45d grace for new products), movingLowPreview (velocity, same grace), stats: potentialRevenue, stockCost, potentialProfit, averageMarginPct."
               }
             },
             {

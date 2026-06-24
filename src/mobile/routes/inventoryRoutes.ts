@@ -10,6 +10,8 @@ import {
   getInventoryItemDetail,
   restockInventoryItem,
   adjustInventoryItem,
+  updateInventoryItem,
+  deleteInventoryItem,
 } from "../controllers/inventoryController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
@@ -20,6 +22,7 @@ import {
   validateInventorySell,
   validateInventoryRestock,
   validateInventoryAdjustment,
+  validateUpdateInventoryItem,
 } from "../../middlewares/validations/inventoryValidation";
 
 const router = express.Router();
@@ -34,6 +37,14 @@ router.post("/sell", express.json(), validateInventorySell, sellFromInventory);
 
 router.post("/items", express.json(), validateAddInventoryItem, addInventoryItem);
 router.get("/items", withPagination(), listInventoryItems);
+router.patch(
+  "/items/:id",
+  validateIdParam,
+  express.json(),
+  validateUpdateInventoryItem,
+  updateInventoryItem,
+);
+router.delete("/items/:id", validateIdParam, deleteInventoryItem);
 router.post(
   "/items/:id/restock",
   validateIdParam,

@@ -5,6 +5,7 @@ model Expense {
   expenseNumber String   @unique @map("expense_number")
   description   String
   category      String
+  expenseType   String   @default("OPEX") @map("expense_type")
   amount        Decimal  @db.Decimal(14, 2)
   vatInclusive  Boolean  @default(false) @map("vat_inclusive")
   vatAmount     Decimal?  @map("vat_amount") @db.Decimal(14, 2)
