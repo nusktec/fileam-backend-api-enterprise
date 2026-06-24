@@ -37,7 +37,7 @@ export function estimateAnnualPersonalIncomeTaxNg(
   const methodology =
     "Estimated using Nigeria PITA Sixth Schedule progressive bands on annual chargeable income proxied by 12 × monthly net profit from records. Consolidated Relief Allowances, rent relief, exclusions, exemption thresholds, partnerships, PAYE withheld, director rules, minimum tax — not applied. Sole traders should verify filings with relevant state IRS.";
 
-  //return line
+  //return line and so
   return {
     estimatedAnnualPitNgn: Math.round(tax * 100) / 100,
     chargeableIncomeProxyAnnualNgn: income,
