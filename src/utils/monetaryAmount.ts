@@ -33,3 +33,9 @@ export function assertMonetaryAmountInRange(
   const msg = validateMonetaryAmount(value, fieldLabel);
   if (msg) throw new HttpReplyError(400, msg);
 }
+
+/** Normalize to 2 decimal places (matches Decimal 14,2 storage). Avoids integer rounding. */
+export function normalizeMoneyAmount(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value * 100) / 100;
+}

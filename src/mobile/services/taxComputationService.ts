@@ -12,6 +12,7 @@ import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputatio
 import { computePayeMonthly } from "../../constants/payroll";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
+import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -148,15 +149,15 @@ export const taxComputationService = {
         netProfit,
       },
       vat: {
-        summary: netVatPayable,
+        summary: normalizeMoneyAmount(netVatPayable),
         belowThreshold: totalIncome < VAT_TURNOVER_THRESHOLD_NGN,
-        income: totalIncome,
+        income: normalizeMoneyAmount(totalIncome),
         vatThreshold: VAT_TURNOVER_THRESHOLD_NGN,
         percentOfThreshold: percentOfVatThreshold,
         amountNeededToThreshold: amountNeededToVatThreshold,
-        outputVat,
-        inputVatClaimable,
-        netVatPayable,
+        outputVat: normalizeMoneyAmount(outputVat),
+        inputVatClaimable: normalizeMoneyAmount(inputVatClaimable),
+        netVatPayable: normalizeMoneyAmount(netVatPayable),
       },
       wht: {
         summary: estimatedWhtDeducted,

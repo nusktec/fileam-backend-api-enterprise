@@ -6,6 +6,7 @@ import {
   CIT_RATE_STANDARD_PERCENT,
 } from "../../constants/percentages";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
+import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 const VAT_TYPES = ["Standard Rate", "Reduced Rate", "Zero Rate", "Exempt"];
 const VAT_PERIODS = ["Monthly", "Quarterly", "Annual"];
@@ -134,9 +135,9 @@ export const enterpriseTaxComputationService = {
     }
     return {
       id: computation.id,
-      salesVat,
-      purchaseVat,
-      netVatPayable,
+      salesVat: normalizeMoneyAmount(salesVat),
+      purchaseVat: normalizeMoneyAmount(purchaseVat),
+      netVatPayable: normalizeMoneyAmount(netVatPayable),
       computation,
     };
   },
@@ -152,9 +153,9 @@ export const enterpriseTaxComputationService = {
       });
       if (!c) return null;
       return {
-        salesVat: decimalToNumber(c.salesVat),
-        purchaseVat: decimalToNumber(c.purchaseVat),
-        netVatPayable: decimalToNumber(c.netVatPayable),
+        salesVat: normalizeMoneyAmount(decimalToNumber(c.salesVat)),
+        purchaseVat: normalizeMoneyAmount(decimalToNumber(c.purchaseVat)),
+        netVatPayable: normalizeMoneyAmount(decimalToNumber(c.netVatPayable)),
         computation: c,
       };
     }
@@ -164,9 +165,9 @@ export const enterpriseTaxComputationService = {
     });
     if (!latest) return null;
     return {
-      salesVat: decimalToNumber(latest.salesVat),
-      purchaseVat: decimalToNumber(latest.purchaseVat),
-      netVatPayable: decimalToNumber(latest.netVatPayable),
+      salesVat: normalizeMoneyAmount(decimalToNumber(latest.salesVat)),
+      purchaseVat: normalizeMoneyAmount(decimalToNumber(latest.purchaseVat)),
+      netVatPayable: normalizeMoneyAmount(decimalToNumber(latest.netVatPayable)),
       computation: latest,
     };
   },
@@ -196,7 +197,7 @@ export const enterpriseTaxComputationService = {
     return rows.map((r) => ({
       month: r.month,
       year: r.year,
-      vatPayable: decimalToNumber(r.vatPayable),
+      vatPayable: normalizeMoneyAmount(decimalToNumber(r.vatPayable)),
     }));
   },
 
@@ -572,9 +573,9 @@ export const enterpriseTaxComputationService = {
     if (!latest) return null;
     return {
       period: { year: y, month: m, label: `${new Date(y, m - 1).toLocaleString("default", { month: "long" })} ${y}` },
-      outputVat: decimalToNumber(latest.salesVat),
-      inputVatClaimable: decimalToNumber(latest.purchaseVat),
-      netVatPayable: decimalToNumber(latest.netVatPayable),
+      outputVat: normalizeMoneyAmount(decimalToNumber(latest.salesVat)),
+      inputVatClaimable: normalizeMoneyAmount(decimalToNumber(latest.purchaseVat)),
+      netVatPayable: normalizeMoneyAmount(decimalToNumber(latest.netVatPayable)),
     };
   },
 

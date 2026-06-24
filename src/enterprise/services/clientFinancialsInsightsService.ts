@@ -10,6 +10,7 @@ import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputatio
 import { computePayeMonthly } from "../../constants/payroll";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 import { VAT_FILING_DAY } from "../../constants/taxPayable";
+import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import {
   resolvePlDateRange,
   type ProfitAndLossQueryOpts,
@@ -25,7 +26,7 @@ function formatNgnShort(n: number): string {
   if (v >= 1_000_000_000) return `₦${(n / 1_000_000_000).toFixed(1)}B`;
   if (v >= 1_000_000) return `₦${(n / 1_000_000).toFixed(1)}M`;
   if (v >= 1_000) return `₦${(n / 1_000).toFixed(0)}K`;
-  return `₦${Math.round(n).toLocaleString("en-NG")}`;
+  return `₦${normalizeMoneyAmount(n).toLocaleString("en-NG", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 function norm(s: string | null | undefined): string {
@@ -276,20 +277,34 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
   );
   const flags = guidance.applicableTaxes;
 
+  const { taxComputationService } = await import(
+    "../../mobile/services/taxComputationService"
+  );
+  let outputVat = 0;
+  let inputVat = 0;
+  let netVat = 0;
+  let totalIncomeExVat = 0;
+  for (let month = 1; month <= 12; month++) {
+    const comp = await taxComputationService.getForPeriod(linkedUserId, y, month);
+    outputVat += comp.vat.outputVat;
+    inputVat += comp.vat.inputVatClaimable;
+    netVat += comp.vat.netVatPayable;
+    totalIncomeExVat += comp.overview.totalIncome;
+  }
+  outputVat = normalizeMoneyAmount(outputVat);
+  inputVat = normalizeMoneyAmount(inputVat);
+  netVat = normalizeMoneyAmount(netVat);
+  totalIncomeExVat = normalizeMoneyAmount(totalIncomeExVat);
+
   const totalIncome = sales.reduce(
     (s, x) => s + decimalToNumber(x.totalAmount),
     0,
   );
-  const outputVat = sales.reduce((s, x) => s + decimalToNumber(x.vatAmount), 0);
   const serviceIncome = sales
     .filter((x) => x.serviceIncome)
     .reduce((s, x) => s + decimalToNumber(x.amount), 0);
   const totalExpenses = expenses.reduce(
     (s, x) => s + decimalToNumber(x.totalAmount),
-    0,
-  );
-  const inputVat = expenses.reduce(
-    (s, x) => s + decimalToNumber(x.vatAmount),
     0,
   );
   const netProfit = totalIncome - totalExpenses;
@@ -312,8 +327,6 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
       whtSurvey += Math.round((base * 5) / PERCENT);
   }
   const whtTotal = whtServices + whtRent + whtSurvey;
-
-  const netVat = Math.round(outputVat - inputVat);
 
   const salaryMonthly =
     user?.employmentGrossSalaryMonthly != null
@@ -355,13 +368,13 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
     id: "vat",
     label: "Value Added Tax (VAT)",
     status:
-      totalIncome < VAT_TURNOVER_THRESHOLD_NGN
+      totalIncomeExVat < VAT_TURNOVER_THRESHOLD_NGN
         ? "computed"
         : payableSectionStatus(vatRows),
     total: netVat,
     items: [
-      { label: "Output VAT on Sales", amount: Math.round(outputVat) },
-      { label: "Input VAT on Purchases", amount: -Math.round(inputVat) },
+      { label: "Output VAT on Sales", amount: outputVat },
+      { label: "Input VAT on Purchases", amount: -inputVat },
     ],
     dueDate: vatDue,
     dueDateStatus: dueDateStatus(vatDue),
