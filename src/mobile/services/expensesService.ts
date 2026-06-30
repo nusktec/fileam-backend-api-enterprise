@@ -5,7 +5,7 @@ import {
   VAT_RATE_PERCENT,
 } from "../../constants/percentages";
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
-import { EXPENSE_TYPES, isValidExpenseType } from "../../constants/expenseTypes";
+import { EXPENSE_TYPES } from "../../constants/expenseTypes";
 import { assertMonetaryAmountInRange } from "../../utils/monetaryAmount";
 import {
   calendarPeriodFromDate,
@@ -172,8 +172,8 @@ export const expensesService = {
     const expenseDate = toCalendarDate(data.date);
 
     const expenseType =
-      data.expenseType != null && isValidExpenseType(data.expenseType)
-        ? data.expenseType
+      data.expenseType != null && String(data.expenseType).trim() !== ""
+        ? String(data.expenseType).trim()
         : "OPEX";
 
     const expense = await prisma.expense.create({
@@ -239,14 +239,7 @@ export const expensesService = {
     const updateData: Record<string, unknown> = {};
     if (data.description != null) updateData.description = data.description;
     if (data.category != null) updateData.category = data.category;
-    if (data.expenseType != null) {
-      if (!isValidExpenseType(data.expenseType)) {
-        throw new Error(
-          `expenseType must be one of: ${EXPENSE_TYPES.join(", ")}`,
-        );
-      }
-      updateData.expenseType = data.expenseType;
-    }
+    if (data.expenseType != null) updateData.expenseType = data.expenseType.trim();
     if (data.date != null) {
       const expenseDate = toCalendarDate(data.date);
       updateData.expenseDate = expenseDate;

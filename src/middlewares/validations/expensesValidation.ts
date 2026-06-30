@@ -28,7 +28,8 @@ export const createExpenseValidation = [
   check("expenseType")
     .optional()
     .trim()
-    .isIn(["OPEX", "COGS", "CAPEX", "Tax"])
-    .withMessage("expenseType must be one of: OPEX, COGS, CAPEX, Tax"),
+    .isString()
+    .isLength({ min: 1, max: 255 })
+    .withMessage("expenseType must be 1–255 characters when provided"),
   handleValidation,
 ];

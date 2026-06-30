@@ -233,11 +233,6 @@ export const updateExpense = async (
       .json(outJson(true, "Expense updated", updated));
   } catch (error) {
     if (replyExpenseError(res, error)) return;
-    const msg = error instanceof Error ? error.message : "";
-    if (msg.includes("expenseType must be one of")) {
-      res.status(HttpStatusCode.BAD_REQUEST).json(outJson(false, msg, null));
-      return;
-    }
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to update expense", null));
