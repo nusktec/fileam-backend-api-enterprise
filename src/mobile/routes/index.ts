@@ -18,6 +18,7 @@ import helpRoutes from "./helpRoutes";
 import contactsAndTypesRoutes from "./contactsAndTypesRoutes";
 import accountDeletionRoutes from "./accountDeletionRoutes";
 import inventoryRoutes from "./inventoryRoutes";
+import assetsRoutes from "./assetsRoutes";
 
 const router = express.Router();
 
@@ -40,6 +41,7 @@ router.use("/help", helpRoutes);
 router.use("/account-deletion", accountDeletionRoutes);
 router.use("/contacts-and-types", contactsAndTypesRoutes);
 router.use("/inventory", inventoryRoutes);
+router.use("/assets", assetsRoutes);
 
 export default router;
 

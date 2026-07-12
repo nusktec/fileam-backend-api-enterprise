@@ -66,4 +66,8 @@ model User {
   inventoryItems         InventoryItem[]
   inventorySales         InventorySale[]
   inventoryMovements     InventoryMovement[]
+  assets                 Asset[]
+  assetTransfers         AssetTransfer[]
+  assetSales             AssetSale[]
+  assetDisposals         AssetDisposal[]
 }

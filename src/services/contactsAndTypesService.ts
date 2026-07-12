@@ -7,6 +7,12 @@ import { EXPENSE_TYPES } from "../constants/expenseTypes";
 import { REPORT_TYPES } from "../constants/filings";
 import { EMPLOYMENT_TYPES } from "../constants/employmentTypes";
 import { SALE_CATEGORIES } from "../constants/saleCategories";
+import {
+  ASSET_TYPES,
+  DEPRECIATION_METHODS,
+  DISPOSAL_REASONS,
+  TRANSFER_TYPES,
+} from "../constants/assets";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"] as const;
 
@@ -23,6 +29,10 @@ export interface AllTypes {
   paymentTypes: string[];
   employmentTypes: string[];
   saleCategories: string[];
+  assetTypes: string[];
+  depreciationMethods: string[];
+  disposalReasons: string[];
+  transferTypes: string[];
 }
 
 export const contactsAndTypesService = {
@@ -40,6 +50,10 @@ export const contactsAndTypesService = {
       paymentTypes: [...PAYMENT_TYPES],
       employmentTypes: [...EMPLOYMENT_TYPES],
       saleCategories: [...SALE_CATEGORIES],
+      assetTypes: [...ASSET_TYPES],
+      depreciationMethods: [...DEPRECIATION_METHODS],
+      disposalReasons: [...DISPOSAL_REASONS],
+      transferTypes: [...TRANSFER_TYPES],
     };
   },
 
