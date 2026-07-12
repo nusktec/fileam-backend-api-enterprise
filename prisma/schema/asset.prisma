@@ -1,0 +1,101 @@
+model Asset {
+  id                     String   @id @default(uuid())
+  userId                 String   @map("user_id")
+  assetCode              String   @unique @map("asset_code")
+  assetType              String   @map("asset_type")
+  assetName              String   @map("asset_name")
+  purchaseDate           DateTime @map("purchase_date") @db.Date
+  purchaseCost           Decimal  @map("purchase_cost") @db.Decimal(14, 2)
+  vendor                 String?
+  evidenceUrl            String?  @map("evidence_url")
+  depreciationMethod     String?  @map("depreciation_method")
+  usefulLife             Int?     @map("useful_life")
+  residualValue          Decimal? @map("residual_value") @db.Decimal(14, 2)
+  serialNumber           String?  @map("serial_number")
+  assetLocation          String?  @map("asset_location")
+  additionalNote         String?  @map("additional_note")
+  assignToConsultant     Boolean  @default(false) @map("assign_to_consultant")
+  consultantReviewStatus String?  @map("consultant_review_status")
+  /** ACTIVE | SOLD | DISPOSED */
+  status                 String   @default("ACTIVE")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transfers  AssetTransfer[]
+  sales      AssetSale[]
+  disposals  AssetDisposal[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, assetType])
+  @@map("assets")
+}
+
+model AssetTransfer {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  transferCode String   @unique @map("transfer_code")
+  assetId      String   @map("asset_id")
+  transferType String   @map("transfer_type")
+  fromLocation String   @map("from_location")
+  toLocation   String   @map("to_location")
+  transferDate DateTime @map("transfer_date") @db.Date
+  reason       String
+  /** PENDING | COMPLETED | CANCELLED */
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([assetId])
+  @@map("asset_transfers")
+}
+
+model AssetSale {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  saleCode        String   @unique @map("sale_code")
+  assetId         String   @map("asset_id")
+  saleDate        DateTime @map("sale_date") @db.Date
+  salePrice       Decimal  @map("sale_price") @db.Decimal(14, 2)
+  buyer           String
+  bookValueAtSale Decimal  @map("book_value_at_sale") @db.Decimal(14, 2)
+  /** GAIN | LOSS | BREAK_EVEN */
+  gainLossType    String   @map("gain_loss_type")
+  gainLossAmount  Decimal  @map("gain_loss_amount") @db.Decimal(14, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([assetId])
+  @@map("asset_sales")
+}
+
+model AssetDisposal {
+  id                   String   @id @default(uuid())
+  userId               String   @map("user_id")
+  disposalCode         String   @unique @map("disposal_code")
+  assetId              String   @map("asset_id")
+  disposalReason       String   @map("disposal_reason")
+  disposalDate         DateTime @map("disposal_date") @db.Date
+  note                 String
+  evidenceUrl          String?  @map("evidence_url")
+  bookValueAtDisposal  Decimal  @map("book_value_at_disposal") @db.Decimal(14, 2)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([assetId])
+  @@map("asset_disposals")
+}
