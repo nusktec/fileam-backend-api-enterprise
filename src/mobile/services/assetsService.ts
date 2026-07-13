@@ -436,7 +436,7 @@ export const assetsService = {
   },
 
   async dashboard(userId: string) {
-    const [assets, pendingReviews, inventoryCount, unpaidSalesCount] =
+    const [assets, pendingReviews, inventoryItems, unpaidSales] =
       await Promise.all([
         prisma.asset.findMany({
           where: { userId, status: ASSET_STATUSES[0] },
@@ -448,8 +448,8 @@ export const assetsService = {
             consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[0],
           },
         }),
-        prisma.inventoryItem.count({ where: { userId } }),
-        prisma.sale.count({
+        prisma.inventoryItem.findMany({ where: { userId } }),
+        prisma.sale.findMany({
           where: {
             userId,
             status: { in: [...SALE_RECEIVABLE_STATUSES] },
@@ -457,8 +457,21 @@ export const assetsService = {
         }),
       ]);
 
+    const inventoryTotal = normalizeMoneyAmount(
+      inventoryItems.reduce(
+        (s, it) => s + d(it.quantity) * d(it.purchaseCost),
+        0,
+      ),
+    );
+    const arTotal = normalizeMoneyAmount(
+      unpaidSales.reduce((s, sale) => s + d(sale.totalAmount), 0),
+    );
+    /** Total value of current assets (inventory + AR; cash/bank stubs = 0 until accounts exist). */
+    const currentAssetsTotal = normalizeMoneyAmount(inventoryTotal + arTotal);
+
     const now = new Date();
     let totalCost = 0;
+    let nonCurrentNetBookValue = 0;
     let annualDepreciation = 0;
     let softwareAmortization = 0;
     const costByType = new Map<string, number>();
@@ -475,6 +488,7 @@ export const assetsService = {
         residualValue: d(a.residualValue),
         asOf: now,
       });
+      nonCurrentNetBookValue += dep.bookValue;
       annualDepreciation += dep.annualDepreciation;
       if (a.assetType === "SOFTWARE_LICENSES") {
         softwareAmortization += dep.annualDepreciation;
@@ -496,8 +510,8 @@ export const assetsService = {
     return {
       summary: {
         pendingReviews,
-        currentAssets: inventoryCount + unpaidSalesCount,
-        nonCurrentAssets: assets.length,
+        currentAssets: currentAssetsTotal,
+        nonCurrentAssets: normalizeMoneyAmount(nonCurrentNetBookValue),
         annualDepreciation: normalizeMoneyAmount(annualDepreciation),
       },
       nonCurrentAssetCategories,
