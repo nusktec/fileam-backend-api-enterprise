@@ -15,6 +15,7 @@ import {
   assertMonetaryAmountInRange,
   normalizeMoneyAmount,
 } from "../../utils/monetaryAmount";
+import { SALE_RECEIVABLE_STATUSES } from "../../constants/salePaymentRules";
 
 const ASSET_COUNTER_ID = "asset_number";
 const TRANSFER_COUNTER_ID = "asset_transfer_number";
@@ -451,7 +452,7 @@ export const assetsService = {
         prisma.sale.count({
           where: {
             userId,
-            status: { in: ["Pending", "Overdue"] },
+            status: { in: [...SALE_RECEIVABLE_STATUSES] },
           },
         }),
       ]);
@@ -515,7 +516,7 @@ export const assetsService = {
       prisma.sale.findMany({
         where: {
           userId,
-          status: { in: ["Pending", "Overdue"] },
+          status: { in: [...SALE_RECEIVABLE_STATUSES] },
         },
         orderBy: { saleDate: "desc" },
       }),

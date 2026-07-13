@@ -29,7 +29,9 @@ export const updateSaleValidation = [
   check("serviceIncome").optional().isBoolean(),
   check("status")
     .optional()
-    .isIn(["Paid", "Pending", "Overdue"])
-    .withMessage("status must be Paid, Pending, or Overdue"),
+    .isIn(["PAID", "Paid", "Pending", "Overdue", "IN_PROGRESS", "CANCELLED"])
+    .withMessage(
+      "status must be PAID, Pending, Overdue, IN_PROGRESS, or CANCELLED",
+    ),
   handleValidation,
 ];

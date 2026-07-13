@@ -22,6 +22,8 @@ model Sale {
   /** Optional URL to a payment receipt or supplementary proof (Media upload URL, etc.) */
   receiptUrl     String?  @map("receipt_url")
   evidenceVaultId String? @map("evidence_vault_id")
+  /** Set when Card/Transfer sale is confirmed PAID via payment-status endpoint */
+  paymentConfirmedAt DateTime? @map("payment_confirmed_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

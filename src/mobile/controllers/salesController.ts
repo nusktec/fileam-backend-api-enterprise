@@ -275,6 +275,41 @@ export const markInvoicePaid = async (
   }
 };
 
+export const updateSalePaymentStatus = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const saleId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const body = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as { status: string };
+    const updated = await salesService.confirmPaymentStatus(
+      userId,
+      saleId!,
+      body.status,
+    );
+    if (!updated) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Sale not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Sale payment status updated", updated));
+  } catch (error) {
+    if (replySaleError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to update sale payment status", null));
+  }
+};
+
 export const deleteSale = async (
   req: IRequest,
   res: Response,

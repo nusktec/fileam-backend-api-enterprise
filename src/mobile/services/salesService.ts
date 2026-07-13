@@ -3,7 +3,11 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { PERCENT, VAT_RATE_PERCENT } from "../../constants/percentages";
 import {
   initialSaleStatusForPaymentType,
+  isAsyncPaymentType,
+  isCashPaymentType,
   isInvoicePaymentType,
+  isSalePaidStatus,
+  SALE_STATUS,
 } from "../../constants/salePaymentRules";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { assertMonetaryAmountInRange } from "../../utils/monetaryAmount";
@@ -36,48 +40,126 @@ function assertSaleFinancials(
   assertMonetaryAmountInRange(Number(totalAmount), "Total amount");
 }
 
+function mapSaleSummary(sale: {
+  id: string;
+  invoiceNumber: string;
+  status: string;
+  description: string;
+  itemName: string | null;
+  saleDate: Date;
+  amount: Decimal;
+  vatAmount: Decimal;
+  totalAmount: Decimal;
+  customerName: string | null;
+  customerId: string | null;
+  receiptUrl: string | null;
+  paymentConfirmedAt?: Date | null;
+  paymentType?: string;
+}) {
+  return {
+    id: sale.id,
+    invoiceNumber: sale.invoiceNumber,
+    status: sale.status,
+    description: sale.description,
+    itemName: sale.itemName ?? null,
+    date: sale.saleDate,
+    amount: decimalToNumber(sale.amount),
+    vatAmount: decimalToNumber(sale.vatAmount),
+    totalAmount: decimalToNumber(sale.totalAmount),
+    customerName: sale.customerName ?? null,
+    customerId: sale.customerId ?? null,
+    receiptUrl: sale.receiptUrl ?? null,
+    paymentType: sale.paymentType,
+    paymentConfirmedAt: sale.paymentConfirmedAt
+      ? sale.paymentConfirmedAt.toISOString()
+      : null,
+  };
+}
+
 function resolveSaleStatusAfterPatch(
   sale: { paymentType: string; status: string },
   data: Partial<{ paymentType: string; status: string }>,
 ): string {
   const effectivePt = data.paymentType ?? sale.paymentType;
 
-  if (!isInvoicePaymentType(effectivePt)) {
-    return "Paid";
-  }
+  if (isInvoicePaymentType(effectivePt)) {
+    if (data.status != null) {
+      const allowed = [
+        SALE_STATUS.PAID,
+        "Paid",
+        SALE_STATUS.PENDING,
+        SALE_STATUS.OVERDUE,
+      ];
+      if (!allowed.includes(data.status)) {
+        throw new HttpReplyError(
+          400,
+          `status must be one of: Pending, Overdue, PAID for Invoice sales`,
+        );
+      }
+      const normalized =
+        data.status === "Paid" ? SALE_STATUS.PAID : data.status;
+      if (
+        normalized === SALE_STATUS.PENDING &&
+        isSalePaidStatus(sale.status)
+      ) {
+        throw new HttpReplyError(
+          400,
+          "Paid sales cannot be set back to Pending",
+        );
+      }
+      if (
+        isSalePaidStatus(normalized) &&
+        ![
+          SALE_STATUS.PENDING,
+          SALE_STATUS.OVERDUE,
+          SALE_STATUS.PAID,
+          "Paid",
+        ].includes(sale.status)
+      ) {
+        throw new HttpReplyError(
+          400,
+          "Only Pending or Overdue invoice sales can be marked Paid via status",
+        );
+      }
+      return isSalePaidStatus(normalized) ? SALE_STATUS.PAID : normalized;
+    }
 
-  if (data.status != null) {
-    const allowed = ["Paid", "Pending", "Overdue"];
-    if (!allowed.includes(data.status)) {
-      throw new HttpReplyError(
-        400,
-        `status must be one of: ${allowed.join(", ")} for Invoice sales`,
-      );
-    }
-    if (data.status === "Pending" && sale.status === "Paid") {
-      throw new HttpReplyError(
-        400,
-        "Paid sales cannot be set back to Pending",
-      );
-    }
     if (
-      data.status === "Paid" &&
-      !["Pending", "Overdue", "Paid"].includes(sale.status)
+      data.paymentType != null &&
+      data.paymentType !== sale.paymentType &&
+      isInvoicePaymentType(data.paymentType)
     ) {
-      throw new HttpReplyError(
-        400,
-        "Only Pending or Overdue invoice sales can be marked Paid via status",
-      );
+      return SALE_STATUS.PENDING;
     }
-    return data.status;
+
+    return sale.status;
   }
 
-  if (
-    data.paymentType != null &&
-    data.paymentType !== sale.paymentType &&
-    isInvoicePaymentType(data.paymentType)
-  ) {
-    return "Pending";
+  // Cash / Card / Transfer — payment-status endpoint confirms Card/Transfer.
+  // PATCH status is not the primary confirm path for async payments.
+  if (data.status != null) {
+    if (data.status === SALE_STATUS.CANCELLED) {
+      return SALE_STATUS.CANCELLED;
+    }
+    if (isSalePaidStatus(data.status) || data.status === SALE_STATUS.IN_PROGRESS) {
+      throw new HttpReplyError(
+        400,
+        "Use PATCH /sales/:id/payment-status to confirm Card/Transfer payments (IN_PROGRESS → PAID)",
+      );
+    }
+    throw new HttpReplyError(
+      400,
+      `Invalid status for ${effectivePt} sales`,
+    );
+  }
+
+  if (data.paymentType != null && data.paymentType !== sale.paymentType) {
+    if (isCashPaymentType(data.paymentType)) return SALE_STATUS.PAID;
+    if (isAsyncPaymentType(data.paymentType)) {
+      return isSalePaidStatus(sale.status)
+        ? SALE_STATUS.PAID
+        : SALE_STATUS.IN_PROGRESS;
+    }
   }
 
   return sale.status;
@@ -135,10 +217,18 @@ export const salesService = {
       },
       {} as Record<string, number>,
     );
-    const paidCount = countByStatus["Paid"] ?? 0;
-    const pendingCount = countByStatus["Pending"] ?? 0;
-    const overdueCount = countByStatus["Overdue"] ?? 0;
-    const totalCount = paidCount + pendingCount + overdueCount;
+    const paidCount =
+      (countByStatus[SALE_STATUS.PAID] ?? 0) + (countByStatus["Paid"] ?? 0);
+    const pendingCount = countByStatus[SALE_STATUS.PENDING] ?? 0;
+    const overdueCount = countByStatus[SALE_STATUS.OVERDUE] ?? 0;
+    const inProgressCount = countByStatus[SALE_STATUS.IN_PROGRESS] ?? 0;
+    const cancelledCount = countByStatus[SALE_STATUS.CANCELLED] ?? 0;
+    const totalCount =
+      paidCount +
+      pendingCount +
+      overdueCount +
+      inProgressCount +
+      cancelledCount;
 
     return {
       summary: {
@@ -150,6 +240,8 @@ export const salesService = {
         paid: paidCount,
         pending: pendingCount,
         overdue: overdueCount,
+        inProgress: inProgressCount,
+        cancelled: cancelledCount,
       },
       sales: sales.map((s) => ({
         id: s.id,
@@ -165,6 +257,10 @@ export const salesService = {
         customerName: s.customerName ?? null,
         customerId: s.customerId ?? null,
         receiptUrl: s.receiptUrl ?? null,
+        paymentType: s.paymentType,
+        paymentConfirmedAt: s.paymentConfirmedAt
+          ? s.paymentConfirmedAt.toISOString()
+          : null,
       })),
       total,
       page,
@@ -198,6 +294,9 @@ export const salesService = {
       total: decimalToNumber(sale.totalAmount),
       vatableIncome: sale.vatableIncome,
       serviceIncome: sale.serviceIncome,
+      paymentConfirmedAt: sale.paymentConfirmedAt
+        ? sale.paymentConfirmedAt.toISOString()
+        : null,
     };
   },
 
@@ -284,6 +383,8 @@ export const salesService = {
       customerName: sale.customerName ?? null,
       customerId: sale.customerId ?? null,
       receiptUrl: sale.receiptUrl ?? null,
+      paymentType: sale.paymentType,
+      paymentConfirmedAt: null,
     };
   },
 
@@ -390,7 +491,69 @@ export const salesService = {
       customerName: updated.customerName ?? null,
       customerId: updated.customerId ?? null,
       receiptUrl: updated.receiptUrl ?? null,
+      paymentType: updated.paymentType,
+      paymentConfirmedAt: updated.paymentConfirmedAt
+        ? updated.paymentConfirmedAt.toISOString()
+        : null,
     };
+  },
+
+  /**
+   * Confirm Card/Transfer payment: IN_PROGRESS → PAID.
+   * Invoice sales continue to use POST /sales/:id/mark-paid.
+   */
+  async confirmPaymentStatus(
+    userId: string,
+    saleId: string,
+    status: string,
+  ) {
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, userId },
+    });
+    if (!sale) return null;
+
+    if (status !== SALE_STATUS.PAID) {
+      throw new HttpReplyError(
+        400,
+        'Only status "PAID" is accepted on payment-status',
+      );
+    }
+
+    if (isInvoicePaymentType(sale.paymentType)) {
+      throw new HttpReplyError(
+        400,
+        "Invoice sales use POST /sales/:id/mark-paid (Pending → Paid)",
+      );
+    }
+
+    if (!isAsyncPaymentType(sale.paymentType)) {
+      throw new HttpReplyError(
+        400,
+        "payment-status applies only to Card or Transfer sales",
+      );
+    }
+
+    if (isSalePaidStatus(sale.status)) {
+      return mapSaleSummary(sale);
+    }
+
+    if (sale.status !== SALE_STATUS.IN_PROGRESS) {
+      throw new HttpReplyError(
+        400,
+        "Only IN_PROGRESS sales can be confirmed as PAID",
+      );
+    }
+
+    const confirmedAt = new Date();
+    const updated = await prisma.sale.update({
+      where: { id: saleId },
+      data: {
+        status: SALE_STATUS.PAID,
+        paymentConfirmedAt: confirmedAt,
+      },
+    });
+
+    return mapSaleSummary(updated);
   },
 
   async markInvoicePaid(userId: string, saleId: string) {
@@ -406,49 +569,34 @@ export const salesService = {
       );
     }
 
-    if (sale.status === "Paid") {
-      return {
-        id: sale.id,
-        invoiceNumber: sale.invoiceNumber,
-        status: sale.status,
-        description: sale.description,
-        itemName: sale.itemName ?? null,
-        date: sale.saleDate,
-        amount: decimalToNumber(sale.amount),
-        vatAmount: decimalToNumber(sale.vatAmount),
-        totalAmount: decimalToNumber(sale.totalAmount),
-        customerName: sale.customerName ?? null,
-        customerId: sale.customerId ?? null,
-        receiptUrl: sale.receiptUrl ?? null,
-      };
+    if (isSalePaidStatus(sale.status)) {
+      return mapSaleSummary({
+        ...sale,
+        status: SALE_STATUS.PAID,
+      });
     }
 
-    if (!["Pending", "Overdue"].includes(sale.status)) {
+    if (
+      ![SALE_STATUS.PENDING, SALE_STATUS.OVERDUE].includes(
+        sale.status as typeof SALE_STATUS.PENDING,
+      )
+    ) {
       throw new HttpReplyError(
         400,
         "Only Pending or Overdue invoice sales can be marked Paid",
       );
     }
 
+    const confirmedAt = new Date();
     const updated = await prisma.sale.update({
       where: { id: saleId },
-      data: { status: "Paid" },
+      data: {
+        status: SALE_STATUS.PAID,
+        paymentConfirmedAt: confirmedAt,
+      },
     });
 
-    return {
-      id: updated.id,
-      invoiceNumber: updated.invoiceNumber,
-      status: updated.status,
-      description: updated.description,
-      itemName: updated.itemName ?? null,
-      date: updated.saleDate,
-      amount: decimalToNumber(updated.amount),
-      vatAmount: decimalToNumber(updated.vatAmount),
-      totalAmount: decimalToNumber(updated.totalAmount),
-      customerName: updated.customerName ?? null,
-      customerId: updated.customerId ?? null,
-      receiptUrl: updated.receiptUrl ?? null,
-    };
+    return mapSaleSummary(updated);
   },
 
   async deleteForUser(userId: string, saleId: string): Promise<boolean> {

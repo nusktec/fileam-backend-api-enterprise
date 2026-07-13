@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}} (collection prerequest sets Authorization except onboarding, AI routes, invitation accept/decline links, and /public/account-deletion). Upload files via Media first, then use returned URL in other endpoints. Enterprise Signup: Step Email \u2192 Step Email verify (saves enterpriseOnboardingToken) \u2192 Step Password (requires Authorization: Bearer {{enterpriseOnboardingToken}}). Mobile expense and sale category fields accept any string (max 255 chars). GET /mobile/contacts-and-types still returns suggested saleCategories, expenseCategories, and expenseTypes (suggested OPEX, COGS, CAPEX, Tax \u2014 any string accepted on expense). Expenses: optional expenseType (any string, max 255; defaults OPEX), supplierName, supplierId (JSON keys supplierName/supplierId or Supplier_name/Supplier_Id). Sales (income): optional customerName (existing), customerId (or Customer_name/Customer_id), itemName, receiptUrl (payment receipt / proof URL from Media). Enterprise financials POST .../transactions passes these through when type expense|income and client is linked. Employment types: Part time, Full time, Contract.\n\nLinked-client P&L (consultant): GET enterprise/clients/:clientId/financials/profit-loss \u2014 :clientId is the linked mobile user UUID (same as {{clientId}} / {{clientUserId}} from Managed Entities or Clients list). Query: year+month for one calendar month; omit year/month for current month; year alone = full year; preset=thisMonth|thisYear; dateFrom & dateTo for custom range. Response includes formulas, attachmentGaps, period.month when a single month.\n\nMobile: PATCH /mobile/sales/:id and PATCH /mobile/expenses/:id (partial update). Mobile filings list/detail: completionPercent, periodAttachmentGaps. Consultant filing for client: POST /mobile/filings/consultant/clients/:clientUserId/tax/:taxType/submit with clientApprovalConfirmed true (same UUID as enterprise client path).\n\nConsultants: Mobile GET /mobile/consultants (directory, query q/page/limit) and POST /mobile/consultants/request with consultantUserId. Mobile GET /mobile/consultant-requests returns pending items; each item includes initiator consultant_to_client (consultant invited you \u2014 use Accept/Decline in app) or client_to_consultant (you requested \u2014 consultant accepts via email link). Email links (no auth): GET /api/v{{apiVersion}}/invitations/:id/accept/:code and .../decline/:code \u2014 set {{invitationLinkId}} and {{invitationLinkCode}} from the email.\n\nEnterprise client filings: GET .../filings/constants returns tax types, payment/filing status enums, report types, period bounds, capabilities, and relative paths for tax-computation GETs. GET .../filings/returns lists period returns for all taxes (optional query taxType=VAT|WHT|...); GET .../filings/vat-returns remains VAT-only. GET/PUT .../filings/tax-types lists/updates active codes. POST .../filings/vat|wht|cit|paye/submit-return \u2014 same body shape as VAT (for WHT, amount = total WHT due). POST .../filings with taxType remains available. GET .../filings/:filingId/report as before.\n\nMobile filings: GET .../filings/constants (same shape as enterprise constants). Unified active-type routes: GET/POST .../filings/tax/:taxType/preview|draft|submit (use {{unifiedTaxType}} e.g. VAT, WHT, CIT, PAYE). Legacy /filings/vat/* and /filings/wht/* unchanged.\n\nAccount deletion: Mobile GET/POST .../mobile/account-deletion/reason-categories and .../request (authenticated, empty body on request). Public (no auth) GET/POST .../public/account-deletion/reason-categories and .../request with JSON {\"email\":\"...\"}.\n\nOptional list filters (leave {{listDateFrom}}/{{listDateTo}} empty to skip): dateFrom & dateTo as YYYY-MM-DD or ISO8601 on paginated/date-based lists (sales, expenses, payables, payments, filings, reports, employees, transactions, financial documents, invoices, evidence vault, enterprise filings/reports, AI records). Enterprise evidence vault also accepts legacy startDate & endDate.\n\nInvoice \u2194 financial document (optional): POST .../financials/documents/upload and .../upload-invoice accept optional invoiceId (UUID of structured invoice). POST .../financials/invoices and PUT .../invoices/:invoiceId accept optional financialDocumentId (UUID of enterprise_financial_documents row; use {{fileId}} from list/upload). PUT financialDocumentId: null unlinks. Invoice responses include documentId (evidence vault) and financialDocumentId (financial upload). Evidence vault: GET .../evidence-vault/documents/:documentId/invoice-extraction-preview (mock extraction), then POST .../documents/:documentId/convert-to-invoice.\n\nEnterprise GET .../clients/:clientId/reports/export-all returns one PDF merging each matching stored report (by generatedAt range) as separate multi-page sections; if none match, exports one section per calendar month in the range (default last 12 months when dates empty). Optional reportType filter. Response header X-Report-Sections = section count. Max 48 sections.\n\nPostman naming: requests ending in ** are the newest changes (Assets module, inventory PATCH/DELETE, employee PATCH/DELETE, expenseType, ex-VAT analytics). Single * marks earlier updated routes.\n\nMobile What I Owe / month arrows: prefer GET \u2026/tax-computation?period=YYYY-MM (live book totals) and GET \u2026/tax-payables?period=YYYY-MM (synced payables for that book month). Editing sale/expense dates re-syncs old and new months. GET \u2026/analytics/financial-overview?year= returns annualRevenue, annualExpense, netProfit (ex-VAT book totals), currentTaxLiability, potentialSavings. Analytics dashboard profitAndLoss uses ex-VAT income/expenses (VAT excluded from revenue and net profit).\n\nConsultant client financial insights (linked mobile user): GET .../financials/cash-flow, .../tax-liability?year=, .../revenue-analytics, .../expense-intelligence \u2014 see requests marked ** under Enterprise \u2192 Clients \u2192 Financials.\n\nMobile assets (fixed assets) **: Base path /mobile/assets \u2014 summary, dashboard, current-assets (inventory + AR from other modules; cash/bank stubs), non-current-assets, depreciation-amortization, CRUD assets (POST /, GET /, GET|PATCH /:id), transfers (POST/GET, PATCH /transfers/:id, POST /transfers/:id/approve|reject), sales (POST/GET \u2014 gain/loss server-computed), disposals (POST/GET, PATCH /disposals/:id). Enums via contacts-and-types: assetTypes, depreciationMethods, disposalReasons, transferTypes.\n\nMobile inventory (stock / COGS): Base path /mobile/inventory \u2014 overview, alerts, items (POST add \u2014 duplicate name per user returns 409; PATCH update metadata; DELETE when qty=0 and no sale history), GET list + detail, POST .../items/:id/restock (quantity, optional note), POST .../items/:id/adjustment (direction in|out, quantity, optional note; optional createSalesInvoice: same transaction \u2014 adjustment in\u2192mobile Sale at unit cost, adjustment out\u2192mobile Expense at unit cost; optional saleDate YYYY-MM-DD, saleCategory, expenseCategory, paymentType, vatableIncome, serviceIncome), POST sell (optional createSalesInvoice mirrors inventory line totals to mobile Sales/invoice; response may include linkedSale), GET movements, GET inventory sales. Slow-moving: 45d grace for new products, then 45d without sale. Requires onboarding complete + Bearer token.\n\nMobile employees: GET list/detail/obligations, POST create, PATCH /employees/:id (partial update), DELETE /employees/:id, POST .../file-as-expense.",
+    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}} (collection prerequest sets Authorization except onboarding, AI routes, invitation accept/decline links, and /public/account-deletion). Upload files via Media first, then use returned URL in other endpoints. Enterprise Signup: Step Email \u2192 Step Email verify (saves enterpriseOnboardingToken) \u2192 Step Password (requires Authorization: Bearer {{enterpriseOnboardingToken}}). Mobile expense and sale category fields accept any string (max 255 chars). GET /mobile/contacts-and-types still returns suggested saleCategories, expenseCategories, and expenseTypes (suggested OPEX, COGS, CAPEX, Tax \u2014 any string accepted on expense). Expenses: optional expenseType (any string, max 255; defaults OPEX), supplierName, supplierId (JSON keys supplierName/supplierId or Supplier_name/Supplier_Id). Sales (income): optional customerName (existing), customerId (or Customer_name/Customer_id), itemName, receiptUrl (payment receipt / proof URL from Media). Enterprise financials POST .../transactions passes these through when type expense|income and client is linked. Employment types: Part time, Full time, Contract.\n\nLinked-client P&L (consultant): GET enterprise/clients/:clientId/financials/profit-loss \u2014 :clientId is the linked mobile user UUID (same as {{clientId}} / {{clientUserId}} from Managed Entities or Clients list). Query: year+month for one calendar month; omit year/month for current month; year alone = full year; preset=thisMonth|thisYear; dateFrom & dateTo for custom range. Response includes formulas, attachmentGaps, period.month when a single month.\n\nSale payment status **: Cash \u2192 PAID on create; Card|Transfer \u2192 IN_PROGRESS then PATCH /mobile/sales/:id/payment-status {\"status\":\"PAID\"} (sets paymentConfirmedAt). Invoice remains Pending \u2192 POST .../mark-paid. Independent of enterprise Invoice mark-paid.\n\nMobile: PATCH /mobile/sales/:id and PATCH /mobile/expenses/:id (partial update). Mobile filings list/detail: completionPercent, periodAttachmentGaps. Consultant filing for client: POST /mobile/filings/consultant/clients/:clientUserId/tax/:taxType/submit with clientApprovalConfirmed true (same UUID as enterprise client path).\n\nConsultants: Mobile GET /mobile/consultants (directory, query q/page/limit) and POST /mobile/consultants/request with consultantUserId. Mobile GET /mobile/consultant-requests returns pending items; each item includes initiator consultant_to_client (consultant invited you \u2014 use Accept/Decline in app) or client_to_consultant (you requested \u2014 consultant accepts via email link). Email links (no auth): GET /api/v{{apiVersion}}/invitations/:id/accept/:code and .../decline/:code \u2014 set {{invitationLinkId}} and {{invitationLinkCode}} from the email.\n\nEnterprise client filings: GET .../filings/constants returns tax types, payment/filing status enums, report types, period bounds, capabilities, and relative paths for tax-computation GETs. GET .../filings/returns lists period returns for all taxes (optional query taxType=VAT|WHT|...); GET .../filings/vat-returns remains VAT-only. GET/PUT .../filings/tax-types lists/updates active codes. POST .../filings/vat|wht|cit|paye/submit-return \u2014 same body shape as VAT (for WHT, amount = total WHT due). POST .../filings with taxType remains available. GET .../filings/:filingId/report as before.\n\nMobile filings: GET .../filings/constants (same shape as enterprise constants). Unified active-type routes: GET/POST .../filings/tax/:taxType/preview|draft|submit (use {{unifiedTaxType}} e.g. VAT, WHT, CIT, PAYE). Legacy /filings/vat/* and /filings/wht/* unchanged.\n\nAccount deletion: Mobile GET/POST .../mobile/account-deletion/reason-categories and .../request (authenticated, empty body on request). Public (no auth) GET/POST .../public/account-deletion/reason-categories and .../request with JSON {\"email\":\"...\"}.\n\nOptional list filters (leave {{listDateFrom}}/{{listDateTo}} empty to skip): dateFrom & dateTo as YYYY-MM-DD or ISO8601 on paginated/date-based lists (sales, expenses, payables, payments, filings, reports, employees, transactions, financial documents, invoices, evidence vault, enterprise filings/reports, AI records). Enterprise evidence vault also accepts legacy startDate & endDate.\n\nInvoice \u2194 financial document (optional): POST .../financials/documents/upload and .../upload-invoice accept optional invoiceId (UUID of structured invoice). POST .../financials/invoices and PUT .../invoices/:invoiceId accept optional financialDocumentId (UUID of enterprise_financial_documents row; use {{fileId}} from list/upload). PUT financialDocumentId: null unlinks. Invoice responses include documentId (evidence vault) and financialDocumentId (financial upload). Evidence vault: GET .../evidence-vault/documents/:documentId/invoice-extraction-preview (mock extraction), then POST .../documents/:documentId/convert-to-invoice.\n\nEnterprise GET .../clients/:clientId/reports/export-all returns one PDF merging each matching stored report (by generatedAt range) as separate multi-page sections; if none match, exports one section per calendar month in the range (default last 12 months when dates empty). Optional reportType filter. Response header X-Report-Sections = section count. Max 48 sections.\n\nPostman naming: requests ending in ** are the newest changes (Assets module, inventory PATCH/DELETE, employee PATCH/DELETE, expenseType, ex-VAT analytics). Single * marks earlier updated routes.\n\nMobile What I Owe / month arrows: prefer GET \u2026/tax-computation?period=YYYY-MM (live book totals) and GET \u2026/tax-payables?period=YYYY-MM (synced payables for that book month). Editing sale/expense dates re-syncs old and new months. GET \u2026/analytics/financial-overview?year= returns annualRevenue, annualExpense, netProfit (ex-VAT book totals), currentTaxLiability, potentialSavings. Analytics dashboard profitAndLoss uses ex-VAT income/expenses (VAT excluded from revenue and net profit).\n\nConsultant client financial insights (linked mobile user): GET .../financials/cash-flow, .../tax-liability?year=, .../revenue-analytics, .../expense-intelligence \u2014 see requests marked ** under Enterprise \u2192 Clients \u2192 Financials.\n\nMobile assets (fixed assets) **: Base path /mobile/assets \u2014 summary, dashboard, current-assets (inventory + AR from other modules; cash/bank stubs), non-current-assets, depreciation-amortization, CRUD assets (POST /, GET /, GET|PATCH /:id), transfers (POST/GET, PATCH /transfers/:id, POST /transfers/:id/approve|reject), sales (POST/GET \u2014 gain/loss server-computed), disposals (POST/GET, PATCH /disposals/:id). Enums via contacts-and-types: assetTypes, depreciationMethods, disposalReasons, transferTypes.\n\nMobile inventory (stock / COGS): Base path /mobile/inventory \u2014 overview, alerts, items (POST add \u2014 duplicate name per user returns 409; PATCH update metadata; DELETE when qty=0 and no sale history), GET list + detail, POST .../items/:id/restock (quantity, optional note), POST .../items/:id/adjustment (direction in|out, quantity, optional note; optional createSalesInvoice: same transaction \u2014 adjustment in\u2192mobile Sale at unit cost, adjustment out\u2192mobile Expense at unit cost; optional saleDate YYYY-MM-DD, saleCategory, expenseCategory, paymentType, vatableIncome, serviceIncome), POST sell (optional createSalesInvoice mirrors inventory line totals to mobile Sales/invoice; response may include linkedSale), GET movements, GET inventory sales. Slow-moving: 45d grace for new products, then 45d without sale. Requires onboarding complete + Bearer token.\n\nMobile employees: GET list/detail/obligations, POST create, PATCH /employees/:id (partial update), DELETE /employees/:id, POST .../file-as-expense.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1025,7 +1025,8 @@
               ],
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
+                "description": "counts include paid, pending, overdue, inProgress, cancelled. Filter ?status=IN_PROGRESS|PAID|Pending|Overdue|CANCELLED|all."
               }
             },
             {
@@ -1064,7 +1065,7 @@
                   "raw": "{\"description\":\"Consulting\",\"itemName\":\"Strategy sprint\",\"amount\":50000,\"date\":\"2026-02-21\",\"paymentType\":\"Cash\",\"customerName\":\"Client A\",\"customerId\":\"cust-ext-001\",\"category\":\"Consulting\",\"receiptUrl\":\"https://cdn.example.com/media/receipt-abc.pdf\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Optional category (any string, max 255), itemName, receiptUrl (URL string). Cash|Transfer|Card default status Paid; paymentType Invoice \u2192 Pending until POST .../sales/:id/mark-paid or PATCH status Paid."
+                "description": "Payment status on create: Cash \u2192 PAID; Card|Transfer \u2192 IN_PROGRESS; Invoice \u2192 Pending. Confirm Card/Transfer with PATCH .../payment-status {\"status\":\"PAID\"}. Invoice confirmation remains POST .../mark-paid. Optional category, itemName, receiptUrl."
               }
             },
             {
@@ -1081,7 +1082,8 @@
                   "mode": "raw",
                   "raw": "{\"description\":\"Billed work\",\"amount\":50000,\"date\":\"2026-02-21\",\"paymentType\":\"Invoice\",\"customerName\":\"Client B\",\"category\":\"Consulting\"}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
+                "description": "paymentType Invoice \u2192 status Pending. Confirm with POST .../sales/:id/mark-paid (unchanged invoice flow). Do not use payment-status for Invoice."
               }
             },
             {
@@ -1116,7 +1118,85 @@
                   "raw": "{}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/mark-paid",
-                "description": "Invoice paymentType only; Pending or Overdue \u2192 Paid. Idempotent if already Paid."
+                "description": "Invoice sales only: Pending|Overdue \u2192 PAID. Sets paymentConfirmedAt. Card/Transfer must use PATCH .../payment-status instead."
+              }
+            },
+            {
+              "name": "Confirm Card/Transfer payment (PATCH payment-status) **",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"status\": \"PAID\"}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/payment-status",
+                "description": "Card/Transfer only: IN_PROGRESS \u2192 PAID. Body must be {\"status\":\"PAID\"}. Sets paymentConfirmedAt. Rejects Invoice (use mark-paid) and Cash (already PAID)."
+              }
+            },
+            {
+              "name": "Create sale (Card \u2014 IN_PROGRESS) **",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('saleId',d.id);}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"description\": \"Consulting fee\", \"amount\": 100000, \"date\": \"2026-07-13\", \"category\": \"Services\", \"paymentType\": \"Card\", \"vatableIncome\": true, \"serviceIncome\": true, \"customerName\": \"Acme Ltd\"}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
+                "description": "Creates sale with status IN_PROGRESS. Confirm later via PATCH .../payment-status."
+              }
+            },
+            {
+              "name": "Create sale (Transfer \u2014 IN_PROGRESS) **",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('saleId',d.id);}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"description\": \"Bank transfer sale\", \"amount\": 50000, \"date\": \"2026-07-13\", \"category\": \"Product Sales\", \"paymentType\": \"Transfer\", \"vatableIncome\": false, \"serviceIncome\": false, \"customerName\": \"Walk-in\"}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
+                "description": "Creates sale with status IN_PROGRESS. Confirm later via PATCH .../payment-status."
               }
             },
             {
