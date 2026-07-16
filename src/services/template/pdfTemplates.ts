@@ -6,6 +6,7 @@ import PDFDocument from "pdfkit";
 import type { Decimal } from "@prisma/client/runtime/library";
 import {
   amountColumnX,
+  drawFittedCellText,
   drawKeyValueBox,
   ensurePageSpace,
   getPdfLayout,
@@ -43,6 +44,15 @@ function formatCurrency(amount: number, currency = "NGN"): string {
 /** Alias for NGN amounts in reports. */
 function formatNaira(amount: number): string {
   return formatCurrency(amount, "NGN");
+}
+
+/** Compact amount for dense table columns (currency shown in report header). */
+function formatTableAmount(amount: number): string {
+  return new Intl.NumberFormat("en-NG", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: true,
+  }).format(amount);
 }
 
 export interface InvoiceData {
@@ -129,21 +139,28 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     doc
       .fillColor("#4a4a4a")
       .fontSize(8)
-      .text(descText, left + 8, rowTop + 6, { width: descW })
-      .text(formatCurrency(data.amount), amountX, rowTop + 6, {
-        width: amtColW,
-        align: "right",
-      })
-      .text(
-        truncateText(`${data.vatRate}% · ${formatCurrency(data.vatAmount)}`, 28),
-        vatX,
-        rowTop + 6,
-        { width: amtColW, align: "right" },
-      )
-      .text(formatCurrency(data.totalAmount), totalX, rowTop + 6, {
-        width: amtColW,
-        align: "right",
-      });
+      .text(descText, left + 8, rowTop + 6, { width: descW });
+    drawFittedCellText(doc, formatCurrency(data.amount), amountX, rowTop + 6, amtColW, {
+      align: "right",
+      fontSize: 8,
+      color: "#4a4a4a",
+    });
+    drawFittedCellText(
+      doc,
+      truncateText(`${data.vatRate}% · ${formatCurrency(data.vatAmount)}`, 28),
+      vatX,
+      rowTop + 6,
+      amtColW,
+      { align: "right", fontSize: 8, color: "#4a4a4a" },
+    );
+    drawFittedCellText(
+      doc,
+      formatCurrency(data.totalAmount),
+      totalX,
+      rowTop + 6,
+      amtColW,
+      { align: "right", fontSize: 8, color: "#4a4a4a" },
+    );
 
     y = rowTop + rowH + 16;
     const totalBoxH = 44;
@@ -153,10 +170,15 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
       .font("Helvetica-Bold")
       .fontSize(10)
       .fillColor("#004d4d")
-      .text("Total Amount", left + 12, y + 10, { width: totalBoxW - 24 })
-      .text(formatCurrency(data.totalAmount), left + 12, y + 26, {
-        width: totalBoxW - 24,
-      });
+      .text("Total Amount", left + 12, y + 10, { width: totalBoxW - 24 });
+    drawFittedCellText(
+      doc,
+      formatCurrency(data.totalAmount),
+      left + 12,
+      y + 26,
+      totalBoxW - 24,
+      { fontSize: 10, font: "Helvetica-Bold", color: "#004d4d" },
+    );
     doc.font("Helvetica").fillColor("#1a1a1a");
 
     y += totalBoxH + 12;
@@ -506,9 +528,11 @@ export function generateFullReportPdf(
       doc.rect(left, tableTop, contentWidth, headerH).fillAndStroke("#e6f7f7", PRIMARY_COLOR);
       doc.fontSize(6).font("Helvetica-Bold").fillColor("#004d4d");
       for (const [key, col] of Object.entries(cols)) {
-        doc.text(key, col.x, tableTop + 6, {
-          width: col.w,
+        drawFittedCellText(doc, key, col.x, tableTop + 6, col.w, {
           align: isAmountColumn(key) ? "right" : "left",
+          fontSize: 6,
+          font: "Helvetica-Bold",
+          color: "#004d4d",
         });
       }
       doc.font("Helvetica").fillColor("#4a4a4a");
@@ -534,9 +558,10 @@ export function generateFullReportPdf(
         }
         doc.rect(left, rowY, contentWidth, rowH).stroke("#e9ecef");
         for (const [key, col] of Object.entries(cols)) {
-          doc.text(row[key] ?? "—", col.x, rowY + 4, {
-            width: col.w,
+          drawFittedCellText(doc, row[key] ?? "—", col.x, rowY + 4, col.w, {
             align: isAmountColumn(key) ? "right" : "left",
+            fontSize: 7,
+            color: "#4a4a4a",
           });
         }
         rowY += rowH;
@@ -615,8 +640,8 @@ export function generateFullReportPdf(
             "Tax Type": truncateText(f.taxType, 14),
             Period: truncateText(f.periodLabel, 16),
             Status: truncateText(f.status, 12),
-            "Amount Due": formatNaira(f.amountDue),
-            Total: formatNaira(f.totalPayable),
+            "Amount Due": formatTableAmount(f.amountDue),
+            Total: formatTableAmount(f.totalPayable),
           })),
         );
       }
@@ -641,9 +666,9 @@ export function generateFullReportPdf(
           data.sales.map((s) => ({
             Invoice: truncateText(s.invoiceNumber, 16),
             Customer: truncateText(s.customerName || "—", 28),
-            Amount: formatNaira(s.amount),
-            VAT: formatNaira(s.vatAmount),
-            Total: formatNaira(s.totalAmount),
+            Amount: formatTableAmount(s.amount),
+            VAT: formatTableAmount(s.vatAmount),
+            Total: formatTableAmount(s.totalAmount),
           })),
         );
       }
@@ -668,9 +693,9 @@ export function generateFullReportPdf(
           data.expenses.map((e) => ({
             "Receipt #": truncateText(e.expenseNumber, 16),
             Category: truncateText(e.category, 28),
-            Amount: formatNaira(e.amount),
-            VAT: formatNaira(e.vatAmount),
-            Total: formatNaira(e.totalAmount),
+            Amount: formatTableAmount(e.amount),
+            VAT: formatTableAmount(e.vatAmount),
+            Total: formatTableAmount(e.totalAmount),
           })),
         );
       }

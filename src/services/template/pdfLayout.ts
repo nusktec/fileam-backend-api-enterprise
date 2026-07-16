@@ -54,6 +54,71 @@ export function amountColumnX(layout: PdfLayout, indexFromRight: 0 | 1 | 2): num
   return rightEdge - amtColW * 3 - gap * 2;
 }
 
+export function measureTextWidth(doc: PdfDoc, text: string): number {
+  return doc.widthOfString(text || "—");
+}
+
+/**
+ * Shrink font or truncate so text fits within a table cell.
+ * Right-aligned amounts that exceed column width otherwise spill into adjacent columns.
+ */
+export function fitTextToCell(
+  doc: PdfDoc,
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+  minFontSize = 5,
+): { text: string; fontSize: number } {
+  const raw = text || "—";
+  let size = fontSize;
+  while (size >= minFontSize) {
+    doc.fontSize(size);
+    if (measureTextWidth(doc, raw) <= maxWidth) {
+      return { text: raw, fontSize: size };
+    }
+    size -= 0.5;
+  }
+  doc.fontSize(minFontSize);
+  let truncated = raw;
+  while (
+    truncated.length > 1 &&
+    measureTextWidth(doc, `${truncated}…`) > maxWidth
+  ) {
+    truncated = truncated.slice(0, -1);
+  }
+  return {
+    text: truncated.length < raw.length ? `${truncated}…` : raw,
+    fontSize: minFontSize,
+  };
+}
+
+export function drawFittedCellText(
+  doc: PdfDoc,
+  text: string,
+  x: number,
+  y: number,
+  w: number,
+  opts?: {
+    align?: "left" | "right" | "center";
+    fontSize?: number;
+    minFontSize?: number;
+    font?: string;
+    color?: string;
+  },
+): void {
+  const align = opts?.align ?? "left";
+  const fontSize = opts?.fontSize ?? 7;
+  const minFontSize = opts?.minFontSize ?? 5;
+  if (opts?.font) doc.font(opts.font);
+  if (opts?.color) doc.fillColor(opts.color);
+  const fitted = fitTextToCell(doc, text, w, fontSize, minFontSize);
+  doc.fontSize(fitted.fontSize).text(fitted.text, x, y, {
+    width: w,
+    align,
+    lineBreak: false,
+  });
+}
+
 export function drawKeyValueBox(
   doc: PdfDoc,
   layout: PdfLayout,
@@ -68,9 +133,9 @@ export function drawKeyValueBox(
 
   doc.rect(left, startY, contentWidth, boxH).fillAndStroke("#f8fafc", "#008b8b");
   let y = startY + pad;
-  const valueX = rightEdge - layout.amtColW - pad;
-  const valueW = layout.amtColW + 20;
-  const labelW = valueX - left - pad - layout.gap;
+  const valueW = Math.min(200, Math.floor(contentWidth * 0.42));
+  const valueX = rightEdge - pad - valueW;
+  const labelW = Math.max(60, valueX - left - pad - layout.gap);
 
   for (const row of rows) {
     doc
@@ -78,11 +143,12 @@ export function drawKeyValueBox(
       .fontSize(9)
       .fillColor("#1a1a1a")
       .text(row.label, left + pad, y, { width: labelW, lineBreak: false });
-    doc
-      .font("Helvetica")
-      .fontSize(9)
-      .fillColor("#4a4a4a")
-      .text(row.value, valueX, y, { width: valueW, align: "right", lineBreak: false });
+    drawFittedCellText(doc, row.value, valueX, y, valueW, {
+      align: "right",
+      fontSize: 9,
+      font: "Helvetica",
+      color: "#4a4a4a",
+    });
     y += rowH;
   }
   doc.font("Helvetica").fillColor("#1a1a1a");

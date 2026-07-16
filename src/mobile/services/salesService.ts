@@ -202,7 +202,7 @@ export const salesService = {
       prisma.sale.count({ where }),
       prisma.sale.aggregate({
         where,
-        _sum: { totalAmount: true, vatAmount: true },
+        _sum: { amount: true, vatAmount: true, totalAmount: true },
       }),
       prisma.sale.groupBy({
         by: ["status"],
@@ -232,8 +232,11 @@ export const salesService = {
 
     return {
       summary: {
-        totalIncome: decimalToNumber(summary._sum.totalAmount),
+        /** Ex-VAT sales base (matches tax computation / analytics income). */
+        totalIncome: decimalToNumber(summary._sum.amount),
         vatCollected: decimalToNumber(summary._sum.vatAmount),
+        /** Gross including Output VAT (optional). */
+        totalIncomeIncludingVat: decimalToNumber(summary._sum.totalAmount),
       },
       counts: {
         all: totalCount,

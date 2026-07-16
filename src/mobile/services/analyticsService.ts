@@ -6,6 +6,7 @@ import {
 } from "../../constants/percentages";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 import { taxComputationService } from "./taxComputationService";
+import { computeEmployeeMonthlyNetPay } from "./employeesService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -205,23 +206,44 @@ export const analyticsService = {
   async getExpenseBreakdown(userId: string, year: number, month: number) {
     const start = new Date(year, month - 1, 1);
     const end = new Date(year, month, 0, 23, 59, 59, 999);
-    const byCategory = await prisma.expense.groupBy({
-      by: ["category"],
-      where: { userId, expenseDate: { gte: start, lte: end } },
-      _sum: { totalAmount: true },
-    });
-    const total = byCategory.reduce(
-      (s, c) => s + decimalToNumber(c._sum.totalAmount),
+    const [byCategory, employees] = await Promise.all([
+      prisma.expense.groupBy({
+        by: ["category"],
+        where: { userId, expenseDate: { gte: start, lte: end } },
+        /** Ex-VAT base — VAT is reported separately as Input VAT claimable. */
+        _sum: { amount: true },
+      }),
+      prisma.employee.findMany({
+        where: {
+          userId,
+          startDate: { lte: end },
+        },
+      }),
+    ]);
+
+    const salariesNetPay = employees.reduce(
+      (s, e) => s + computeEmployeeMonthlyNetPay(e),
       0,
     );
-    return byCategory.map((c) => ({
-      category: c.category,
-      amount: decimalToNumber(c._sum.totalAmount),
-      percentageOfTotal:
-        total > 0
-          ? (decimalToNumber(c._sum.totalAmount) / total) * PERCENT
-          : 0,
-    }));
+
+    const rows: { category: string; amount: number }[] = byCategory.map(
+      (c) => ({
+        category: c.category,
+        amount: decimalToNumber(c._sum.amount),
+      }),
+    );
+    if (salariesNetPay > 0) {
+      rows.push({ category: "Salaries", amount: salariesNetPay });
+    }
+
+    const total = rows.reduce((s, r) => s + r.amount, 0);
+    return rows
+      .map((r) => ({
+        category: r.category,
+        amount: r.amount,
+        percentageOfTotal: total > 0 ? (r.amount / total) * PERCENT : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
   },
 
   async getBusinessHealth(userId: string) {

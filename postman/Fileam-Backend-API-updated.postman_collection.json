@@ -1016,7 +1016,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20&status=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Paginated sales. counts: paid, pending, overdue, inProgress, cancelled. Filter status=all|PAID|IN_PROGRESS|Pending|Overdue|CANCELLED (or legacy Paid)."
+                "description": "Paginated sales. summary.totalIncome is ex-VAT (amount); summary.vatCollected is Output VAT. counts: paid, pending, overdue, inProgress, cancelled. Filter status=all|PAID|IN_PROGRESS|Pending|Overdue|CANCELLED (or legacy Paid)."
               },
               "event": [
                 {
@@ -1315,7 +1315,7 @@
                   "raw": "{\"description\":\"Office supplies\",\"amount\":15000,\"date\":\"2026-02-21\",\"category\":\"Other\",\"expenseType\":\"OPEX\",\"supplierName\":\"Acme Supplies Ltd\",\"supplierId\":\"sup-ext-001\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "category: any string (required, max 255). expenseType: any string (max 255; defaults OPEX). Optional supplierName, supplierId (or Supplier_name / Supplier_Id). vatInclusive defaults false in API if omitted \u2014 send explicitly if required."
+                "description": "category: any string (required, max 255). expenseType: any string (max 255; defaults OPEX). Optional supplierName, supplierId (or Supplier_name / Supplier_Id). When vatInclusive=true, amount is the VAT-inclusive gross: server extracts Input VAT (÷ 1.075) into amount (net) + vatAmount; totalAmount stays the entered gross. When vatInclusive=false, amount is net; optional vatAmount is added on top. List summary.totalExpenses is ex-VAT; summary.vatClaimable is sum of Input VAT."
               }
             },
             {
@@ -1350,7 +1350,7 @@
                   "raw": "{\"description\":\"Google Ads (updated)\",\"amount\":26000,\"expenseType\":\"OPEX\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "PATCH vatInclusive alone now recomputes VAT (7.5% on base) and totalAmount. Optional expenseType: any string (max 255). Response includes expenseType."
+                "description": "When vatInclusive=true, amount is treated as VAT-inclusive gross (extract VAT ÷ 1.075; do not add 7.5% on top). When false, amount is net and optional vatAmount is added. Toggling vatInclusive alone re-resolves from current total (if inclusive) or base. Optional expenseType: any string (max 255)."
               }
             },
             {

@@ -99,12 +99,14 @@ export const taxComputationService = {
       (s, x) => s + decimalToNumber(x.amount),
       0,
     );
-    const inputVatClaimable = expenses.reduce(
-      (s, x) => s + decimalToNumber(x.vatAmount),
-      0,
-    );
+    /** Input VAT only from VAT-tagged expenses (stored vatAmount). */
+    const inputVatClaimable = expenses.reduce((s, x) => {
+      if (!x.vatInclusive || x.vatAmount == null) return s;
+      return s + decimalToNumber(x.vatAmount);
+    }, 0);
     const netProfit = totalIncome - totalExpenses;
 
+    /** Net VAT Payable = Output VAT − Input VAT (claimable). */
     const netVatPayable = outputVat - inputVatClaimable;
     const estimatedWhtDeducted =
       (serviceIncome * WHT_RATE_SERVICES_PERCENT) / PERCENT;

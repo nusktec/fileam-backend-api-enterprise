@@ -6,7 +6,10 @@ import {
 } from "../../constants/percentages";
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 import { EXPENSE_TYPES } from "../../constants/expenseTypes";
-import { assertMonetaryAmountInRange } from "../../utils/monetaryAmount";
+import {
+  assertMonetaryAmountInRange,
+  normalizeMoneyAmount,
+} from "../../utils/monetaryAmount";
 import {
   calendarPeriodFromDate,
   toCalendarDate,
@@ -14,6 +17,9 @@ import {
 import { taxPayablesService } from "./taxPayablesService";
 
 const EXPENSE_COUNTER_ID = "expense_number";
+
+/** 1 + VAT rate (e.g. 1.075) — used to extract VAT from an inclusive total. */
+const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -32,6 +38,52 @@ function assertExpenseFinancials(
   assertMonetaryAmountInRange(Number(totalAmount), "Total amount");
 }
 
+/**
+ * Resolve stored base / VAT / total.
+ * - vatInclusive: `enteredAmount` is gross (VAT included). Extract VAT; total stays entered.
+ * - exclusive + vatAmount: entered is net; total = net + vat.
+ * - exclusive, no vat: entered is total, no Input VAT.
+ */
+function resolveExpenseAmounts(input: {
+  enteredAmount: number;
+  vatInclusive: boolean;
+  vatAmount?: number | null;
+}): { base: Decimal; vatAmount: Decimal | null; totalAmount: Decimal } {
+  const entered = new Decimal(input.enteredAmount);
+
+  if (input.vatInclusive) {
+    const base = entered.div(VAT_INCLUSIVE_DIVISOR);
+    const vat = entered.sub(base);
+    const baseRounded = new Decimal(normalizeMoneyAmount(Number(base)));
+    const vatRounded = new Decimal(normalizeMoneyAmount(Number(vat)));
+    const totalRounded = new Decimal(
+      normalizeMoneyAmount(Number(baseRounded.add(vatRounded))),
+    );
+    // Prefer preserving the entered gross as total when rounding allows.
+    const total =
+      Math.abs(Number(totalRounded) - Number(entered)) < 0.02
+        ? new Decimal(normalizeMoneyAmount(Number(entered)))
+        : totalRounded;
+    const adjustedVat = total.sub(baseRounded);
+    assertExpenseFinancials(baseRounded, adjustedVat, total);
+    return {
+      base: baseRounded,
+      vatAmount: adjustedVat,
+      totalAmount: total,
+    };
+  }
+
+  if (input.vatAmount != null && Number(input.vatAmount) > 0) {
+    const vat = new Decimal(input.vatAmount);
+    const total = entered.add(vat);
+    assertExpenseFinancials(entered, vat, total);
+    return { base: entered, vatAmount: vat, totalAmount: total };
+  }
+
+  assertExpenseFinancials(entered, null, entered);
+  return { base: entered, vatAmount: null, totalAmount: entered };
+}
+
 async function nextExpenseNumber(): Promise<string> {
   const counter = await prisma.counter.upsert({
     where: { id: EXPENSE_COUNTER_ID },
@@ -39,6 +91,39 @@ async function nextExpenseNumber(): Promise<string> {
     update: { lastNumber: { increment: 1 } },
   });
   return `EXP-${String(counter.lastNumber).padStart(3, "0")}`;
+}
+
+function mapExpenseListItem(e: {
+  id: string;
+  expenseNumber: string;
+  description: string;
+  expenseDate: Date;
+  category: string;
+  expenseType: string;
+  amount: Decimal;
+  totalAmount: Decimal;
+  vatAmount: Decimal | null;
+  vatInclusive: boolean;
+  supplierName: string | null;
+  supplierId: string | null;
+}) {
+  return {
+    id: e.id,
+    expenseNumber: e.expenseNumber,
+    description: e.description,
+    date: e.expenseDate,
+    category: e.category,
+    expenseType: e.expenseType,
+    /** Net / ex-VAT base */
+    baseAmount: decimalToNumber(e.amount),
+    vatAmount: e.vatAmount != null ? decimalToNumber(e.vatAmount) : null,
+    /** Gross total (base + VAT when applicable) */
+    amount: decimalToNumber(e.totalAmount),
+    vatTag: e.vatInclusive,
+    vatInclusive: e.vatInclusive,
+    supplierName: e.supplierName ?? null,
+    supplierId: e.supplierId ?? null,
+  };
 }
 
 export { EXPENSE_CATEGORIES, EXPENSE_TYPES };
@@ -76,44 +161,38 @@ export const expensesService = {
       prisma.expense.count({ where }),
       prisma.expense.aggregate({
         where,
-        _sum: { totalAmount: true, vatAmount: true },
+        _sum: { amount: true, vatAmount: true, totalAmount: true },
       }),
       prisma.expense.groupBy({
         by: ["category"],
         where,
-        _sum: { totalAmount: true },
+        _sum: { amount: true },
       }),
     ]);
-    const totalAmount = decimalToNumber(summary._sum.totalAmount);
+    const totalExpenses = decimalToNumber(summary._sum.amount);
+    const vatClaimable = decimalToNumber(summary._sum.vatAmount);
     const topCategories = byCategory
       .map((c) => ({
         category: c.category,
-        amount: decimalToNumber(c._sum.totalAmount),
+        amount: decimalToNumber(c._sum.amount),
         percentageOfTotal:
-          totalAmount > 0
-            ? (decimalToNumber(c._sum.totalAmount) / totalAmount) * PERCENT
+          totalExpenses > 0
+            ? (decimalToNumber(c._sum.amount) / totalExpenses) * PERCENT
             : 0,
       }))
       .sort((a, b) => b.amount - a.amount);
 
     return {
       summary: {
-        totalExpenses: decimalToNumber(summary._sum.totalAmount),
-        vatClaimable: decimalToNumber(summary._sum.vatAmount),
+        /** Ex-VAT expense base (Input VAT excluded). */
+        totalExpenses,
+        /** Sum of Input VAT on VAT-inclusive expenses. */
+        vatClaimable,
+        /** Gross spend including VAT (optional for clients that need it). */
+        totalExpensesIncludingVat: decimalToNumber(summary._sum.totalAmount),
       },
       topCategories,
-      expenses: expenses.map((e) => ({
-        id: e.id,
-        expenseNumber: e.expenseNumber,
-        description: e.description,
-        date: e.expenseDate,
-        category: e.category,
-        expenseType: e.expenseType,
-        amount: decimalToNumber(e.totalAmount),
-        vatTag: e.vatInclusive,
-        supplierName: e.supplierName ?? null,
-        supplierId: e.supplierId ?? null,
-      })),
+      expenses: expenses.map(mapExpenseListItem),
       total,
       page,
       limit,
@@ -162,11 +241,11 @@ export const expensesService = {
       createdById?: string;
     },
   ) {
-    const amount = new Decimal(data.amount);
-    const vatAmount =
-      data.vatAmount != null ? new Decimal(data.vatAmount) : null;
-    const totalAmount = vatAmount ? amount.add(vatAmount) : amount;
-    assertExpenseFinancials(amount, vatAmount, totalAmount);
+    const { base, vatAmount, totalAmount } = resolveExpenseAmounts({
+      enteredAmount: data.amount,
+      vatInclusive: data.vatInclusive,
+      vatAmount: data.vatAmount,
+    });
 
     const expenseNumber = await nextExpenseNumber();
     const expenseDate = toCalendarDate(data.date);
@@ -184,7 +263,7 @@ export const expensesService = {
         description: data.description,
         category: data.category,
         expenseType,
-        amount,
+        amount: base,
         vatInclusive: data.vatInclusive,
         vatAmount,
         totalAmount,
@@ -206,8 +285,12 @@ export const expensesService = {
       date: expense.expenseDate,
       category: expense.category,
       expenseType: expense.expenseType,
+      baseAmount: decimalToNumber(expense.amount),
+      vatAmount:
+        expense.vatAmount != null ? decimalToNumber(expense.vatAmount) : null,
       amount: decimalToNumber(expense.totalAmount),
       vatTag: expense.vatInclusive,
+      vatInclusive: expense.vatInclusive,
       supplierName: expense.supplierName ?? null,
       supplierId: expense.supplierId ?? null,
     };
@@ -266,38 +349,37 @@ export const expensesService = {
       data.vatInclusive !== undefined;
 
     if (touchesFinancial) {
-      const base =
-        data.amount != null ? new Decimal(data.amount) : expense.amount;
       const vatInclusive =
         data.vatInclusive !== undefined
           ? data.vatInclusive
           : expense.vatInclusive;
 
-      let nextBase = base;
-      let nextVat: Decimal | null = null;
-      let nextTotal = base;
+      // When editing amount under VAT-inclusive, treat entered amount as gross.
+      // If only toggling vatInclusive without amount, use current total (gross) as the entered figure.
+      const enteredAmount =
+        data.amount != null
+          ? data.amount
+          : vatInclusive
+            ? decimalToNumber(expense.totalAmount)
+            : decimalToNumber(expense.amount);
 
-      if (data.vatAmount != null) {
-        const vat = new Decimal(data.vatAmount);
-        const vatNum = Number(vat);
-        nextBase = base;
-        nextVat = vatNum > 0 ? vat : null;
-        nextTotal = vatNum > 0 ? base.add(vat) : base;
-      } else if (vatInclusive) {
-        const vat = base.mul(VAT_RATE_PERCENT / PERCENT);
-        nextBase = base;
-        nextVat = vat;
-        nextTotal = base.add(vat);
-      } else {
-        nextBase = base;
-        nextVat = null;
-        nextTotal = base;
-      }
+      const resolved = resolveExpenseAmounts({
+        enteredAmount,
+        vatInclusive,
+        vatAmount:
+          data.vatAmount !== undefined
+            ? data.vatAmount
+            : vatInclusive
+              ? undefined
+              : expense.vatAmount != null
+                ? decimalToNumber(expense.vatAmount)
+                : undefined,
+      });
 
-      assertExpenseFinancials(nextBase, nextVat, nextTotal);
-      updateData.amount = nextBase;
-      updateData.vatAmount = nextVat;
-      updateData.totalAmount = nextTotal;
+      updateData.amount = resolved.base;
+      updateData.vatAmount = resolved.vatAmount;
+      updateData.totalAmount = resolved.totalAmount;
+      updateData.vatInclusive = vatInclusive;
     }
 
     const updated = await prisma.expense.update({
@@ -314,8 +396,12 @@ export const expensesService = {
       date: updated.expenseDate,
       category: updated.category,
       expenseType: updated.expenseType,
+      baseAmount: decimalToNumber(updated.amount),
+      vatAmount:
+        updated.vatAmount != null ? decimalToNumber(updated.vatAmount) : null,
       amount: decimalToNumber(updated.totalAmount),
       vatTag: updated.vatInclusive,
+      vatInclusive: updated.vatInclusive,
       supplierName: updated.supplierName ?? null,
       supplierId: updated.supplierId ?? null,
     };

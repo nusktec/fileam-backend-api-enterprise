@@ -33,6 +33,26 @@ function grossMonthly(e: {
   );
 }
 
+/** Monthly net pay (gross − employee deductions / estimated contractor WHT). */
+export function computeEmployeeMonthlyNetPay(e: {
+  basicSalary: Decimal;
+  housingAllowance: Decimal;
+  transportAllowance: Decimal;
+  mealAllowance: Decimal;
+  otherAllowances: Decimal;
+  employmentType: string;
+}): number {
+  const gross = grossMonthly(e);
+  const contractor = isContractorEmployment(e.employmentType);
+  const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
+  const nhf = contractor ? 0 : computeNhf(decimalToNumber(e.basicSalary));
+  const paye = contractor ? 0 : computePayeMonthly(gross * 12);
+  const whtEstimated = contractor
+    ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
+    : 0;
+  return gross - pensionEmp - nhf - paye - whtEstimated;
+}
+
 export const employeesService = {
   async list(
     userId: string,
@@ -72,13 +92,10 @@ export const employeesService = {
       const gross = grossMonthly(e);
       monthlyPayroll += gross;
       const contractor = isContractorEmployment(e.employmentType);
-      const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
-      const nhf = contractor ? 0 : computeNhf(decimalToNumber(e.basicSalary));
       const paye = contractor ? 0 : computePayeMonthly(gross * 12);
       const whtEstimated = contractor
         ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
         : 0;
-      const net = gross - pensionEmp - nhf - paye - whtEstimated;
       return {
         id: e.id,
         fullName: e.fullName,
@@ -88,7 +105,7 @@ export const employeesService = {
         grossPay: gross,
         paye,
         estimatedWhtMonthly: contractor ? whtEstimated : undefined,
-        netPay: net,
+        netPay: computeEmployeeMonthlyNetPay(e),
       };
     });
     return {
@@ -156,7 +173,7 @@ export const employeesService = {
       ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
       : 0;
     const pensionEmployer = contractor ? 0 : computePensionEmployer(gross);
-    const net = gross - pensionEmp - nhf - paye - whtEstimated;
+    const net = computeEmployeeMonthlyNetPay(e);
     const totalMonthlyCost = gross + pensionEmployer;
     return {
       id: e.id,
