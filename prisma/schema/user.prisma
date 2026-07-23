@@ -67,7 +67,9 @@ model User {
   inventorySales         InventorySale[]
   inventoryMovements     InventoryMovement[]
   assets                 Asset[]
+  assetsAssignedAsConsultant Asset[] @relation("AssetAssignedConsultant")
   assetTransfers         AssetTransfer[]
   assetSales             AssetSale[]
   assetDisposals         AssetDisposal[]
+  assetHistories         AssetHistory[]
 }

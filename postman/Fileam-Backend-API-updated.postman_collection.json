@@ -1624,7 +1624,7 @@
         },
         {
           "name": "Assets **",
-          "description": "Fixed assets module. Base: /mobile/assets. Auth: Bearer + onboarding complete. Codes: AST-/TRF-/SAL-/DSP-. PATCH uses :id (UUID). Transfers need consultant approve/reject. Sales gain/loss is server-computed. Current assets: inventory from Inventory module, AR from unpaid Sales; cash/bank stubs until cash accounts exist.",
+          "description": "Fixed assets module. Base: /mobile/assets. Auth: Bearer + onboarding complete. Codes: AST-/TRF-/SAL-/DSP-. Reviews: GET /reviews, GET /reviews/:id (UUID or AST-code), POST /:id/evidence (multipart files), POST /:id/assign-consultant, POST /:id/confirm-review, POST /:id/approve-review, GET /history, GET /consultants, GET /reports/:reportType (PDF). Evidence: max 10 files, 10MB each, same MIME types as /media/upload. History newest-first; filters: type, assetType, assetId, dateFrom, dateTo.",
           "item": [
             {
               "name": "Get assets summary **",
@@ -1942,6 +1942,107 @@
                   "mode": "raw",
                   "raw": "{\"note\": \"Updated disposal note with insurer reference.\", \"evidenceUrl\": \"https://example.com/disposal-report-v2.pdf\"}"
                 }
+              }
+            },
+            {
+              "name": "List asset reviews **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/reviews?page=1&limit=20",
+                "description": "Assets with assignToConsultant=true. summary.totalInReview + reviews[] (assetId code, consultantReviewStatus, lastActivity)."
+              }
+            },
+            {
+              "name": "Get asset review detail **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/reviews/{{assetId}}",
+                "description": "Full review payload: financials, evidenceUrls[], nrsTreatment, history[] (newest-first). :id = UUID or AST-code."
+              }
+            },
+            {
+              "name": "List asset consultants **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/consultants",
+                "description": "Consultants for assign-consultant picker: consultantId, name, email, phone, organizationName, connected."
+              }
+            },
+            {
+              "name": "Assign consultant **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"consultantId\": \"{{consultantUserId}}\"}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/{{assetId}}/assign-consultant",
+                "description": "Sets assignToConsultant=true, status PENDING, logs SENT_TO_CONSULTANT. Reassignment allowed (new history entry)."
+              }
+            },
+            {
+              "name": "Confirm asset review **",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/{{assetId}}/confirm-review",
+                "description": "Distinct step after assign: logs CONFIRM_REVIEW (status stays PENDING until approve)."
+              }
+            },
+            {
+              "name": "Approve asset review **",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/{{assetId}}/approve-review",
+                "description": "Sets consultantReviewStatus=APPROVED and logs CONSULTANT_APPROVED."
+              }
+            },
+            {
+              "name": "Upload asset evidence **",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "files",
+                      "type": "file",
+                      "src": [],
+                      "description": "One or more files (field name files). Max 10, 10MB each."
+                    }
+                  ]
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/{{assetId}}/evidence",
+                "description": "Multipart upload; appends to evidenceUrls. Silent (no history entry)."
+              }
+            },
+            {
+              "name": "List all asset history **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/history?page=1&limit=20&type=&assetType=&assetId=&dateFrom=&dateTo=",
+                "description": "Cross-asset history newest-first. Optional filters: type (HistoryActionType), assetType, assetId, dateFrom, dateTo."
+              }
+            },
+            {
+              "name": "Download asset report PDF **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/reports/ASSET_SUMMARY_REPORT?startDate=&endDate=&assetType=",
+                "description": "On-the-fly PDF. reportType: ASSET_SUMMARY_REPORT | DEPRECIATION_SCHEDULE | ASSET_MOVEMENT_REPORT | TAX_IMPACT_REPORT | ASSET_INTELLIGENCE_REPORT | CURRENT_ASSETS_STATEMENT. Optional startDate, endDate, assetType."
               }
             }
           ]
@@ -2360,7 +2461,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/dashboard?period=2026-02&range=month",
-                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). netProfit = income \u2212 expenses (ex-VAT). VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance (personaTooltip, taxes[] with applicable flags). range=month|quarter|year."
+                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). expenses / operatingExpenses = book expenses (ex-VAT) + Salaries (employee monthly gross pay). netProfit = income \u2212 that total. expenseBreakdown includes category rows (ex-VAT) plus Salaries at gross. VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance. range=month|quarter|year."
               }
             }
           ]

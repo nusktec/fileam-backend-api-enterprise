@@ -20,6 +20,17 @@ import {
   listAssetDisposals,
   updateAssetDisposal,
 } from "../controllers/assetsController";
+import {
+  listAssetReviews,
+  getAssetReview,
+  uploadAssetEvidence,
+  assignAssetConsultant,
+  confirmAssetReview,
+  approveAssetReview,
+  listAssetReviewConsultants,
+  listAllAssetHistory,
+  downloadAssetReport,
+} from "../controllers/assetReviewsController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
 import { withPagination } from "../../middlewares/paginationMiddleware";
@@ -33,6 +44,10 @@ import {
   validateCreateDisposal,
   validateUpdateDisposal,
 } from "../../middlewares/validations/assetsValidation";
+import {
+  uploadMultiple,
+  handleUploadError,
+} from "../../middlewares/uploadMiddleware";
 
 const router = express.Router();
 
@@ -43,6 +58,13 @@ router.get("/dashboard", getAssetsDashboard);
 router.get("/current-assets", getCurrentAssets);
 router.get("/non-current-assets", getNonCurrentAssets);
 router.get("/depreciation-amortization", getDepreciationAmortization);
+
+/** Asset Reviews & reports (static paths before /:id) */
+router.get("/reviews", withPagination(), listAssetReviews);
+router.get("/reviews/:id", validateIdParam, getAssetReview);
+router.get("/history", withPagination(), listAllAssetHistory);
+router.get("/reports/:reportType", downloadAssetReport);
+router.get("/consultants", listAssetReviewConsultants);
 
 router.post("/", express.json(), validateCreateAsset, createAsset);
 router.get("/", withPagination(), listAssets);
@@ -89,6 +111,30 @@ router.patch(
   validateUpdateDisposal,
   updateAssetDisposal,
 );
+
+router.post(
+  "/:id/evidence",
+  validateIdParam,
+  (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    uploadMultiple(req, res, (err) => {
+      if (err) return handleUploadError(err, req, res, next);
+      next();
+    });
+  },
+  uploadAssetEvidence,
+);
+router.post(
+  "/:id/assign-consultant",
+  validateIdParam,
+  express.json(),
+  assignAssetConsultant,
+);
+router.post("/:id/confirm-review", validateIdParam, confirmAssetReview);
+router.post("/:id/approve-review", validateIdParam, approveAssetReview);
 
 router.patch(
   "/:id",

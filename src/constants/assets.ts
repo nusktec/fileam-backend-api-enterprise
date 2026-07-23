@@ -98,3 +98,49 @@ export type AssetStatus = (typeof ASSET_STATUSES)[number];
 export function isValidAssetStatus(value: string): value is AssetStatus {
   return (ASSET_STATUSES as readonly string[]).includes(value);
 }
+
+/** Unified asset timeline action types (Asset Reviews API). */
+export const ASSET_HISTORY_ACTION_TYPES = [
+  "ASSET_ACQUIRED",
+  "SENT_TO_CONSULTANT",
+  "CONFIRM_REVIEW",
+  "CONSULTANT_APPROVED",
+  "ASSET_TRANSFER",
+  "ASSET_DISPOSAL",
+] as const;
+
+export type AssetHistoryActionType =
+  (typeof ASSET_HISTORY_ACTION_TYPES)[number];
+
+export function isValidAssetHistoryActionType(
+  value: string,
+): value is AssetHistoryActionType {
+  return (ASSET_HISTORY_ACTION_TYPES as readonly string[]).includes(value);
+}
+
+/** PDF report types for GET /assets/reports/:reportType */
+export const ASSET_REPORT_TYPES = [
+  "ASSET_SUMMARY_REPORT",
+  "DEPRECIATION_SCHEDULE",
+  "ASSET_MOVEMENT_REPORT",
+  "TAX_IMPACT_REPORT",
+  "ASSET_INTELLIGENCE_REPORT",
+  "CURRENT_ASSETS_STATEMENT",
+] as const;
+
+export type AssetReportType = (typeof ASSET_REPORT_TYPES)[number];
+
+export function isValidAssetReportType(
+  value: string,
+): value is AssetReportType {
+  return (ASSET_REPORT_TYPES as readonly string[]).includes(value);
+}
+
+export const ASSET_REPORT_DISPLAY_NAMES: Record<AssetReportType, string> = {
+  ASSET_SUMMARY_REPORT: "Asset Summary Report",
+  DEPRECIATION_SCHEDULE: "Depreciation Schedule",
+  ASSET_MOVEMENT_REPORT: "Asset Movement Report",
+  TAX_IMPACT_REPORT: "Tax Impact Report",
+  ASSET_INTELLIGENCE_REPORT: "Asset Intelligence Report",
+  CURRENT_ASSETS_STATEMENT: "Current Assets Statement",
+};

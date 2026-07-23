@@ -16,6 +16,7 @@ import {
   normalizeMoneyAmount,
 } from "../../utils/monetaryAmount";
 import { SALE_RECEIVABLE_STATUSES } from "../../constants/salePaymentRules";
+import { appendAssetHistory } from "./assetHistoryHelper";
 
 const ASSET_COUNTER_ID = "asset_number";
 const TRANSFER_COUNTER_ID = "asset_transfer_number";
@@ -145,6 +146,7 @@ function mapAssetRow(
     purchaseDate: Date;
     vendor: string | null;
     evidenceUrl: string | null;
+    evidenceUrls?: string[];
     depreciationMethod: string | null;
     usefulLife: number | null;
     residualValue: Decimal | null;
@@ -152,6 +154,7 @@ function mapAssetRow(
     assetLocation: string | null;
     additionalNote: string | null;
     assignToConsultant: boolean;
+    assignedConsultantId?: string | null;
     consultantReviewStatus: string | null;
     status: string;
     createdAt: Date;
@@ -167,6 +170,12 @@ function mapAssetRow(
     residualValue: d(asset.residualValue),
     asOf,
   });
+  const evidenceUrls =
+    asset.evidenceUrls && asset.evidenceUrls.length > 0
+      ? asset.evidenceUrls
+      : asset.evidenceUrl
+        ? [asset.evidenceUrl]
+        : [];
 
   return {
     id: asset.id,
@@ -178,7 +187,8 @@ function mapAssetRow(
     bookValue: dep.bookValue,
     purchaseDate: dateToIsoDate(asset.purchaseDate),
     vendor: asset.vendor,
-    evidenceUrl: asset.evidenceUrl,
+    evidenceUrl: evidenceUrls[0] ?? asset.evidenceUrl ?? null,
+    evidenceUrls,
     depreciationMethod: asset.depreciationMethod,
     depreciationPercentage: dep.depreciationPercentage,
     usefulLife: asset.usefulLife,
@@ -190,6 +200,7 @@ function mapAssetRow(
     assetLocation: asset.assetLocation,
     additionalNote: asset.additionalNote,
     assignToConsultant: asset.assignToConsultant,
+    assignedConsultantId: asset.assignedConsultantId ?? null,
     consultantReviewStatus: asset.consultantReviewStatus,
     status: asset.status,
     createdAt: asset.createdAt.toISOString(),
@@ -251,29 +262,47 @@ export const assetsService = {
 
     const assignToConsultant = data.assignToConsultant === true;
     const assetCode = await nextCodedNumber(ASSET_COUNTER_ID, "AST");
-    const asset = await prisma.asset.create({
-      data: {
+    const evidenceUrl = data.evidenceUrl?.trim() || null;
+    const purchaseDate = parseDateOnly(data.purchaseDate);
+    const asset = await prisma.$transaction(async (tx) => {
+      const row = await tx.asset.create({
+        data: {
+          userId,
+          assetCode,
+          assetType: data.assetType,
+          assetName: data.assetName.trim(),
+          purchaseDate,
+          purchaseCost: dec(data.purchaseCost),
+          vendor: data.vendor?.trim() || null,
+          evidenceUrl,
+          evidenceUrls: evidenceUrl ? [evidenceUrl] : [],
+          depreciationMethod: data.depreciationMethod?.trim() || null,
+          usefulLife: data.usefulLife ?? null,
+          residualValue:
+            data.residualValue != null ? dec(data.residualValue) : null,
+          serialNumber: data.serialNumber?.trim() || null,
+          assetLocation: data.assetLocation?.trim() || null,
+          additionalNote: data.additionalNote?.trim() || null,
+          assignToConsultant,
+          consultantReviewStatus: assignToConsultant
+            ? CONSULTANT_REVIEW_STATUSES[0]
+            : null,
+          status: ASSET_STATUSES[0],
+        },
+      });
+      await appendAssetHistory(tx, {
         userId,
-        assetCode,
-        assetType: data.assetType,
-        assetName: data.assetName.trim(),
-        purchaseDate: parseDateOnly(data.purchaseDate),
-        purchaseCost: dec(data.purchaseCost),
-        vendor: data.vendor?.trim() || null,
-        evidenceUrl: data.evidenceUrl?.trim() || null,
-        depreciationMethod: data.depreciationMethod?.trim() || null,
-        usefulLife: data.usefulLife ?? null,
-        residualValue:
-          data.residualValue != null ? dec(data.residualValue) : null,
-        serialNumber: data.serialNumber?.trim() || null,
-        assetLocation: data.assetLocation?.trim() || null,
-        additionalNote: data.additionalNote?.trim() || null,
-        assignToConsultant,
-        consultantReviewStatus: assignToConsultant
-          ? CONSULTANT_REVIEW_STATUSES[0]
-          : null,
-        status: ASSET_STATUSES[0],
-      },
+        assetId: row.id,
+        type: "ASSET_ACQUIRED",
+        eventDate: purchaseDate,
+        details: {
+          assetName: row.assetName,
+          vendor: row.vendor,
+          purchaseCost: data.purchaseCost,
+          assignedEmployee: null,
+        },
+      });
+      return row;
     });
     return mapAssetRow(asset);
   },
@@ -328,7 +357,14 @@ export const assetsService = {
       updateData.vendor = data.vendor?.trim() || null;
     }
     if (data.evidenceUrl !== undefined) {
-      updateData.evidenceUrl = data.evidenceUrl?.trim() || null;
+      const url = data.evidenceUrl?.trim() || null;
+      updateData.evidenceUrl = url;
+      if (url) {
+        const existingUrls = existing.evidenceUrls ?? [];
+        if (!existingUrls.includes(url)) {
+          updateData.evidenceUrls = [...existingUrls, url];
+        }
+      }
     }
     if (data.depreciationMethod !== undefined) {
       updateData.depreciationMethod = data.depreciationMethod?.trim() || null;
@@ -902,6 +938,17 @@ export const assetsService = {
         where: { id: transfer.assetId },
         data: { assetLocation: transfer.toLocation },
       });
+      await appendAssetHistory(tx, {
+        userId,
+        assetId: transfer.assetId,
+        type: "ASSET_TRANSFER",
+        eventDate: transfer.transferDate,
+        details: {
+          fromLocation: transfer.fromLocation,
+          toLocation: transfer.toLocation,
+          transferType: transfer.transferType,
+        },
+      });
 
       return {
         id: updated.id,
@@ -1137,6 +1184,16 @@ export const assetsService = {
           status: TRANSFER_STATUSES[0],
         },
         data: { status: TRANSFER_STATUSES[2] },
+      });
+      await appendAssetHistory(tx, {
+        userId,
+        assetId: asset.id,
+        type: "ASSET_DISPOSAL",
+        eventDate: disposalDate,
+        details: {
+          disposalReason: data.disposalReason,
+          note: data.note.trim(),
+        },
       });
       return row;
     });

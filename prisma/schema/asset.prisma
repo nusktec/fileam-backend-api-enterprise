@@ -7,7 +7,10 @@ model Asset {
   purchaseDate           DateTime @map("purchase_date") @db.Date
   purchaseCost           Decimal  @map("purchase_cost") @db.Decimal(14, 2)
   vendor                 String?
+  /** Legacy single evidence URL — kept in sync with first of evidenceUrls when present. */
   evidenceUrl            String?  @map("evidence_url")
+  /** Accumulated evidence document URLs (additive uploads). */
+  evidenceUrls           String[] @default([]) @map("evidence_urls")
   depreciationMethod     String?  @map("depreciation_method")
   usefulLife             Int?     @map("useful_life")
   residualValue          Decimal? @map("residual_value") @db.Decimal(14, 2)
@@ -15,21 +18,45 @@ model Asset {
   assetLocation          String?  @map("asset_location")
   additionalNote         String?  @map("additional_note")
   assignToConsultant     Boolean  @default(false) @map("assign_to_consultant")
+  assignedConsultantId   String?  @map("assigned_consultant_id")
   consultantReviewStatus String?  @map("consultant_review_status")
   /** ACTIVE | SOLD | DISPOSED */
   status                 String   @default("ACTIVE")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
-  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transfers  AssetTransfer[]
-  sales      AssetSale[]
-  disposals  AssetDisposal[]
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedConsultant User?            @relation("AssetAssignedConsultant", fields: [assignedConsultantId], references: [id], onDelete: SetNull)
+  transfers          AssetTransfer[]
+  sales              AssetSale[]
+  disposals          AssetDisposal[]
+  history            AssetHistory[]
 
   @@index([userId])
   @@index([userId, status])
   @@index([userId, assetType])
+  @@index([userId, assignToConsultant])
+  @@index([assignedConsultantId])
   @@map("assets")
+}
+
+model AssetHistory {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  assetId   String   @map("asset_id")
+  /** HistoryActionType enum string */
+  type      String
+  eventDate DateTime @map("event_date") @db.Date
+  details   Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([userId, eventDate])
+  @@index([userId, type])
+  @@index([assetId, eventDate])
+  @@map("asset_histories")
 }
 
 model AssetTransfer {
@@ -80,17 +107,17 @@ model AssetSale {
 }
 
 model AssetDisposal {
-  id                   String   @id @default(uuid())
-  userId               String   @map("user_id")
-  disposalCode         String   @unique @map("disposal_code")
-  assetId              String   @map("asset_id")
-  disposalReason       String   @map("disposal_reason")
-  disposalDate         DateTime @map("disposal_date") @db.Date
-  note                 String
-  evidenceUrl          String?  @map("evidence_url")
-  bookValueAtDisposal  Decimal  @map("book_value_at_disposal") @db.Decimal(14, 2)
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  disposalCode        String   @unique @map("disposal_code")
+  assetId             String   @map("asset_id")
+  disposalReason      String   @map("disposal_reason")
+  disposalDate        DateTime @map("disposal_date") @db.Date
+  note                String
+  evidenceUrl         String?  @map("evidence_url")
+  bookValueAtDisposal Decimal  @map("book_value_at_disposal") @db.Decimal(14, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   asset Asset @relation(fields: [assetId], references: [id], onDelete: Restrict)

@@ -10,6 +10,15 @@ export const uploadSingle = multer({
   limits: { fileSize: MEDIA_CONFIG.MAX_FILE_SIZE },
 }).single("file");
 
+/** Multiple files — form field name `files` (Asset Reviews evidence upload). */
+export const uploadMultiple = multer({
+  storage,
+  limits: {
+    fileSize: MEDIA_CONFIG.MAX_FILE_SIZE,
+    files: 10,
+  },
+}).array("files", 10);
+
 export function handleUploadError(
   err: unknown,
   req: Request,
@@ -37,8 +46,18 @@ export function handleUploadError(
     res
       .status(400)
       .json(
-        outJson(false, "Unexpected field. Use form field name 'file'.", null),
+        outJson(
+          false,
+          "Unexpected field. Use form field name 'file' (or 'files' for multi-upload).",
+          null,
+        ),
       );
+    return;
+  }
+  if (multerErr.code === "LIMIT_FILE_COUNT") {
+    res
+      .status(400)
+      .json(outJson(false, "Too many files. Maximum 10 per request.", null));
     return;
   }
   next(err);

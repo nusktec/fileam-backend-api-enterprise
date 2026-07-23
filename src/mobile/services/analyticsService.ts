@@ -6,11 +6,24 @@ import {
 } from "../../constants/percentages";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 import { taxComputationService } from "./taxComputationService";
-import { computeEmployeeMonthlyNetPay } from "./employeesService";
+import { computeEmployeeMonthlyGrossPay } from "./employeesService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
+}
+
+/** Sum of monthly gross salaries for employees active by end of the given calendar month. */
+async function monthlySalariesGross(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<number> {
+  const end = new Date(year, month, 0, 23, 59, 59, 999);
+  const employees = await prisma.employee.findMany({
+    where: { userId, startDate: { lte: end } },
+  });
+  return employees.reduce((s, e) => s + computeEmployeeMonthlyGrossPay(e), 0);
 }
 
 function periodLabel(year: number, month: number): string {
@@ -148,15 +161,15 @@ export const analyticsService = {
     range: DashboardRange,
   ): Promise<{ income: number; expenses: number; netProfit: number }> {
     if (range === "month") {
-      const comp = await taxComputationService.getForPeriod(
-        userId,
-        year,
-        month,
-      );
+      const [comp, salaries] = await Promise.all([
+        taxComputationService.getForPeriod(userId, year, month),
+        monthlySalariesGross(userId, year, month),
+      ]);
+      const expenses = comp.overview.totalExpenses + salaries;
       return {
         income: comp.overview.totalIncome,
-        expenses: comp.overview.totalExpenses,
-        netProfit: comp.overview.netProfit,
+        expenses,
+        netProfit: comp.overview.totalIncome - expenses,
       };
     }
     let income = 0;
@@ -165,9 +178,12 @@ export const analyticsService = {
     let y = year;
     let m = month;
     for (let i = 0; i < months; i++) {
-      const comp = await taxComputationService.getForPeriod(userId, y, m);
+      const [comp, salaries] = await Promise.all([
+        taxComputationService.getForPeriod(userId, y, m),
+        monthlySalariesGross(userId, y, m),
+      ]);
       income += comp.overview.totalIncome;
-      expenses += comp.overview.totalExpenses;
+      expenses += comp.overview.totalExpenses + salaries;
       m--;
       if (m < 1) {
         m = 12;
@@ -206,25 +222,15 @@ export const analyticsService = {
   async getExpenseBreakdown(userId: string, year: number, month: number) {
     const start = new Date(year, month - 1, 1);
     const end = new Date(year, month, 0, 23, 59, 59, 999);
-    const [byCategory, employees] = await Promise.all([
+    const [byCategory, salariesGross] = await Promise.all([
       prisma.expense.groupBy({
         by: ["category"],
         where: { userId, expenseDate: { gte: start, lte: end } },
         /** Ex-VAT base — VAT is reported separately as Input VAT claimable. */
         _sum: { amount: true },
       }),
-      prisma.employee.findMany({
-        where: {
-          userId,
-          startDate: { lte: end },
-        },
-      }),
+      monthlySalariesGross(userId, year, month),
     ]);
-
-    const salariesNetPay = employees.reduce(
-      (s, e) => s + computeEmployeeMonthlyNetPay(e),
-      0,
-    );
 
     const rows: { category: string; amount: number }[] = byCategory.map(
       (c) => ({
@@ -232,8 +238,8 @@ export const analyticsService = {
         amount: decimalToNumber(c._sum.amount),
       }),
     );
-    if (salariesNetPay > 0) {
-      rows.push({ category: "Salaries", amount: salariesNetPay });
+    if (salariesGross > 0) {
+      rows.push({ category: "Salaries", amount: salariesGross });
     }
 
     const total = rows.reduce((s, r) => s + r.amount, 0);

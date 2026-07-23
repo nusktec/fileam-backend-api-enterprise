@@ -33,6 +33,17 @@ function grossMonthly(e: {
   );
 }
 
+/** Monthly gross pay (basic + allowances) — used in analytics expense totals / breakdown. */
+export function computeEmployeeMonthlyGrossPay(e: {
+  basicSalary: Decimal;
+  housingAllowance: Decimal;
+  transportAllowance: Decimal;
+  mealAllowance: Decimal;
+  otherAllowances: Decimal;
+}): number {
+  return grossMonthly(e);
+}
+
 /** Monthly net pay (gross − employee deductions / estimated contractor WHT). */
 export function computeEmployeeMonthlyNetPay(e: {
   basicSalary: Decimal;
@@ -42,7 +53,7 @@ export function computeEmployeeMonthlyNetPay(e: {
   otherAllowances: Decimal;
   employmentType: string;
 }): number {
-  const gross = grossMonthly(e);
+  const gross = computeEmployeeMonthlyGrossPay(e);
   const contractor = isContractorEmployment(e.employmentType);
   const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
   const nhf = contractor ? 0 : computeNhf(decimalToNumber(e.basicSalary));
