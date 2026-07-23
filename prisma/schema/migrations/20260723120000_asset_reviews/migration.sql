@@ -1,4 +1,5 @@
 -- Asset Reviews: evidenceUrls[], assigned consultant, unified history
+-- Note: User model maps to table "User" (not "users").
 
 ALTER TABLE "assets" ADD COLUMN IF NOT EXISTS "evidence_urls" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE "assets" ADD COLUMN IF NOT EXISTS "assigned_consultant_id" TEXT;
@@ -17,7 +18,7 @@ ALTER TABLE "assets"
   DROP CONSTRAINT IF EXISTS "assets_assigned_consultant_id_fkey";
 ALTER TABLE "assets"
   ADD CONSTRAINT "assets_assigned_consultant_id_fkey"
-  FOREIGN KEY ("assigned_consultant_id") REFERENCES "users"("id")
+  FOREIGN KEY ("assigned_consultant_id") REFERENCES "User"("id")
   ON DELETE SET NULL ON UPDATE CASCADE;
 
 CREATE TABLE IF NOT EXISTS "asset_histories" (
@@ -39,7 +40,7 @@ ALTER TABLE "asset_histories"
   DROP CONSTRAINT IF EXISTS "asset_histories_user_id_fkey";
 ALTER TABLE "asset_histories"
   ADD CONSTRAINT "asset_histories_user_id_fkey"
-  FOREIGN KEY ("user_id") REFERENCES "users"("id")
+  FOREIGN KEY ("user_id") REFERENCES "User"("id")
   ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE "asset_histories"
