@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/database";
 import {
   ASSET_HISTORY_ACTION_TYPES,
+  ASSET_STATUS,
   CONSULTANT_REVIEW_STATUSES,
   isValidAssetHistoryActionType,
   isValidAssetType,
@@ -12,7 +13,7 @@ import { uploadToS3 } from "../../services/mediaUploadService";
 import {
   computeStraightLineDepreciation,
 } from "./assetsService";
-import { appendAssetHistory } from "./assetHistoryHelper";
+import { appendAssetHistory, syncAssetHistoryFromRecords } from "./assetHistoryHelper";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -111,6 +112,8 @@ export const assetReviewsService = {
         "Asset is not flagged for consultant review",
       );
     }
+
+    await syncAssetHistoryFromRecords(userId, asset.id);
 
     const [history, consultant] = await Promise.all([
       prisma.assetHistory.findMany({
@@ -280,6 +283,7 @@ export const assetReviewsService = {
           assignToConsultant: true,
           assignedConsultantId: consultant.id,
           consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[0],
+          status: ASSET_STATUS.AWAITING, // consultant assigned — awaiting review work
         },
       });
       await appendAssetHistory(tx, {
@@ -372,6 +376,7 @@ export const assetReviewsService = {
         where: { id: asset.id },
         data: {
           consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[1],
+          status: ASSET_STATUS.ACTIVE,
         },
       });
       await appendAssetHistory(tx, {
@@ -476,6 +481,8 @@ export const assetReviewsService = {
     if (opts?.assetType && !isValidAssetType(opts.assetType)) {
       throw new HttpReplyError(400, "Invalid assetType");
     }
+
+    await syncAssetHistoryFromRecords(userId);
 
     let assetDbId: string | undefined;
     if (opts?.assetId) {

@@ -1624,7 +1624,7 @@
         },
         {
           "name": "Assets **",
-          "description": "Fixed assets module. Base: /mobile/assets. Auth: Bearer + onboarding complete. Codes: AST-/TRF-/SAL-/DSP-. Reviews: GET /reviews, GET /reviews/:id (UUID or AST-code), POST /:id/evidence (multipart files), POST /:id/assign-consultant, POST /:id/confirm-review, POST /:id/approve-review, GET /history, GET /consultants, GET /reports/:reportType (PDF). Evidence: max 10 files, 10MB each, same MIME types as /media/upload. History newest-first; filters: type, assetType, assetId, dateFrom, dateTo.",
+          "description": "Fixed assets module. Base: /mobile/assets. Auth: Bearer + onboarding complete. Asset status: ACTIVE | PENDING | AWAITING | SOLD | DISPOSED (PENDING when flagged for review; AWAITING after consultant assigned; ACTIVE after approve). Codes: AST-/TRF-/SAL-/DSP-. Reviews: GET /reviews, GET /reviews/:id (UUID or AST-code), POST /:id/evidence (multipart files), POST /:id/assign-consultant, POST /:id/confirm-review, POST /:id/approve-review, GET /history, GET /consultants, GET /reports/:reportType (PDF). Evidence: max 10 files, 10MB each, same MIME types as /media/upload. History newest-first; filters: type, assetType, assetId, dateFrom, dateTo.",
           "item": [
             {
               "name": "Get assets summary **",
@@ -1641,7 +1641,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/dashboard",
-                "description": "summary.pendingReviews (count); summary.currentAssets = total current-asset value (inventory cost + unpaid AR; cash/bank stubs 0); summary.nonCurrentAssets = total net book value of ACTIVE fixed assets; annualDepreciation; nonCurrentAssetCategories[]; plImpact (annualDepreciationCharge, softwareAmortization; capitalAllowance/netTaxBenefit stubbed 0)."
+                "description": "summary.pendingReviews; summary.currentAssets = cash+bank+inventory+AR; also summary.cash, bankBalances, inventory, accountsReceivable totals; summary.nonCurrentAssets = NBV of ACTIVE fixed assets; annualDepreciation; nonCurrentAssetCategories[]; plImpact."
               }
             },
             {
@@ -1650,7 +1650,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/current-assets",
-                "description": "Aggregates: cash/bank stubs (empty), inventory from InventoryItem (qty\u00d7cost), accountsReceivable from Sale status Pending/Overdue."
+                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales \u2212 expenses; account number from Business.bankAccount when set), inventory (qty\u00d7cost), accountsReceivable (Pending/Overdue/IN_PROGRESS sales at totalAmount). totalCurrentAssets = sum of the four."
               }
             },
             {

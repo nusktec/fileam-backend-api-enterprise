@@ -2,7 +2,7 @@ import PDFDocument from "pdfkit";
 import { prisma } from "../../config/database";
 import {
   ASSET_REPORT_DISPLAY_NAMES,
-  ASSET_STATUSES,
+  ASSET_STATUS,
   type AssetReportType,
   isValidAssetReportType,
   isValidAssetType,
@@ -16,7 +16,7 @@ import {
   getPdfLayout,
   tableColumns,
 } from "../../services/template/pdfLayout";
-import { computeStraightLineDepreciation } from "./assetsService";
+import { assetsService, computeStraightLineDepreciation } from "./assetsService";
 
 const PRIMARY = "#008b8b";
 
@@ -185,46 +185,50 @@ export const assetReportsService = {
     const filename = `${slug}-${dateIso(new Date())}.pdf`;
 
     if (type === "CURRENT_ASSETS_STATEMENT") {
-      const arSales = await prisma.sale.findMany({
-        where: {
-          userId,
-          status: { in: ["Pending", "IN_PROGRESS", "Overdue"] },
-        },
-        select: { amount: true },
-      });
-      const ar = arSales.reduce((s, x) => s + d(x.amount), 0);
-      const items = await prisma.inventoryItem.findMany({
-        where: { userId },
-        take: 200,
-        orderBy: { name: "asc" },
-      });
-      const inventoryValue = items.reduce(
-        (s, i) => s + d(i.purchaseCost) * d(i.quantity),
-        0,
-      );
+      const snap = await assetsService.getCurrentAssetsSnapshot(userId);
       const buffer = await renderTablePdf({
         title,
         subtitle,
         summaryRows: [
-          { label: "Inventory value", value: fmt(inventoryValue) },
-          { label: "Accounts receivable (ex-VAT)", value: fmt(ar) },
+          { label: "Cash", value: fmt(snap.cash.total) },
+          { label: "Bank balances", value: fmt(snap.bankBalances.total) },
+          { label: "Inventory", value: fmt(snap.inventory.total) },
           {
-            label: "Total current assets (approx.)",
-            value: fmt(inventoryValue + ar),
+            label: "Accounts receivable",
+            value: fmt(snap.accountsReceivable.total),
+          },
+          {
+            label: "Total current assets",
+            value: fmt(snap.totalCurrentAssets),
           },
         ],
         columns: [
-          { key: "Item", width: 160 },
-          { key: "Qty", width: 50, fromRight: true, amount: true },
-          { key: "Unit cost", width: 90, fromRight: true, amount: true },
-          { key: "Value", width: 100, fromRight: true, amount: true },
+          { key: "Component", width: 140 },
+          { key: "Detail", width: 160 },
+          { key: "Amount", width: 100, fromRight: true, amount: true },
         ],
-        rows: items.map((i) => ({
-          Item: i.name,
-          Qty: String(d(i.quantity)),
-          "Unit cost": fmt(d(i.purchaseCost)),
-          Value: fmt(d(i.purchaseCost) * d(i.quantity)),
-        })),
+        rows: [
+          ...snap.cash.items.map((i) => ({
+            Component: "Cash",
+            Detail: `${i.title} — ${i.subtitle}`,
+            Amount: fmt(i.amount),
+          })),
+          ...snap.bankBalances.items.map((i) => ({
+            Component: "Bank",
+            Detail: `${i.bankName} (${i.accountNumber})`,
+            Amount: fmt(i.amount),
+          })),
+          ...snap.inventory.items.map((i) => ({
+            Component: "Inventory",
+            Detail: i.stockName,
+            Amount: fmt(i.amount),
+          })),
+          ...snap.accountsReceivable.items.map((i) => ({
+            Component: "Receivable",
+            Detail: `${i.invoiceNumber} — ${i.customerName ?? "—"} (${i.status})`,
+            Amount: fmt(i.amount),
+          })),
+        ],
       });
       return { buffer, filename };
     }
@@ -366,13 +370,21 @@ export const assetReportsService = {
         cur.nbv += dep.bookValue;
         byType.set(a.assetType, cur);
       }
-      const active = mapped.filter((x) => x.a.status === ASSET_STATUSES[0]).length;
+      const active = mapped.filter((x) => x.a.status === ASSET_STATUS.ACTIVE)
+        .length;
+      const pending = mapped.filter((x) => x.a.status === ASSET_STATUS.PENDING)
+        .length;
+      const awaiting = mapped.filter(
+        (x) => x.a.status === ASSET_STATUS.AWAITING,
+      ).length;
       const buffer = await renderTablePdf({
         title,
         subtitle,
         summaryRows: [
           { label: "Total assets", value: String(mapped.length) },
           { label: "Active assets", value: String(active) },
+          { label: "Pending", value: String(pending) },
+          { label: "Awaiting review", value: String(awaiting) },
           { label: "Total purchase cost", value: fmt(totalCost) },
           { label: "Total net book value", value: fmt(totalBook) },
         ],

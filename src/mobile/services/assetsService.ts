@@ -1,11 +1,13 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import {
-  ASSET_STATUSES,
+  ASSET_ON_BOOKS_STATUSES,
+  ASSET_STATUS,
   ASSET_TYPES,
   CONSULTANT_REVIEW_STATUSES,
   GAIN_LOSS_TYPES,
   TRANSFER_STATUSES,
+  isAssetOnBooks,
   type AssetStatus,
   type GainLossType,
 } from "../../constants/assets";
@@ -15,7 +17,12 @@ import {
   assertMonetaryAmountInRange,
   normalizeMoneyAmount,
 } from "../../utils/monetaryAmount";
-import { SALE_RECEIVABLE_STATUSES } from "../../constants/salePaymentRules";
+import {
+  isCashPaymentType,
+  isSalePaidStatus,
+  SALE_RECEIVABLE_STATUSES,
+  SALE_STATUS,
+} from "../../constants/salePaymentRules";
 import { appendAssetHistory } from "./assetHistoryHelper";
 
 const ASSET_COUNTER_ID = "asset_number";
@@ -27,6 +34,165 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DAYS_PER_YEAR = 365.25;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * Book-based current assets (no dedicated cash/bank ledger yet):
+ * - Cash: PAID sales with paymentType Cash, net of expense shortfall after bank
+ * - Bank: PAID Card/Transfer/Invoice sales − all expense outflows (expenses assumed bank-settled)
+ * - AR: unpaid sales (Pending / Overdue / IN_PROGRESS) at invoice totalAmount
+ * - Inventory: qty × purchaseCost
+ */
+async function buildCurrentAssetsSnapshot(userId: string) {
+  const [inventoryItems, unpaidSales, paidSales, expenses, business] =
+    await Promise.all([
+      prisma.inventoryItem.findMany({ where: { userId } }),
+      prisma.sale.findMany({
+        where: {
+          userId,
+          status: { in: [...SALE_RECEIVABLE_STATUSES] },
+        },
+        orderBy: [{ saleDate: "desc" }, { createdAt: "desc" }],
+      }),
+      prisma.sale.findMany({
+        where: {
+          userId,
+          OR: [
+            { status: SALE_STATUS.PAID },
+            { status: "Paid" },
+          ],
+        },
+      }),
+      prisma.expense.findMany({ where: { userId } }),
+      prisma.business.findFirst({
+        where: { userId },
+        select: { bankAccount: true, name: true },
+      }),
+    ]);
+
+  const inventoryRows = inventoryItems
+    .map((it) => {
+      const amount = normalizeMoneyAmount(d(it.quantity) * d(it.purchaseCost));
+      return {
+        stockName: it.name,
+        amount,
+        quantity: d(it.quantity),
+      };
+    })
+    .filter((r) => r.amount > 0 || r.quantity > 0);
+
+  const inventoryTotal = normalizeMoneyAmount(
+    inventoryRows.reduce((s, r) => s + r.amount, 0),
+  );
+
+  const arItems = unpaidSales.map((s) => ({
+    invoiceNumber: s.invoiceNumber,
+    customerName: s.customerName,
+    status: s.status === SALE_STATUS.OVERDUE ? "OVERDUE" : "CURRENT",
+    amount: normalizeMoneyAmount(d(s.totalAmount)),
+    paymentType: s.paymentType,
+    saleStatus: s.status,
+  }));
+  const arTotal = normalizeMoneyAmount(
+    arItems.reduce((s, r) => s + r.amount, 0),
+  );
+
+  let cashReceipts = 0;
+  let bankReceipts = 0;
+  for (const s of paidSales) {
+    if (!isSalePaidStatus(s.status)) continue;
+    const amt = d(s.totalAmount);
+    if (isCashPaymentType(s.paymentType)) cashReceipts += amt;
+    else bankReceipts += amt;
+  }
+  cashReceipts = normalizeMoneyAmount(cashReceipts);
+  bankReceipts = normalizeMoneyAmount(bankReceipts);
+
+  const expenseOutflows = normalizeMoneyAmount(
+    expenses.reduce((s, e) => s + d(e.totalAmount), 0),
+  );
+
+  // Expenses assumed paid via bank/transfer; if bank is insufficient, draw from cash.
+  let bankNet = normalizeMoneyAmount(bankReceipts - expenseOutflows);
+  let cashNet = cashReceipts;
+  if (bankNet < 0) {
+    const shortfall = -bankNet;
+    cashNet = normalizeMoneyAmount(Math.max(0, cashNet - shortfall));
+    bankNet = 0;
+  }
+
+  const cash = {
+    total: cashNet,
+    items:
+      cashNet > 0
+        ? [
+            {
+              title: "Cash on hand",
+              subtitle: "PAID Cash sales, net of expense drawdowns",
+              amount: cashNet,
+            },
+          ]
+        : ([] as Array<{ title: string; subtitle: string; amount: number }>),
+  };
+
+  const accountNumber = business?.bankAccount?.trim() || "Not set";
+  const bankBalances = {
+    total: bankNet,
+    items:
+      bankNet > 0
+        ? [
+            {
+              bankName: business?.name?.trim()
+                ? `${business.name.trim()} — primary`
+                : "Primary bank account",
+              accountType: "Current",
+              accountNumber,
+              amount: bankNet,
+            },
+          ]
+        : ([] as Array<{
+            bankName: string;
+            accountType: string;
+            accountNumber: string;
+            amount: number;
+          }>),
+  };
+
+  const totalCurrentAssets = normalizeMoneyAmount(
+    cash.total + bankBalances.total + inventoryTotal + arTotal,
+  );
+
+  return {
+    totalCurrentAssets,
+    cash,
+    bankBalances,
+    inventory: {
+      total: inventoryTotal,
+      numberOfSku: inventoryRows.length,
+      items: inventoryRows.map(({ stockName, amount }) => ({
+        stockName,
+        amount,
+      })),
+    },
+    accountsReceivable: {
+      total: arTotal,
+      items: arItems.map(
+        ({ invoiceNumber, customerName, status, amount }) => ({
+          invoiceNumber,
+          customerName,
+          status,
+          amount,
+        }),
+      ),
+    },
+    /** Diagnostic totals used to derive cash/bank (not required by UI spec). */
+    methodology: {
+      cashReceipts,
+      bankReceipts,
+      expenseOutflows,
+      note: "Cash = PAID Cash sales (less expense shortfall). Bank = PAID Card/Transfer/Invoice sales − all expense totals. AR = unpaid invoice/card/transfer totals. Inventory = qty × purchase cost.",
+    },
+  };
+}
 
 function d(v: Decimal | null | undefined): number {
   if (v == null) return 0;
@@ -136,6 +302,36 @@ async function findOwnedAsset(userId: string, assetRef: string) {
   });
 }
 
+async function findOwnedTransfer(
+  client: typeof prisma | Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  userId: string,
+  transferRef: string,
+) {
+  const ref = transferRef.trim();
+  if (!ref) return null;
+  const include = {
+    asset: {
+      select: {
+        id: true,
+        assetCode: true,
+        assetName: true,
+        assetType: true,
+        status: true,
+      },
+    },
+  } as const;
+  if (UUID_RE.test(ref)) {
+    return client.assetTransfer.findFirst({
+      where: { id: ref, userId },
+      include,
+    });
+  }
+  return client.assetTransfer.findFirst({
+    where: { userId, transferCode: ref },
+    include,
+  });
+}
+
 function mapAssetRow(
   asset: {
     id: string;
@@ -211,7 +407,7 @@ function mapAssetRow(
 export const assetsService = {
   async summary(userId: string) {
     const assets = await prisma.asset.findMany({
-      where: { userId, status: ASSET_STATUSES[0] },
+      where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
     });
     let purchaseCost = 0;
     let accumulatedDepreciation = 0;
@@ -287,7 +483,9 @@ export const assetsService = {
           consultantReviewStatus: assignToConsultant
             ? CONSULTANT_REVIEW_STATUSES[0]
             : null,
-          status: ASSET_STATUSES[0],
+          status: assignToConsultant
+            ? ASSET_STATUS.PENDING
+            : ASSET_STATUS.ACTIVE,
         },
       });
       await appendAssetHistory(tx, {
@@ -330,7 +528,7 @@ export const assetsService = {
       where: { id: assetId, userId },
     });
     if (!existing) return null;
-    if (existing.status !== ASSET_STATUSES[0]) {
+    if (!isAssetOnBooks(existing.status)) {
       throw new HttpReplyError(
         400,
         `Cannot update asset with status ${existing.status}`,
@@ -389,8 +587,19 @@ export const assetsService = {
         if (!existing.consultantReviewStatus) {
           updateData.consultantReviewStatus = CONSULTANT_REVIEW_STATUSES[0];
         }
+        if (isAssetOnBooks(existing.status)) {
+          // Flagged for review but consultant not necessarily assigned yet.
+          updateData.status = ASSET_STATUS.PENDING;
+        }
       } else if (data.assignToConsultant === false) {
         updateData.consultantReviewStatus = null;
+        updateData.assignedConsultantId = null;
+        if (
+          existing.status === ASSET_STATUS.AWAITING ||
+          existing.status === ASSET_STATUS.PENDING
+        ) {
+          updateData.status = ASSET_STATUS.ACTIVE;
+        }
       }
     }
 
@@ -472,38 +681,19 @@ export const assetsService = {
   },
 
   async dashboard(userId: string) {
-    const [assets, pendingReviews, inventoryItems, unpaidSales] =
-      await Promise.all([
-        prisma.asset.findMany({
-          where: { userId, status: ASSET_STATUSES[0] },
-        }),
-        prisma.asset.count({
-          where: {
-            userId,
-            assignToConsultant: true,
-            consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[0],
-          },
-        }),
-        prisma.inventoryItem.findMany({ where: { userId } }),
-        prisma.sale.findMany({
-          where: {
-            userId,
-            status: { in: [...SALE_RECEIVABLE_STATUSES] },
-          },
-        }),
-      ]);
-
-    const inventoryTotal = normalizeMoneyAmount(
-      inventoryItems.reduce(
-        (s, it) => s + d(it.quantity) * d(it.purchaseCost),
-        0,
-      ),
-    );
-    const arTotal = normalizeMoneyAmount(
-      unpaidSales.reduce((s, sale) => s + d(sale.totalAmount), 0),
-    );
-    /** Total value of current assets (inventory + AR; cash/bank stubs = 0 until accounts exist). */
-    const currentAssetsTotal = normalizeMoneyAmount(inventoryTotal + arTotal);
+    const [assets, pendingReviews, current] = await Promise.all([
+      prisma.asset.findMany({
+        where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
+      }),
+      prisma.asset.count({
+        where: {
+          userId,
+          assignToConsultant: true,
+          consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[0],
+        },
+      }),
+      buildCurrentAssetsSnapshot(userId),
+    ]);
 
     const now = new Date();
     let totalCost = 0;
@@ -546,9 +736,13 @@ export const assetsService = {
     return {
       summary: {
         pendingReviews,
-        currentAssets: currentAssetsTotal,
+        currentAssets: current.totalCurrentAssets,
         nonCurrentAssets: normalizeMoneyAmount(nonCurrentNetBookValue),
         annualDepreciation: normalizeMoneyAmount(annualDepreciation),
+        cash: current.cash.total,
+        bankBalances: current.bankBalances.total,
+        inventory: current.inventory.total,
+        accountsReceivable: current.accountsReceivable.total,
       },
       nonCurrentAssetCategories,
       plImpact: {
@@ -561,77 +755,24 @@ export const assetsService = {
   },
 
   async currentAssets(userId: string) {
-    const [inventoryItems, unpaidSales] = await Promise.all([
-      prisma.inventoryItem.findMany({ where: { userId } }),
-      prisma.sale.findMany({
-        where: {
-          userId,
-          status: { in: [...SALE_RECEIVABLE_STATUSES] },
-        },
-        orderBy: { saleDate: "desc" },
-      }),
-    ]);
-
-    const inventoryRows = inventoryItems
-      .map((it) => {
-        const amount = normalizeMoneyAmount(d(it.quantity) * d(it.purchaseCost));
-        return {
-          stockName: it.name,
-          amount,
-          quantity: d(it.quantity),
-        };
-      })
-      .filter((r) => r.amount > 0 || r.quantity > 0);
-
-    const inventoryTotal = normalizeMoneyAmount(
-      inventoryRows.reduce((s, r) => s + r.amount, 0),
-    );
-
-    const arItems = unpaidSales.map((s) => ({
-      invoiceNumber: s.invoiceNumber,
-      customerName: s.customerName,
-      status: s.status === "Overdue" ? "OVERDUE" : "CURRENT",
-      amount: normalizeMoneyAmount(d(s.totalAmount)),
-    }));
-    const arTotal = normalizeMoneyAmount(
-      arItems.reduce((s, r) => s + r.amount, 0),
-    );
-
-    const cash = { total: 0, items: [] as Array<{ title: string; subtitle: string; amount: number }> };
-    const bankBalances = {
-      total: 0,
-      items: [] as Array<{
-        bankName: string;
-        accountType: string;
-        accountNumber: string;
-        amount: number;
-      }>,
-    };
-
+    const snapshot = await buildCurrentAssetsSnapshot(userId);
     return {
-      totalCurrentAssets: normalizeMoneyAmount(
-        cash.total + bankBalances.total + inventoryTotal + arTotal,
-      ),
-      cash,
-      bankBalances,
-      inventory: {
-        total: inventoryTotal,
-        numberOfSku: inventoryRows.length,
-        items: inventoryRows.map(({ stockName, amount }) => ({
-          stockName,
-          amount,
-        })),
-      },
-      accountsReceivable: {
-        total: arTotal,
-        items: arItems,
-      },
+      totalCurrentAssets: snapshot.totalCurrentAssets,
+      cash: snapshot.cash,
+      bankBalances: snapshot.bankBalances,
+      inventory: snapshot.inventory,
+      accountsReceivable: snapshot.accountsReceivable,
     };
+  },
+
+  /** Shared snapshot for reports / other callers. */
+  async getCurrentAssetsSnapshot(userId: string) {
+    return buildCurrentAssetsSnapshot(userId);
   },
 
   async nonCurrentAssets(userId: string) {
     const assets = await prisma.asset.findMany({
-      where: { userId, status: ASSET_STATUSES[0] },
+      where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
       orderBy: { assetName: "asc" },
     });
     const now = new Date();
@@ -682,7 +823,7 @@ export const assetsService = {
 
   async depreciationAmortization(userId: string) {
     const assets = await prisma.asset.findMany({
-      where: { userId, status: ASSET_STATUSES[0] },
+      where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
       orderBy: { assetName: "asc" },
     });
     const now = new Date();
@@ -728,7 +869,7 @@ export const assetsService = {
   ) {
     const asset = await findOwnedAsset(userId, data.assetId);
     if (!asset) throw new HttpReplyError(400, "Asset not found");
-    if (asset.status !== ASSET_STATUSES[0]) {
+    if (!isAssetOnBooks(asset.status)) {
       throw new HttpReplyError(
         400,
         `Cannot transfer asset with status ${asset.status}`,
@@ -750,18 +891,35 @@ export const assetsService = {
     }
 
     const transferCode = await nextCodedNumber(TRANSFER_COUNTER_ID, "TRF");
-    const transfer = await prisma.assetTransfer.create({
-      data: {
+    const transferDate = parseDateOnly(data.transferDate);
+    const transfer = await prisma.$transaction(async (tx) => {
+      const row = await tx.assetTransfer.create({
+        data: {
+          userId,
+          transferCode,
+          assetId: asset.id,
+          transferType: data.transferType,
+          fromLocation: data.fromLocation.trim(),
+          toLocation: data.toLocation.trim(),
+          transferDate,
+          reason: data.reason.trim(),
+          status: TRANSFER_STATUSES[0],
+        },
+      });
+      await appendAssetHistory(tx, {
         userId,
-        transferCode,
         assetId: asset.id,
-        transferType: data.transferType,
-        fromLocation: data.fromLocation.trim(),
-        toLocation: data.toLocation.trim(),
-        transferDate: parseDateOnly(data.transferDate),
-        reason: data.reason.trim(),
-        status: TRANSFER_STATUSES[0],
-      },
+        type: "ASSET_TRANSFER",
+        eventDate: transferDate,
+        details: {
+          fromLocation: row.fromLocation,
+          toLocation: row.toLocation,
+          transferType: row.transferType,
+          status: row.status,
+          reason: row.reason,
+        },
+      });
+      return row;
     });
 
     return {
@@ -905,25 +1063,12 @@ export const assetsService = {
 
   async approveTransfer(userId: string, transferId: string) {
     return prisma.$transaction(async (tx) => {
-      const transfer = await tx.assetTransfer.findFirst({
-        where: { id: transferId, userId },
-        include: {
-          asset: {
-            select: {
-              id: true,
-              assetCode: true,
-              assetName: true,
-              assetType: true,
-              status: true,
-            },
-          },
-        },
-      });
+      const transfer = await findOwnedTransfer(tx, userId, transferId);
       if (!transfer) return null;
       if (transfer.status !== TRANSFER_STATUSES[0]) {
         throw new HttpReplyError(400, "Only pending transfers can be approved");
       }
-      if (transfer.asset.status !== ASSET_STATUSES[0]) {
+      if (!isAssetOnBooks(transfer.asset.status)) {
         throw new HttpReplyError(
           400,
           `Cannot approve transfer for asset with status ${transfer.asset.status}`,
@@ -931,24 +1076,37 @@ export const assetsService = {
       }
 
       const updated = await tx.assetTransfer.update({
-        where: { id: transferId },
+        where: { id: transfer.id },
         data: { status: TRANSFER_STATUSES[1] },
       });
       await tx.asset.update({
         where: { id: transfer.assetId },
         data: { assetLocation: transfer.toLocation },
       });
-      await appendAssetHistory(tx, {
-        userId,
-        assetId: transfer.assetId,
-        type: "ASSET_TRANSFER",
-        eventDate: transfer.transferDate,
-        details: {
-          fromLocation: transfer.fromLocation,
-          toLocation: transfer.toLocation,
-          transferType: transfer.transferType,
+
+      // History is written on create; if missing (legacy), record completion now.
+      const alreadyLogged = await tx.assetHistory.findFirst({
+        where: {
+          userId,
+          assetId: transfer.assetId,
+          type: "ASSET_TRANSFER",
+          eventDate: transfer.transferDate,
         },
       });
+      if (!alreadyLogged) {
+        await appendAssetHistory(tx, {
+          userId,
+          assetId: transfer.assetId,
+          type: "ASSET_TRANSFER",
+          eventDate: transfer.transferDate,
+          details: {
+            fromLocation: transfer.fromLocation,
+            toLocation: transfer.toLocation,
+            transferType: transfer.transferType,
+            status: TRANSFER_STATUSES[1],
+          },
+        });
+      }
 
       return {
         id: updated.id,
@@ -967,21 +1125,14 @@ export const assetsService = {
   },
 
   async rejectTransfer(userId: string, transferId: string) {
-    const transfer = await prisma.assetTransfer.findFirst({
-      where: { id: transferId, userId },
-      include: {
-        asset: {
-          select: { assetCode: true, assetName: true, assetType: true },
-        },
-      },
-    });
+    const transfer = await findOwnedTransfer(prisma, userId, transferId);
     if (!transfer) return null;
     if (transfer.status !== TRANSFER_STATUSES[0]) {
       throw new HttpReplyError(400, "Only pending transfers can be rejected");
     }
 
     const updated = await prisma.assetTransfer.update({
-      where: { id: transferId },
+      where: { id: transfer.id },
       data: { status: TRANSFER_STATUSES[2] },
     });
 
@@ -1013,7 +1164,7 @@ export const assetsService = {
 
     const asset = await findOwnedAsset(userId, data.assetId);
     if (!asset) throw new HttpReplyError(400, "Asset not found");
-    if (asset.status !== ASSET_STATUSES[0]) {
+    if (!isAssetOnBooks(asset.status)) {
       throw new HttpReplyError(
         400,
         `Cannot sell asset with status ${asset.status}`,
@@ -1051,7 +1202,7 @@ export const assetsService = {
       });
       await tx.asset.update({
         where: { id: asset.id },
-        data: { status: ASSET_STATUSES[1] satisfies AssetStatus },
+        data: { status: ASSET_STATUS.SOLD },
       });
       await tx.assetTransfer.updateMany({
         where: {
@@ -1144,7 +1295,7 @@ export const assetsService = {
   ) {
     const asset = await findOwnedAsset(userId, data.assetId);
     if (!asset) throw new HttpReplyError(400, "Asset not found");
-    if (asset.status !== ASSET_STATUSES[0]) {
+    if (!isAssetOnBooks(asset.status)) {
       throw new HttpReplyError(
         400,
         `Cannot dispose asset with status ${asset.status}`,
@@ -1176,7 +1327,7 @@ export const assetsService = {
       });
       await tx.asset.update({
         where: { id: asset.id },
-        data: { status: ASSET_STATUSES[2] satisfies AssetStatus },
+        data: { status: ASSET_STATUS.DISPOSED },
       });
       await tx.assetTransfer.updateMany({
         where: {

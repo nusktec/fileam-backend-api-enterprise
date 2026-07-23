@@ -91,12 +91,37 @@ export function isValidConsultantReviewStatus(
   return (CONSULTANT_REVIEW_STATUSES as readonly string[]).includes(value);
 }
 
-export const ASSET_STATUSES = ["ACTIVE", "SOLD", "DISPOSED"] as const;
+export const ASSET_STATUSES = [
+  "ACTIVE",
+  "PENDING",
+  "AWAITING",
+  "SOLD",
+  "DISPOSED",
+] as const;
 
 export type AssetStatus = (typeof ASSET_STATUSES)[number];
 
+export const ASSET_STATUS = {
+  ACTIVE: "ACTIVE",
+  PENDING: "PENDING",
+  AWAITING: "AWAITING",
+  SOLD: "SOLD",
+  DISPOSED: "DISPOSED",
+} as const satisfies Record<string, AssetStatus>;
+
+/** Owned / on books — not sold or disposed. */
+export const ASSET_ON_BOOKS_STATUSES: AssetStatus[] = [
+  ASSET_STATUS.ACTIVE,
+  ASSET_STATUS.PENDING,
+  ASSET_STATUS.AWAITING,
+];
+
 export function isValidAssetStatus(value: string): value is AssetStatus {
   return (ASSET_STATUSES as readonly string[]).includes(value);
+}
+
+export function isAssetOnBooks(status: string): boolean {
+  return (ASSET_ON_BOOKS_STATUSES as readonly string[]).includes(status);
 }
 
 /** Unified asset timeline action types (Asset Reviews API). */
