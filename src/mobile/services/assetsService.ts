@@ -483,8 +483,9 @@ export const assetsService = {
           consultantReviewStatus: assignToConsultant
             ? CONSULTANT_REVIEW_STATUSES[0]
             : null,
+          // Review queue default: AWAITING until a consultant is assigned → PENDING_REVIEW
           status: assignToConsultant
-            ? ASSET_STATUS.PENDING
+            ? ASSET_STATUS.AWAITING
             : ASSET_STATUS.ACTIVE,
         },
       });
@@ -588,15 +589,19 @@ export const assetsService = {
           updateData.consultantReviewStatus = CONSULTANT_REVIEW_STATUSES[0];
         }
         if (isAssetOnBooks(existing.status)) {
-          // Flagged for review but consultant not necessarily assigned yet.
-          updateData.status = ASSET_STATUS.PENDING;
+          // Flagged for review; consultant not assigned yet → AWAITING
+          // If already assigned, keep PENDING_REVIEW
+          updateData.status = existing.assignedConsultantId
+            ? ASSET_STATUS.PENDING_REVIEW
+            : ASSET_STATUS.AWAITING;
         }
       } else if (data.assignToConsultant === false) {
         updateData.consultantReviewStatus = null;
         updateData.assignedConsultantId = null;
         if (
           existing.status === ASSET_STATUS.AWAITING ||
-          existing.status === ASSET_STATUS.PENDING
+          existing.status === ASSET_STATUS.PENDING ||
+          existing.status === ASSET_STATUS.PENDING_REVIEW
         ) {
           updateData.status = ASSET_STATUS.ACTIVE;
         }

@@ -283,7 +283,7 @@ export const assetReviewsService = {
           assignToConsultant: true,
           assignedConsultantId: consultant.id,
           consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[0],
-          status: ASSET_STATUS.AWAITING, // consultant assigned — awaiting review work
+          status: ASSET_STATUS.PENDING_REVIEW, // consultant assigned — in review
         },
       });
       await appendAssetHistory(tx, {
@@ -308,7 +308,7 @@ export const assetReviewsService = {
 
   /**
    * Distinct step: consultant acknowledges receipt before completing review.
-   * Logs CONFIRM_REVIEW; status stays PENDING until approve.
+   * Logs CONFIRM_REVIEW; asset status stays PENDING_REVIEW until approve.
    */
   async confirmReview(userId: string, assetRef: string) {
     const asset = await findOwnedAsset(userId, assetRef);

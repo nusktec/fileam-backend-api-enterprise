@@ -377,6 +377,9 @@ export const assetReportsService = {
       const awaiting = mapped.filter(
         (x) => x.a.status === ASSET_STATUS.AWAITING,
       ).length;
+      const pendingReview = mapped.filter(
+        (x) => x.a.status === ASSET_STATUS.PENDING_REVIEW,
+      ).length;
       const buffer = await renderTablePdf({
         title,
         subtitle,
@@ -385,6 +388,7 @@ export const assetReportsService = {
           { label: "Active assets", value: String(active) },
           { label: "Pending", value: String(pending) },
           { label: "Awaiting review", value: String(awaiting) },
+          { label: "Pending review", value: String(pendingReview) },
           { label: "Total purchase cost", value: fmt(totalCost) },
           { label: "Total net book value", value: fmt(totalBook) },
         ],

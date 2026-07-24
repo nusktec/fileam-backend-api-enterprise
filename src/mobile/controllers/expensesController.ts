@@ -131,37 +131,10 @@ export const createExpense = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const b = req.body ?? {};
-    const {
-      amount,
-      description,
-      category,
-      expenseType,
-      date,
-      vatInclusive,
-      vatAmount,
-      receiptUrl,
-    } = b;
-    const supplierName = b.supplierName ?? b.Supplier_name;
-    const supplierId = b.supplierId ?? b.Supplier_Id;
-    const expense = await expensesService.create(userId, {
-      amount: Number(amount),
-      description,
-      category,
-      expenseType,
-      date,
-      vatInclusive: Boolean(vatInclusive),
-      vatAmount: vatAmount != null ? Number(vatAmount) : undefined,
-      receiptUrl,
-      supplierName:
-        supplierName != null && String(supplierName).trim() !== ""
-          ? String(supplierName).trim()
-          : undefined,
-      supplierId:
-        supplierId != null && String(supplierId).trim() !== ""
-          ? String(supplierId).trim()
-          : undefined,
-    });
+    const expense = await expensesService.create(
+      userId,
+      mapExpenseCreateBody(req.body ?? {}),
+    );
     res
       .status(HttpStatusCode.CREATED)
       .json(outJson(true, "Expense added", expense));
@@ -170,6 +143,59 @@ export const createExpense = async (
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to add expense", null));
+  }
+};
+
+function mapExpenseCreateBody(b: Record<string, unknown>) {
+  const supplierName = b.supplierName ?? b.Supplier_name;
+  const supplierId = b.supplierId ?? b.Supplier_Id;
+  return {
+    amount: Number(b.amount),
+    description: String(b.description),
+    category: String(b.category),
+    expenseType:
+      b.expenseType != null && String(b.expenseType).trim() !== ""
+        ? String(b.expenseType).trim()
+        : undefined,
+    date: String(b.date),
+    vatInclusive: Boolean(b.vatInclusive),
+    vatAmount: b.vatAmount != null ? Number(b.vatAmount) : undefined,
+    receiptUrl:
+      b.receiptUrl != null && String(b.receiptUrl).trim() !== ""
+        ? String(b.receiptUrl).trim()
+        : undefined,
+    supplierName:
+      supplierName != null && String(supplierName).trim() !== ""
+        ? String(supplierName).trim()
+        : undefined,
+    supplierId:
+      supplierId != null && String(supplierId).trim() !== ""
+        ? String(supplierId).trim()
+        : undefined,
+  };
+}
+
+export const createExpensesBulk = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const itemsRaw = Array.isArray(req.body?.items) ? req.body.items : [];
+    const result = await expensesService.bulkCreate(
+      userId,
+      itemsRaw.map((item: Record<string, unknown>) =>
+        mapExpenseCreateBody(item),
+      ),
+    );
+    res
+      .status(HttpStatusCode.CREATED)
+      .json(outJson(true, "Expenses added", result));
+  } catch (error) {
+    if (replyExpenseError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to add expenses", null));
   }
 };
 

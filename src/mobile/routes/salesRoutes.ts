@@ -4,6 +4,7 @@ import {
   getSaleById,
   getSaleDetails,
   createSale,
+  createSalesBulk,
   updateSale,
   downloadSaleInvoice,
   markInvoicePaid,
@@ -12,7 +13,10 @@ import {
 } from "../controllers/salesController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
-import { createSaleValidation } from "../../middlewares/validations/salesValidation";
+import {
+  createSaleValidation,
+  bulkCreateSaleValidation,
+} from "../../middlewares/validations/salesValidation";
 import { updateSaleValidation } from "../../middlewares/validations/updateSaleValidation";
 import { updateSalePaymentStatusValidation } from "../../middlewares/validations/salePaymentStatusValidation";
 import { validateIdParam } from "../../middlewares/validations/mobileValidation";
@@ -23,6 +27,7 @@ const router = express.Router();
 router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/", withPagination("saleDate"), listSales);
+router.post("/bulk", bulkCreateSaleValidation, createSalesBulk);
 router.delete("/:id", validateIdParam, deleteSale);
 router.post("/:id/mark-paid", validateIdParam, markInvoicePaid);
 router.patch(

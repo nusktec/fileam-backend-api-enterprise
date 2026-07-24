@@ -40,6 +40,41 @@ function assertSaleFinancials(
   assertMonetaryAmountInRange(Number(totalAmount), "Total amount");
 }
 
+const BULK_CREATE_MAX = 100;
+
+function mapSaleCreateResult(sale: {
+  id: string;
+  invoiceNumber: string;
+  status: string;
+  description: string;
+  itemName: string | null;
+  saleDate: Date;
+  amount: Decimal;
+  vatAmount: Decimal;
+  totalAmount: Decimal;
+  customerName: string | null;
+  customerId: string | null;
+  receiptUrl: string | null;
+  paymentType: string;
+}) {
+  return {
+    id: sale.id,
+    invoiceNumber: sale.invoiceNumber,
+    status: sale.status,
+    description: sale.description,
+    itemName: sale.itemName ?? null,
+    date: sale.saleDate,
+    amount: decimalToNumber(sale.amount),
+    vatAmount: decimalToNumber(sale.vatAmount),
+    totalAmount: decimalToNumber(sale.totalAmount),
+    customerName: sale.customerName ?? null,
+    customerId: sale.customerId ?? null,
+    receiptUrl: sale.receiptUrl ?? null,
+    paymentType: sale.paymentType,
+    paymentConfirmedAt: null as string | null,
+  };
+}
+
 function mapSaleSummary(sale: {
   id: string;
   invoiceNumber: string;
@@ -373,21 +408,117 @@ export const salesService = {
       calendarPeriodFromDate(saleDate),
     ]);
 
+    return mapSaleCreateResult(sale);
+  },
+
+  /**
+   * Bulk-insert sales in one transaction (consecutive invoice numbers).
+   * Max 100 items. Syncs tax payables once for all affected periods.
+   */
+  async bulkCreate(
+    userId: string,
+    items: Array<{
+      amount: number;
+      description: string;
+      itemName?: string | null;
+      receiptUrl?: string | null;
+      category?: string;
+      customerName?: string;
+      customerId?: string;
+      paymentType: string;
+      date: string;
+      vatableIncome: boolean;
+      serviceIncome: boolean;
+      createdById?: string;
+    }>,
+  ) {
+    if (items.length === 0) {
+      throw new HttpReplyError(400, "items must be a non-empty array");
+    }
+    if (items.length > BULK_CREATE_MAX) {
+      throw new HttpReplyError(
+        400,
+        `Maximum ${BULK_CREATE_MAX} items per bulk insert`,
+      );
+    }
+
+    const prepared = items.map((data) => {
+      const amount = new Decimal(data.amount);
+      const vatRate = data.vatableIncome
+        ? new Decimal(VAT_RATE_PERCENT)
+        : new Decimal(0);
+      const vatAmount = data.vatableIncome
+        ? amount.mul(VAT_RATE_PERCENT / PERCENT)
+        : new Decimal(0);
+      const totalAmount = amount.add(vatAmount);
+      assertSaleFinancials(amount, vatAmount, totalAmount);
+      return {
+        data,
+        amount,
+        vatRate,
+        vatAmount,
+        totalAmount,
+        status: initialSaleStatusForPaymentType(data.paymentType),
+        saleDate: toCalendarDate(data.date),
+      };
+    });
+
+    const sales = await prisma.$transaction(async (tx) => {
+      const userRow = await tx.user.findUnique({
+        where: { id: userId },
+      });
+      if (!userRow) return null;
+      const startNum =
+        Number((userRow as { nextSaleNumber?: number }).nextSaleNumber) || 1;
+      await tx.$executeRaw`
+        UPDATE "User" SET next_sale_number = ${startNum + prepared.length} WHERE id = ${userId}
+      `;
+
+      const created = [];
+      for (let i = 0; i < prepared.length; i++) {
+        const p = prepared[i]!;
+        const row = await tx.sale.create({
+          data: {
+            userId,
+            createdById: p.data.createdById ?? userId,
+            invoiceNumber: String(startNum + i),
+            description: p.data.description,
+            itemName: nullableTrimmed(p.data.itemName),
+            category: p.data.category ?? null,
+            customerName: p.data.customerName?.trim() || null,
+            customerId: p.data.customerId?.trim() || null,
+            amount: p.amount,
+            vatRate: p.vatRate,
+            vatAmount: p.vatAmount,
+            totalAmount: p.totalAmount,
+            paymentType: p.data.paymentType,
+            saleDate: p.saleDate,
+            vatableIncome: p.data.vatableIncome,
+            serviceIncome: p.data.serviceIncome,
+            status: p.status,
+            receiptUrl: nullableTrimmed(p.data.receiptUrl),
+          },
+        });
+        created.push(row);
+      }
+      return created;
+    });
+
+    if (!sales) return null;
+
+    const periods = [
+      ...new Map(
+        prepared.map((p) => {
+          const period = calendarPeriodFromDate(p.saleDate);
+          return [`${period.year}-${period.month}`, period] as const;
+        }),
+      ).values(),
+    ];
+    await taxPayablesService.syncPayablesForPeriods(userId, periods);
+
     return {
-      id: sale.id,
-      invoiceNumber: sale.invoiceNumber,
-      status: sale.status,
-      description: sale.description,
-      itemName: sale.itemName ?? null,
-      date: sale.saleDate,
-      amount: decimalToNumber(sale.amount),
-      vatAmount: decimalToNumber(sale.vatAmount),
-      totalAmount: decimalToNumber(sale.totalAmount),
-      customerName: sale.customerName ?? null,
-      customerId: sale.customerId ?? null,
-      receiptUrl: sale.receiptUrl ?? null,
-      paymentType: sale.paymentType,
-      paymentConfirmedAt: null,
+      count: sales.length,
+      sales: sales.map(mapSaleCreateResult),
     };
   },
 

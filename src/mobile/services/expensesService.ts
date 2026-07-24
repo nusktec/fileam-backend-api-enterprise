@@ -1,11 +1,13 @@
-import { prisma } from "../../config/database";
+import { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
+import { prisma } from "../../config/database";
 import {
   PERCENT,
   VAT_RATE_PERCENT,
 } from "../../constants/percentages";
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 import { EXPENSE_TYPES } from "../../constants/expenseTypes";
+import { HttpReplyError } from "../../utils/httpReplyError";
 import {
   assertMonetaryAmountInRange,
   normalizeMoneyAmount,
@@ -91,6 +93,60 @@ async function nextExpenseNumber(): Promise<string> {
     update: { lastNumber: { increment: 1 } },
   });
   return `EXP-${String(counter.lastNumber).padStart(3, "0")}`;
+}
+
+const BULK_CREATE_MAX = 100;
+
+async function allocateExpenseNumbers(
+  tx: Prisma.TransactionClient,
+  count: number,
+): Promise<string[]> {
+  await tx.counter.upsert({
+    where: { id: EXPENSE_COUNTER_ID },
+    create: { id: EXPENSE_COUNTER_ID, lastNumber: 0 },
+    update: {},
+  });
+  const updated = await tx.counter.update({
+    where: { id: EXPENSE_COUNTER_ID },
+    data: { lastNumber: { increment: count } },
+  });
+  const end = updated.lastNumber;
+  const start = end - count + 1;
+  return Array.from({ length: count }, (_, i) =>
+    `EXP-${String(start + i).padStart(3, "0")}`,
+  );
+}
+
+function mapExpenseCreateResult(expense: {
+  id: string;
+  expenseNumber: string;
+  description: string;
+  expenseDate: Date;
+  category: string;
+  expenseType: string;
+  amount: Decimal;
+  totalAmount: Decimal;
+  vatAmount: Decimal | null;
+  vatInclusive: boolean;
+  supplierName: string | null;
+  supplierId: string | null;
+}) {
+  return {
+    id: expense.id,
+    expenseNumber: expense.expenseNumber,
+    description: expense.description,
+    date: expense.expenseDate,
+    category: expense.category,
+    expenseType: expense.expenseType,
+    baseAmount: decimalToNumber(expense.amount),
+    vatAmount:
+      expense.vatAmount != null ? decimalToNumber(expense.vatAmount) : null,
+    amount: decimalToNumber(expense.totalAmount),
+    vatTag: expense.vatInclusive,
+    vatInclusive: expense.vatInclusive,
+    supplierName: expense.supplierName ?? null,
+    supplierId: expense.supplierId ?? null,
+  };
 }
 
 function mapExpenseListItem(e: {
@@ -278,21 +334,98 @@ export const expensesService = {
       calendarPeriodFromDate(expenseDate),
     ]);
 
+    return mapExpenseCreateResult(expense);
+  },
+
+  /**
+   * Bulk-insert expenses in one transaction (consecutive EXP- numbers).
+   * Max 100 items. Syncs tax payables once for all affected periods.
+   */
+  async bulkCreate(
+    userId: string,
+    items: Array<{
+      amount: number;
+      description: string;
+      category: string;
+      expenseType?: string;
+      date: string;
+      vatInclusive: boolean;
+      vatAmount?: number;
+      receiptUrl?: string;
+      supplierName?: string;
+      supplierId?: string;
+      createdById?: string;
+    }>,
+  ) {
+    if (items.length === 0) {
+      throw new HttpReplyError(400, "items must be a non-empty array");
+    }
+    if (items.length > BULK_CREATE_MAX) {
+      throw new HttpReplyError(
+        400,
+        `Maximum ${BULK_CREATE_MAX} items per bulk insert`,
+      );
+    }
+
+    const prepared = items.map((data) => {
+      const amounts = resolveExpenseAmounts({
+        enteredAmount: data.amount,
+        vatInclusive: data.vatInclusive,
+        vatAmount: data.vatAmount,
+      });
+      const expenseType =
+        data.expenseType != null && String(data.expenseType).trim() !== ""
+          ? String(data.expenseType).trim()
+          : "OPEX";
+      return {
+        data,
+        ...amounts,
+        expenseType,
+        expenseDate: toCalendarDate(data.date),
+      };
+    });
+
+    const expenses = await prisma.$transaction(async (tx) => {
+      const numbers = await allocateExpenseNumbers(tx, prepared.length);
+      const created = [];
+      for (let i = 0; i < prepared.length; i++) {
+        const p = prepared[i]!;
+        const row = await tx.expense.create({
+          data: {
+            userId,
+            createdById: p.data.createdById ?? userId,
+            expenseNumber: numbers[i]!,
+            description: p.data.description,
+            category: p.data.category,
+            expenseType: p.expenseType,
+            amount: p.base,
+            vatInclusive: p.data.vatInclusive,
+            vatAmount: p.vatAmount,
+            totalAmount: p.totalAmount,
+            receiptUrl: p.data.receiptUrl ?? null,
+            supplierName: p.data.supplierName?.trim() || null,
+            supplierId: p.data.supplierId?.trim() || null,
+            expenseDate: p.expenseDate,
+          },
+        });
+        created.push(row);
+      }
+      return created;
+    });
+
+    const periods = [
+      ...new Map(
+        prepared.map((p) => {
+          const period = calendarPeriodFromDate(p.expenseDate);
+          return [`${period.year}-${period.month}`, period] as const;
+        }),
+      ).values(),
+    ];
+    await taxPayablesService.syncPayablesForPeriods(userId, periods);
+
     return {
-      id: expense.id,
-      expenseNumber: expense.expenseNumber,
-      description: expense.description,
-      date: expense.expenseDate,
-      category: expense.category,
-      expenseType: expense.expenseType,
-      baseAmount: decimalToNumber(expense.amount),
-      vatAmount:
-        expense.vatAmount != null ? decimalToNumber(expense.vatAmount) : null,
-      amount: decimalToNumber(expense.totalAmount),
-      vatTag: expense.vatInclusive,
-      vatInclusive: expense.vatInclusive,
-      supplierName: expense.supplierName ?? null,
-      supplierId: expense.supplierId ?? null,
+      count: expenses.length,
+      expenses: expenses.map(mapExpenseCreateResult),
     };
   },
 

@@ -95,6 +95,7 @@ export const ASSET_STATUSES = [
   "ACTIVE",
   "PENDING",
   "AWAITING",
+  "PENDING_REVIEW",
   "SOLD",
   "DISPOSED",
 ] as const;
@@ -105,6 +106,7 @@ export const ASSET_STATUS = {
   ACTIVE: "ACTIVE",
   PENDING: "PENDING",
   AWAITING: "AWAITING",
+  PENDING_REVIEW: "PENDING_REVIEW",
   SOLD: "SOLD",
   DISPOSED: "DISPOSED",
 } as const satisfies Record<string, AssetStatus>;
@@ -114,6 +116,7 @@ export const ASSET_ON_BOOKS_STATUSES: AssetStatus[] = [
   ASSET_STATUS.ACTIVE,
   ASSET_STATUS.PENDING,
   ASSET_STATUS.AWAITING,
+  ASSET_STATUS.PENDING_REVIEW,
 ];
 
 export function isValidAssetStatus(value: string): value is AssetStatus {
