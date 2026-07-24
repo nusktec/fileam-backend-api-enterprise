@@ -4,9 +4,11 @@ import {
   ASSET_ON_BOOKS_STATUSES,
   ASSET_STATUS,
   ASSET_TYPES,
-  CONSULTANT_REVIEW_STATUSES,
+  CONSULTANT_REVIEW_STATUS,
+  CONSULTANT_REVIEW_OPEN_STATUSES,
   GAIN_LOSS_TYPES,
   TRANSFER_STATUSES,
+  isAssetInReviewStatus,
   isAssetOnBooks,
   type AssetStatus,
   type GainLossType,
@@ -481,9 +483,8 @@ export const assetsService = {
           additionalNote: data.additionalNote?.trim() || null,
           assignToConsultant,
           consultantReviewStatus: assignToConsultant
-            ? CONSULTANT_REVIEW_STATUSES[0]
+            ? CONSULTANT_REVIEW_STATUS.AWAITING
             : null,
-          // Review queue default: AWAITING until a consultant is assigned → PENDING_REVIEW
           status: assignToConsultant
             ? ASSET_STATUS.AWAITING
             : ASSET_STATUS.ACTIVE,
@@ -586,23 +587,17 @@ export const assetsService = {
       updateData.assignToConsultant = data.assignToConsultant;
       if (data.assignToConsultant === true) {
         if (!existing.consultantReviewStatus) {
-          updateData.consultantReviewStatus = CONSULTANT_REVIEW_STATUSES[0];
+          updateData.consultantReviewStatus =
+            CONSULTANT_REVIEW_STATUS.AWAITING;
         }
         if (isAssetOnBooks(existing.status)) {
-          // Flagged for review; consultant not assigned yet → AWAITING
-          // If already assigned, keep PENDING_REVIEW
-          updateData.status = existing.assignedConsultantId
-            ? ASSET_STATUS.PENDING_REVIEW
-            : ASSET_STATUS.AWAITING;
+          // Default review state until a consultant is assigned.
+          updateData.status = ASSET_STATUS.AWAITING;
         }
       } else if (data.assignToConsultant === false) {
         updateData.consultantReviewStatus = null;
         updateData.assignedConsultantId = null;
-        if (
-          existing.status === ASSET_STATUS.AWAITING ||
-          existing.status === ASSET_STATUS.PENDING ||
-          existing.status === ASSET_STATUS.PENDING_REVIEW
-        ) {
+        if (isAssetInReviewStatus(existing.status)) {
           updateData.status = ASSET_STATUS.ACTIVE;
         }
       }
@@ -650,7 +645,7 @@ export const assetsService = {
         where: {
           userId,
           assignToConsultant: true,
-          consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[0],
+          consultantReviewStatus: { in: [...CONSULTANT_REVIEW_OPEN_STATUSES] },
         },
       }),
     ]);
@@ -694,7 +689,7 @@ export const assetsService = {
         where: {
           userId,
           assignToConsultant: true,
-          consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[0],
+          consultantReviewStatus: { in: [...CONSULTANT_REVIEW_OPEN_STATUSES] },
         },
       }),
       buildCurrentAssetsSnapshot(userId),

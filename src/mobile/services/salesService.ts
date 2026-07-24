@@ -17,6 +17,8 @@ import {
 } from "../../utils/dateRangeQuery";
 import { taxPayablesService } from "./taxPayablesService";
 
+const BULK_CREATE_MAX = 100;
+
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
@@ -38,41 +40,6 @@ function assertSaleFinancials(
   assertMonetaryAmountInRange(Number(amount), "Amount");
   assertMonetaryAmountInRange(Number(vatAmount), "VAT amount");
   assertMonetaryAmountInRange(Number(totalAmount), "Total amount");
-}
-
-const BULK_CREATE_MAX = 100;
-
-function mapSaleCreateResult(sale: {
-  id: string;
-  invoiceNumber: string;
-  status: string;
-  description: string;
-  itemName: string | null;
-  saleDate: Date;
-  amount: Decimal;
-  vatAmount: Decimal;
-  totalAmount: Decimal;
-  customerName: string | null;
-  customerId: string | null;
-  receiptUrl: string | null;
-  paymentType: string;
-}) {
-  return {
-    id: sale.id,
-    invoiceNumber: sale.invoiceNumber,
-    status: sale.status,
-    description: sale.description,
-    itemName: sale.itemName ?? null,
-    date: sale.saleDate,
-    amount: decimalToNumber(sale.amount),
-    vatAmount: decimalToNumber(sale.vatAmount),
-    totalAmount: decimalToNumber(sale.totalAmount),
-    customerName: sale.customerName ?? null,
-    customerId: sale.customerId ?? null,
-    receiptUrl: sale.receiptUrl ?? null,
-    paymentType: sale.paymentType,
-    paymentConfirmedAt: null as string | null,
-  };
 }
 
 function mapSaleSummary(sale: {
@@ -408,13 +375,24 @@ export const salesService = {
       calendarPeriodFromDate(saleDate),
     ]);
 
-    return mapSaleCreateResult(sale);
+    return {
+      id: sale.id,
+      invoiceNumber: sale.invoiceNumber,
+      status: sale.status,
+      description: sale.description,
+      itemName: sale.itemName ?? null,
+      date: sale.saleDate,
+      amount: decimalToNumber(sale.amount),
+      vatAmount: decimalToNumber(sale.vatAmount),
+      totalAmount: decimalToNumber(sale.totalAmount),
+      customerName: sale.customerName ?? null,
+      customerId: sale.customerId ?? null,
+      receiptUrl: sale.receiptUrl ?? null,
+      paymentType: sale.paymentType,
+      paymentConfirmedAt: null,
+    };
   },
 
-  /**
-   * Bulk-insert sales in one transaction (consecutive invoice numbers).
-   * Max 100 items. Syncs tax payables once for all affected periods.
-   */
   async bulkCreate(
     userId: string,
     items: Array<{
@@ -427,98 +405,144 @@ export const salesService = {
       customerId?: string;
       paymentType: string;
       date: string;
-      vatableIncome: boolean;
-      serviceIncome: boolean;
-      createdById?: string;
+      vatableIncome?: boolean;
+      serviceIncome?: boolean;
     }>,
+    createdById?: string,
   ) {
-    if (items.length === 0) {
-      throw new HttpReplyError(400, "items must be a non-empty array");
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new HttpReplyError(400, "Provide a non-empty items array");
     }
     if (items.length > BULK_CREATE_MAX) {
       throw new HttpReplyError(
         400,
-        `Maximum ${BULK_CREATE_MAX} items per bulk insert`,
+        `Bulk create limited to ${BULK_CREATE_MAX} sales per request`,
       );
     }
 
-    const prepared = items.map((data) => {
-      const amount = new Decimal(data.amount);
-      const vatRate = data.vatableIncome
+    const prepared = items.map((raw, index) => {
+      const amount = new Decimal(raw.amount);
+      const vatableIncome = Boolean(raw.vatableIncome);
+      const serviceIncome = raw.serviceIncome !== false;
+      const vatRate = vatableIncome
         ? new Decimal(VAT_RATE_PERCENT)
         : new Decimal(0);
-      const vatAmount = data.vatableIncome
+      const vatAmount = vatableIncome
         ? amount.mul(VAT_RATE_PERCENT / PERCENT)
         : new Decimal(0);
       const totalAmount = amount.add(vatAmount);
-      assertSaleFinancials(amount, vatAmount, totalAmount);
+      try {
+        assertSaleFinancials(amount, vatAmount, totalAmount);
+      } catch (e) {
+        if (e instanceof HttpReplyError) {
+          throw new HttpReplyError(
+            e.statusCode,
+            `items[${index}]: ${e.message}`,
+          );
+        }
+        throw e;
+      }
+      if (!raw.description?.trim()) {
+        throw new HttpReplyError(
+          400,
+          `items[${index}]: Description is required`,
+        );
+      }
+      if (!raw.paymentType?.trim()) {
+        throw new HttpReplyError(
+          400,
+          `items[${index}]: paymentType is required`,
+        );
+      }
+      if (!raw.date) {
+        throw new HttpReplyError(400, `items[${index}]: date is required`);
+      }
       return {
-        data,
         amount,
         vatRate,
         vatAmount,
         totalAmount,
-        status: initialSaleStatusForPaymentType(data.paymentType),
-        saleDate: toCalendarDate(data.date),
+        description: raw.description.trim(),
+        itemName: nullableTrimmed(raw.itemName),
+        receiptUrl: nullableTrimmed(raw.receiptUrl),
+        category: raw.category ?? null,
+        customerName: raw.customerName?.trim() || null,
+        customerId: raw.customerId?.trim() || null,
+        paymentType: raw.paymentType,
+        saleDate: toCalendarDate(raw.date),
+        vatableIncome,
+        serviceIncome,
+        status: initialSaleStatusForPaymentType(raw.paymentType),
       };
     });
 
     const sales = await prisma.$transaction(async (tx) => {
-      const userRow = await tx.user.findUnique({
-        where: { id: userId },
-      });
+      const userRow = await tx.user.findUnique({ where: { id: userId } });
       if (!userRow) return null;
-      const startNum =
+      let nextNum =
         Number((userRow as { nextSaleNumber?: number }).nextSaleNumber) || 1;
-      await tx.$executeRaw`
-        UPDATE "User" SET next_sale_number = ${startNum + prepared.length} WHERE id = ${userId}
-      `;
-
       const created = [];
-      for (let i = 0; i < prepared.length; i++) {
-        const p = prepared[i]!;
-        const row = await tx.sale.create({
-          data: {
-            userId,
-            createdById: p.data.createdById ?? userId,
-            invoiceNumber: String(startNum + i),
-            description: p.data.description,
-            itemName: nullableTrimmed(p.data.itemName),
-            category: p.data.category ?? null,
-            customerName: p.data.customerName?.trim() || null,
-            customerId: p.data.customerId?.trim() || null,
-            amount: p.amount,
-            vatRate: p.vatRate,
-            vatAmount: p.vatAmount,
-            totalAmount: p.totalAmount,
-            paymentType: p.data.paymentType,
-            saleDate: p.saleDate,
-            vatableIncome: p.data.vatableIncome,
-            serviceIncome: p.data.serviceIncome,
-            status: p.status,
-            receiptUrl: nullableTrimmed(p.data.receiptUrl),
-          },
-        });
-        created.push(row);
+      for (const row of prepared) {
+        const invoiceNumber = String(nextNum);
+        nextNum += 1;
+        created.push(
+          await tx.sale.create({
+            data: {
+              userId,
+              createdById: createdById ?? userId,
+              invoiceNumber,
+              description: row.description,
+              itemName: row.itemName,
+              category: row.category,
+              customerName: row.customerName,
+              customerId: row.customerId,
+              amount: row.amount,
+              vatRate: row.vatRate,
+              vatAmount: row.vatAmount,
+              totalAmount: row.totalAmount,
+              paymentType: row.paymentType,
+              saleDate: row.saleDate,
+              vatableIncome: row.vatableIncome,
+              serviceIncome: row.serviceIncome,
+              status: row.status,
+              receiptUrl: row.receiptUrl,
+            },
+          }),
+        );
       }
+      await tx.$executeRaw`
+        UPDATE "User" SET next_sale_number = ${nextNum} WHERE id = ${userId}
+      `;
       return created;
     });
 
     if (!sales) return null;
 
     const periods = [
-      ...new Map(
-        prepared.map((p) => {
-          const period = calendarPeriodFromDate(p.saleDate);
-          return [`${period.year}-${period.month}`, period] as const;
-        }),
-      ).values(),
+      ...new Set(
+        prepared.map((p) => calendarPeriodFromDate(p.saleDate)),
+      ),
     ];
     await taxPayablesService.syncPayablesForPeriods(userId, periods);
 
     return {
-      count: sales.length,
-      sales: sales.map(mapSaleCreateResult),
+      created: sales.length,
+      sales: sales.map((sale) => ({
+        id: sale.id,
+        invoiceNumber: sale.invoiceNumber,
+        status: sale.status,
+        description: sale.description,
+        itemName: sale.itemName ?? null,
+        date: sale.saleDate,
+        amount: decimalToNumber(sale.amount),
+        vatAmount: decimalToNumber(sale.vatAmount),
+        totalAmount: decimalToNumber(sale.totalAmount),
+        customerName: sale.customerName ?? null,
+        customerId: sale.customerId ?? null,
+        receiptUrl: sale.receiptUrl ?? null,
+        paymentType: sale.paymentType,
+        paymentConfirmedAt: null,
+      })),
     };
   },
 

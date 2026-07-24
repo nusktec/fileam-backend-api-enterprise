@@ -3,7 +3,7 @@ import { prisma } from "../../config/database";
 import {
   ASSET_HISTORY_ACTION_TYPES,
   ASSET_STATUS,
-  CONSULTANT_REVIEW_STATUSES,
+  CONSULTANT_REVIEW_STATUS,
   isValidAssetHistoryActionType,
   isValidAssetType,
 } from "../../constants/assets";
@@ -282,8 +282,8 @@ export const assetReviewsService = {
         data: {
           assignToConsultant: true,
           assignedConsultantId: consultant.id,
-          consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[0],
-          status: ASSET_STATUS.PENDING_REVIEW, // consultant assigned — in review
+          consultantReviewStatus: CONSULTANT_REVIEW_STATUS.PENDING_REVIEW,
+          status: ASSET_STATUS.PENDING_REVIEW,
         },
       });
       await appendAssetHistory(tx, {
@@ -308,7 +308,7 @@ export const assetReviewsService = {
 
   /**
    * Distinct step: consultant acknowledges receipt before completing review.
-   * Logs CONFIRM_REVIEW; asset status stays PENDING_REVIEW until approve.
+   * Logs CONFIRM_REVIEW; review status stays PENDING_REVIEW until approve.
    */
   async confirmReview(userId: string, assetRef: string) {
     const asset = await findOwnedAsset(userId, assetRef);
@@ -319,7 +319,7 @@ export const assetReviewsService = {
         "Assign a consultant before confirming review",
       );
     }
-    if (asset.consultantReviewStatus === CONSULTANT_REVIEW_STATUSES[1]) {
+    if (asset.consultantReviewStatus === CONSULTANT_REVIEW_STATUS.APPROVED) {
       throw new HttpReplyError(400, "Review is already approved");
     }
 
@@ -375,7 +375,7 @@ export const assetReviewsService = {
       const row = await tx.asset.update({
         where: { id: asset.id },
         data: {
-          consultantReviewStatus: CONSULTANT_REVIEW_STATUSES[1],
+          consultantReviewStatus: CONSULTANT_REVIEW_STATUS.APPROVED,
           status: ASSET_STATUS.ACTIVE,
         },
       });

@@ -372,13 +372,13 @@ export const assetReportsService = {
       }
       const active = mapped.filter((x) => x.a.status === ASSET_STATUS.ACTIVE)
         .length;
-      const pending = mapped.filter((x) => x.a.status === ASSET_STATUS.PENDING)
-        .length;
+      const pending = mapped.filter(
+        (x) =>
+          x.a.status === ASSET_STATUS.PENDING ||
+          x.a.status === ASSET_STATUS.PENDING_REVIEW,
+      ).length;
       const awaiting = mapped.filter(
         (x) => x.a.status === ASSET_STATUS.AWAITING,
-      ).length;
-      const pendingReview = mapped.filter(
-        (x) => x.a.status === ASSET_STATUS.PENDING_REVIEW,
       ).length;
       const buffer = await renderTablePdf({
         title,
@@ -386,9 +386,8 @@ export const assetReportsService = {
         summaryRows: [
           { label: "Total assets", value: String(mapped.length) },
           { label: "Active assets", value: String(active) },
-          { label: "Pending", value: String(pending) },
-          { label: "Awaiting review", value: String(awaiting) },
-          { label: "Pending review", value: String(pendingReview) },
+          { label: "Awaiting (no consultant)", value: String(awaiting) },
+          { label: "Pending review", value: String(pending) },
           { label: "Total purchase cost", value: fmt(totalCost) },
           { label: "Total net book value", value: fmt(totalBook) },
         ],

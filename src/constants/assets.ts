@@ -77,13 +77,30 @@ export function isValidGainLossType(value: string): value is GainLossType {
 }
 
 export const CONSULTANT_REVIEW_STATUSES = [
-  "PENDING",
+  "AWAITING",
+  "PENDING_REVIEW",
   "APPROVED",
   "REJECTED",
+  /** @deprecated legacy — treat as AWAITING */
+  "PENDING",
 ] as const;
 
 export type ConsultantReviewStatus =
   (typeof CONSULTANT_REVIEW_STATUSES)[number];
+
+export const CONSULTANT_REVIEW_STATUS = {
+  AWAITING: "AWAITING",
+  PENDING_REVIEW: "PENDING_REVIEW",
+  APPROVED: "APPROVED",
+  REJECTED: "REJECTED",
+} as const satisfies Record<string, ConsultantReviewStatus>;
+
+/** Still open for consultant action (not approved/rejected). */
+export const CONSULTANT_REVIEW_OPEN_STATUSES: ConsultantReviewStatus[] = [
+  CONSULTANT_REVIEW_STATUS.AWAITING,
+  CONSULTANT_REVIEW_STATUS.PENDING_REVIEW,
+  "PENDING",
+];
 
 export function isValidConsultantReviewStatus(
   value: string,
@@ -91,11 +108,16 @@ export function isValidConsultantReviewStatus(
   return (CONSULTANT_REVIEW_STATUSES as readonly string[]).includes(value);
 }
 
+export function isConsultantReviewOpen(status: string | null | undefined): boolean {
+  if (!status) return false;
+  return (CONSULTANT_REVIEW_OPEN_STATUSES as readonly string[]).includes(status);
+}
+
 export const ASSET_STATUSES = [
   "ACTIVE",
-  "PENDING",
   "AWAITING",
   "PENDING_REVIEW",
+  "PENDING",
   "SOLD",
   "DISPOSED",
 ] as const;
@@ -104,9 +126,10 @@ export type AssetStatus = (typeof ASSET_STATUSES)[number];
 
 export const ASSET_STATUS = {
   ACTIVE: "ACTIVE",
-  PENDING: "PENDING",
   AWAITING: "AWAITING",
   PENDING_REVIEW: "PENDING_REVIEW",
+  /** @deprecated prefer AWAITING / PENDING_REVIEW */
+  PENDING: "PENDING",
   SOLD: "SOLD",
   DISPOSED: "DISPOSED",
 } as const satisfies Record<string, AssetStatus>;
@@ -114,9 +137,9 @@ export const ASSET_STATUS = {
 /** Owned / on books — not sold or disposed. */
 export const ASSET_ON_BOOKS_STATUSES: AssetStatus[] = [
   ASSET_STATUS.ACTIVE,
-  ASSET_STATUS.PENDING,
   ASSET_STATUS.AWAITING,
   ASSET_STATUS.PENDING_REVIEW,
+  ASSET_STATUS.PENDING,
 ];
 
 export function isValidAssetStatus(value: string): value is AssetStatus {
@@ -125,6 +148,14 @@ export function isValidAssetStatus(value: string): value is AssetStatus {
 
 export function isAssetOnBooks(status: string): boolean {
   return (ASSET_ON_BOOKS_STATUSES as readonly string[]).includes(status);
+}
+
+export function isAssetInReviewStatus(status: string): boolean {
+  return (
+    status === ASSET_STATUS.AWAITING ||
+    status === ASSET_STATUS.PENDING_REVIEW ||
+    status === ASSET_STATUS.PENDING
+  );
 }
 
 /** Unified asset timeline action types (Asset Reviews API). */

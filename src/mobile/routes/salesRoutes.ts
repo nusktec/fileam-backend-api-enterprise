@@ -4,7 +4,7 @@ import {
   getSaleById,
   getSaleDetails,
   createSale,
-  createSalesBulk,
+  bulkCreateSales,
   updateSale,
   downloadSaleInvoice,
   markInvoicePaid,
@@ -15,7 +15,7 @@ import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
 import {
   createSaleValidation,
-  bulkCreateSaleValidation,
+  bulkCreateSalesValidation,
 } from "../../middlewares/validations/salesValidation";
 import { updateSaleValidation } from "../../middlewares/validations/updateSaleValidation";
 import { updateSalePaymentStatusValidation } from "../../middlewares/validations/salePaymentStatusValidation";
@@ -27,7 +27,21 @@ const router = express.Router();
 router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/", withPagination("saleDate"), listSales);
-router.post("/bulk", bulkCreateSaleValidation, createSalesBulk);
+router.post(
+  "/bulk",
+  (
+    req: express.Request,
+    _res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    if (!req.body?.items && Array.isArray(req.body?.sales)) {
+      req.body.items = req.body.sales;
+    }
+    next();
+  },
+  bulkCreateSalesValidation,
+  bulkCreateSales,
+);
 router.delete("/:id", validateIdParam, deleteSale);
 router.post("/:id/mark-paid", validateIdParam, markInvoicePaid);
 router.patch(

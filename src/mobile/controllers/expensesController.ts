@@ -131,10 +131,37 @@ export const createExpense = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const expense = await expensesService.create(
-      userId,
-      mapExpenseCreateBody(req.body ?? {}),
-    );
+    const b = req.body ?? {};
+    const {
+      amount,
+      description,
+      category,
+      expenseType,
+      date,
+      vatInclusive,
+      vatAmount,
+      receiptUrl,
+    } = b;
+    const supplierName = b.supplierName ?? b.Supplier_name;
+    const supplierId = b.supplierId ?? b.Supplier_Id;
+    const expense = await expensesService.create(userId, {
+      amount: Number(amount),
+      description,
+      category,
+      expenseType,
+      date,
+      vatInclusive: Boolean(vatInclusive),
+      vatAmount: vatAmount != null ? Number(vatAmount) : undefined,
+      receiptUrl,
+      supplierName:
+        supplierName != null && String(supplierName).trim() !== ""
+          ? String(supplierName).trim()
+          : undefined,
+      supplierId:
+        supplierId != null && String(supplierId).trim() !== ""
+          ? String(supplierId).trim()
+          : undefined,
+    });
     res
       .status(HttpStatusCode.CREATED)
       .json(outJson(true, "Expense added", expense));
@@ -146,56 +173,55 @@ export const createExpense = async (
   }
 };
 
-function mapExpenseCreateBody(b: Record<string, unknown>) {
-  const supplierName = b.supplierName ?? b.Supplier_name;
-  const supplierId = b.supplierId ?? b.Supplier_Id;
-  return {
-    amount: Number(b.amount),
-    description: String(b.description),
-    category: String(b.category),
-    expenseType:
-      b.expenseType != null && String(b.expenseType).trim() !== ""
-        ? String(b.expenseType).trim()
-        : undefined,
-    date: String(b.date),
-    vatInclusive: Boolean(b.vatInclusive),
-    vatAmount: b.vatAmount != null ? Number(b.vatAmount) : undefined,
-    receiptUrl:
-      b.receiptUrl != null && String(b.receiptUrl).trim() !== ""
-        ? String(b.receiptUrl).trim()
-        : undefined,
-    supplierName:
-      supplierName != null && String(supplierName).trim() !== ""
-        ? String(supplierName).trim()
-        : undefined,
-    supplierId:
-      supplierId != null && String(supplierId).trim() !== ""
-        ? String(supplierId).trim()
-        : undefined,
-  };
-}
-
-export const createExpensesBulk = async (
+export const bulkCreateExpenses = async (
   req: IRequest,
   res: Response,
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const itemsRaw = Array.isArray(req.body?.items) ? req.body.items : [];
-    const result = await expensesService.bulkCreate(
-      userId,
-      itemsRaw.map((item: Record<string, unknown>) =>
-        mapExpenseCreateBody(item),
-      ),
-    );
+    const items = (req.body?.items ?? req.body?.expenses) as unknown;
+    if (!Array.isArray(items)) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(
+          outJson(false, "Body must include items (array of expenses)", null),
+        );
+      return;
+    }
+    const normalized = items.map((raw: Record<string, unknown>) => {
+      const supplierName = raw.supplierName ?? raw.Supplier_name;
+      const supplierId = raw.supplierId ?? raw.Supplier_Id;
+      return {
+        amount: Number(raw.amount),
+        description: String(raw.description ?? ""),
+        category: String(raw.category ?? ""),
+        expenseType:
+          raw.expenseType != null ? String(raw.expenseType) : undefined,
+        date: String(raw.date ?? ""),
+        vatInclusive: Boolean(raw.vatInclusive),
+        vatAmount:
+          raw.vatAmount != null ? Number(raw.vatAmount) : undefined,
+        receiptUrl:
+          raw.receiptUrl != null ? String(raw.receiptUrl) : undefined,
+        supplierName:
+          supplierName != null && String(supplierName).trim() !== ""
+            ? String(supplierName).trim()
+            : undefined,
+        supplierId:
+          supplierId != null && String(supplierId).trim() !== ""
+            ? String(supplierId).trim()
+            : undefined,
+      };
+    });
+    const result = await expensesService.bulkCreate(userId, normalized);
     res
       .status(HttpStatusCode.CREATED)
-      .json(outJson(true, "Expenses added", result));
+      .json(outJson(true, `${result.created} expenses added`, result));
   } catch (error) {
     if (replyExpenseError(res, error)) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "Failed to add expenses", null));
+      .json(outJson(false, "Failed to bulk add expenses", null));
   }
 };
 

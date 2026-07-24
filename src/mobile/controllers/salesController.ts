@@ -117,10 +117,45 @@ export const createSale = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const sale = await salesService.create(
-      userId,
-      mapSaleCreateBody(req.body ?? {}),
-    );
+    const b = req.body ?? {};
+    const {
+      amount,
+      description,
+      category,
+      paymentType,
+      date,
+      vatableIncome,
+      serviceIncome,
+      itemName,
+      receiptUrl,
+    } = b;
+    const customerName = b.customerName ?? b.Customer_name;
+    const customerId = b.customerId ?? b.Customer_id;
+    const sale = await salesService.create(userId, {
+      amount: Number(amount),
+      description,
+      category,
+      customerName:
+        customerName != null && String(customerName).trim() !== ""
+          ? String(customerName).trim()
+          : undefined,
+      customerId:
+        customerId != null && String(customerId).trim() !== ""
+          ? String(customerId).trim()
+          : undefined,
+      itemName:
+        itemName != null && String(itemName).trim() !== ""
+          ? String(itemName).trim()
+          : undefined,
+      receiptUrl:
+        receiptUrl != null && String(receiptUrl).trim() !== ""
+          ? String(receiptUrl).trim()
+          : undefined,
+      paymentType,
+      date,
+      vatableIncome: Boolean(vatableIncome),
+      serviceIncome: serviceIncome !== false,
+    });
     if (!sale) {
       res
         .status(HttpStatusCode.NOT_FOUND)
@@ -136,52 +171,50 @@ export const createSale = async (
   }
 };
 
-function mapSaleCreateBody(b: Record<string, unknown>) {
-  const customerName = b.customerName ?? b.Customer_name;
-  const customerId = b.customerId ?? b.Customer_id;
-  const itemName = b.itemName;
-  const receiptUrl = b.receiptUrl;
-  return {
-    amount: Number(b.amount),
-    description: String(b.description),
-    category:
-      b.category != null && String(b.category).trim() !== ""
-        ? String(b.category).trim()
-        : undefined,
-    customerName:
-      customerName != null && String(customerName).trim() !== ""
-        ? String(customerName).trim()
-        : undefined,
-    customerId:
-      customerId != null && String(customerId).trim() !== ""
-        ? String(customerId).trim()
-        : undefined,
-    itemName:
-      itemName != null && String(itemName).trim() !== ""
-        ? String(itemName).trim()
-        : undefined,
-    receiptUrl:
-      receiptUrl != null && String(receiptUrl).trim() !== ""
-        ? String(receiptUrl).trim()
-        : undefined,
-    paymentType: String(b.paymentType),
-    date: String(b.date),
-    vatableIncome: Boolean(b.vatableIncome),
-    serviceIncome: b.serviceIncome !== false,
-  };
-}
-
-export const createSalesBulk = async (
+export const bulkCreateSales = async (
   req: IRequest,
   res: Response,
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const itemsRaw = Array.isArray(req.body?.items) ? req.body.items : [];
-    const result = await salesService.bulkCreate(
-      userId,
-      itemsRaw.map((item: Record<string, unknown>) => mapSaleCreateBody(item)),
-    );
+    const items = (req.body?.items ?? req.body?.sales) as unknown;
+    if (!Array.isArray(items)) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "Body must include items (array of sales)", null));
+      return;
+    }
+    const normalized = items.map((raw: Record<string, unknown>) => {
+      const customerName = raw.customerName ?? raw.Customer_name;
+      const customerId = raw.customerId ?? raw.Customer_id;
+      return {
+        amount: Number(raw.amount),
+        description: String(raw.description ?? ""),
+        category:
+          raw.category != null ? String(raw.category) : undefined,
+        paymentType: String(raw.paymentType ?? ""),
+        date: String(raw.date ?? ""),
+        vatableIncome: Boolean(raw.vatableIncome),
+        serviceIncome: raw.serviceIncome !== false,
+        customerName:
+          customerName != null && String(customerName).trim() !== ""
+            ? String(customerName).trim()
+            : undefined,
+        customerId:
+          customerId != null && String(customerId).trim() !== ""
+            ? String(customerId).trim()
+            : undefined,
+        itemName:
+          raw.itemName != null && String(raw.itemName).trim() !== ""
+            ? String(raw.itemName).trim()
+            : undefined,
+        receiptUrl:
+          raw.receiptUrl != null && String(raw.receiptUrl).trim() !== ""
+            ? String(raw.receiptUrl).trim()
+            : undefined,
+      };
+    });
+    const result = await salesService.bulkCreate(userId, normalized);
     if (!result) {
       res
         .status(HttpStatusCode.NOT_FOUND)
@@ -190,12 +223,12 @@ export const createSalesBulk = async (
     }
     res
       .status(HttpStatusCode.CREATED)
-      .json(outJson(true, "Sales added", result));
+      .json(outJson(true, `${result.created} sales added`, result));
   } catch (error) {
     if (replySaleError(res, error)) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "Failed to add sales", null));
+      .json(outJson(false, "Failed to bulk add sales", null));
   }
 };
 

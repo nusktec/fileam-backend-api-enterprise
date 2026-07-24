@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}} (collection prerequest sets Authorization except onboarding, AI routes, invitation accept/decline links, and /public/account-deletion). Upload files via Media first, then use returned URL in other endpoints. Enterprise Signup: Step Email \u2192 Step Email verify (saves enterpriseOnboardingToken) \u2192 Step Password (requires Authorization: Bearer {{enterpriseOnboardingToken}}). Mobile expense and sale category fields accept any string (max 255 chars). GET /mobile/contacts-and-types still returns suggested saleCategories, expenseCategories, and expenseTypes (suggested OPEX, COGS, CAPEX, Tax \u2014 any string accepted on expense). Expenses: optional expenseType (any string, max 255; defaults OPEX), supplierName, supplierId (JSON keys supplierName/supplierId or Supplier_name/Supplier_Id). Sales (income): optional customerName (existing), customerId (or Customer_name/Customer_id), itemName, receiptUrl (payment receipt / proof URL from Media). Enterprise financials POST .../transactions passes these through when type expense|income and client is linked. Employment types: Part time, Full time, Contract.\n\nLinked-client P&L (consultant): GET enterprise/clients/:clientId/financials/profit-loss \u2014 :clientId is the linked mobile user UUID (same as {{clientId}} / {{clientUserId}} from Managed Entities or Clients list). Query: year+month for one calendar month; omit year/month for current month; year alone = full year; preset=thisMonth|thisYear; dateFrom & dateTo for custom range. Response includes formulas, attachmentGaps, period.month when a single month.\n\nSale payment status **: Cash \u2192 PAID on create; Card|Transfer \u2192 IN_PROGRESS then PATCH /mobile/sales/:id/payment-status {\"status\":\"PAID\"} (sets paymentConfirmedAt). Invoice remains Pending \u2192 POST .../mark-paid. Independent of enterprise Invoice mark-paid.\n\nMobile: PATCH /mobile/sales/:id and PATCH /mobile/expenses/:id (partial update). Mobile filings list/detail: completionPercent, periodAttachmentGaps. Consultant filing for client: POST /mobile/filings/consultant/clients/:clientUserId/tax/:taxType/submit with clientApprovalConfirmed true (same UUID as enterprise client path).\n\nConsultants: Mobile GET /mobile/consultants (directory, query q/page/limit) and POST /mobile/consultants/request with consultantUserId. Mobile GET /mobile/consultant-requests returns pending items; each item includes initiator consultant_to_client (consultant invited you \u2014 use Accept/Decline in app) or client_to_consultant (you requested \u2014 consultant accepts via email link). Email links (no auth): GET /api/v{{apiVersion}}/invitations/:id/accept/:code and .../decline/:code \u2014 set {{invitationLinkId}} and {{invitationLinkCode}} from the email.\n\nEnterprise client filings: GET .../filings/constants returns tax types, payment/filing status enums, report types, period bounds, capabilities, and relative paths for tax-computation GETs. GET .../filings/returns lists period returns for all taxes (optional query taxType=VAT|WHT|...); GET .../filings/vat-returns remains VAT-only. GET/PUT .../filings/tax-types lists/updates active codes. POST .../filings/vat|wht|cit|paye/submit-return \u2014 same body shape as VAT (for WHT, amount = total WHT due). POST .../filings with taxType remains available. GET .../filings/:filingId/report as before.\n\nMobile filings: GET .../filings/constants (same shape as enterprise constants). Unified active-type routes: GET/POST .../filings/tax/:taxType/preview|draft|submit (use {{unifiedTaxType}} e.g. VAT, WHT, CIT, PAYE). Legacy /filings/vat/* and /filings/wht/* unchanged.\n\nAccount deletion: Mobile GET/POST .../mobile/account-deletion/reason-categories and .../request (authenticated, empty body on request). Public (no auth) GET/POST .../public/account-deletion/reason-categories and .../request with JSON {\"email\":\"...\"}.\n\nOptional list filters (leave {{listDateFrom}}/{{listDateTo}} empty to skip): dateFrom & dateTo as YYYY-MM-DD or ISO8601 on paginated/date-based lists (sales, expenses, payables, payments, filings, reports, employees, transactions, financial documents, invoices, evidence vault, enterprise filings/reports, AI records). Enterprise evidence vault also accepts legacy startDate & endDate.\n\nInvoice \u2194 financial document (optional): POST .../financials/documents/upload and .../upload-invoice accept optional invoiceId (UUID of structured invoice). POST .../financials/invoices and PUT .../invoices/:invoiceId accept optional financialDocumentId (UUID of enterprise_financial_documents row; use {{fileId}} from list/upload). PUT financialDocumentId: null unlinks. Invoice responses include documentId (evidence vault) and financialDocumentId (financial upload). Evidence vault: GET .../evidence-vault/documents/:documentId/invoice-extraction-preview (mock extraction), then POST .../documents/:documentId/convert-to-invoice.\n\nEnterprise GET .../clients/:clientId/reports/export-all returns one PDF merging each matching stored report (by generatedAt range) as separate multi-page sections; if none match, exports one section per calendar month in the range (default last 12 months when dates empty). Optional reportType filter. Response header X-Report-Sections = section count. Max 48 sections.\n\nPostman naming: requests ending in ** are the newest changes (sale/expense bulk create, sale payment-status IN_PROGRESS\u2192PAID, Assets module, inventory/employee PATCH/DELETE, expenseType, ex-VAT analytics). Single * marks earlier updated routes.\n\nMobile What I Owe / month arrows: prefer GET \u2026/tax-computation?period=YYYY-MM (live book totals) and GET \u2026/tax-payables?period=YYYY-MM (synced payables for that book month). Editing sale/expense dates re-syncs old and new months. GET \u2026/analytics/financial-overview?year= returns annualRevenue, annualExpense, netProfit (ex-VAT book totals), currentTaxLiability, potentialSavings. Analytics dashboard profitAndLoss uses ex-VAT income/expenses (VAT excluded from revenue and net profit).\n\nConsultant client financial insights (linked mobile user): GET .../financials/cash-flow, .../tax-liability?year=, .../revenue-analytics, .../expense-intelligence \u2014 see requests marked ** under Enterprise \u2192 Clients \u2192 Financials.\n\nMobile assets (fixed assets) **: Base path /mobile/assets \u2014 summary, dashboard, current-assets (inventory + AR from other modules; cash/bank stubs), non-current-assets, depreciation-amortization, CRUD assets (POST /, GET /, GET|PATCH /:id), transfers (POST/GET, PATCH /transfers/:id, POST /transfers/:id/approve|reject), sales (POST/GET \u2014 gain/loss server-computed), disposals (POST/GET, PATCH /disposals/:id). Reviews: AWAITING when flagged; PENDING_REVIEW after assign-consultant; ACTIVE after approve. PDF reports: GET /reports/:reportType (ASSET_SUMMARY_REPORT | DEPRECIATION_SCHEDULE | ASSET_MOVEMENT_REPORT | TAX_IMPACT_REPORT | ASSET_INTELLIGENCE_REPORT | CURRENT_ASSETS_STATEMENT; optional startDate/endDate/assetType). Enums via contacts-and-types: assetTypes, depreciationMethods, disposalReasons, transferTypes.\n\nBulk create **: POST /mobile/sales/bulk and POST /mobile/expenses/bulk \u2014 body { items: [ ... ] } (max 100; same fields as single create); returns { count, sales|expenses }.\n\nMobile inventory (stock / COGS): Base path /mobile/inventory \u2014 overview, alerts, items (POST add \u2014 duplicate name per user returns 409; PATCH update metadata; DELETE when qty=0 and no sale history), GET list + detail, POST .../items/:id/restock (quantity, optional note), POST .../items/:id/adjustment (direction in|out, quantity, optional note; optional createSalesInvoice: same transaction \u2014 adjustment in\u2192mobile Sale at unit cost, adjustment out\u2192mobile Expense at unit cost; optional saleDate YYYY-MM-DD, saleCategory, expenseCategory, paymentType, vatableIncome, serviceIncome), POST sell (optional createSalesInvoice mirrors inventory line totals to mobile Sales/invoice; response may include linkedSale), GET movements, GET inventory sales. Slow-moving: 45d grace for new products, then 45d without sale. Requires onboarding complete + Bearer token.\n\nMobile employees: GET list/detail/obligations, POST create, PATCH /employees/:id (partial update), DELETE /employees/:id, POST .../file-as-expense.",
+    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}} (collection prerequest sets Authorization except onboarding, AI routes, invitation accept/decline links, and /public/account-deletion). Upload files via Media first, then use returned URL in other endpoints. Enterprise Signup: Step Email \u2192 Step Email verify (saves enterpriseOnboardingToken) \u2192 Step Password (requires Authorization: Bearer {{enterpriseOnboardingToken}}). Mobile expense and sale category fields accept any string (max 255 chars). GET /mobile/contacts-and-types still returns suggested saleCategories, expenseCategories, and expenseTypes (suggested OPEX, COGS, CAPEX, Tax \u2014 any string accepted on expense). Expenses: optional expenseType (any string, max 255; defaults OPEX), supplierName, supplierId (JSON keys supplierName/supplierId or Supplier_name/Supplier_Id). Sales (income): optional customerName (existing), customerId (or Customer_name/Customer_id), itemName, receiptUrl (payment receipt / proof URL from Media). Enterprise financials POST .../transactions passes these through when type expense|income and client is linked. Employment types: Part time, Full time, Contract.\n\nLinked-client P&L (consultant): GET enterprise/clients/:clientId/financials/profit-loss \u2014 :clientId is the linked mobile user UUID (same as {{clientId}} / {{clientUserId}} from Managed Entities or Clients list). Query: year+month for one calendar month; omit year/month for current month; year alone = full year; preset=thisMonth|thisYear; dateFrom & dateTo for custom range. Response includes formulas, attachmentGaps, period.month when a single month.\n\nSale payment status **: Cash \u2192 PAID on create; Card|Transfer \u2192 IN_PROGRESS then PATCH /mobile/sales/:id/payment-status {\"status\":\"PAID\"} (sets paymentConfirmedAt). Invoice remains Pending \u2192 POST .../mark-paid. Independent of enterprise Invoice mark-paid.\n\nMobile: PATCH /mobile/sales/:id and PATCH /mobile/expenses/:id (partial update). Mobile filings list/detail: completionPercent, periodAttachmentGaps. Consultant filing for client: POST /mobile/filings/consultant/clients/:clientUserId/tax/:taxType/submit with clientApprovalConfirmed true (same UUID as enterprise client path).\n\nConsultants: Mobile GET /mobile/consultants (directory, query q/page/limit) and POST /mobile/consultants/request with consultantUserId. Mobile GET /mobile/consultant-requests returns pending items; each item includes initiator consultant_to_client (consultant invited you \u2014 use Accept/Decline in app) or client_to_consultant (you requested \u2014 consultant accepts via email link). Email links (no auth): GET /api/v{{apiVersion}}/invitations/:id/accept/:code and .../decline/:code \u2014 set {{invitationLinkId}} and {{invitationLinkCode}} from the email.\n\nEnterprise client filings: GET .../filings/constants returns tax types, payment/filing status enums, report types, period bounds, capabilities, and relative paths for tax-computation GETs. GET .../filings/returns lists period returns for all taxes (optional query taxType=VAT|WHT|...); GET .../filings/vat-returns remains VAT-only. GET/PUT .../filings/tax-types lists/updates active codes. POST .../filings/vat|wht|cit|paye/submit-return \u2014 same body shape as VAT (for WHT, amount = total WHT due). POST .../filings with taxType remains available. GET .../filings/:filingId/report as before.\n\nMobile filings: GET .../filings/constants (same shape as enterprise constants). Unified active-type routes: GET/POST .../filings/tax/:taxType/preview|draft|submit (use {{unifiedTaxType}} e.g. VAT, WHT, CIT, PAYE). Legacy /filings/vat/* and /filings/wht/* unchanged.\n\nAccount deletion: Mobile GET/POST .../mobile/account-deletion/reason-categories and .../request (authenticated, empty body on request). Public (no auth) GET/POST .../public/account-deletion/reason-categories and .../request with JSON {\"email\":\"...\"}.\n\nOptional list filters (leave {{listDateFrom}}/{{listDateTo}} empty to skip): dateFrom & dateTo as YYYY-MM-DD or ISO8601 on paginated/date-based lists (sales, expenses, payables, payments, filings, reports, employees, transactions, financial documents, invoices, evidence vault, enterprise filings/reports, AI records). Enterprise evidence vault also accepts legacy startDate & endDate.\n\nInvoice \u2194 financial document (optional): POST .../financials/documents/upload and .../upload-invoice accept optional invoiceId (UUID of structured invoice). POST .../financials/invoices and PUT .../invoices/:invoiceId accept optional financialDocumentId (UUID of enterprise_financial_documents row; use {{fileId}} from list/upload). PUT financialDocumentId: null unlinks. Invoice responses include documentId (evidence vault) and financialDocumentId (financial upload). Evidence vault: GET .../evidence-vault/documents/:documentId/invoice-extraction-preview (mock extraction), then POST .../documents/:documentId/convert-to-invoice.\n\nEnterprise GET .../clients/:clientId/reports/export-all returns one PDF merging each matching stored report (by generatedAt range) as separate multi-page sections; if none match, exports one section per calendar month in the range (default last 12 months when dates empty). Optional reportType filter. Response header X-Report-Sections = section count. Max 48 sections.\n\nPostman naming: requests ending in ** are the newest changes (sale payment-status IN_PROGRESS\u2192PAID, Assets module, inventory/employee PATCH/DELETE, expenseType, ex-VAT analytics). Single * marks earlier updated routes.\n\nMobile What I Owe / month arrows: prefer GET \u2026/tax-computation?period=YYYY-MM (live book totals) and GET \u2026/tax-payables?period=YYYY-MM (synced payables for that book month). Editing sale/expense dates re-syncs old and new months. GET \u2026/analytics/financial-overview?year= returns annualRevenue, annualExpense, netProfit (ex-VAT book totals), currentTaxLiability, potentialSavings. Analytics dashboard profitAndLoss uses ex-VAT income/expenses (VAT excluded from revenue and net profit).\n\nConsultant client financial insights (linked mobile user): GET .../financials/cash-flow, .../tax-liability?year=, .../revenue-analytics, .../expense-intelligence \u2014 see requests marked ** under Enterprise \u2192 Clients \u2192 Financials.\n\nMobile assets (fixed assets) **: Base path /mobile/assets \u2014 summary, dashboard, current-assets (inventory + AR from other modules; cash/bank stubs), non-current-assets, depreciation-amortization, CRUD assets (POST /, GET /, GET|PATCH /:id), transfers (POST/GET, PATCH /transfers/:id, POST /transfers/:id/approve|reject), sales (POST/GET \u2014 gain/loss server-computed), disposals (POST/GET, PATCH /disposals/:id). Enums via contacts-and-types: assetTypes, depreciationMethods, disposalReasons, transferTypes.\n\nMobile inventory (stock / COGS): Base path /mobile/inventory \u2014 overview, alerts, items (POST add \u2014 duplicate name per user returns 409; PATCH update metadata; DELETE when qty=0 and no sale history), GET list + detail, POST .../items/:id/restock (quantity, optional note), POST .../items/:id/adjustment (direction in|out, quantity, optional note; optional createSalesInvoice: same transaction \u2014 adjustment in\u2192mobile Sale at unit cost, adjustment out\u2192mobile Expense at unit cost; optional saleDate YYYY-MM-DD, saleCategory, expenseCategory, paymentType, vatableIncome, serviceIncome), POST sell (optional createSalesInvoice mirrors inventory line totals to mobile Sales/invoice; response may include linkedSale), GET movements, GET inventory sales. Slow-moving: 45d grace for new products, then 45d without sale. Requires onboarding complete + Bearer token.\n\nMobile employees: GET list/detail/obligations, POST create, PATCH /employees/:id (partial update), DELETE /employees/:id, POST .../file-as-expense.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1110,36 +1110,6 @@
               ]
             },
             {
-              "name": "Bulk create sales **",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data; var arr=d&&d.sales?d.sales:[];",
-                      "if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('saleId',arr[0].id);}"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
-                "description": "Bulk insert up to 100 sales. Body: { items: [ /* same fields as Create sale */ ] }. Returns { count, sales }.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Walk-in cash sale\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-13\",\n      \"category\": \"Product Sales\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": false,\n      \"serviceIncome\": false,\n      \"customerName\": \"Walk-in\"\n    },\n    {\n      \"description\": \"Consulting fee\",\n      \"amount\": 100000,\n      \"date\": \"2026-07-13\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Card\",\n      \"vatableIncome\": true,\n      \"serviceIncome\": true,\n      \"customerName\": \"Acme Ltd\",\n      \"itemName\": \"Advisory package\"\n    }\n  ]\n}"
-                }
-              }
-            },
-            {
               "name": "Create sale (Card \u2014 IN_PROGRESS) **",
               "request": {
                 "method": "POST",
@@ -1230,6 +1200,24 @@
               ]
             },
             {
+              "name": "Bulk create sales **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
+                "description": "Body: { items: SaleCreate[] } (alias key sales also accepted). Max 100. Same fields as single create. Response: { created, sales[] }. Invoice numbers allocated sequentially in one transaction.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk cash sale\",\n      \"amount\": 10000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": true,\n      \"serviceIncome\": true\n    },\n    {\n      \"description\": \"Bulk invoice sale\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Invoice\",\n      \"vatableIncome\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
+                }
+              }
+            },
+            {
               "name": "Confirm Card/Transfer payment (PATCH payment-status) **",
               "request": {
                 "method": "PATCH",
@@ -1284,10 +1272,10 @@
               }
             }
           ],
-          "description": "Mobile sales / income. Payment status: Cash\u2192PAID on create; Card|Transfer\u2192IN_PROGRESS then PATCH /:id/payment-status {\"status\":\"PAID\"} (sets paymentConfirmedAt). Invoice\u2192Pending then POST /:id/mark-paid. Bulk: POST /bulk { items: [...] } max 100. Enterprise Invoice mark-paid is separate."
+          "description": "Mobile sales / income. Payment status: Cash\u2192PAID on create; Card|Transfer\u2192IN_PROGRESS then PATCH /:id/payment-status {\"status\":\"PAID\"} (sets paymentConfirmedAt). Invoice\u2192Pending then POST /:id/mark-paid. Enterprise Invoice mark-paid is separate."
         },
         {
-          "name": "Expenses **",
+          "name": "Expenses *",
           "item": [
             {
               "name": "List expenses *",
@@ -1349,36 +1337,6 @@
               }
             },
             {
-              "name": "Bulk create expenses **",
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data; var arr=d&&d.expenses?d.expenses:[];",
-                      "if(j.status&&arr.length&&arr[0].id){pm.collectionVariables.set('expenseId',arr[0].id);}"
-                    ]
-                  }
-                }
-              ],
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-02-21\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"supplierName\": \"Acme Supplies Ltd\"\n    },\n    {\n      \"description\": \"Google Ads\",\n      \"amount\": 25000,\n      \"date\": \"2026-02-21\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
-                },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/bulk",
-                "description": "Bulk insert up to 100 expenses. Body: { items: [ /* same fields as Create expense */ ] }. Returns { count, expenses }."
-              }
-            },
-            {
               "name": "Create expense (Marketing) *",
               "request": {
                 "method": "POST",
@@ -1393,6 +1351,24 @@
                   "raw": "{\"description\":\"Google Ads\",\"amount\":25000,\"date\":\"2026-02-21\",\"category\":\"Marketing\",\"expenseType\":\"OPEX\",\"vatInclusive\":false}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses"
+              }
+            },
+            {
+              "name": "Bulk create expenses *",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/bulk",
+                "description": "Body: { items: ExpenseCreate[] } (alias key expenses also accepted). Max 100. Same fields as single create (vatInclusive splits VAT). Response: { created, expenses[] }.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"vatInclusive\": true\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
+                }
               }
             },
             {
@@ -1421,8 +1397,7 @@
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}"
               }
             }
-          ],
-          "description": "Mobile expenses. category required (any string max 255). expenseType optional (defaults OPEX). VAT: vatInclusive=true treats amount as gross (\u00f71.075). Bulk: POST /bulk { items: [...] } max 100."
+          ]
         },
         {
           "name": "Inventory *",
@@ -1685,7 +1660,7 @@
         },
         {
           "name": "Assets **",
-          "description": "Fixed assets module. Base: /mobile/assets. Auth: Bearer + onboarding complete. Asset status: ACTIVE | PENDING | AWAITING | PENDING_REVIEW | SOLD | DISPOSED (AWAITING when flagged for review; PENDING_REVIEW after consultant assigned; ACTIVE after approve). Codes: AST-/TRF-/SAL-/DSP-. Reviews: GET /reviews, GET /reviews/:id (UUID or AST-code), POST /:id/evidence (multipart files), POST /:id/assign-consultant, POST /:id/confirm-review, POST /:id/approve-review, GET /history, GET /consultants, GET /reports/:reportType (PDF). Evidence: max 10 files, 10MB each, same MIME types as /media/upload. History newest-first; filters: type, assetType, assetId, dateFrom, dateTo.",
+          "description": "Fixed assets module. Base: /mobile/assets. Auth: Bearer + onboarding complete. Asset + review status: AWAITING (default when flagged for review) \u2192 PENDING_REVIEW (after consultant assigned) \u2192 ACTIVE (after approve). Also SOLD | DISPOSED. consultantReviewStatus mirrors AWAITING | PENDING_REVIEW | APPROVED | REJECTED. Codes: AST-/TRF-/SAL-/DSP-. Reviews: GET /reviews, GET /reviews/:id, POST /:id/evidence, POST /:id/assign-consultant, POST /:id/confirm-review, POST /:id/approve-review, GET /history, GET /consultants, GET /reports/:reportType (PDF).",
           "item": [
             {
               "name": "Get assets summary **",
@@ -2047,7 +2022,7 @@
                   "raw": "{\"consultantId\": \"{{consultantUserId}}\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/{{assetId}}/assign-consultant",
-                "description": "Sets assignToConsultant=true, status PENDING_REVIEW, logs SENT_TO_CONSULTANT. Reassignment allowed (new history entry)."
+                "description": "Sets assignToConsultant=true, status PENDING, logs SENT_TO_CONSULTANT. Reassignment allowed (new history entry)."
               }
             },
             {
@@ -2056,7 +2031,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/{{assetId}}/confirm-review",
-                "description": "Distinct step after assign: logs CONFIRM_REVIEW (asset status stays PENDING_REVIEW until approve)."
+                "description": "Distinct step after assign: logs CONFIRM_REVIEW (status stays PENDING until approve)."
               }
             },
             {
@@ -2098,57 +2073,12 @@
               }
             },
             {
-              "name": "Download report PDF — ASSET_SUMMARY_REPORT **",
+              "name": "Download asset report PDF **",
               "request": {
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/reports/ASSET_SUMMARY_REPORT?startDate=&endDate=&assetType=",
-                "description": "On-the-fly PDF. Asset list: cost, NBV, status. Optional startDate/endDate (purchaseDate), assetType. Aliases: dateFrom/dateTo."
-              }
-            },
-            {
-              "name": "Download report PDF — DEPRECIATION_SCHEDULE **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/reports/DEPRECIATION_SCHEDULE?startDate=&endDate=&assetType=",
-                "description": "On-the-fly PDF. Life, annual/accum dep, NBV. Optional startDate/endDate, assetType."
-              }
-            },
-            {
-              "name": "Download report PDF — ASSET_MOVEMENT_REPORT **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/reports/ASSET_MOVEMENT_REPORT?startDate=&endDate=&assetType=",
-                "description": "On-the-fly PDF. Acquire/transfer/disposal history. Dates filter eventDate."
-              }
-            },
-            {
-              "name": "Download report PDF — TAX_IMPACT_REPORT **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/reports/TAX_IMPACT_REPORT?startDate=&endDate=&assetType=",
-                "description": "On-the-fly PDF. Estimated capital allowance / tax deduction."
-              }
-            },
-            {
-              "name": "Download report PDF — ASSET_INTELLIGENCE_REPORT **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/reports/ASSET_INTELLIGENCE_REPORT?startDate=&endDate=&assetType=",
-                "description": "On-the-fly PDF. Counts by type + status totals (incl. AWAITING, PENDING_REVIEW)."
-              }
-            },
-            {
-              "name": "Download report PDF — CURRENT_ASSETS_STATEMENT **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/reports/CURRENT_ASSETS_STATEMENT?startDate=&endDate=&assetType=",
-                "description": "On-the-fly PDF. Cash/bank/inventory/AR snapshot. Filters accepted but do not change snapshot."
+                "description": "On-the-fly PDF. reportType: ASSET_SUMMARY_REPORT | DEPRECIATION_SCHEDULE | ASSET_MOVEMENT_REPORT | TAX_IMPACT_REPORT | ASSET_INTELLIGENCE_REPORT | CURRENT_ASSETS_STATEMENT. Optional startDate, endDate, assetType."
               }
             }
           ]

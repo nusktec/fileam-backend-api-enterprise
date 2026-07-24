@@ -4,7 +4,7 @@ import {
   getExpenseById,
   getExpenseDetails,
   createExpense,
-  createExpensesBulk,
+  bulkCreateExpenses,
   updateExpense,
   downloadExpenseReceipt,
   deleteExpense,
@@ -13,7 +13,7 @@ import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
 import {
   createExpenseValidation,
-  bulkCreateExpenseValidation,
+  bulkCreateExpensesValidation,
 } from "../../middlewares/validations/expensesValidation";
 import { updateExpenseValidation } from "../../middlewares/validations/updateExpenseValidation";
 import { validateIdParam } from "../../middlewares/validations/mobileValidation";
@@ -24,7 +24,21 @@ const router = express.Router();
 router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/", withPagination("expenseDate"), listExpenses);
-router.post("/bulk", bulkCreateExpenseValidation, createExpensesBulk);
+router.post(
+  "/bulk",
+  (
+    req: express.Request,
+    _res: express.Response,
+    next: express.NextFunction,
+  ) => {
+    if (!req.body?.items && Array.isArray(req.body?.expenses)) {
+      req.body.items = req.body.expenses;
+    }
+    next();
+  },
+  bulkCreateExpensesValidation,
+  bulkCreateExpenses,
+);
 router.delete("/:id", validateIdParam, deleteExpense);
 router.get("/:id/details", validateIdParam, getExpenseDetails);
 router.get("/:id/download-receipt", validateIdParam, downloadExpenseReceipt);
