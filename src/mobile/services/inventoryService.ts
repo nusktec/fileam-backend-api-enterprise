@@ -16,8 +16,12 @@ import {
 } from "../../constants/percentages";
 import { initialSaleStatusForPaymentType } from "../../constants/salePaymentRules";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 const EXPENSE_COUNTER_ID = "expense_number";
+
+/** 1 + VAT rate (e.g. 1.075) — used to extract VAT from an inclusive total. */
+const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
 
 async function createLinkedSaleInTx(
   tx: Prisma.TransactionClient,
@@ -31,6 +35,7 @@ async function createLinkedSaleInTx(
     paymentType: string;
     saleDate: Date;
     vatableIncome: boolean;
+    vatInclusive?: boolean;
     serviceIncome: boolean;
   },
 ) {
@@ -43,14 +48,35 @@ async function createLinkedSaleInTx(
   await tx.$executeRaw`
     UPDATE "User" SET next_sale_number = ${nextNum + 1} WHERE id = ${userId}
   `;
-  const amount = input.baseAmount;
-  const vatRate = input.vatableIncome
-    ? new Decimal(VAT_RATE_PERCENT)
-    : new Decimal(0);
-  const vatAmount = input.vatableIncome
-    ? amount.mul(VAT_RATE_PERCENT / PERCENT)
-    : new Decimal(0);
-  const totalAmount = amount.add(vatAmount);
+
+  const entered = input.baseAmount;
+  const vatInclusive = Boolean(input.vatInclusive);
+  let amount: Decimal;
+  let vatRate: Decimal;
+  let vatAmount: Decimal;
+  let totalAmount: Decimal;
+
+  if (!input.vatableIncome) {
+    amount = entered;
+    vatRate = new Decimal(0);
+    vatAmount = new Decimal(0);
+    totalAmount = entered;
+  } else if (vatInclusive) {
+    const base = entered.div(VAT_INCLUSIVE_DIVISOR);
+    amount = new Decimal(normalizeMoneyAmount(Number(base)));
+    const total = new Decimal(normalizeMoneyAmount(Number(entered)));
+    vatAmount = total.sub(amount);
+    vatRate = new Decimal(VAT_RATE_PERCENT);
+    totalAmount = total;
+  } else {
+    amount = entered;
+    vatRate = new Decimal(VAT_RATE_PERCENT);
+    vatAmount = new Decimal(
+      normalizeMoneyAmount(Number(entered.mul(VAT_RATE_PERCENT / PERCENT))),
+    );
+    totalAmount = amount.add(vatAmount);
+  }
+
   const sale = await tx.sale.create({
     data: {
       userId,
@@ -61,6 +87,7 @@ async function createLinkedSaleInTx(
       customerName: input.customerName,
       customerId: input.customerId,
       amount,
+      vatInclusive,
       vatRate,
       vatAmount,
       totalAmount,
@@ -75,6 +102,7 @@ async function createLinkedSaleInTx(
     id: sale.id,
     invoiceNumber: sale.invoiceNumber,
     amount: d(sale.amount),
+    vatInclusive: sale.vatInclusive,
     vatAmount: d(sale.vatAmount),
     totalAmount: d(sale.totalAmount),
   };
@@ -645,6 +673,7 @@ export const inventoryService = {
       paymentType?: string;
       saleDate?: string;
       vatableIncome?: boolean;
+      vatInclusive?: boolean;
       serviceIncome?: boolean;
       saleCategory?: string;
       expenseCategory?: string;
@@ -724,6 +753,7 @@ export const inventoryService = {
               paymentType: data.paymentType?.trim() || "Cash",
               saleDate: bookDate,
               vatableIncome: data.vatableIncome === true,
+              vatInclusive: data.vatInclusive === true,
               serviceIncome: data.serviceIncome !== false,
             });
           }
@@ -875,6 +905,7 @@ export const inventoryService = {
       paymentType?: string;
       saleDate?: string;
       vatableIncome?: boolean;
+      vatInclusive?: boolean;
       serviceIncome?: boolean;
       saleCategory?: string;
     },
@@ -980,6 +1011,7 @@ export const inventoryService = {
           paymentType: data.paymentType?.trim() || "Cash",
           saleDate,
           vatableIncome: data.vatableIncome === true,
+          vatInclusive: data.vatInclusive === true,
           serviceIncome: data.serviceIncome !== false,
         });
       }

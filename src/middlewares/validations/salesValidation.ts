@@ -27,6 +27,10 @@ export const createSaleValidation = [
     .optional()
     .isBoolean()
     .withMessage("vatableIncome must be boolean"),
+  check("vatInclusive")
+    .optional()
+    .isBoolean()
+    .withMessage("vatInclusive must be boolean"),
   check("serviceIncome")
     .optional()
     .isBoolean()
@@ -61,6 +65,7 @@ export const bulkCreateSalesValidation = [
   check("items.*.itemName").optional().trim().isString(),
   check("items.*.receiptUrl").optional().trim().isString(),
   check("items.*.vatableIncome").optional().isBoolean(),
+  check("items.*.vatInclusive").optional().isBoolean(),
   check("items.*.serviceIncome").optional().isBoolean(),
   handleValidation,
 ];

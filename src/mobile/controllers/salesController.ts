@@ -125,6 +125,7 @@ export const createSale = async (
       paymentType,
       date,
       vatableIncome,
+      vatInclusive,
       serviceIncome,
       itemName,
       receiptUrl,
@@ -154,6 +155,7 @@ export const createSale = async (
       paymentType,
       date,
       vatableIncome: Boolean(vatableIncome),
+      vatInclusive: Boolean(vatInclusive),
       serviceIncome: serviceIncome !== false,
     });
     if (!sale) {
@@ -195,6 +197,7 @@ export const bulkCreateSales = async (
         paymentType: String(raw.paymentType ?? ""),
         date: String(raw.date ?? ""),
         vatableIncome: Boolean(raw.vatableIncome),
+        vatInclusive: Boolean(raw.vatInclusive),
         serviceIncome: raw.serviceIncome !== false,
         customerName:
           customerName != null && String(customerName).trim() !== ""
@@ -289,6 +292,10 @@ export const updateSale = async (req: IRequest, res: Response): Promise<void> =>
       vatableIncome:
         body.vatableIncome !== undefined
           ? Boolean(body.vatableIncome)
+          : undefined,
+      vatInclusive:
+        body.vatInclusive !== undefined
+          ? Boolean(body.vatInclusive)
           : undefined,
       serviceIncome:
         body.serviceIncome !== undefined

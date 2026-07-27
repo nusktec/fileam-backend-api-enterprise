@@ -10,6 +10,8 @@ model Sale {
   customerName   String?  @map("customer_name")
   customerId     String?  @map("customer_id")
   amount         Decimal  @db.Decimal(14, 2)
+  /** When true, entered amount is gross (VAT included); net is extracted for tax. */
+  vatInclusive   Boolean  @default(false) @map("vat_inclusive")
   vatRate        Decimal  @default(0) @map("vat_rate") @db.Decimal(5, 2)
   vatAmount      Decimal  @default(0) @map("vat_amount") @db.Decimal(14, 2)
   totalAmount    Decimal  @map("total_amount") @db.Decimal(14, 2)

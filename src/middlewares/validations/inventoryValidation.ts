@@ -41,6 +41,7 @@ export const validateInventorySell = [
     .matches(/^\d{4}-\d{2}-\d{2}$/)
     .withMessage("saleDate must be YYYY-MM-DD"),
   check("vatableIncome").optional().isBoolean().toBoolean(),
+  check("vatInclusive").optional().isBoolean().toBoolean(),
   check("serviceIncome").optional().isBoolean().toBoolean(),
   check("saleCategory")
     .optional({ values: "null" })
@@ -75,6 +76,7 @@ export const validateInventoryAdjustment = [
     .matches(/^\d{4}-\d{2}-\d{2}$/)
     .withMessage("saleDate must be YYYY-MM-DD"),
   check("vatableIncome").optional().isBoolean().toBoolean(),
+  check("vatInclusive").optional().isBoolean().toBoolean(),
   check("serviceIncome").optional().isBoolean().toBoolean(),
   check("saleCategory")
     .optional({ values: "null" })

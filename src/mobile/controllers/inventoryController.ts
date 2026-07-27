@@ -103,6 +103,7 @@ export const sellFromInventory = async (
       paymentType?: string;
       saleDate?: string;
       vatableIncome?: boolean;
+      vatInclusive?: boolean;
       serviceIncome?: boolean;
       saleCategory?: string;
     };
@@ -117,6 +118,7 @@ export const sellFromInventory = async (
       paymentType: data.paymentType,
       saleDate: data.saleDate,
       vatableIncome: data.vatableIncome,
+      vatInclusive: data.vatInclusive,
       serviceIncome: data.serviceIncome,
       saleCategory: data.saleCategory,
     });
@@ -290,6 +292,7 @@ export const adjustInventoryItem = async (
       paymentType?: string;
       saleDate?: string;
       vatableIncome?: boolean;
+      vatInclusive?: boolean;
       serviceIncome?: boolean;
       saleCategory?: string;
       expenseCategory?: string;
@@ -302,6 +305,7 @@ export const adjustInventoryItem = async (
       paymentType: data.paymentType,
       saleDate: data.saleDate,
       vatableIncome: data.vatableIncome,
+      vatInclusive: data.vatInclusive,
       serviceIncome: data.serviceIncome,
       saleCategory: data.saleCategory,
       expenseCategory: data.expenseCategory,

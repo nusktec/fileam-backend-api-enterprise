@@ -10,7 +10,10 @@ import {
   SALE_STATUS,
 } from "../../constants/salePaymentRules";
 import { HttpReplyError } from "../../utils/httpReplyError";
-import { assertMonetaryAmountInRange } from "../../utils/monetaryAmount";
+import {
+  assertMonetaryAmountInRange,
+  normalizeMoneyAmount,
+} from "../../utils/monetaryAmount";
 import {
   calendarPeriodFromDate,
   toCalendarDate,
@@ -18,6 +21,9 @@ import {
 import { taxPayablesService } from "./taxPayablesService";
 
 const BULK_CREATE_MAX = 100;
+
+/** 1 + VAT rate (e.g. 1.075) — used to extract VAT from an inclusive total. */
+const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -40,6 +46,71 @@ function assertSaleFinancials(
   assertMonetaryAmountInRange(Number(amount), "Amount");
   assertMonetaryAmountInRange(Number(vatAmount), "VAT amount");
   assertMonetaryAmountInRange(Number(totalAmount), "Total amount");
+}
+
+/**
+ * Resolve stored net / VAT / total for a sale.
+ * - vatable + vatInclusive: `enteredAmount` is gross. Extract VAT; total stays entered; amount is net.
+ * - vatable + exclusive: entered is net; VAT added on top.
+ * - not vatable: amount = total = entered; VAT = 0.
+ */
+function resolveSaleAmounts(input: {
+  enteredAmount: number;
+  vatableIncome: boolean;
+  vatInclusive: boolean;
+}): {
+  amount: Decimal;
+  vatRate: Decimal;
+  vatAmount: Decimal;
+  totalAmount: Decimal;
+} {
+  const entered = new Decimal(input.enteredAmount);
+
+  if (!input.vatableIncome) {
+    assertSaleFinancials(entered, new Decimal(0), entered);
+    return {
+      amount: entered,
+      vatRate: new Decimal(0),
+      vatAmount: new Decimal(0),
+      totalAmount: entered,
+    };
+  }
+
+  const vatRate = new Decimal(VAT_RATE_PERCENT);
+
+  if (input.vatInclusive) {
+    const base = entered.div(VAT_INCLUSIVE_DIVISOR);
+    const vat = entered.sub(base);
+    const amountRounded = new Decimal(normalizeMoneyAmount(Number(base)));
+    const vatRounded = new Decimal(normalizeMoneyAmount(Number(vat)));
+    const totalRounded = new Decimal(
+      normalizeMoneyAmount(Number(amountRounded.add(vatRounded))),
+    );
+    // Prefer preserving the entered gross as total when rounding allows.
+    const total =
+      Math.abs(Number(totalRounded) - Number(entered)) < 0.02
+        ? new Decimal(normalizeMoneyAmount(Number(entered)))
+        : totalRounded;
+    const adjustedVat = total.sub(amountRounded);
+    assertSaleFinancials(amountRounded, adjustedVat, total);
+    return {
+      amount: amountRounded,
+      vatRate,
+      vatAmount: adjustedVat,
+      totalAmount: total,
+    };
+  }
+
+  const vatAmount = entered.mul(VAT_RATE_PERCENT / PERCENT);
+  const vatRounded = new Decimal(normalizeMoneyAmount(Number(vatAmount)));
+  const totalAmount = entered.add(vatRounded);
+  assertSaleFinancials(entered, vatRounded, totalAmount);
+  return {
+    amount: entered,
+    vatRate,
+    vatAmount: vatRounded,
+    totalAmount,
+  };
 }
 
 function mapSaleSummary(sale: {
@@ -297,6 +368,7 @@ export const salesService = {
       vatRate: decimalToNumber(sale.vatRate),
       vatAmount: decimalToNumber(sale.vatAmount),
       total: decimalToNumber(sale.totalAmount),
+      vatInclusive: sale.vatInclusive,
       vatableIncome: sale.vatableIncome,
       serviceIncome: sale.serviceIncome,
       paymentConfirmedAt: sale.paymentConfirmedAt
@@ -318,19 +390,17 @@ export const salesService = {
       paymentType: string;
       date: string;
       vatableIncome: boolean;
+      vatInclusive?: boolean;
       serviceIncome: boolean;
       createdById?: string;
     },
   ) {
-    const amount = new Decimal(data.amount);
-    const vatRate = data.vatableIncome
-      ? new Decimal(VAT_RATE_PERCENT)
-      : new Decimal(0);
-    const vatAmount = data.vatableIncome
-      ? amount.mul(VAT_RATE_PERCENT / PERCENT)
-      : new Decimal(0);
-    const totalAmount = amount.add(vatAmount);
-    assertSaleFinancials(amount, vatAmount, totalAmount);
+    const vatInclusive = Boolean(data.vatInclusive);
+    const { amount, vatRate, vatAmount, totalAmount } = resolveSaleAmounts({
+      enteredAmount: data.amount,
+      vatableIncome: data.vatableIncome,
+      vatInclusive,
+    });
     const status = initialSaleStatusForPaymentType(data.paymentType);
     const saleDate = toCalendarDate(data.date);
 
@@ -356,6 +426,7 @@ export const salesService = {
           customerName: data.customerName?.trim() || null,
           customerId: data.customerId?.trim() || null,
           amount,
+          vatInclusive,
           vatRate,
           vatAmount,
           totalAmount,
@@ -383,6 +454,7 @@ export const salesService = {
       itemName: sale.itemName ?? null,
       date: sale.saleDate,
       amount: decimalToNumber(sale.amount),
+      vatInclusive: sale.vatInclusive,
       vatAmount: decimalToNumber(sale.vatAmount),
       totalAmount: decimalToNumber(sale.totalAmount),
       customerName: sale.customerName ?? null,
@@ -406,6 +478,7 @@ export const salesService = {
       paymentType: string;
       date: string;
       vatableIncome?: boolean;
+      vatInclusive?: boolean;
       serviceIncome?: boolean;
     }>,
     createdById?: string,
@@ -421,18 +494,16 @@ export const salesService = {
     }
 
     const prepared = items.map((raw, index) => {
-      const amount = new Decimal(raw.amount);
       const vatableIncome = Boolean(raw.vatableIncome);
+      const vatInclusive = Boolean(raw.vatInclusive);
       const serviceIncome = raw.serviceIncome !== false;
-      const vatRate = vatableIncome
-        ? new Decimal(VAT_RATE_PERCENT)
-        : new Decimal(0);
-      const vatAmount = vatableIncome
-        ? amount.mul(VAT_RATE_PERCENT / PERCENT)
-        : new Decimal(0);
-      const totalAmount = amount.add(vatAmount);
+      let resolved: ReturnType<typeof resolveSaleAmounts>;
       try {
-        assertSaleFinancials(amount, vatAmount, totalAmount);
+        resolved = resolveSaleAmounts({
+          enteredAmount: Number(raw.amount),
+          vatableIncome,
+          vatInclusive,
+        });
       } catch (e) {
         if (e instanceof HttpReplyError) {
           throw new HttpReplyError(
@@ -458,10 +529,7 @@ export const salesService = {
         throw new HttpReplyError(400, `items[${index}]: date is required`);
       }
       return {
-        amount,
-        vatRate,
-        vatAmount,
-        totalAmount,
+        ...resolved,
         description: raw.description.trim(),
         itemName: nullableTrimmed(raw.itemName),
         receiptUrl: nullableTrimmed(raw.receiptUrl),
@@ -471,6 +539,7 @@ export const salesService = {
         paymentType: raw.paymentType,
         saleDate: toCalendarDate(raw.date),
         vatableIncome,
+        vatInclusive,
         serviceIncome,
         status: initialSaleStatusForPaymentType(raw.paymentType),
       };
@@ -497,6 +566,7 @@ export const salesService = {
               customerName: row.customerName,
               customerId: row.customerId,
               amount: row.amount,
+              vatInclusive: row.vatInclusive,
               vatRate: row.vatRate,
               vatAmount: row.vatAmount,
               totalAmount: row.totalAmount,
@@ -535,6 +605,7 @@ export const salesService = {
         itemName: sale.itemName ?? null,
         date: sale.saleDate,
         amount: decimalToNumber(sale.amount),
+        vatInclusive: sale.vatInclusive,
         vatAmount: decimalToNumber(sale.vatAmount),
         totalAmount: decimalToNumber(sale.totalAmount),
         customerName: sale.customerName ?? null,
@@ -560,6 +631,7 @@ export const salesService = {
       paymentType: string;
       date: string;
       vatableIncome: boolean;
+      vatInclusive: boolean;
       serviceIncome: boolean;
       status: string;
     }>,
@@ -601,30 +673,42 @@ export const salesService = {
       periodsToSync.push(calendarPeriodFromDate(saleDate));
     }
     if (data.vatableIncome != null) updateData.vatableIncome = data.vatableIncome;
+    if (data.vatInclusive != null) updateData.vatInclusive = data.vatInclusive;
     if (data.serviceIncome != null) updateData.serviceIncome = data.serviceIncome;
 
-    const vatable =
-      data.vatableIncome != null ? data.vatableIncome : sale.vatableIncome;
+    const touchesFinancial =
+      data.amount != null ||
+      data.vatableIncome !== undefined ||
+      data.vatInclusive !== undefined;
 
-    if (data.amount != null) {
-      const amount = new Decimal(data.amount);
-      const vatRate = (vatable ? VAT_RATE_PERCENT : 0) / PERCENT;
-      const vatAmount = amount.mul(vatRate);
-      const totalAmount = amount.add(vatAmount);
-      assertSaleFinancials(amount, vatAmount, totalAmount);
-      updateData.amount = amount;
-      updateData.vatRate = new Decimal(vatable ? VAT_RATE_PERCENT : 0);
-      updateData.vatAmount = vatAmount;
-      updateData.totalAmount = totalAmount;
-    } else if (data.vatableIncome != null) {
-      const amount = new Decimal(sale.amount);
-      const vatRate = (vatable ? VAT_RATE_PERCENT : 0) / PERCENT;
-      const vatAmount = amount.mul(vatRate);
-      const totalAmount = amount.add(vatAmount);
-      assertSaleFinancials(amount, vatAmount, totalAmount);
-      updateData.vatRate = new Decimal(vatable ? VAT_RATE_PERCENT : 0);
-      updateData.vatAmount = vatAmount;
-      updateData.totalAmount = totalAmount;
+    if (touchesFinancial) {
+      const vatable =
+        data.vatableIncome != null ? data.vatableIncome : sale.vatableIncome;
+      const vatInclusive =
+        data.vatInclusive !== undefined
+          ? data.vatInclusive
+          : sale.vatInclusive;
+
+      // When editing amount under VAT-inclusive, treat entered amount as gross.
+      // If only toggling vatInclusive without amount, use current total (gross) as the entered figure.
+      const enteredAmount =
+        data.amount != null
+          ? data.amount
+          : vatInclusive
+            ? decimalToNumber(sale.totalAmount)
+            : decimalToNumber(sale.amount);
+
+      const resolved = resolveSaleAmounts({
+        enteredAmount,
+        vatableIncome: vatable,
+        vatInclusive,
+      });
+      updateData.amount = resolved.amount;
+      updateData.vatRate = resolved.vatRate;
+      updateData.vatAmount = resolved.vatAmount;
+      updateData.totalAmount = resolved.totalAmount;
+      updateData.vatInclusive = vatInclusive;
+      updateData.vatableIncome = vatable;
     }
 
     updateData.status = resolveSaleStatusAfterPatch(sale, data);
@@ -644,6 +728,7 @@ export const salesService = {
       itemName: updated.itemName ?? null,
       date: updated.saleDate,
       amount: decimalToNumber(updated.amount),
+      vatInclusive: updated.vatInclusive,
       vatAmount: decimalToNumber(updated.vatAmount),
       totalAmount: decimalToNumber(updated.totalAmount),
       customerName: updated.customerName ?? null,

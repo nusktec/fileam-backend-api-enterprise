@@ -26,6 +26,7 @@ export const updateSaleValidation = [
     .withMessage(`paymentType must be one of: ${PAYMENT_TYPES.join(", ")}`),
   check("date").optional().isISO8601(),
   check("vatableIncome").optional().isBoolean(),
+  check("vatInclusive").optional().isBoolean(),
   check("serviceIncome").optional().isBoolean(),
   check("status")
     .optional()
