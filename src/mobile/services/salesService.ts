@@ -22,9 +22,6 @@ import { taxPayablesService } from "./taxPayablesService";
 
 const BULK_CREATE_MAX = 100;
 
-/** 1 + VAT rate (e.g. 1.075) — used to extract VAT from an inclusive total. */
-const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
-
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
@@ -50,10 +47,25 @@ function assertSaleFinancials(
 
 /**
  * Resolve stored net / VAT / total for a sale.
- * - vatable + vatInclusive: `enteredAmount` is gross. Extract VAT; total stays entered; amount is net.
- * - vatable + exclusive: entered is net; VAT added on top.
- * - not vatable: amount = total = entered; VAT = 0.
+ * `vatableIncome` and `vatInclusive` are mutually exclusive:
+ * - vatInclusive: entered amount is gross; VAT = 7.5% of gross; net = gross − VAT
+ *   (e.g. 3000 → amount 2775, vatAmount 225, totalAmount 3000).
+ * - vatableIncome: entered amount is net; add 7.5% VAT on top.
+ * - neither: no VAT.
  */
+function assertExclusiveVatFlags(
+  vatableIncome: boolean,
+  vatInclusive: boolean,
+  label = "",
+): void {
+  if (vatableIncome && vatInclusive) {
+    throw new HttpReplyError(
+      400,
+      `${label}vatableIncome and vatInclusive cannot both be true. Use vatInclusive for VAT-inclusive amounts, or vatableIncome to add VAT on a net amount.`,
+    );
+  }
+}
+
 function resolveSaleAmounts(input: {
   enteredAmount: number;
   vatableIncome: boolean;
@@ -64,52 +76,43 @@ function resolveSaleAmounts(input: {
   vatAmount: Decimal;
   totalAmount: Decimal;
 } {
+  assertExclusiveVatFlags(input.vatableIncome, input.vatInclusive);
   const entered = new Decimal(input.enteredAmount);
 
-  if (!input.vatableIncome) {
-    assertSaleFinancials(entered, new Decimal(0), entered);
-    return {
-      amount: entered,
-      vatRate: new Decimal(0),
-      vatAmount: new Decimal(0),
-      totalAmount: entered,
-    };
-  }
-
-  const vatRate = new Decimal(VAT_RATE_PERCENT);
-
   if (input.vatInclusive) {
-    const base = entered.div(VAT_INCLUSIVE_DIVISOR);
-    const vat = entered.sub(base);
-    const amountRounded = new Decimal(normalizeMoneyAmount(Number(base)));
-    const vatRounded = new Decimal(normalizeMoneyAmount(Number(vat)));
-    const totalRounded = new Decimal(
-      normalizeMoneyAmount(Number(amountRounded.add(vatRounded))),
+    const total = new Decimal(normalizeMoneyAmount(Number(entered)));
+    const vatRounded = new Decimal(
+      normalizeMoneyAmount(Number(total.mul(VAT_RATE_PERCENT / PERCENT))),
     );
-    // Prefer preserving the entered gross as total when rounding allows.
-    const total =
-      Math.abs(Number(totalRounded) - Number(entered)) < 0.02
-        ? new Decimal(normalizeMoneyAmount(Number(entered)))
-        : totalRounded;
-    const adjustedVat = total.sub(amountRounded);
-    assertSaleFinancials(amountRounded, adjustedVat, total);
+    const amountRounded = total.sub(vatRounded);
+    assertSaleFinancials(amountRounded, vatRounded, total);
     return {
       amount: amountRounded,
-      vatRate,
-      vatAmount: adjustedVat,
+      vatRate: new Decimal(VAT_RATE_PERCENT),
+      vatAmount: vatRounded,
       totalAmount: total,
     };
   }
 
-  const vatAmount = entered.mul(VAT_RATE_PERCENT / PERCENT);
-  const vatRounded = new Decimal(normalizeMoneyAmount(Number(vatAmount)));
-  const totalAmount = entered.add(vatRounded);
-  assertSaleFinancials(entered, vatRounded, totalAmount);
+  if (input.vatableIncome) {
+    const vatAmount = entered.mul(VAT_RATE_PERCENT / PERCENT);
+    const vatRounded = new Decimal(normalizeMoneyAmount(Number(vatAmount)));
+    const totalAmount = entered.add(vatRounded);
+    assertSaleFinancials(entered, vatRounded, totalAmount);
+    return {
+      amount: entered,
+      vatRate: new Decimal(VAT_RATE_PERCENT),
+      vatAmount: vatRounded,
+      totalAmount,
+    };
+  }
+
+  assertSaleFinancials(entered, new Decimal(0), entered);
   return {
     amount: entered,
-    vatRate,
-    vatAmount: vatRounded,
-    totalAmount,
+    vatRate: new Decimal(0),
+    vatAmount: new Decimal(0),
+    totalAmount: entered,
   };
 }
 
@@ -396,9 +399,11 @@ export const salesService = {
     },
   ) {
     const vatInclusive = Boolean(data.vatInclusive);
+    const vatableIncome = Boolean(data.vatableIncome);
+    assertExclusiveVatFlags(vatableIncome, vatInclusive);
     const { amount, vatRate, vatAmount, totalAmount } = resolveSaleAmounts({
       enteredAmount: data.amount,
-      vatableIncome: data.vatableIncome,
+      vatableIncome,
       vatInclusive,
     });
     const status = initialSaleStatusForPaymentType(data.paymentType);
@@ -432,7 +437,7 @@ export const salesService = {
           totalAmount,
           paymentType: data.paymentType,
           saleDate,
-          vatableIncome: data.vatableIncome,
+          vatableIncome,
           serviceIncome: data.serviceIncome,
           status,
           receiptUrl: nullableTrimmed(data.receiptUrl),
@@ -496,7 +501,7 @@ export const salesService = {
     const prepared = items.map((raw, index) => {
       const vatableIncome = Boolean(raw.vatableIncome);
       const vatInclusive = Boolean(raw.vatInclusive);
-      const serviceIncome = raw.serviceIncome !== false;
+      assertExclusiveVatFlags(vatableIncome, vatInclusive, `items[${index}]: `);
       let resolved: ReturnType<typeof resolveSaleAmounts>;
       try {
         resolved = resolveSaleAmounts({
@@ -508,7 +513,9 @@ export const salesService = {
         if (e instanceof HttpReplyError) {
           throw new HttpReplyError(
             e.statusCode,
-            `items[${index}]: ${e.message}`,
+            e.message.startsWith("items[")
+              ? e.message
+              : `items[${index}]: ${e.message}`,
           );
         }
         throw e;
@@ -540,7 +547,7 @@ export const salesService = {
         saleDate: toCalendarDate(raw.date),
         vatableIncome,
         vatInclusive,
-        serviceIncome,
+        serviceIncome: raw.serviceIncome !== false,
         status: initialSaleStatusForPaymentType(raw.paymentType),
       };
     });
@@ -688,6 +695,7 @@ export const salesService = {
         data.vatInclusive !== undefined
           ? data.vatInclusive
           : sale.vatInclusive;
+      assertExclusiveVatFlags(vatable, vatInclusive);
 
       // When editing amount under VAT-inclusive, treat entered amount as gross.
       // If only toggling vatInclusive without amount, use current total (gross) as the entered figure.

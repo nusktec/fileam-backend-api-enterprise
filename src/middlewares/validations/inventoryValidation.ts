@@ -42,6 +42,14 @@ export const validateInventorySell = [
     .withMessage("saleDate must be YYYY-MM-DD"),
   check("vatableIncome").optional().isBoolean().toBoolean(),
   check("vatInclusive").optional().isBoolean().toBoolean(),
+  body().custom((value) => {
+    if (value?.vatableIncome === true && value?.vatInclusive === true) {
+      throw new Error(
+        "vatableIncome and vatInclusive cannot both be true",
+      );
+    }
+    return true;
+  }),
   check("serviceIncome").optional().isBoolean().toBoolean(),
   check("saleCategory")
     .optional({ values: "null" })
@@ -77,6 +85,14 @@ export const validateInventoryAdjustment = [
     .withMessage("saleDate must be YYYY-MM-DD"),
   check("vatableIncome").optional().isBoolean().toBoolean(),
   check("vatInclusive").optional().isBoolean().toBoolean(),
+  body().custom((value) => {
+    if (value?.vatableIncome === true && value?.vatInclusive === true) {
+      throw new Error(
+        "vatableIncome and vatInclusive cannot both be true",
+      );
+    }
+    return true;
+  }),
   check("serviceIncome").optional().isBoolean().toBoolean(),
   check("saleCategory")
     .optional({ values: "null" })

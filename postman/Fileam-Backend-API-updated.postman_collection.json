@@ -1090,10 +1090,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "paymentType Cash \u2192 status PAID immediately. No payment-status call needed.",
+                "description": "paymentType Cash \u2192 status PAID immediately. No payment-status call needed. Optional vatInclusive (bool, default false). vatableIncome and vatInclusive are mutually exclusive (cannot both be true). vatInclusive=true: amount is VAT-inclusive gross; VAT = 7.5% of gross and amount = gross \u2212 VAT (e.g. 3000 \u2192 amount 2775, vat 225). vatableIncome=true: amount is net and 7.5% VAT is added on top. Neither: no VAT.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\": \"Walk-in cash sale\", \"amount\": 25000, \"date\": \"2026-07-13\", \"category\": \"Product Sales\", \"paymentType\": \"Cash\", \"vatableIncome\": false, \"serviceIncome\": false, \"customerName\": \"Walk-in\"}"
+                  "raw": "{\"description\": \"Walk-in cash sale\", \"amount\": 25000, \"date\": \"2026-07-13\", \"category\": \"Product Sales\", \"paymentType\": \"Cash\", \"vatableIncome\": false, \"vatInclusive\": false, \"serviceIncome\": false, \"customerName\": \"Walk-in\"}"
                 }
               },
               "event": [
@@ -1120,10 +1120,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "paymentType Card \u2192 status IN_PROGRESS. Confirm with PATCH .../payment-status.",
+                "description": "paymentType Card \u2192 status IN_PROGRESS. Confirm with PATCH .../payment-status. vatableIncome and vatInclusive are mutually exclusive. vatInclusive=true: amount is VAT-inclusive gross; VAT = 7.5% of gross (amount = gross \u2212 VAT). vatableIncome=true: amount is net (+ 7.5% VAT).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\": \"Consulting fee\", \"amount\": 100000, \"date\": \"2026-07-13\", \"category\": \"Services\", \"paymentType\": \"Card\", \"vatableIncome\": true, \"serviceIncome\": true, \"customerName\": \"Acme Ltd\", \"itemName\": \"Advisory package\"}"
+                  "raw": "{\"description\": \"Consulting fee\", \"amount\": 100000, \"date\": \"2026-07-13\", \"category\": \"Services\", \"paymentType\": \"Card\", \"vatableIncome\": false, \"vatInclusive\": true, \"serviceIncome\": true, \"customerName\": \"Acme Ltd\", \"itemName\": \"Advisory package\"}"
                 }
               },
               "event": [
@@ -1150,10 +1150,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "paymentType Transfer \u2192 status IN_PROGRESS. Confirm with PATCH .../payment-status.",
+                "description": "paymentType Transfer \u2192 status IN_PROGRESS. Confirm with PATCH .../payment-status. Optional vatInclusive (bool, default false).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\": \"Bank transfer sale\", \"amount\": 50000, \"date\": \"2026-07-13\", \"category\": \"Product Sales\", \"paymentType\": \"Transfer\", \"vatableIncome\": false, \"serviceIncome\": false, \"customerName\": \"XYZ Ventures\"}"
+                  "raw": "{\"description\": \"Bank transfer sale\", \"amount\": 50000, \"date\": \"2026-07-13\", \"category\": \"Product Sales\", \"paymentType\": \"Transfer\", \"vatableIncome\": false, \"vatInclusive\": false, \"serviceIncome\": false, \"customerName\": \"XYZ Ventures\"}"
                 }
               },
               "event": [
@@ -1180,10 +1180,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "paymentType Invoice \u2192 status Pending. Confirm with POST .../mark-paid only. Do not use payment-status for Invoice.",
+                "description": "paymentType Invoice \u2192 status Pending. Confirm with POST .../mark-paid only. Do not use payment-status for Invoice. vatableIncome and vatInclusive are mutually exclusive. Here vatableIncome=true adds 7.5% Output VAT on the net amount.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\": \"Invoice billed sale\", \"amount\": 75000, \"date\": \"2026-07-13\", \"category\": \"Services\", \"paymentType\": \"Invoice\", \"vatableIncome\": true, \"serviceIncome\": true, \"customerName\": \"ABC Limited\", \"customerId\": \"cust-001\"}"
+                  "raw": "{\"description\": \"Invoice billed sale\", \"amount\": 75000, \"date\": \"2026-07-13\", \"category\": \"Services\", \"paymentType\": \"Invoice\", \"vatableIncome\": true, \"vatInclusive\": false, \"serviceIncome\": true, \"customerName\": \"ABC Limited\", \"customerId\": \"cust-001\"}"
                 }
               },
               "event": [
@@ -1210,10 +1210,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
-                "description": "Body: { items: SaleCreate[] } (alias key sales also accepted). Max 100. Same fields as single create. Response: { created, sales[] }. Invoice numbers allocated sequentially in one transaction.",
+                "description": "Body: { items: SaleCreate[] } (alias key sales also accepted). Max 100. Same fields as single create. Per item, vatableIncome and vatInclusive are mutually exclusive: vatInclusive: VAT = 7.5% of gross (amount = gross \u2212 VAT); vatableIncome adds 7.5% on net. Response: { created, sales[] }. Invoice numbers allocated sequentially in one transaction.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk cash sale\",\n      \"amount\": 10000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": true,\n      \"serviceIncome\": true\n    },\n    {\n      \"description\": \"Bulk invoice sale\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Invoice\",\n      \"vatableIncome\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk cash sale\",\n      \"amount\": 10000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true\n    },\n    {\n      \"description\": \"Bulk invoice sale\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Invoice\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
                 }
               }
             },
@@ -1272,7 +1272,7 @@
               }
             }
           ],
-          "description": "Mobile sales / income. Payment status: Cash\u2192PAID on create; Card|Transfer\u2192IN_PROGRESS then PATCH /:id/payment-status {\"status\":\"PAID\"} (sets paymentConfirmedAt). Invoice\u2192Pending then POST /:id/mark-paid. Enterprise Invoice mark-paid is separate."
+          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive on create/bulk/update: vatInclusive=true treats amount as gross (VAT = 7.5% of gross; amount = gross \u2212 VAT); vatableIncome=true treats amount as net (+ 7.5% VAT). Payment status: Cash\u2192PAID on create; Card|Transfer\u2192IN_PROGRESS then PATCH /:id/payment-status {\"status\":\"PAID\"} (sets paymentConfirmedAt). Invoice\u2192Pending then POST /:id/mark-paid. Enterprise Invoice mark-paid is separate."
         },
         {
           "name": "Expenses *",

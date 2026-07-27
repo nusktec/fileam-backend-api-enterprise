@@ -1,4 +1,4 @@
-import { check } from "express-validator";
+import { check, body } from "express-validator";
 import { handleValidation } from "../errorHandler";
 import { optionalMonetaryAmount } from "./monetaryAmountValidation";
 
@@ -27,6 +27,14 @@ export const updateSaleValidation = [
   check("date").optional().isISO8601(),
   check("vatableIncome").optional().isBoolean(),
   check("vatInclusive").optional().isBoolean(),
+  body().custom((value) => {
+    if (value?.vatableIncome === true && value?.vatInclusive === true) {
+      throw new Error(
+        "vatableIncome and vatInclusive cannot both be true",
+      );
+    }
+    return true;
+  }),
   check("serviceIncome").optional().isBoolean(),
   check("status")
     .optional()

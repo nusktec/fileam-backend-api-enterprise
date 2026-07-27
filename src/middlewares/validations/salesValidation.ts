@@ -1,8 +1,18 @@
-import { check } from "express-validator";
+import { check, body } from "express-validator";
 import { handleValidation } from "../errorHandler";
 import { requiredMonetaryAmount } from "./monetaryAmountValidation";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
+
+const exclusiveVatFlagsMessage =
+  "vatableIncome and vatInclusive cannot both be true";
+
+function assertExclusiveVatFlagsInBody(body: Record<string, unknown>) {
+  if (body.vatableIncome === true && body.vatInclusive === true) {
+    throw new Error(exclusiveVatFlagsMessage);
+  }
+  return true;
+}
 
 export const createSaleValidation = [
   requiredMonetaryAmount("amount", "Amount"),
@@ -31,6 +41,7 @@ export const createSaleValidation = [
     .optional()
     .isBoolean()
     .withMessage("vatInclusive must be boolean"),
+  body().custom((value) => assertExclusiveVatFlagsInBody(value)),
   check("serviceIncome")
     .optional()
     .isBoolean()
@@ -67,5 +78,15 @@ export const bulkCreateSalesValidation = [
   check("items.*.vatableIncome").optional().isBoolean(),
   check("items.*.vatInclusive").optional().isBoolean(),
   check("items.*.serviceIncome").optional().isBoolean(),
+  body("items").custom((items) => {
+    if (!Array.isArray(items)) return true;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i] as Record<string, unknown>;
+      if (item?.vatableIncome === true && item?.vatInclusive === true) {
+        throw new Error(`items[${i}]: ${exclusiveVatFlagsMessage}`);
+      }
+    }
+    return true;
+  }),
   handleValidation,
 ];

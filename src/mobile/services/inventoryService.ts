@@ -20,9 +20,6 @@ import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 
-/** 1 + VAT rate (e.g. 1.075) — used to extract VAT from an inclusive total. */
-const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
-
 async function createLinkedSaleInTx(
   tx: Prisma.TransactionClient,
   userId: string,
@@ -51,30 +48,41 @@ async function createLinkedSaleInTx(
 
   const entered = input.baseAmount;
   const vatInclusive = Boolean(input.vatInclusive);
+  const vatableIncome = Boolean(input.vatableIncome);
+  if (vatableIncome && vatInclusive) {
+    throw new HttpReplyError(
+      400,
+      "vatableIncome and vatInclusive cannot both be true. Use vatInclusive for VAT-inclusive amounts, or vatableIncome to add VAT on a net amount.",
+    );
+  }
+
   let amount: Decimal;
   let vatRate: Decimal;
   let vatAmount: Decimal;
   let totalAmount: Decimal;
 
-  if (!input.vatableIncome) {
-    amount = entered;
-    vatRate = new Decimal(0);
-    vatAmount = new Decimal(0);
-    totalAmount = entered;
-  } else if (vatInclusive) {
-    const base = entered.div(VAT_INCLUSIVE_DIVISOR);
-    amount = new Decimal(normalizeMoneyAmount(Number(base)));
-    const total = new Decimal(normalizeMoneyAmount(Number(entered)));
-    vatAmount = total.sub(amount);
+  if (vatInclusive) {
+    // Gross entered: VAT = 7.5% of gross; net = gross − VAT (e.g. 3000 → 2775 + 225).
+    totalAmount = new Decimal(normalizeMoneyAmount(Number(entered)));
+    vatAmount = new Decimal(
+      normalizeMoneyAmount(
+        Number(totalAmount.mul(VAT_RATE_PERCENT / PERCENT)),
+      ),
+    );
+    amount = totalAmount.sub(vatAmount);
     vatRate = new Decimal(VAT_RATE_PERCENT);
-    totalAmount = total;
-  } else {
+  } else if (vatableIncome) {
     amount = entered;
     vatRate = new Decimal(VAT_RATE_PERCENT);
     vatAmount = new Decimal(
       normalizeMoneyAmount(Number(entered.mul(VAT_RATE_PERCENT / PERCENT))),
     );
     totalAmount = amount.add(vatAmount);
+  } else {
+    amount = entered;
+    vatRate = new Decimal(0);
+    vatAmount = new Decimal(0);
+    totalAmount = entered;
   }
 
   const sale = await tx.sale.create({
@@ -93,7 +101,7 @@ async function createLinkedSaleInTx(
       totalAmount,
       paymentType: input.paymentType,
       saleDate: input.saleDate,
-      vatableIncome: input.vatableIncome,
+      vatableIncome,
       serviceIncome: input.serviceIncome,
       status: initialSaleStatusForPaymentType(input.paymentType),
     },
