@@ -25,6 +25,10 @@ export const updateSaleValidation = [
     .isIn(PAYMENT_TYPES)
     .withMessage(`paymentType must be one of: ${PAYMENT_TYPES.join(", ")}`),
   check("date").optional().isISO8601(),
+  check("invoiceDueDate")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("invoiceDueDate must be a valid ISO date"),
   check("vatableIncome").optional().isBoolean(),
   check("vatInclusive").optional().isBoolean(),
   body().custom((value) => {

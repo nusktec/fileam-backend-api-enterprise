@@ -141,6 +141,8 @@ export const createExpense = async (
       vatInclusive,
       vatAmount,
       receiptUrl,
+      paymentType,
+      invoiceDueDate,
     } = b;
     const supplierName = b.supplierName ?? b.Supplier_name;
     const supplierId = b.supplierId ?? b.Supplier_Id;
@@ -153,6 +155,16 @@ export const createExpense = async (
       vatInclusive: Boolean(vatInclusive),
       vatAmount: vatAmount != null ? Number(vatAmount) : undefined,
       receiptUrl,
+      paymentType:
+        paymentType != null && String(paymentType).trim() !== ""
+          ? String(paymentType).trim()
+          : undefined,
+      invoiceDueDate:
+        invoiceDueDate != null && String(invoiceDueDate).trim() !== ""
+          ? String(invoiceDueDate)
+          : invoiceDueDate === null
+            ? null
+            : undefined,
       supplierName:
         supplierName != null && String(supplierName).trim() !== ""
           ? String(supplierName).trim()
@@ -203,6 +215,16 @@ export const bulkCreateExpenses = async (
           raw.vatAmount != null ? Number(raw.vatAmount) : undefined,
         receiptUrl:
           raw.receiptUrl != null ? String(raw.receiptUrl) : undefined,
+        paymentType:
+          raw.paymentType != null && String(raw.paymentType).trim() !== ""
+            ? String(raw.paymentType).trim()
+            : undefined,
+        invoiceDueDate:
+          raw.invoiceDueDate != null && String(raw.invoiceDueDate).trim() !== ""
+            ? String(raw.invoiceDueDate)
+            : raw.invoiceDueDate === null
+              ? null
+              : undefined,
         supplierName:
           supplierName != null && String(supplierName).trim() !== ""
             ? String(supplierName).trim()
@@ -261,6 +283,14 @@ export const updateExpense = async (
         body.vatAmount != null ? Number(body.vatAmount) : undefined,
       date: body.date as string | undefined,
       receiptUrl: body.receiptUrl as string | undefined,
+      paymentType: body.paymentType as string | undefined,
+      invoiceDueDate:
+        body.invoiceDueDate !== undefined
+          ? body.invoiceDueDate == null ||
+            String(body.invoiceDueDate).trim() === ""
+            ? null
+            : String(body.invoiceDueDate)
+          : undefined,
       supplierName:
         supplierName !== undefined
           ? supplierName === null || String(supplierName).trim() === ""

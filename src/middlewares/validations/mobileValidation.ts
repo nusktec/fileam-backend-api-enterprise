@@ -43,6 +43,7 @@ export const validateCreateEmployee = [
   check("startDate").optional().isISO8601(),
   check("tin").optional().trim().isString(),
   check("pensionRsa").optional().trim().isString(),
+  check("pfa").optional().trim().isString(),
   handleValidation,
 ];
 
@@ -64,5 +65,6 @@ export const validateUpdateEmployee = [
   check("startDate").optional().isISO8601(),
   check("tin").optional({ nullable: true }).trim().isString(),
   check("pensionRsa").optional({ nullable: true }).trim().isString(),
+  check("pfa").optional({ nullable: true }).trim().isString(),
   handleValidation,
 ];

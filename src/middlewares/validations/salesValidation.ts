@@ -33,6 +33,10 @@ export const createSaleValidation = [
     .isIn(PAYMENT_TYPES)
     .withMessage(`paymentType must be one of: ${PAYMENT_TYPES.join(", ")}`),
   check("date").isISO8601().withMessage("Date must be a valid ISO date"),
+  check("invoiceDueDate")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("invoiceDueDate must be a valid ISO date"),
   check("vatableIncome")
     .optional()
     .isBoolean()
@@ -61,11 +65,18 @@ export const bulkCreateSalesValidation = [
     .notEmpty()
     .withMessage("Each item description is required"),
   check("items.*.paymentType")
+    .optional()
     .isIn(PAYMENT_TYPES)
-    .withMessage(`Each paymentType must be one of: ${PAYMENT_TYPES.join(", ")}`),
+    .withMessage(
+      `Each paymentType must be one of: ${PAYMENT_TYPES.join(", ")} (defaults to Transfer)`,
+    ),
   check("items.*.date")
     .isISO8601()
     .withMessage("Each date must be a valid ISO date"),
+  check("items.*.invoiceDueDate")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("Each invoiceDueDate must be a valid ISO date"),
   check("items.*.category")
     .optional({ values: "null" })
     .trim()

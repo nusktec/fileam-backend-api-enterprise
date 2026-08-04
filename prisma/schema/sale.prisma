@@ -17,6 +17,8 @@ model Sale {
   totalAmount    Decimal  @map("total_amount") @db.Decimal(14, 2)
   paymentType    String   @map("payment_type")
   saleDate       DateTime @map("sale_date") @db.Date
+  /** Optional due date shown on invoice PDF when payment is by invoice. */
+  invoiceDueDate DateTime? @map("invoice_due_date") @db.Date
   vatableIncome  Boolean  @default(false) @map("vatable_income")
   serviceIncome  Boolean  @default(true) @map("service_income")
   status         String   @default("Pending")

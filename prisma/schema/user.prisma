@@ -41,6 +41,8 @@ model User {
 
   tokens                      Token[]
   employees                   Employee[]
+  payrollSettings             PayrollSettings?
+  payrollObligations          PayrollObligation[]
   userRoles                   UserRole[]
   businesses                  Business[]
   consultantConnections         ConsultantConnection[]

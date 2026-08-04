@@ -54,7 +54,7 @@ export async function generatePdfForDocument(
       }),
       prisma.business.findFirst({
         where: { userId },
-        select: { name: true, streetAddress: true },
+        select: { name: true, streetAddress: true, bankAccount: true },
       }),
     ]);
 
@@ -68,6 +68,8 @@ export async function generatePdfForDocument(
       totalAmount: toNum(sale.totalAmount),
       paymentType: sale.paymentType,
       saleDate: sale.saleDate,
+      invoiceDueDate: sale.invoiceDueDate,
+      accountNumber: business?.bankAccount ?? null,
       vatableIncome: sale.vatableIncome,
       serviceIncome: sale.serviceIncome,
       status: sale.status,

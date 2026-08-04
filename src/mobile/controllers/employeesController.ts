@@ -89,6 +89,7 @@ export const createEmployee = async (
       startDate,
       tin,
       pensionRsa,
+      pfa,
     } = req.body ?? {};
     const data = await employeesService.create(userId, {
       fullName,
@@ -106,6 +107,7 @@ export const createEmployee = async (
       startDate,
       tin,
       pensionRsa,
+      pfa,
     });
     res.status(HttpStatusCode.OK).json(outJson(true, "Employee added", data));
   } catch (error) {
@@ -150,6 +152,7 @@ export const updateEmployee = async (
       startDate: body.startDate,
       tin: body.tin,
       pensionRsa: body.pensionRsa,
+      pfa: body.pfa,
     });
     if (!data) {
       res

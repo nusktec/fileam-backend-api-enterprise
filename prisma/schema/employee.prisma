@@ -13,6 +13,8 @@ model Employee {
   stateOfResidence    String?  @map("state_of_residence")
   tin                 String?  @map("tin")
   pensionRsa          String?  @map("pension_rsa")
+  /** Pension Fund Administrator name (e.g. Stanbic IBTC Pension). */
+  pfa                 String?
   startDate           DateTime @map("start_date") @db.Date
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")

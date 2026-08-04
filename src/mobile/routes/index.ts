@@ -19,6 +19,10 @@ import contactsAndTypesRoutes from "./contactsAndTypesRoutes";
 import accountDeletionRoutes from "./accountDeletionRoutes";
 import inventoryRoutes from "./inventoryRoutes";
 import assetsRoutes from "./assetsRoutes";
+import payrollRoutes from "./payrollRoutes";
+import payeeRoutes from "./payeeRoutes";
+import nhfRoutes from "./nhfRoutes";
+import pensionRoutes from "./pensionRoutes";
 
 const router = express.Router();
 
@@ -37,6 +41,10 @@ router.use("/reports", reportsRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/evidence-vault", evidenceVaultRoutes);
 router.use("/employees", employeesRoutes);
+router.use("/payroll", payrollRoutes);
+router.use("/payee", payeeRoutes);
+router.use("/nhf", nhfRoutes);
+router.use("/pension", pensionRoutes);
 router.use("/help", helpRoutes);
 router.use("/account-deletion", accountDeletionRoutes);
 router.use("/contacts-and-types", contactsAndTypesRoutes);

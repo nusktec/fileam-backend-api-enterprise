@@ -6,6 +6,7 @@ import {
 } from "../../constants/percentages";
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 import { EXPENSE_TYPES } from "../../constants/expenseTypes";
+import { PAYMENT_TYPE_TRANSFER } from "../../constants/salePaymentRules";
 import {
   assertMonetaryAmountInRange,
   normalizeMoneyAmount,
@@ -26,6 +27,14 @@ const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
+}
+
+function optionalInvoiceDueDate(
+  value: string | null | undefined,
+): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || String(value).trim() === "") return null;
+  return toCalendarDate(String(value));
 }
 
 function assertExpenseFinancials(
@@ -106,6 +115,8 @@ function mapExpenseListItem(e: {
   totalAmount: Decimal;
   vatAmount: Decimal | null;
   vatInclusive: boolean;
+  paymentType: string;
+  invoiceDueDate: Date | null;
   supplierName: string | null;
   supplierId: string | null;
 }) {
@@ -123,6 +134,8 @@ function mapExpenseListItem(e: {
     amount: decimalToNumber(e.totalAmount),
     vatTag: e.vatInclusive,
     vatInclusive: e.vatInclusive,
+    paymentType: e.paymentType,
+    invoiceDueDate: e.invoiceDueDate,
     supplierName: e.supplierName ?? null,
     supplierId: e.supplierId ?? null,
   };
@@ -222,6 +235,8 @@ export const expensesService = {
         expense.vatAmount != null ? decimalToNumber(expense.vatAmount) : null,
       total: decimalToNumber(expense.totalAmount),
       vatInclusive: expense.vatInclusive,
+      paymentType: expense.paymentType,
+      invoiceDueDate: expense.invoiceDueDate,
       supplierName: expense.supplierName ?? null,
       supplierId: expense.supplierId ?? null,
     };
@@ -240,6 +255,8 @@ export const expensesService = {
       receiptUrl?: string;
       supplierName?: string;
       supplierId?: string;
+      paymentType?: string;
+      invoiceDueDate?: string | null;
       createdById?: string;
     },
   ) {
@@ -251,6 +268,11 @@ export const expensesService = {
 
     const expenseNumber = await nextExpenseNumber();
     const expenseDate = toCalendarDate(data.date);
+    const paymentType =
+      data.paymentType != null && String(data.paymentType).trim() !== ""
+        ? String(data.paymentType).trim()
+        : PAYMENT_TYPE_TRANSFER;
+    const invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate) ?? null;
 
     const expenseType =
       data.expenseType != null && String(data.expenseType).trim() !== ""
@@ -269,10 +291,12 @@ export const expensesService = {
         vatInclusive: data.vatInclusive,
         vatAmount,
         totalAmount,
+        paymentType,
         receiptUrl: data.receiptUrl ?? null,
         supplierName: data.supplierName?.trim() || null,
         supplierId: data.supplierId?.trim() || null,
         expenseDate,
+        invoiceDueDate,
       },
     });
 
@@ -293,6 +317,8 @@ export const expensesService = {
       amount: decimalToNumber(expense.totalAmount),
       vatTag: expense.vatInclusive,
       vatInclusive: expense.vatInclusive,
+      paymentType: expense.paymentType,
+      invoiceDueDate: expense.invoiceDueDate,
       supplierName: expense.supplierName ?? null,
       supplierId: expense.supplierId ?? null,
     };
@@ -311,6 +337,8 @@ export const expensesService = {
       receiptUrl?: string;
       supplierName?: string;
       supplierId?: string;
+      paymentType?: string;
+      invoiceDueDate?: string | null;
     }>,
     createdById?: string,
   ) {
@@ -366,6 +394,11 @@ export const expensesService = {
         receiptUrl: raw.receiptUrl ?? null,
         supplierName: raw.supplierName?.trim() || null,
         supplierId: raw.supplierId?.trim() || null,
+        paymentType:
+          raw.paymentType != null && String(raw.paymentType).trim() !== ""
+            ? String(raw.paymentType).trim()
+            : PAYMENT_TYPE_TRANSFER,
+        invoiceDueDate: optionalInvoiceDueDate(raw.invoiceDueDate) ?? null,
       };
     });
 
@@ -394,10 +427,12 @@ export const expensesService = {
               vatInclusive: row.vatInclusive,
               vatAmount: row.vatAmount,
               totalAmount: row.totalAmount,
+              paymentType: row.paymentType,
               receiptUrl: row.receiptUrl,
               supplierName: row.supplierName,
               supplierId: row.supplierId,
               expenseDate: row.expenseDate,
+              invoiceDueDate: row.invoiceDueDate,
             },
           }),
         );
@@ -427,6 +462,8 @@ export const expensesService = {
         amount: decimalToNumber(expense.totalAmount),
         vatTag: expense.vatInclusive,
         vatInclusive: expense.vatInclusive,
+        paymentType: expense.paymentType,
+        invoiceDueDate: expense.invoiceDueDate,
         supplierName: expense.supplierName ?? null,
         supplierId: expense.supplierId ?? null,
       })),
@@ -447,6 +484,8 @@ export const expensesService = {
       receiptUrl: string;
       supplierName: string | null;
       supplierId: string | null;
+      paymentType: string;
+      invoiceDueDate: string | null;
     }>,
   ) {
     const expense = await prisma.expense.findFirst({
@@ -467,6 +506,12 @@ export const expensesService = {
     }
     if (data.vatInclusive != null) updateData.vatInclusive = data.vatInclusive;
     if (data.receiptUrl != null) updateData.receiptUrl = data.receiptUrl;
+    if (data.paymentType != null) {
+      updateData.paymentType = data.paymentType.trim();
+    }
+    if (data.invoiceDueDate !== undefined) {
+      updateData.invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate);
+    }
     if (data.supplierName !== undefined) {
       updateData.supplierName =
         data.supplierName === null || data.supplierName === ""
@@ -539,6 +584,8 @@ export const expensesService = {
       amount: decimalToNumber(updated.totalAmount),
       vatTag: updated.vatInclusive,
       vatInclusive: updated.vatInclusive,
+      paymentType: updated.paymentType,
+      invoiceDueDate: updated.invoiceDueDate,
       supplierName: updated.supplierName ?? null,
       supplierId: updated.supplierId ?? null,
     };

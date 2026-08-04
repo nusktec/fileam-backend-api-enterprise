@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API v1. Base: {{baseUrl}}/api/v{{apiVersion}}. Auth: Bearer {{accessToken}} (collection prerequest sets Authorization except onboarding, AI routes, invitation accept/decline links, and /public/account-deletion). Upload files via Media first, then use returned URL in other endpoints. Enterprise Signup: Step Email \u2192 Step Email verify (saves enterpriseOnboardingToken) \u2192 Step Password (requires Authorization: Bearer {{enterpriseOnboardingToken}}). Mobile expense and sale category fields accept any string (max 255 chars). GET /mobile/contacts-and-types still returns suggested saleCategories, expenseCategories, and expenseTypes (suggested OPEX, COGS, CAPEX, Tax \u2014 any string accepted on expense). Expenses: optional expenseType (any string, max 255; defaults OPEX), supplierName, supplierId (JSON keys supplierName/supplierId or Supplier_name/Supplier_Id). Sales (income): optional customerName (existing), customerId (or Customer_name/Customer_id), itemName, receiptUrl (payment receipt / proof URL from Media). Enterprise financials POST .../transactions passes these through when type expense|income and client is linked. Employment types: Part time, Full time, Contract.\n\nLinked-client P&L (consultant): GET enterprise/clients/:clientId/financials/profit-loss \u2014 :clientId is the linked mobile user UUID (same as {{clientId}} / {{clientUserId}} from Managed Entities or Clients list). Query: year+month for one calendar month; omit year/month for current month; year alone = full year; preset=thisMonth|thisYear; dateFrom & dateTo for custom range. Response includes formulas, attachmentGaps, period.month when a single month.\n\nSale payment status **: Cash \u2192 PAID on create; Card|Transfer \u2192 IN_PROGRESS then PATCH /mobile/sales/:id/payment-status {\"status\":\"PAID\"} (sets paymentConfirmedAt). Invoice remains Pending \u2192 POST .../mark-paid. Independent of enterprise Invoice mark-paid.\n\nMobile: PATCH /mobile/sales/:id and PATCH /mobile/expenses/:id (partial update). Mobile filings list/detail: completionPercent, periodAttachmentGaps. Consultant filing for client: POST /mobile/filings/consultant/clients/:clientUserId/tax/:taxType/submit with clientApprovalConfirmed true (same UUID as enterprise client path).\n\nConsultants: Mobile GET /mobile/consultants (directory, query q/page/limit) and POST /mobile/consultants/request with consultantUserId. Mobile GET /mobile/consultant-requests returns pending items; each item includes initiator consultant_to_client (consultant invited you \u2014 use Accept/Decline in app) or client_to_consultant (you requested \u2014 consultant accepts via email link). Email links (no auth): GET /api/v{{apiVersion}}/invitations/:id/accept/:code and .../decline/:code \u2014 set {{invitationLinkId}} and {{invitationLinkCode}} from the email.\n\nEnterprise client filings: GET .../filings/constants returns tax types, payment/filing status enums, report types, period bounds, capabilities, and relative paths for tax-computation GETs. GET .../filings/returns lists period returns for all taxes (optional query taxType=VAT|WHT|...); GET .../filings/vat-returns remains VAT-only. GET/PUT .../filings/tax-types lists/updates active codes. POST .../filings/vat|wht|cit|paye/submit-return \u2014 same body shape as VAT (for WHT, amount = total WHT due). POST .../filings with taxType remains available. GET .../filings/:filingId/report as before.\n\nMobile filings: GET .../filings/constants (same shape as enterprise constants). Unified active-type routes: GET/POST .../filings/tax/:taxType/preview|draft|submit (use {{unifiedTaxType}} e.g. VAT, WHT, CIT, PAYE). Legacy /filings/vat/* and /filings/wht/* unchanged.\n\nAccount deletion: Mobile GET/POST .../mobile/account-deletion/reason-categories and .../request (authenticated, empty body on request). Public (no auth) GET/POST .../public/account-deletion/reason-categories and .../request with JSON {\"email\":\"...\"}.\n\nOptional list filters (leave {{listDateFrom}}/{{listDateTo}} empty to skip): dateFrom & dateTo as YYYY-MM-DD or ISO8601 on paginated/date-based lists (sales, expenses, payables, payments, filings, reports, employees, transactions, financial documents, invoices, evidence vault, enterprise filings/reports, AI records). Enterprise evidence vault also accepts legacy startDate & endDate.\n\nInvoice \u2194 financial document (optional): POST .../financials/documents/upload and .../upload-invoice accept optional invoiceId (UUID of structured invoice). POST .../financials/invoices and PUT .../invoices/:invoiceId accept optional financialDocumentId (UUID of enterprise_financial_documents row; use {{fileId}} from list/upload). PUT financialDocumentId: null unlinks. Invoice responses include documentId (evidence vault) and financialDocumentId (financial upload). Evidence vault: GET .../evidence-vault/documents/:documentId/invoice-extraction-preview (mock extraction), then POST .../documents/:documentId/convert-to-invoice.\n\nEnterprise GET .../clients/:clientId/reports/export-all returns one PDF merging each matching stored report (by generatedAt range) as separate multi-page sections; if none match, exports one section per calendar month in the range (default last 12 months when dates empty). Optional reportType filter. Response header X-Report-Sections = section count. Max 48 sections.\n\nPostman naming: requests ending in ** are the newest changes (sale payment-status IN_PROGRESS\u2192PAID, Assets module, inventory/employee PATCH/DELETE, expenseType, ex-VAT analytics). Single * marks earlier updated routes.\n\nMobile What I Owe / month arrows: prefer GET \u2026/tax-computation?period=YYYY-MM (live book totals) and GET \u2026/tax-payables?period=YYYY-MM (synced payables for that book month). Editing sale/expense dates re-syncs old and new months. GET \u2026/analytics/financial-overview?year= returns annualRevenue, annualExpense, netProfit (ex-VAT book totals), currentTaxLiability, potentialSavings. Analytics dashboard profitAndLoss uses ex-VAT income/expenses (VAT excluded from revenue and net profit).\n\nConsultant client financial insights (linked mobile user): GET .../financials/cash-flow, .../tax-liability?year=, .../revenue-analytics, .../expense-intelligence \u2014 see requests marked ** under Enterprise \u2192 Clients \u2192 Financials.\n\nMobile assets (fixed assets) **: Base path /mobile/assets \u2014 summary, dashboard, current-assets (inventory + AR from other modules; cash/bank stubs), non-current-assets, depreciation-amortization, CRUD assets (POST /, GET /, GET|PATCH /:id), transfers (POST/GET, PATCH /transfers/:id, POST /transfers/:id/approve|reject), sales (POST/GET \u2014 gain/loss server-computed), disposals (POST/GET, PATCH /disposals/:id). Enums via contacts-and-types: assetTypes, depreciationMethods, disposalReasons, transferTypes.\n\nMobile inventory (stock / COGS): Base path /mobile/inventory \u2014 overview, alerts, items (POST add \u2014 duplicate name per user returns 409; PATCH update metadata; DELETE when qty=0 and no sale history), GET list + detail, POST .../items/:id/restock (quantity, optional note), POST .../items/:id/adjustment (direction in|out, quantity, optional note; optional createSalesInvoice: same transaction \u2014 adjustment in\u2192mobile Sale at unit cost, adjustment out\u2192mobile Expense at unit cost; optional saleDate YYYY-MM-DD, saleCategory, expenseCategory, paymentType, vatableIncome, serviceIncome), POST sell (optional createSalesInvoice mirrors inventory line totals to mobile Sales/invoice; response may include linkedSale), GET movements, GET inventory sales. Slow-moving: 45d grace for new products, then 45d without sale. Requires onboarding complete + Bearer token.\n\nMobile employees: GET list/detail/obligations, POST create, PATCH /employees/:id (partial update), DELETE /employees/:id, POST .../file-as-expense.",
+    "description": "Fileam Backend API. Mobile modules include Sales, Expenses, Inventory, Assets, Employees, Payroll (PAYE/NHF/Pension), Evidence Vault, Tax, etc. AI Service uses X-Client-Id + X-Api-Secret (includes evidence-vault). Recent: expense paymentType + invoiceDueDate; sale invoiceDueDate; employee pfa; bulk sales default Transfer+PAID; VAT-inclusive sales use 7.5% of gross.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -208,6 +208,18 @@
       "key": "assetDisposalId",
       "value": "",
       "description": "Asset disposal UUID"
+    },
+    {
+      "key": "evidenceVaultDocId",
+      "value": "sale-"
+    },
+    {
+      "key": "payrollPeriod",
+      "value": "2026-07"
+    },
+    {
+      "key": "consultantId",
+      "value": ""
     }
   ],
   "event": [
@@ -1090,10 +1102,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "paymentType Cash \u2192 status PAID immediately. No payment-status call needed. Optional vatInclusive (bool, default false). vatableIncome and vatInclusive are mutually exclusive (cannot both be true). vatInclusive=true: amount is VAT-inclusive gross; VAT = 7.5% of gross and amount = gross \u2212 VAT (e.g. 3000 \u2192 amount 2775, vat 225). vatableIncome=true: amount is net and 7.5% VAT is added on top. Neither: no VAT.",
+                "description": "paymentType Cash \u2192 status PAID. Optional invoiceDueDate. vatableIncome and vatInclusive mutually exclusive.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\": \"Walk-in cash sale\", \"amount\": 25000, \"date\": \"2026-07-13\", \"category\": \"Product Sales\", \"paymentType\": \"Cash\", \"vatableIncome\": false, \"vatInclusive\": false, \"serviceIncome\": false, \"customerName\": \"Walk-in\"}"
+                  "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"Walk-in\"\n}"
                 }
               },
               "event": [
@@ -1120,10 +1132,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "paymentType Card \u2192 status IN_PROGRESS. Confirm with PATCH .../payment-status. vatableIncome and vatInclusive are mutually exclusive. vatInclusive=true: amount is VAT-inclusive gross; VAT = 7.5% of gross (amount = gross \u2212 VAT). vatableIncome=true: amount is net (+ 7.5% VAT).",
+                "description": "Card \u2192 IN_PROGRESS. vatInclusive example: 3000 \u2192 amount 2775, vatAmount 225, totalAmount 3000.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\": \"Consulting fee\", \"amount\": 100000, \"date\": \"2026-07-13\", \"category\": \"Services\", \"paymentType\": \"Card\", \"vatableIncome\": false, \"vatInclusive\": true, \"serviceIncome\": true, \"customerName\": \"Acme Ltd\", \"itemName\": \"Advisory package\"}"
+                  "raw": "{\n  \"description\": \"Consulting fee\",\n  \"amount\": 3000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Card\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": true,\n  \"customerName\": \"Acme Ltd\",\n  \"itemName\": \"Advisory package\"\n}"
                 }
               },
               "event": [
@@ -1180,10 +1192,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "paymentType Invoice \u2192 status Pending. Confirm with POST .../mark-paid only. Do not use payment-status for Invoice. vatableIncome and vatInclusive are mutually exclusive. Here vatableIncome=true adds 7.5% Output VAT on the net amount.",
+                "description": "Invoice \u2192 Pending. invoiceDueDate appears on invoice PDF with account number from business profile.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\": \"Invoice billed sale\", \"amount\": 75000, \"date\": \"2026-07-13\", \"category\": \"Services\", \"paymentType\": \"Invoice\", \"vatableIncome\": true, \"vatInclusive\": false, \"serviceIncome\": true, \"customerName\": \"ABC Limited\", \"customerId\": \"cust-001\"}"
+                  "raw": "{\n  \"description\": \"Invoice billed sale\",\n  \"amount\": 75000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": true,\n  \"vatInclusive\": false,\n  \"serviceIncome\": true,\n  \"customerName\": \"ABC Limited\",\n  \"customerId\": \"cust-001\"\n}"
                 }
               },
               "event": [
@@ -1210,10 +1222,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
-                "description": "Body: { items: SaleCreate[] } (alias key sales also accepted). Max 100. Same fields as single create. Per item, vatableIncome and vatInclusive are mutually exclusive: vatInclusive: VAT = 7.5% of gross (amount = gross \u2212 VAT); vatableIncome adds 7.5% on net. Response: { created, sales[] }. Invoice numbers allocated sequentially in one transaction.",
+                "description": "paymentType optional (defaults Transfer). Status always PAID. Optional invoiceDueDate per item. Max 100.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk cash sale\",\n      \"amount\": 10000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true\n    },\n    {\n      \"description\": \"Bulk invoice sale\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Invoice\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale\",\n      \"amount\": 10000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk transfer sale 2\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
                 }
               }
             },
@@ -1255,10 +1267,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Partial update. For Card/Transfer do not set status to PAID here \u2014 use payment-status. Invoice may still PATCH status Pending|Overdue|PAID.",
+                "description": "Partial update. Optional invoiceDueDate, paymentType, vat flags (mutually exclusive).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\": \"Updated sale description\", \"amount\": 52000}"
+                  "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
                 }
               }
             },
@@ -1272,7 +1284,7 @@
               }
             }
           ],
-          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive on create/bulk/update: vatInclusive=true treats amount as gross (VAT = 7.5% of gross; amount = gross \u2212 VAT); vatableIncome=true treats amount as net (+ 7.5% VAT). Payment status: Cash\u2192PAID on create; Card|Transfer\u2192IN_PROGRESS then PATCH /:id/payment-status {\"status\":\"PAID\"} (sets paymentConfirmedAt). Invoice\u2192Pending then POST /:id/mark-paid. Enterprise Invoice mark-paid is separate."
+          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive: vatInclusive=true \u2192 VAT = 7.5% of gross (amount = gross \u2212 VAT); vatableIncome=true \u2192 amount is net (+ 7.5% VAT). Optional invoiceDueDate (ISO date) shown on invoice PDF with Business.bankAccount. Cash\u2192PAID; Card|Transfer\u2192IN_PROGRESS then PATCH payment-status; Invoice\u2192Pending then mark-paid. Bulk: paymentType defaults Transfer; status always PAID."
         },
         {
           "name": "Expenses *",
@@ -1330,10 +1342,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\":\"Office supplies\",\"amount\":15000,\"date\":\"2026-02-21\",\"category\":\"Other\",\"expenseType\":\"OPEX\",\"supplierName\":\"Acme Supplies Ltd\",\"supplierId\":\"sup-ext-001\"}"
+                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "category: any string (required, max 255). expenseType: any string (max 255; defaults OPEX). Optional supplierName, supplierId (or Supplier_name / Supplier_Id). When vatInclusive=true, amount is the VAT-inclusive gross: server extracts Input VAT (÷ 1.075) into amount (net) + vatAmount; totalAmount stays the entered gross. When vatInclusive=false, amount is net; optional vatAmount is added on top. List summary.totalExpenses is ex-VAT; summary.vatClaimable is sum of Input VAT."
+                "description": "Optional paymentType (default Transfer) and invoiceDueDate. category required. expenseType defaults OPEX."
               }
             },
             {
@@ -1348,9 +1360,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\":\"Google Ads\",\"amount\":25000,\"date\":\"2026-02-21\",\"category\":\"Marketing\",\"expenseType\":\"OPEX\",\"vatInclusive\":false}"
+                  "raw": "{\n  \"description\": \"Google Ads\",\n  \"amount\": 25000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Marketing\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Card\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"vatInclusive\": true\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
+                "description": "vatInclusive=true: amount is gross. paymentType + invoiceDueDate optional."
               }
             },
             {
@@ -1364,10 +1377,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/bulk",
-                "description": "Body: { items: ExpenseCreate[] } (alias key expenses also accepted). Max 100. Same fields as single create (vatInclusive splits VAT). Response: { created, expenses[] }.",
+                "description": "paymentType defaults Transfer when omitted. Optional invoiceDueDate per item. Max 100.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"vatInclusive\": true\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Transfer\",\n      \"invoiceDueDate\": \"2026-08-10\",\n      \"vatInclusive\": true\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
                 }
               }
             },
@@ -1383,10 +1396,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\":\"Google Ads (updated)\",\"amount\":26000,\"expenseType\":\"OPEX\"}"
+                  "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "When vatInclusive=true, amount is treated as VAT-inclusive gross (extract VAT ÷ 1.075; do not add 7.5% on top). When false, amount is net and optional vatAmount is added. Toggling vatInclusive alone re-resolves from current total (if inclusive) or base. Optional expenseType: any string (max 255)."
+                "description": "Partial update including optional paymentType and invoiceDueDate."
               }
             },
             {
@@ -1397,7 +1410,8 @@
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}"
               }
             }
-          ]
+          ],
+          "description": "Expenses. Optional paymentType (Cash|Transfer|Invoice|Card, default Transfer) and invoiceDueDate. vatInclusive=true: amount is gross (VAT extracted \u00f7 1.075). List summary.totalExpenses is ex-VAT."
         },
         {
           "name": "Inventory *",
@@ -2586,9 +2600,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"fullName\":\"John Doe\",\"jobTitle\":\"Developer\",\"employmentType\":\"Full time\",\"basicSalary\":120000,\"housingAllowance\":30000}"
+                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
+                "description": "Optional pfa (PFA name). employmentType: Full time | Part time | Contract."
               }
             },
             {
@@ -2603,9 +2618,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"fullName\":\"Jane Smith\",\"jobTitle\":\"Designer\",\"employmentType\":\"Part time\",\"basicSalary\":60000,\"housingAllowance\":15000}"
+                  "raw": "{\n  \"fullName\": \"Jane Smith\",\n  \"jobTitle\": \"Designer\",\n  \"employmentType\": \"Part time\",\n  \"basicSalary\": 60000,\n  \"housingAllowance\": 15000,\n  \"pfa\": \"ARM Pension Managers\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
+                "description": "Part time employee with optional pfa."
               }
             },
             {
@@ -2620,10 +2636,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"jobTitle\":\"Senior Developer\",\"basicSalary\":150000,\"housingAllowance\":35000}"
+                  "raw": "{\n  \"jobTitle\": \"Senior Developer\",\n  \"basicSalary\": 150000,\n  \"housingAllowance\": 35000,\n  \"pfa\": \"Stanbic IBTC Pension\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
-                "description": "Partial update: fullName, jobTitle, employmentType (Part time | Full time | Contract), basicSalary, allowances, stateOfResidence, startDate, tin, pensionRsa."
+                "description": "Partial update. Optional pfa (null to clear)."
               }
             },
             {
@@ -2640,6 +2656,355 @@
                 "method": "POST",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}/file-as-expense",
                 "description": "Creates expense with category Salary, expenseType OPEX, total = gross pay + employer pension."
+              }
+            }
+          ],
+          "description": "Employee CRUD + obligations. Optional pfa (Pension Fund Administrator) on create/update; returned on list/detail. Used by Payroll pension remittance."
+        },
+        {
+          "name": "Payroll **",
+          "description": "Payroll & statutory remittances under /mobile (Assets-style mount). GET /payroll summary; /payee, /nhf, /pension detail; PATCH /nhf/applicability (business-global). Shared actions per obligation: POST /{payee|nhf|pension}/:period/{evidence|assign-consultant|mark-as-paid|pay}. period=YYYY-MM. Pay returns placeholder URL (PAYMENT_BASE_URL). Annual report is PDF stream. Employee pfa via /employees.",
+          "item": [
+            {
+              "name": "GET payroll summary",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payroll?period=2026-07",
+                "description": "Optional period=YYYY-MM. Returns totals, statutoryObligations, complianceCalendar, annualReport path."
+              }
+            },
+            {
+              "name": "Download payroll annual report PDF",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payroll/annual-report?period=2026-07",
+                "description": "Binary PDF stream for the period/year."
+              }
+            },
+            {
+              "name": "GET PAYE detail",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payee?period=2026-07",
+                "description": "PAYE summary, employeeDetails, schedule, history."
+              }
+            },
+            {
+              "name": "GET NHF detail",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/nhf?period=2026-07",
+                "description": "NHF detail (own shape). Respects isNhfApplicable."
+              }
+            },
+            {
+              "name": "PATCH NHF applicability",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/nhf/applicability",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"isNhfApplicable\": true\n}"
+                },
+                "description": "Business-global toggle. Body: { isNhfApplicable: boolean }."
+              }
+            },
+            {
+              "name": "GET Pension detail",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/pension?period=2026-07",
+                "description": "Pension summary with employee/employer %, pfa per employee, totalNoOfPfas."
+              }
+            },
+            {
+              "name": "POST PAYE evidence",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payee/2026-07/evidence",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"url\": \"https://example.com/evidence/payee.pdf\",\n  \"evidenceType\": \"receipt\"\n}"
+                },
+                "description": "Body: url + evidenceType required."
+              }
+            },
+            {
+              "name": "POST PAYE assign consultant",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payee/2026-07/assign-consultant",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"consultantId\": \"{{consultantId}}\"\n}"
+                },
+                "description": "Body: consultantId required."
+              }
+            },
+            {
+              "name": "POST PAYE mark as paid",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payee/2026-07/mark-as-paid",
+                "description": "No body. Sets status PAID for period."
+              }
+            },
+            {
+              "name": "POST PAYE pay (payment link)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payee/2026-07/pay",
+                "description": "Returns { url } placeholder payment link."
+              }
+            },
+            {
+              "name": "POST NHF evidence",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/nhf/2026-07/evidence",
+                "description": "Upload evidence for NHF period remittance.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"url\": \"https://example.com/evidence/nhf.pdf\",\n  \"evidenceType\": \"receipt\"\n}"
+                }
+              }
+            },
+            {
+              "name": "POST NHF assign consultant",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/nhf/2026-07/assign-consultant",
+                "description": "Assign consultant to NHF obligation for period.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"consultantId\": \"{{consultantId}}\"\n}"
+                }
+              }
+            },
+            {
+              "name": "POST NHF mark as paid",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/nhf/2026-07/mark-as-paid",
+                "description": "Mark NHF as PAID for period (no body)."
+              }
+            },
+            {
+              "name": "POST NHF pay (payment link)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/nhf/2026-07/pay",
+                "description": "Returns placeholder payment URL for NHF."
+              }
+            },
+            {
+              "name": "POST Pension evidence",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/pension/2026-07/evidence",
+                "description": "Upload evidence for Pension period remittance.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"url\": \"https://example.com/evidence/pension.pdf\",\n  \"evidenceType\": \"receipt\"\n}"
+                }
+              }
+            },
+            {
+              "name": "POST Pension assign consultant",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/pension/2026-07/assign-consultant",
+                "description": "Assign consultant to Pension obligation for period.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"consultantId\": \"{{consultantId}}\"\n}"
+                }
+              }
+            },
+            {
+              "name": "POST Pension mark as paid",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/pension/2026-07/mark-as-paid",
+                "description": "Mark Pension as PAID for period (no body)."
+              }
+            },
+            {
+              "name": "POST Pension pay (payment link)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/pension/2026-07/pay",
+                "description": "Returns placeholder payment URL for Pension."
               }
             }
           ]
@@ -4800,8 +5165,63 @@
             },
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/records"
           }
+        },
+        {
+          "name": "Get evidence vault documents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "{{aiClientId}}"
+              },
+              {
+                "key": "X-Api-Secret",
+                "value": "{{aiServiceSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
+            "description": "List vault docs + categoryCounts. Query: search, category (all|invoices|receipts|vat_schedules|filings|wht_notes), dateFrom, dateTo."
+          }
+        },
+        {
+          "name": "Get evidence vault document by id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "{{aiClientId}}"
+              },
+              {
+                "key": "X-Api-Secret",
+                "value": "{{aiServiceSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents/{{evidenceVaultDocId}}",
+            "description": "Composite id e.g. sale-{{saleId}}, expense-{{expenseId}}, payable-{{payableId}}, report-{{reportId}}."
+          }
+        },
+        {
+          "name": "Download evidence vault document",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Client-Id",
+                "value": "{{aiClientId}}"
+              },
+              {
+                "key": "X-Api-Secret",
+                "value": "{{aiServiceSecret}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents/{{evidenceVaultDocId}}/download",
+            "description": "JSON { url } if stored; else PDF stream when generatable."
+          }
         }
-      ]
+      ],
+      "description": "Server-to-server AI API. Headers: X-Client-Id (user id), X-Api-Secret (AI_SERVICE_SECRET). GET/PATCH /records (sales|expenses|filings). Evidence vault: GET /evidence-vault/documents, /:id, /:id/download."
     }
   ]
 }

@@ -1,0 +1,39 @@
+model PayrollSettings {
+  id              String   @id @default(uuid())
+  userId          String   @unique @map("user_id")
+  /** When false, NHF is excluded from payroll deductions and remittance. */
+  isNhfApplicable Boolean  @default(true) @map("is_nhf_applicable")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payroll_settings")
+}
+
+/** Period remittance record for PAYE / NHF / Pension (status, evidence, payment). */
+model PayrollObligation {
+  id                   String    @id @default(uuid())
+  userId               String    @map("user_id")
+  /** PAYE | NHF | PENSION */
+  type                 String
+  /** Payroll month being remitted, YYYY-MM */
+  period               String
+  amount               Decimal   @db.Decimal(14, 2)
+  /** PAID | PENDING */
+  status               String    @default("PENDING")
+  dueDate              DateTime  @map("due_date") @db.Date
+  collectingAuthority  String?   @map("collecting_authority")
+  evidenceUrls         String[]  @default([]) @map("evidence_urls")
+  assignedConsultantId String?   @map("assigned_consultant_id")
+  paymentLink          String?   @map("payment_link")
+  paidAt               DateTime? @map("paid_at")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, period])
+  @@index([userId, type])
+  @@map("payroll_obligations")
+}

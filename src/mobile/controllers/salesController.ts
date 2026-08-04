@@ -124,6 +124,7 @@ export const createSale = async (
       category,
       paymentType,
       date,
+      invoiceDueDate,
       vatableIncome,
       vatInclusive,
       serviceIncome,
@@ -154,6 +155,12 @@ export const createSale = async (
           : undefined,
       paymentType,
       date,
+      invoiceDueDate:
+        invoiceDueDate != null && String(invoiceDueDate).trim() !== ""
+          ? String(invoiceDueDate)
+          : invoiceDueDate === null
+            ? null
+            : undefined,
       vatableIncome: Boolean(vatableIncome),
       vatInclusive: Boolean(vatInclusive),
       serviceIncome: serviceIncome !== false,
@@ -194,8 +201,17 @@ export const bulkCreateSales = async (
         description: String(raw.description ?? ""),
         category:
           raw.category != null ? String(raw.category) : undefined,
-        paymentType: String(raw.paymentType ?? ""),
+        paymentType:
+          raw.paymentType != null && String(raw.paymentType).trim() !== ""
+            ? String(raw.paymentType).trim()
+            : undefined,
         date: String(raw.date ?? ""),
+        invoiceDueDate:
+          raw.invoiceDueDate != null && String(raw.invoiceDueDate).trim() !== ""
+            ? String(raw.invoiceDueDate)
+            : raw.invoiceDueDate === null
+              ? null
+              : undefined,
         vatableIncome: Boolean(raw.vatableIncome),
         vatInclusive: Boolean(raw.vatInclusive),
         serviceIncome: raw.serviceIncome !== false,
@@ -289,6 +305,13 @@ export const updateSale = async (req: IRequest, res: Response): Promise<void> =>
       amount: body.amount != null ? Number(body.amount) : undefined,
       paymentType: body.paymentType as string | undefined,
       date: body.date as string | undefined,
+      invoiceDueDate:
+        body.invoiceDueDate !== undefined
+          ? body.invoiceDueDate == null ||
+            String(body.invoiceDueDate).trim() === ""
+            ? null
+            : String(body.invoiceDueDate)
+          : undefined,
       vatableIncome:
         body.vatableIncome !== undefined
           ? Boolean(body.vatableIncome)

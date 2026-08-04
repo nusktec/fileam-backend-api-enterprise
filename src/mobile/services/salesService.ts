@@ -7,6 +7,7 @@ import {
   isCashPaymentType,
   isInvoicePaymentType,
   isSalePaidStatus,
+  PAYMENT_TYPE_TRANSFER,
   SALE_STATUS,
 } from "../../constants/salePaymentRules";
 import { HttpReplyError } from "../../utils/httpReplyError";
@@ -33,6 +34,14 @@ function nullableTrimmed(
   if (value === undefined || value === null) return null;
   const t = String(value).trim();
   return t === "" ? null : t;
+}
+
+function optionalInvoiceDueDate(
+  value: string | null | undefined,
+): Date | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || String(value).trim() === "") return null;
+  return toCalendarDate(String(value));
 }
 
 function assertSaleFinancials(
@@ -131,6 +140,7 @@ function mapSaleSummary(sale: {
   receiptUrl: string | null;
   paymentConfirmedAt?: Date | null;
   paymentType?: string;
+  invoiceDueDate?: Date | null;
 }) {
   return {
     id: sale.id,
@@ -146,6 +156,7 @@ function mapSaleSummary(sale: {
     customerId: sale.customerId ?? null,
     receiptUrl: sale.receiptUrl ?? null,
     paymentType: sale.paymentType,
+    invoiceDueDate: sale.invoiceDueDate ?? null,
     paymentConfirmedAt: sale.paymentConfirmedAt
       ? sale.paymentConfirmedAt.toISOString()
       : null,
@@ -337,6 +348,7 @@ export const salesService = {
         customerId: s.customerId ?? null,
         receiptUrl: s.receiptUrl ?? null,
         paymentType: s.paymentType,
+        invoiceDueDate: s.invoiceDueDate ?? null,
         paymentConfirmedAt: s.paymentConfirmedAt
           ? s.paymentConfirmedAt.toISOString()
           : null,
@@ -367,6 +379,7 @@ export const salesService = {
       receiptUrl: sale.receiptUrl ?? null,
       paymentType: sale.paymentType,
       date: sale.saleDate,
+      invoiceDueDate: sale.invoiceDueDate ?? null,
       baseAmount: decimalToNumber(sale.amount),
       vatRate: decimalToNumber(sale.vatRate),
       vatAmount: decimalToNumber(sale.vatAmount),
@@ -392,6 +405,7 @@ export const salesService = {
       customerId?: string;
       paymentType: string;
       date: string;
+      invoiceDueDate?: string | null;
       vatableIncome: boolean;
       vatInclusive?: boolean;
       serviceIncome: boolean;
@@ -408,6 +422,7 @@ export const salesService = {
     });
     const status = initialSaleStatusForPaymentType(data.paymentType);
     const saleDate = toCalendarDate(data.date);
+    const invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate) ?? null;
 
     const sale = await prisma.$transaction(async (tx) => {
       const userRow = await tx.user.findUnique({
@@ -437,6 +452,7 @@ export const salesService = {
           totalAmount,
           paymentType: data.paymentType,
           saleDate,
+          invoiceDueDate,
           vatableIncome,
           serviceIncome: data.serviceIncome,
           status,
@@ -466,6 +482,7 @@ export const salesService = {
       customerId: sale.customerId ?? null,
       receiptUrl: sale.receiptUrl ?? null,
       paymentType: sale.paymentType,
+      invoiceDueDate: sale.invoiceDueDate ?? null,
       paymentConfirmedAt: null,
     };
   },
@@ -480,8 +497,9 @@ export const salesService = {
       category?: string;
       customerName?: string;
       customerId?: string;
-      paymentType: string;
+      paymentType?: string;
       date: string;
+      invoiceDueDate?: string | null;
       vatableIncome?: boolean;
       vatInclusive?: boolean;
       serviceIncome?: boolean;
@@ -526,15 +544,11 @@ export const salesService = {
           `items[${index}]: Description is required`,
         );
       }
-      if (!raw.paymentType?.trim()) {
-        throw new HttpReplyError(
-          400,
-          `items[${index}]: paymentType is required`,
-        );
-      }
       if (!raw.date) {
         throw new HttpReplyError(400, `items[${index}]: date is required`);
       }
+      // Bulk sales: default Transfer; always PAID (skip normal Transfer → IN_PROGRESS).
+      const paymentType = raw.paymentType?.trim() || PAYMENT_TYPE_TRANSFER;
       return {
         ...resolved,
         description: raw.description.trim(),
@@ -543,12 +557,13 @@ export const salesService = {
         category: raw.category ?? null,
         customerName: raw.customerName?.trim() || null,
         customerId: raw.customerId?.trim() || null,
-        paymentType: raw.paymentType,
+        paymentType,
         saleDate: toCalendarDate(raw.date),
+        invoiceDueDate: optionalInvoiceDueDate(raw.invoiceDueDate) ?? null,
         vatableIncome,
         vatInclusive,
         serviceIncome: raw.serviceIncome !== false,
-        status: initialSaleStatusForPaymentType(raw.paymentType),
+        status: SALE_STATUS.PAID,
       };
     });
 
@@ -579,6 +594,7 @@ export const salesService = {
               totalAmount: row.totalAmount,
               paymentType: row.paymentType,
               saleDate: row.saleDate,
+              invoiceDueDate: row.invoiceDueDate,
               vatableIncome: row.vatableIncome,
               serviceIncome: row.serviceIncome,
               status: row.status,
@@ -619,6 +635,7 @@ export const salesService = {
         customerId: sale.customerId ?? null,
         receiptUrl: sale.receiptUrl ?? null,
         paymentType: sale.paymentType,
+        invoiceDueDate: sale.invoiceDueDate ?? null,
         paymentConfirmedAt: null,
       })),
     };
@@ -637,6 +654,7 @@ export const salesService = {
       amount: number;
       paymentType: string;
       date: string;
+      invoiceDueDate: string | null;
       vatableIncome: boolean;
       vatInclusive: boolean;
       serviceIncome: boolean;
@@ -678,6 +696,9 @@ export const salesService = {
       const saleDate = toCalendarDate(data.date);
       updateData.saleDate = saleDate;
       periodsToSync.push(calendarPeriodFromDate(saleDate));
+    }
+    if (data.invoiceDueDate !== undefined) {
+      updateData.invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate);
     }
     if (data.vatableIncome != null) updateData.vatableIncome = data.vatableIncome;
     if (data.vatInclusive != null) updateData.vatInclusive = data.vatInclusive;
@@ -743,6 +764,7 @@ export const salesService = {
       customerId: updated.customerId ?? null,
       receiptUrl: updated.receiptUrl ?? null,
       paymentType: updated.paymentType,
+      invoiceDueDate: updated.invoiceDueDate ?? null,
       paymentConfirmedAt: updated.paymentConfirmedAt
         ? updated.paymentConfirmedAt.toISOString()
         : null,

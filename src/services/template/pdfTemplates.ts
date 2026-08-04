@@ -65,6 +65,8 @@ export interface InvoiceData {
   totalAmount: number;
   paymentType: string;
   saleDate: Date;
+  invoiceDueDate?: Date | null;
+  accountNumber?: string | null;
   vatableIncome: boolean;
   serviceIncome: boolean;
   status: string;
@@ -101,6 +103,12 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     y = doc.y + 2;
     doc.text(`Date: ${formatDate(data.saleDate)}`, left, y, { width: contentWidth });
     y = doc.y + 2;
+    if (data.invoiceDueDate) {
+      doc.text(`Due Date: ${formatDate(data.invoiceDueDate)}`, left, y, {
+        width: contentWidth,
+      });
+      y = doc.y + 2;
+    }
     doc.text(`Status: ${data.status}`, left, y, { width: contentWidth });
     y = doc.y + 14;
 
@@ -113,8 +121,19 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
         y = doc.y + 2;
         doc.text(data.businessAddress, left, y, { width: contentWidth });
       }
+      if (data.accountNumber) {
+        y = doc.y + 2;
+        doc.text(`Account Number: ${data.accountNumber}`, left, y, {
+          width: contentWidth,
+        });
+      }
       y = doc.y + 12;
       doc.fontSize(9);
+    } else if (data.accountNumber) {
+      doc.text(`Account Number: ${data.accountNumber}`, left, y, {
+        width: contentWidth,
+      });
+      y = doc.y + 12;
     }
 
     doc.text("Bill To:", left, y, { width: contentWidth });

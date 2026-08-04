@@ -45,23 +45,38 @@ export function computeEmployeeMonthlyGrossPay(e: {
 }
 
 /** Monthly net pay (gross − employee deductions / estimated contractor WHT). */
-export function computeEmployeeMonthlyNetPay(e: {
-  basicSalary: Decimal;
-  housingAllowance: Decimal;
-  transportAllowance: Decimal;
-  mealAllowance: Decimal;
-  otherAllowances: Decimal;
-  employmentType: string;
-}): number {
+export function computeEmployeeMonthlyNetPay(
+  e: {
+    basicSalary: Decimal;
+    housingAllowance: Decimal;
+    transportAllowance: Decimal;
+    mealAllowance: Decimal;
+    otherAllowances: Decimal;
+    employmentType: string;
+  },
+  opts?: { nhfApplicable?: boolean },
+): number {
   const gross = computeEmployeeMonthlyGrossPay(e);
   const contractor = isContractorEmployment(e.employmentType);
   const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
-  const nhf = contractor ? 0 : computeNhf(decimalToNumber(e.basicSalary));
+  const nhfApplicable = opts?.nhfApplicable !== false;
+  const nhf =
+    contractor || !nhfApplicable
+      ? 0
+      : computeNhf(decimalToNumber(e.basicSalary));
   const paye = contractor ? 0 : computePayeMonthly(gross * 12);
   const whtEstimated = contractor
     ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
     : 0;
   return gross - pensionEmp - nhf - paye - whtEstimated;
+}
+
+async function isNhfApplicableForUser(userId: string): Promise<boolean> {
+  const settings = await prisma.payrollSettings.findUnique({
+    where: { userId },
+    select: { isNhfApplicable: true },
+  });
+  return settings?.isNhfApplicable !== false;
 }
 
 export const employeesService = {
@@ -88,7 +103,7 @@ export const employeesService = {
       if (opts.dateTo) where.createdAt.lte = opts.dateTo;
     }
 
-    const [employees, total, obligations] = await Promise.all([
+    const [employees, total, obligations, nhfApplicable] = await Promise.all([
       prisma.employee.findMany({
         where,
         orderBy: { createdAt: order },
@@ -97,6 +112,7 @@ export const employeesService = {
       }),
       prisma.employee.count({ where }),
       this.getObligations(userId),
+      isNhfApplicableForUser(userId),
     ]);
     let monthlyPayroll = 0;
     const list = employees.map((e) => {
@@ -113,10 +129,11 @@ export const employeesService = {
         jobTitle: e.jobTitle,
         employmentType: e.employmentType,
         employeeId: e.employeeId,
+        pfa: e.pfa ?? null,
         grossPay: gross,
         paye,
         estimatedWhtMonthly: contractor ? whtEstimated : undefined,
-        netPay: computeEmployeeMonthlyNetPay(e),
+        netPay: computeEmployeeMonthlyNetPay(e, { nhfApplicable }),
       };
     });
     return {
@@ -177,14 +194,16 @@ export const employeesService = {
     const basic = decimalToNumber(e.basicSalary);
     const gross = grossMonthly(e);
     const contractor = isContractorEmployment(e.employmentType);
+    const nhfApplicable = await isNhfApplicableForUser(userId);
     const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
-    const nhf = contractor ? 0 : computeNhf(basic);
+    const nhf =
+      contractor || !nhfApplicable ? 0 : computeNhf(basic);
     const paye = contractor ? 0 : computePayeMonthly(gross * 12);
     const whtEstimated = contractor
       ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
       : 0;
     const pensionEmployer = contractor ? 0 : computePensionEmployer(gross);
-    const net = computeEmployeeMonthlyNetPay(e);
+    const net = computeEmployeeMonthlyNetPay(e, { nhfApplicable });
     const totalMonthlyCost = gross + pensionEmployer;
     return {
       id: e.id,
@@ -196,6 +215,7 @@ export const employeesService = {
       stateOfResidence: e.stateOfResidence,
       tin: e.tin,
       pensionRsa: e.pensionRsa,
+      pfa: e.pfa ?? null,
       salaryStructure: {
         basicSalary: basic,
         housingAllowance: decimalToNumber(e.housingAllowance),
@@ -233,6 +253,7 @@ export const employeesService = {
       startDate?: string;
       tin?: string;
       pensionRsa?: string;
+      pfa?: string;
     },
   ) {
     const counter = await prisma.counter.upsert({
@@ -257,6 +278,7 @@ export const employeesService = {
         stateOfResidence: data.stateOfResidence ?? null,
         tin: data.tin ?? null,
         pensionRsa: data.pensionRsa ?? null,
+        pfa: data.pfa?.trim() || null,
         startDate,
       },
     });
@@ -279,6 +301,7 @@ export const employeesService = {
       startDate: string;
       tin: string | null;
       pensionRsa: string | null;
+      pfa: string | null;
     }>,
   ) {
     const existing = await prisma.employee.findFirst({
@@ -308,6 +331,9 @@ export const employeesService = {
     if (data.tin !== undefined) updateData.tin = data.tin?.trim() || null;
     if (data.pensionRsa !== undefined) {
       updateData.pensionRsa = data.pensionRsa?.trim() || null;
+    }
+    if (data.pfa !== undefined) {
+      updateData.pfa = data.pfa?.trim() || null;
     }
 
     if (Object.keys(updateData).length === 0) {

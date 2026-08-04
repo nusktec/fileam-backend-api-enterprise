@@ -5,6 +5,8 @@ import {
   requiredMonetaryAmount,
 } from "./monetaryAmountValidation";
 
+const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
+
 export const createExpenseValidation = [
   requiredMonetaryAmount("amount", "Amount"),
   check("description").trim().notEmpty().withMessage("Description is required"),
@@ -31,6 +33,16 @@ export const createExpenseValidation = [
     .isString()
     .isLength({ min: 1, max: 255 })
     .withMessage("expenseType must be 1–255 characters when provided"),
+  check("paymentType")
+    .optional()
+    .isIn(PAYMENT_TYPES)
+    .withMessage(
+      `paymentType must be one of: ${PAYMENT_TYPES.join(", ")} (defaults to Transfer)`,
+    ),
+  check("invoiceDueDate")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("invoiceDueDate must be a valid ISO date"),
   handleValidation,
 ];
 
@@ -66,5 +78,15 @@ export const bulkCreateExpensesValidation = [
     .trim()
     .isString()
     .isLength({ min: 1, max: 255 }),
+  check("items.*.paymentType")
+    .optional()
+    .isIn(PAYMENT_TYPES)
+    .withMessage(
+      `Each paymentType must be one of: ${PAYMENT_TYPES.join(", ")} (defaults to Transfer)`,
+    ),
+  check("items.*.invoiceDueDate")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("Each invoiceDueDate must be a valid ISO date"),
   handleValidation,
 ];
