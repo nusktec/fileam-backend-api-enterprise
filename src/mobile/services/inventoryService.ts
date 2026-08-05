@@ -15,10 +15,14 @@ import {
   MARGIN_PERCENT_NUMERATOR,
 } from "../../constants/percentages";
 import { initialSaleStatusForPaymentType } from "../../constants/salePaymentRules";
+import { initialInvoicePaidAmount } from "../../constants/invoicePaymentStatus";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 const EXPENSE_COUNTER_ID = "expense_number";
+
+/** 1 + VAT rate (e.g. 1.075) — Base = Total / divisor for VAT-inclusive. */
+const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
 
 async function createLinkedSaleInTx(
   tx: Prisma.TransactionClient,
@@ -31,6 +35,7 @@ async function createLinkedSaleInTx(
     customerId: string | null;
     paymentType: string;
     saleDate: Date;
+    invoiceDueDate?: Date | null;
     vatableIncome: boolean;
     vatInclusive?: boolean;
     serviceIncome: boolean;
@@ -62,14 +67,19 @@ async function createLinkedSaleInTx(
   let totalAmount: Decimal;
 
   if (vatInclusive) {
-    // Gross entered: VAT = 7.5% of gross; net = gross − VAT (e.g. 3000 → 2775 + 225).
+    // Gross entered: base = total / 1.075; vat = total − base (same as sales).
     totalAmount = new Decimal(normalizeMoneyAmount(Number(entered)));
+    const base = totalAmount.div(VAT_INCLUSIVE_DIVISOR);
+    amount = new Decimal(normalizeMoneyAmount(Number(base)));
     vatAmount = new Decimal(
-      normalizeMoneyAmount(
-        Number(totalAmount.mul(VAT_RATE_PERCENT / PERCENT)),
-      ),
+      normalizeMoneyAmount(Number(totalAmount.sub(amount))),
     );
-    amount = totalAmount.sub(vatAmount);
+    // Keep total = base + vat exactly (prefer entered gross as total).
+    const reconciledTotal = amount.add(vatAmount);
+    if (Math.abs(Number(reconciledTotal) - Number(totalAmount)) >= 0.02) {
+      totalAmount = new Decimal(normalizeMoneyAmount(Number(reconciledTotal)));
+      vatAmount = totalAmount.sub(amount);
+    }
     vatRate = new Decimal(VAT_RATE_PERCENT);
   } else if (vatableIncome) {
     amount = entered;
@@ -84,6 +94,17 @@ async function createLinkedSaleInTx(
     vatAmount = new Decimal(0);
     totalAmount = entered;
   }
+
+  const invoiceDueDate = input.invoiceDueDate ?? null;
+  const invoicePaidAmount = initialInvoicePaidAmount(
+    input.paymentType,
+    Number(totalAmount),
+  );
+  const status = initialSaleStatusForPaymentType(input.paymentType, {
+    invoicePaidAmount,
+    totalAmount: Number(totalAmount),
+    invoiceDueDate,
+  });
 
   const sale = await tx.sale.create({
     data: {
@@ -101,9 +122,11 @@ async function createLinkedSaleInTx(
       totalAmount,
       paymentType: input.paymentType,
       saleDate: input.saleDate,
+      invoiceDueDate,
+      invoicePaidAmount: new Decimal(invoicePaidAmount),
       vatableIncome,
       serviceIncome: input.serviceIncome,
-      status: initialSaleStatusForPaymentType(input.paymentType),
+      status,
     },
   });
   return {
@@ -680,6 +703,7 @@ export const inventoryService = {
       createSalesInvoice?: boolean;
       paymentType?: string;
       saleDate?: string;
+      invoiceDueDate?: string | null;
       vatableIncome?: boolean;
       vatInclusive?: boolean;
       serviceIncome?: boolean;
@@ -760,6 +784,13 @@ export const inventoryService = {
               customerId: null,
               paymentType: data.paymentType?.trim() || "Cash",
               saleDate: bookDate,
+              invoiceDueDate:
+                data.invoiceDueDate != null &&
+                String(data.invoiceDueDate).trim() !== ""
+                  ? new Date(
+                      `${String(data.invoiceDueDate).trim().slice(0, 10)}T12:00:00.000Z`,
+                    )
+                  : null,
               vatableIncome: data.vatableIncome === true,
               vatInclusive: data.vatInclusive === true,
               serviceIncome: data.serviceIncome !== false,
@@ -912,6 +943,7 @@ export const inventoryService = {
       createSalesInvoice?: boolean;
       paymentType?: string;
       saleDate?: string;
+      invoiceDueDate?: string | null;
       vatableIncome?: boolean;
       vatInclusive?: boolean;
       serviceIncome?: boolean;
@@ -1018,6 +1050,13 @@ export const inventoryService = {
           customerId: data.customerId?.trim() || null,
           paymentType: data.paymentType?.trim() || "Cash",
           saleDate,
+          invoiceDueDate:
+            data.invoiceDueDate != null &&
+            String(data.invoiceDueDate).trim() !== ""
+              ? new Date(
+                  `${String(data.invoiceDueDate).trim().slice(0, 10)}T12:00:00.000Z`,
+                )
+              : null,
           vatableIncome: data.vatableIncome === true,
           vatInclusive: data.vatInclusive === true,
           serviceIncome: data.serviceIncome !== false,

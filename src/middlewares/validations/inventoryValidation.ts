@@ -40,6 +40,10 @@ export const validateInventorySell = [
     .optional()
     .matches(/^\d{4}-\d{2}-\d{2}$/)
     .withMessage("saleDate must be YYYY-MM-DD"),
+  check("invoiceDueDate")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("invoiceDueDate must be a valid ISO date"),
   check("vatableIncome").optional().isBoolean().toBoolean(),
   check("vatInclusive").optional().isBoolean().toBoolean(),
   body().custom((value) => {
@@ -83,6 +87,10 @@ export const validateInventoryAdjustment = [
     .optional()
     .matches(/^\d{4}-\d{2}-\d{2}$/)
     .withMessage("saleDate must be YYYY-MM-DD"),
+  check("invoiceDueDate")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("invoiceDueDate must be a valid ISO date"),
   check("vatableIncome").optional().isBoolean().toBoolean(),
   check("vatInclusive").optional().isBoolean().toBoolean(),
   body().custom((value) => {

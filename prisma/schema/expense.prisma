@@ -17,6 +17,10 @@ model Expense {
   expenseDate   DateTime @map("expense_date") @db.Date
   /** Optional invoice / bill due date. */
   invoiceDueDate DateTime? @map("invoice_due_date") @db.Date
+  /** Amount paid toward this bill (status derived for invoice-based expenses). */
+  invoicePaidAmount Decimal @default(0) @map("invoice_paid_amount") @db.Decimal(14, 2)
+  /** Paid | Partial | Pending | Overdue — derived from invoicePaidAmount + invoiceDueDate. */
+  status        String   @default("Pending")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

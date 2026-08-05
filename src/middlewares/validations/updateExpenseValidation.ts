@@ -36,5 +36,9 @@ export const updateExpenseValidation = [
     .optional({ nullable: true })
     .isISO8601()
     .withMessage("invoiceDueDate must be a valid ISO date"),
+  check("invoicePaidAmount")
+    .optional({ values: "null" })
+    .isFloat({ min: 0 })
+    .withMessage("invoicePaidAmount must be a non-negative number"),
   handleValidation,
 ];

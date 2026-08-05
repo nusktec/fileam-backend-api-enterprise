@@ -312,6 +312,10 @@ export const updateSale = async (req: IRequest, res: Response): Promise<void> =>
             ? null
             : String(body.invoiceDueDate)
           : undefined,
+      invoicePaidAmount:
+        body.invoicePaidAmount != null
+          ? Number(body.invoicePaidAmount)
+          : undefined,
       vatableIncome:
         body.vatableIncome !== undefined
           ? Boolean(body.vatableIncome)

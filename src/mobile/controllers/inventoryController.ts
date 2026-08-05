@@ -102,6 +102,7 @@ export const sellFromInventory = async (
       createSalesInvoice?: boolean;
       paymentType?: string;
       saleDate?: string;
+      invoiceDueDate?: string | null;
       vatableIncome?: boolean;
       vatInclusive?: boolean;
       serviceIncome?: boolean;
@@ -117,6 +118,7 @@ export const sellFromInventory = async (
       createSalesInvoice: data.createSalesInvoice,
       paymentType: data.paymentType,
       saleDate: data.saleDate,
+      invoiceDueDate: data.invoiceDueDate,
       vatableIncome: data.vatableIncome,
       vatInclusive: data.vatInclusive,
       serviceIncome: data.serviceIncome,
@@ -291,6 +293,7 @@ export const adjustInventoryItem = async (
       createSalesInvoice?: boolean;
       paymentType?: string;
       saleDate?: string;
+      invoiceDueDate?: string | null;
       vatableIncome?: boolean;
       vatInclusive?: boolean;
       serviceIncome?: boolean;
@@ -304,6 +307,7 @@ export const adjustInventoryItem = async (
       createSalesInvoice: data.createSalesInvoice,
       paymentType: data.paymentType,
       saleDate: data.saleDate,
+      invoiceDueDate: data.invoiceDueDate,
       vatableIncome: data.vatableIncome,
       vatInclusive: data.vatInclusive,
       serviceIncome: data.serviceIncome,

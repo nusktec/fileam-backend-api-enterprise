@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Mobile modules include Sales, Expenses, Inventory, Assets, Employees, Payroll (PAYE/NHF/Pension), Evidence Vault, Tax, etc. AI Service uses X-Client-Id + X-Api-Secret (includes evidence-vault). Recent: expense paymentType + invoiceDueDate; sale invoiceDueDate; employee pfa; bulk sales default Transfer+PAID; VAT-inclusive sales use 7.5% of gross.",
+    "description": "Fileam Backend API. Sales/Expenses use invoicePaidAmount + invoiceDueDate for calculated status (Paid|Partial|Pending|Overdue). VAT-inclusive sales: Base = Total/(1.075). Inventory linked sales support invoiceDueDate. Bulk sales default Transfer and fully paid. Payroll, Assets, AI evidence-vault under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1044,12 +1044,12 @@
               ]
             },
             {
-              "name": "List sales (IN_PROGRESS only) **",
+              "name": "List sales (Pending / Partial / Overdue filter) **",
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20&status=IN_PROGRESS",
-                "description": "Card/Transfer sales awaiting payment confirmation."
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20&status=Pending",
+                "description": "Filter by calculated status: Pending, Partial, Overdue, Paid, CANCELLED. Note: status on list is derived from invoicePaidAmount + invoiceDueDate."
               },
               "event": [
                 {
@@ -1102,7 +1102,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "paymentType Cash \u2192 status PAID. Optional invoiceDueDate. vatableIncome and vatInclusive mutually exclusive.",
+                "description": "Cash \u2192 invoicePaidAmount = totalAmount \u2192 status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total \u2212 Base (e.g. 3000 \u2192 ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"Walk-in\"\n}"
@@ -1122,7 +1122,7 @@
               ]
             },
             {
-              "name": "Create sale (Card \u2014 IN_PROGRESS) **",
+              "name": "Create sale (Card \u2014 unpaid / calculated status) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1132,10 +1132,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Card \u2192 IN_PROGRESS. vatInclusive example: 3000 \u2192 amount 2775, vatAmount 225, totalAmount 3000.",
+                "description": "Card starts unpaid (invoicePaidAmount=0). vatInclusive 3000 \u2192 base ~2790.70, VAT ~209.30, total 3000. With invoiceDueDate: Pending until due, then Overdue if still unpaid. Confirm via PATCH payment-status.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Consulting fee\",\n  \"amount\": 3000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Card\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": true,\n  \"customerName\": \"Acme Ltd\",\n  \"itemName\": \"Advisory package\"\n}"
+                  "raw": "{\n  \"description\": \"Consulting fee\",\n  \"amount\": 3000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Card\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": true,\n  \"customerName\": \"Acme Ltd\",\n  \"itemName\": \"Advisory package\"\n}"
                 }
               },
               "event": [
@@ -1152,7 +1152,7 @@
               ]
             },
             {
-              "name": "Create sale (Transfer \u2014 IN_PROGRESS) **",
+              "name": "Create sale (Transfer \u2014 unpaid / calculated status) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1162,10 +1162,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "paymentType Transfer \u2192 status IN_PROGRESS. Confirm with PATCH .../payment-status. Optional vatInclusive (bool, default false).",
+                "description": "Transfer starts unpaid. Optional invoiceDueDate drives Pending vs Overdue. Payment status is calculated from invoicePaidAmount vs totalAmount and invoiceDueDate: Paid (paid >= total), Overdue (past due and not fully paid), Partial (0 < paid < total), Pending (else). CANCELLED remains manual.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"description\": \"Bank transfer sale\", \"amount\": 50000, \"date\": \"2026-07-13\", \"category\": \"Product Sales\", \"paymentType\": \"Transfer\", \"vatableIncome\": false, \"vatInclusive\": false, \"serviceIncome\": false, \"customerName\": \"XYZ Ventures\"}"
+                  "raw": "{\n  \"description\": \"Bank transfer sale\",\n  \"amount\": 50000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Transfer\",\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"XYZ Ventures\"\n}"
                 }
               },
               "event": [
@@ -1192,7 +1192,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Invoice \u2192 Pending. invoiceDueDate appears on invoice PDF with account number from business profile.",
+                "description": "Invoice \u2192 unpaid until mark-paid or invoicePaidAmount updated. invoiceDueDate on PDF. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total \u2212 Base (e.g. 3000 \u2192 ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Invoice billed sale\",\n  \"amount\": 75000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": true,\n  \"vatInclusive\": false,\n  \"serviceIncome\": true,\n  \"customerName\": \"ABC Limited\",\n  \"customerId\": \"cust-001\"\n}"
@@ -1222,10 +1222,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
-                "description": "paymentType optional (defaults Transfer). Status always PAID. Optional invoiceDueDate per item. Max 100.",
+                "description": "paymentType defaults Transfer. Bulk sets invoicePaidAmount = total \u2192 Paid immediately. VAT inclusive: Base = Total/1.075. Max 100.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale\",\n      \"amount\": 10000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk transfer sale 2\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive)\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk transfer sale 2\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
                 }
               }
             },
@@ -1240,7 +1240,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/payment-status",
-                "description": "Card/Transfer only: IN_PROGRESS \u2192 PAID. Body must be {\"status\":\"PAID\"}. Sets paymentConfirmedAt. Rejects Invoice (use mark-paid) and Cash (already PAID).",
+                "description": "Sets invoicePaidAmount = totalAmount \u2192 status Paid. Body {\"status\":\"PAID\"}. Rejects Invoice (use mark-paid). Works for Card/Transfer (and other non-invoice unpaid sales).",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"status\": \"PAID\"}"
@@ -1253,7 +1253,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/mark-paid",
-                "description": "Invoice sales only: Pending|Overdue \u2192 PAID. Sets paymentConfirmedAt. Card/Transfer must use PATCH .../payment-status instead."
+                "description": "Invoice only: sets invoicePaidAmount = totalAmount \u2192 Paid. Sets paymentConfirmedAt."
               }
             },
             {
@@ -1267,10 +1267,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Partial update. Optional invoiceDueDate, paymentType, vat flags (mutually exclusive).",
+                "description": "Partial update. invoicePaidAmount 20000 on larger total \u2192 Partial (or Overdue if past due). status CANCELLED still accepted manually.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
+                  "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"invoicePaidAmount\": 20000,\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
                 }
               }
             },
@@ -1282,9 +1282,32 @@
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
                 "description": "Deletes sale and re-syncs tax payables for its book month."
               }
+            },
+            {
+              "name": "Update sale paid amount (Partial) **",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
+                "description": "Set invoicePaidAmount without marking fully Paid. Status becomes Partial or Overdue.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invoicePaidAmount\": 10000,\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
+                }
+              }
             }
           ],
-          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive: vatInclusive=true \u2192 VAT = 7.5% of gross (amount = gross \u2212 VAT); vatableIncome=true \u2192 amount is net (+ 7.5% VAT). Optional invoiceDueDate (ISO date) shown on invoice PDF with Business.bankAccount. Cash\u2192PAID; Card|Transfer\u2192IN_PROGRESS then PATCH payment-status; Invoice\u2192Pending then mark-paid. Bulk: paymentType defaults Transfer; status always PAID."
+          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total \u2212 Base (e.g. 3000 \u2192 ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top. Optional invoiceDueDate + invoicePaidAmount. Payment status is calculated from invoicePaidAmount vs totalAmount and invoiceDueDate: Paid (paid >= total), Overdue (past due and not fully paid), Partial (0 < paid < total), Pending (else). CANCELLED remains manual. Cash create starts fully paid. Card/Transfer/Invoice start unpaid unless invoicePaidAmount set. Bulk: paymentType defaults Transfer; invoicePaidAmount = total (Paid). Confirm: PATCH payment-status or POST mark-paid sets paid = totalAmount."
         },
         {
           "name": "Expenses *",
@@ -1342,10 +1365,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false\n}"
+                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"invoicePaidAmount\": 0,\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Optional paymentType (default Transfer) and invoiceDueDate. category required. expenseType defaults OPEX."
+                "description": "Invoice expense starts unpaid \u2192 Pending/Overdue from due date. Payment status is calculated from invoicePaidAmount vs totalAmount and invoiceDueDate: Paid (paid >= total), Overdue (past due and not fully paid), Partial (0 < paid < total), Pending (else). CANCELLED remains manual."
               }
             },
             {
@@ -1360,10 +1383,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Google Ads\",\n  \"amount\": 25000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Marketing\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Card\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"vatInclusive\": true\n}"
+                  "raw": "{\n  \"description\": \"Google Ads\",\n  \"amount\": 25000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Marketing\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Cash\",\n  \"vatInclusive\": true\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "vatInclusive=true: amount is gross. paymentType + invoiceDueDate optional."
+                "description": "Cash \u2192 fully paid. vatInclusive amount is gross (\u00f7 1.075)."
               }
             },
             {
@@ -1377,10 +1400,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/bulk",
-                "description": "paymentType defaults Transfer when omitted. Optional invoiceDueDate per item. Max 100.",
+                "description": "First item Partial (5000 paid). Second Cash \u2192 Paid. Max 100.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Transfer\",\n      \"invoiceDueDate\": \"2026-08-10\",\n      \"vatInclusive\": true\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-10\",\n      \"invoicePaidAmount\": 5000,\n      \"vatInclusive\": true\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
                 }
               }
             },
@@ -1396,10 +1419,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"vatInclusive\": false\n}"
+                  "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"invoicePaidAmount\": 10000,\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Partial update including optional paymentType and invoiceDueDate."
+                "description": "Update invoicePaidAmount / invoiceDueDate to recalculate status (Partial/Overdue/Paid/Pending)."
               }
             },
             {
@@ -1409,9 +1432,32 @@
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}"
               }
+            },
+            {
+              "name": "Update expense paid amount (Partial) *",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
+                "description": "Record a partial bill payment. Status \u2192 Partial or Overdue.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"invoicePaidAmount\": 7500,\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
+                }
+              }
             }
           ],
-          "description": "Expenses. Optional paymentType (Cash|Transfer|Invoice|Card, default Transfer) and invoiceDueDate. vatInclusive=true: amount is gross (VAT extracted \u00f7 1.075). List summary.totalExpenses is ex-VAT."
+          "description": "Expenses. Optional paymentType (default Transfer), invoiceDueDate, invoicePaidAmount. Payment status is calculated from invoicePaidAmount vs totalAmount and invoiceDueDate: Paid (paid >= total), Overdue (past due and not fully paid), Partial (0 < paid < total), Pending (else). CANCELLED remains manual. Cash create starts fully paid. vatInclusive expenses still extract VAT \u00f7 1.075."
         },
         {
           "name": "Inventory *",
@@ -1469,10 +1515,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"lines\":[{\"inventoryItemId\":\"{{inventoryItemId}}\",\"quantity\":1}],\"customerName\":\"Walk-in\",\"customerId\":\"cust-walk-1\",\"createSalesInvoice\":true,\"paymentType\":\"Transfer\",\"saleDate\":\"2026-03-29\",\"saleCategory\":\"Product Sales\",\"vatableIncome\":false,\"serviceIncome\":true}"
+                  "raw": "{\n  \"lines\": [\n    {\n      \"inventoryItemId\": \"{{inventoryItemId}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"customerName\": \"Walk-in\",\n  \"customerId\": \"cust-walk-1\",\n  \"createSalesInvoice\": true,\n  \"paymentType\": \"Invoice\",\n  \"saleDate\": \"2026-07-24\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": false,\n  \"saleCategory\": \"Product Sales\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "createSalesInvoice: true \u2014 creates mobile Sales row in same DB transaction; response.data.linkedSale has id, invoiceNumber, amounts. Test script saves linked sale id to {{saleId}}. Optional paymentType, saleDate (YYYY-MM-DD), saleCategory (any string, max 255; default Product Sales), vatableIncome, serviceIncome."
+                "description": "Creates linked Sale with invoiceDueDate. VAT-inclusive uses Base = Total/1.075. paymentType Invoice \u2192 unpaid until paid amount updated."
               }
             },
             {
@@ -1617,10 +1663,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"direction\":\"in\",\"quantity\":2,\"note\":\"Found in recount\",\"createSalesInvoice\":true,\"saleDate\":\"2026-03-29\",\"saleCategory\":\"Other\"}"
+                  "raw": "{\n  \"direction\": \"in\",\n  \"quantity\": 2,\n  \"note\": \"Found in recount\",\n  \"createSalesInvoice\": true,\n  \"saleDate\": \"2026-03-29\",\n  \"saleCategory\": \"Other\",\n  \"invoiceDueDate\": \"2026-08-15\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "direction in + createSalesInvoice: true \u2014 books a mobile Sale at purchase cost \u00d7 qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome."
+                "description": "direction in + createSalesInvoice: true \u2014 books a mobile Sale at purchase cost \u00d7 qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome. Optional invoiceDueDate on linked sale."
               }
             },
             {
@@ -1670,7 +1716,8 @@
                 "description": "No createSalesInvoice \u2014 inventory movement only."
               }
             }
-          ]
+          ],
+          "description": "Linked sales accept invoiceDueDate (and VAT flags). Status follows sale invoicePaidAmount rules."
         },
         {
           "name": "Assets **",

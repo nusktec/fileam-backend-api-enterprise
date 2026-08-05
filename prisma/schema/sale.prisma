@@ -19,6 +19,8 @@ model Sale {
   saleDate       DateTime @map("sale_date") @db.Date
   /** Optional due date shown on invoice PDF when payment is by invoice. */
   invoiceDueDate DateTime? @map("invoice_due_date") @db.Date
+  /** Amount paid toward this invoice (status is derived from this + due date). */
+  invoicePaidAmount Decimal @default(0) @map("invoice_paid_amount") @db.Decimal(14, 2)
   vatableIncome  Boolean  @default(false) @map("vatable_income")
   serviceIncome  Boolean  @default(true) @map("service_income")
   status         String   @default("Pending")

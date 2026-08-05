@@ -3,13 +3,17 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { PERCENT, VAT_RATE_PERCENT } from "../../constants/percentages";
 import {
   initialSaleStatusForPaymentType,
-  isAsyncPaymentType,
   isCashPaymentType,
   isInvoicePaymentType,
   isSalePaidStatus,
   PAYMENT_TYPE_TRANSFER,
+  resolveSaleInvoiceStatus,
   SALE_STATUS,
 } from "../../constants/salePaymentRules";
+import {
+  initialInvoicePaidAmount,
+  INVOICE_PAYMENT_STATUS,
+} from "../../constants/invoicePaymentStatus";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import {
   assertMonetaryAmountInRange,
@@ -57,8 +61,8 @@ function assertSaleFinancials(
 /**
  * Resolve stored net / VAT / total for a sale.
  * `vatableIncome` and `vatInclusive` are mutually exclusive:
- * - vatInclusive: entered amount is gross; VAT = 7.5% of gross; net = gross − VAT
- *   (e.g. 3000 → amount 2775, vatAmount 225, totalAmount 3000).
+ * - vatInclusive: entered amount is gross (total).
+ *   base = total / (1 + VAT rate); vat = total − base; ensure total = base + vat.
  * - vatableIncome: entered amount is net; add 7.5% VAT on top.
  * - neither: no VAT.
  */
@@ -75,6 +79,9 @@ function assertExclusiveVatFlags(
   }
 }
 
+/** 1 + VAT rate (e.g. 1.075) — Base = Total / divisor for VAT-inclusive. */
+const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
+
 function resolveSaleAmounts(input: {
   enteredAmount: number;
   vatableIncome: boolean;
@@ -90,16 +97,24 @@ function resolveSaleAmounts(input: {
 
   if (input.vatInclusive) {
     const total = new Decimal(normalizeMoneyAmount(Number(entered)));
+    const base = total.div(VAT_INCLUSIVE_DIVISOR);
+    const amountRounded = new Decimal(normalizeMoneyAmount(Number(base)));
     const vatRounded = new Decimal(
-      normalizeMoneyAmount(Number(total.mul(VAT_RATE_PERCENT / PERCENT))),
+      normalizeMoneyAmount(Number(total.sub(amountRounded))),
     );
-    const amountRounded = total.sub(vatRounded);
-    assertSaleFinancials(amountRounded, vatRounded, total);
+    // Keep total = base + vat exactly (prefer entered gross as total).
+    const reconciledTotal = amountRounded.add(vatRounded);
+    const totalFinal =
+      Math.abs(Number(reconciledTotal) - Number(total)) < 0.02
+        ? total
+        : new Decimal(normalizeMoneyAmount(Number(reconciledTotal)));
+    const vatFinal = totalFinal.sub(amountRounded);
+    assertSaleFinancials(amountRounded, vatFinal, totalFinal);
     return {
       amount: amountRounded,
       vatRate: new Decimal(VAT_RATE_PERCENT),
-      vatAmount: vatRounded,
-      totalAmount: total,
+      vatAmount: vatFinal,
+      totalAmount: totalFinal,
     };
   }
 
@@ -141,22 +156,34 @@ function mapSaleSummary(sale: {
   paymentConfirmedAt?: Date | null;
   paymentType?: string;
   invoiceDueDate?: Date | null;
+  invoicePaidAmount?: Decimal | null;
+  category?: string | null;
 }) {
+  const invoicePaidAmount = decimalToNumber(sale.invoicePaidAmount);
+  const totalAmount = decimalToNumber(sale.totalAmount);
+  const status = resolveSaleInvoiceStatus({
+    status: sale.status,
+    invoicePaidAmount,
+    totalAmount,
+    invoiceDueDate: sale.invoiceDueDate,
+  });
   return {
     id: sale.id,
     invoiceNumber: sale.invoiceNumber,
-    status: sale.status,
+    status,
     description: sale.description,
     itemName: sale.itemName ?? null,
+    category: sale.category ?? null,
     date: sale.saleDate,
     amount: decimalToNumber(sale.amount),
     vatAmount: decimalToNumber(sale.vatAmount),
-    totalAmount: decimalToNumber(sale.totalAmount),
+    totalAmount,
     customerName: sale.customerName ?? null,
     customerId: sale.customerId ?? null,
     receiptUrl: sale.receiptUrl ?? null,
     paymentType: sale.paymentType,
     invoiceDueDate: sale.invoiceDueDate ?? null,
+    invoicePaidAmount,
     paymentConfirmedAt: sale.paymentConfirmedAt
       ? sale.paymentConfirmedAt.toISOString()
       : null,
@@ -164,92 +191,51 @@ function mapSaleSummary(sale: {
 }
 
 function resolveSaleStatusAfterPatch(
-  sale: { paymentType: string; status: string },
-  data: Partial<{ paymentType: string; status: string }>,
+  sale: {
+    paymentType: string;
+    status: string;
+    invoicePaidAmount: Decimal;
+    totalAmount: Decimal;
+    invoiceDueDate: Date | null;
+  },
+  data: Partial<{
+    paymentType: string;
+    status: string;
+    invoicePaidAmount: number;
+    invoiceDueDate: string | null;
+  }>,
+  totalAmount: number,
 ): string {
-  const effectivePt = data.paymentType ?? sale.paymentType;
-
-  if (isInvoicePaymentType(effectivePt)) {
-    if (data.status != null) {
-      const allowed = [
-        SALE_STATUS.PAID,
-        "Paid",
-        SALE_STATUS.PENDING,
-        SALE_STATUS.OVERDUE,
-      ];
-      if (!allowed.includes(data.status)) {
-        throw new HttpReplyError(
-          400,
-          `status must be one of: Pending, Overdue, PAID for Invoice sales`,
-        );
-      }
-      const normalized =
-        data.status === "Paid" ? SALE_STATUS.PAID : data.status;
-      if (
-        normalized === SALE_STATUS.PENDING &&
-        isSalePaidStatus(sale.status)
-      ) {
-        throw new HttpReplyError(
-          400,
-          "Paid sales cannot be set back to Pending",
-        );
-      }
-      if (
-        isSalePaidStatus(normalized) &&
-        ![
-          SALE_STATUS.PENDING,
-          SALE_STATUS.OVERDUE,
-          SALE_STATUS.PAID,
-          "Paid",
-        ].includes(sale.status)
-      ) {
-        throw new HttpReplyError(
-          400,
-          "Only Pending or Overdue invoice sales can be marked Paid via status",
-        );
-      }
-      return isSalePaidStatus(normalized) ? SALE_STATUS.PAID : normalized;
-    }
-
-    if (
-      data.paymentType != null &&
-      data.paymentType !== sale.paymentType &&
-      isInvoicePaymentType(data.paymentType)
-    ) {
-      return SALE_STATUS.PENDING;
-    }
-
-    return sale.status;
+  if (data.status === SALE_STATUS.CANCELLED) {
+    return SALE_STATUS.CANCELLED;
+  }
+  if (sale.status === SALE_STATUS.CANCELLED && data.status == null) {
+    return SALE_STATUS.CANCELLED;
   }
 
-  // Cash / Card / Transfer — payment-status endpoint confirms Card/Transfer.
-  // PATCH status is not the primary confirm path for async payments.
-  if (data.status != null) {
-    if (data.status === SALE_STATUS.CANCELLED) {
-      return SALE_STATUS.CANCELLED;
-    }
-    if (isSalePaidStatus(data.status) || data.status === SALE_STATUS.IN_PROGRESS) {
-      throw new HttpReplyError(
-        400,
-        "Use PATCH /sales/:id/payment-status to confirm Card/Transfer payments (IN_PROGRESS → PAID)",
-      );
-    }
-    throw new HttpReplyError(
-      400,
-      `Invalid status for ${effectivePt} sales`,
-    );
+  const paid =
+    data.invoicePaidAmount != null
+      ? data.invoicePaidAmount
+      : isCashPaymentType(data.paymentType ?? sale.paymentType) &&
+          data.paymentType != null &&
+          data.paymentType !== sale.paymentType
+        ? totalAmount
+        : decimalToNumber(sale.invoicePaidAmount);
+
+  let dueDate = sale.invoiceDueDate;
+  if (data.invoiceDueDate !== undefined) {
+    dueDate =
+      data.invoiceDueDate === null || String(data.invoiceDueDate).trim() === ""
+        ? null
+        : toCalendarDate(String(data.invoiceDueDate));
   }
 
-  if (data.paymentType != null && data.paymentType !== sale.paymentType) {
-    if (isCashPaymentType(data.paymentType)) return SALE_STATUS.PAID;
-    if (isAsyncPaymentType(data.paymentType)) {
-      return isSalePaidStatus(sale.status)
-        ? SALE_STATUS.PAID
-        : SALE_STATUS.IN_PROGRESS;
-    }
-  }
-
-  return sale.status;
+  return resolveSaleInvoiceStatus({
+    status: data.status === SALE_STATUS.CANCELLED ? SALE_STATUS.CANCELLED : null,
+    invoicePaidAmount: paid,
+    totalAmount,
+    invoiceDueDate: dueDate,
+  });
 }
 
 export const salesService = {
@@ -297,25 +283,43 @@ export const salesService = {
         _count: true,
       }),
     ]);
-    const countByStatus = counts.reduce(
-      (acc, c) => {
-        acc[c.status] = c._count;
+    const mappedSales = sales.map((s) => mapSaleSummary(s));
+    // Prefer computed statuses for counts (Overdue flips with the calendar).
+    const countByStatus = mappedSales.reduce(
+      (acc, s) => {
+        acc[s.status] = (acc[s.status] ?? 0) + 1;
         return acc;
       },
       {} as Record<string, number>,
     );
+    // Also include DB statuses for rows outside the current page via groupBy
     const paidCount =
-      (countByStatus[SALE_STATUS.PAID] ?? 0) + (countByStatus["Paid"] ?? 0);
-    const pendingCount = countByStatus[SALE_STATUS.PENDING] ?? 0;
-    const overdueCount = countByStatus[SALE_STATUS.OVERDUE] ?? 0;
+      (countByStatus[INVOICE_PAYMENT_STATUS.PAID] ?? 0) +
+      (countByStatus[SALE_STATUS.PAID] ?? 0);
+    const pendingCount = countByStatus[INVOICE_PAYMENT_STATUS.PENDING] ?? 0;
+    const overdueCount = countByStatus[INVOICE_PAYMENT_STATUS.OVERDUE] ?? 0;
+    const partialCount = countByStatus[INVOICE_PAYMENT_STATUS.PARTIAL] ?? 0;
     const inProgressCount = countByStatus[SALE_STATUS.IN_PROGRESS] ?? 0;
     const cancelledCount = countByStatus[SALE_STATUS.CANCELLED] ?? 0;
-    const totalCount =
-      paidCount +
-      pendingCount +
-      overdueCount +
-      inProgressCount +
-      cancelledCount;
+
+    // Full-dataset counts from DB groupBy (legacy) + remap paid labels
+    const dbPaid =
+      (counts.find((c) => c.status === SALE_STATUS.PAID)?._count ?? 0) +
+      (counts.find((c) => c.status === INVOICE_PAYMENT_STATUS.PAID)?._count ??
+        0);
+    const dbPending =
+      counts.find((c) => c.status === INVOICE_PAYMENT_STATUS.PENDING)?._count ??
+      0;
+    const dbOverdue =
+      counts.find((c) => c.status === INVOICE_PAYMENT_STATUS.OVERDUE)?._count ??
+      0;
+    const dbPartial =
+      counts.find((c) => c.status === INVOICE_PAYMENT_STATUS.PARTIAL)?._count ??
+      0;
+    const dbInProgress =
+      counts.find((c) => c.status === SALE_STATUS.IN_PROGRESS)?._count ?? 0;
+    const dbCancelled =
+      counts.find((c) => c.status === SALE_STATUS.CANCELLED)?._count ?? 0;
 
     return {
       summary: {
@@ -326,33 +330,24 @@ export const salesService = {
         totalIncomeIncludingVat: decimalToNumber(summary._sum.totalAmount),
       },
       counts: {
-        all: totalCount,
-        paid: paidCount,
-        pending: pendingCount,
-        overdue: overdueCount,
-        inProgress: inProgressCount,
-        cancelled: cancelledCount,
+        all: total,
+        paid: dbPaid,
+        pending: dbPending,
+        overdue: dbOverdue,
+        partial: dbPartial,
+        inProgress: dbInProgress,
+        cancelled: dbCancelled,
+        /** Page-local computed counts (for UI that only shows this page). */
+        page: {
+          paid: paidCount,
+          pending: pendingCount,
+          overdue: overdueCount,
+          partial: partialCount,
+          inProgress: inProgressCount,
+          cancelled: cancelledCount,
+        },
       },
-      sales: sales.map((s) => ({
-        id: s.id,
-        invoiceNumber: s.invoiceNumber,
-        status: s.status,
-        description: s.description,
-        itemName: s.itemName ?? null,
-        category: s.category ?? null,
-        date: s.saleDate,
-        amount: decimalToNumber(s.amount),
-        vatAmount: decimalToNumber(s.vatAmount),
-        totalAmount: decimalToNumber(s.totalAmount),
-        customerName: s.customerName ?? null,
-        customerId: s.customerId ?? null,
-        receiptUrl: s.receiptUrl ?? null,
-        paymentType: s.paymentType,
-        invoiceDueDate: s.invoiceDueDate ?? null,
-        paymentConfirmedAt: s.paymentConfirmedAt
-          ? s.paymentConfirmedAt.toISOString()
-          : null,
-      })),
+      sales: mappedSales,
       total,
       page,
       limit,
@@ -365,31 +360,16 @@ export const salesService = {
       where: { id: saleId, userId },
     });
     if (!sale) return null;
+    const summary = mapSaleSummary(sale);
     return {
-      id: sale.id,
-      invoiceNumber: sale.invoiceNumber,
-      status: sale.status,
-      totalAmount: decimalToNumber(sale.totalAmount),
-      description: sale.description,
-      itemName: sale.itemName ?? null,
-      category: sale.category ?? null,
+      ...summary,
       customer: sale.customerName,
-      customerName: sale.customerName ?? null,
-      customerId: sale.customerId ?? null,
-      receiptUrl: sale.receiptUrl ?? null,
-      paymentType: sale.paymentType,
-      date: sale.saleDate,
-      invoiceDueDate: sale.invoiceDueDate ?? null,
       baseAmount: decimalToNumber(sale.amount),
       vatRate: decimalToNumber(sale.vatRate),
-      vatAmount: decimalToNumber(sale.vatAmount),
       total: decimalToNumber(sale.totalAmount),
       vatInclusive: sale.vatInclusive,
       vatableIncome: sale.vatableIncome,
       serviceIncome: sale.serviceIncome,
-      paymentConfirmedAt: sale.paymentConfirmedAt
-        ? sale.paymentConfirmedAt.toISOString()
-        : null,
     };
   },
 
@@ -420,9 +400,17 @@ export const salesService = {
       vatableIncome,
       vatInclusive,
     });
-    const status = initialSaleStatusForPaymentType(data.paymentType);
     const saleDate = toCalendarDate(data.date);
     const invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate) ?? null;
+    const invoicePaidAmount = initialInvoicePaidAmount(
+      data.paymentType,
+      Number(totalAmount),
+    );
+    const status = initialSaleStatusForPaymentType(data.paymentType, {
+      invoicePaidAmount,
+      totalAmount: Number(totalAmount),
+      invoiceDueDate,
+    });
 
     const sale = await prisma.$transaction(async (tx) => {
       const userRow = await tx.user.findUnique({
@@ -453,6 +441,7 @@ export const salesService = {
           paymentType: data.paymentType,
           saleDate,
           invoiceDueDate,
+          invoicePaidAmount: new Decimal(invoicePaidAmount),
           vatableIncome,
           serviceIncome: data.serviceIncome,
           status,
@@ -467,24 +456,7 @@ export const salesService = {
       calendarPeriodFromDate(saleDate),
     ]);
 
-    return {
-      id: sale.id,
-      invoiceNumber: sale.invoiceNumber,
-      status: sale.status,
-      description: sale.description,
-      itemName: sale.itemName ?? null,
-      date: sale.saleDate,
-      amount: decimalToNumber(sale.amount),
-      vatInclusive: sale.vatInclusive,
-      vatAmount: decimalToNumber(sale.vatAmount),
-      totalAmount: decimalToNumber(sale.totalAmount),
-      customerName: sale.customerName ?? null,
-      customerId: sale.customerId ?? null,
-      receiptUrl: sale.receiptUrl ?? null,
-      paymentType: sale.paymentType,
-      invoiceDueDate: sale.invoiceDueDate ?? null,
-      paymentConfirmedAt: null,
-    };
+    return mapSaleSummary(sale);
   },
 
   async bulkCreate(
@@ -547,8 +519,18 @@ export const salesService = {
       if (!raw.date) {
         throw new HttpReplyError(400, `items[${index}]: date is required`);
       }
-      // Bulk sales: default Transfer; always PAID (skip normal Transfer → IN_PROGRESS).
+      // Bulk sales: default Transfer; fully paid immediately.
       const paymentType = raw.paymentType?.trim() || PAYMENT_TYPE_TRANSFER;
+      const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
+      const totalNum = Number(resolved.totalAmount);
+      const invoicePaidAmount = initialInvoicePaidAmount(paymentType, totalNum, {
+        fullyPaid: true,
+      });
+      const status = initialSaleStatusForPaymentType(paymentType, {
+        invoicePaidAmount,
+        totalAmount: totalNum,
+        invoiceDueDate,
+      });
       return {
         ...resolved,
         description: raw.description.trim(),
@@ -559,11 +541,12 @@ export const salesService = {
         customerId: raw.customerId?.trim() || null,
         paymentType,
         saleDate: toCalendarDate(raw.date),
-        invoiceDueDate: optionalInvoiceDueDate(raw.invoiceDueDate) ?? null,
+        invoiceDueDate,
+        invoicePaidAmount,
         vatableIncome,
         vatInclusive,
         serviceIncome: raw.serviceIncome !== false,
-        status: SALE_STATUS.PAID,
+        status,
       };
     });
 
@@ -595,6 +578,7 @@ export const salesService = {
               paymentType: row.paymentType,
               saleDate: row.saleDate,
               invoiceDueDate: row.invoiceDueDate,
+              invoicePaidAmount: new Decimal(row.invoicePaidAmount),
               vatableIncome: row.vatableIncome,
               serviceIncome: row.serviceIncome,
               status: row.status,
@@ -620,24 +604,7 @@ export const salesService = {
 
     return {
       created: sales.length,
-      sales: sales.map((sale) => ({
-        id: sale.id,
-        invoiceNumber: sale.invoiceNumber,
-        status: sale.status,
-        description: sale.description,
-        itemName: sale.itemName ?? null,
-        date: sale.saleDate,
-        amount: decimalToNumber(sale.amount),
-        vatInclusive: sale.vatInclusive,
-        vatAmount: decimalToNumber(sale.vatAmount),
-        totalAmount: decimalToNumber(sale.totalAmount),
-        customerName: sale.customerName ?? null,
-        customerId: sale.customerId ?? null,
-        receiptUrl: sale.receiptUrl ?? null,
-        paymentType: sale.paymentType,
-        invoiceDueDate: sale.invoiceDueDate ?? null,
-        paymentConfirmedAt: null,
-      })),
+      sales: sales.map((sale) => mapSaleSummary(sale)),
     };
   },
 
@@ -655,6 +622,7 @@ export const salesService = {
       paymentType: string;
       date: string;
       invoiceDueDate: string | null;
+      invoicePaidAmount: number;
       vatableIncome: boolean;
       vatInclusive: boolean;
       serviceIncome: boolean;
@@ -700,6 +668,9 @@ export const salesService = {
     if (data.invoiceDueDate !== undefined) {
       updateData.invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate);
     }
+    if (data.invoicePaidAmount != null) {
+      updateData.invoicePaidAmount = new Decimal(data.invoicePaidAmount);
+    }
     if (data.vatableIncome != null) updateData.vatableIncome = data.vatableIncome;
     if (data.vatInclusive != null) updateData.vatInclusive = data.vatInclusive;
     if (data.serviceIncome != null) updateData.serviceIncome = data.serviceIncome;
@@ -718,8 +689,6 @@ export const salesService = {
           : sale.vatInclusive;
       assertExclusiveVatFlags(vatable, vatInclusive);
 
-      // When editing amount under VAT-inclusive, treat entered amount as gross.
-      // If only toggling vatInclusive without amount, use current total (gross) as the entered figure.
       const enteredAmount =
         data.amount != null
           ? data.amount
@@ -740,7 +709,28 @@ export const salesService = {
       updateData.vatableIncome = vatable;
     }
 
-    updateData.status = resolveSaleStatusAfterPatch(sale, data);
+    const nextTotal =
+      updateData.totalAmount != null
+        ? Number(updateData.totalAmount as Decimal)
+        : decimalToNumber(sale.totalAmount);
+
+    if (
+      data.paymentType != null &&
+      isCashPaymentType(data.paymentType) &&
+      data.invoicePaidAmount == null
+    ) {
+      updateData.invoicePaidAmount = new Decimal(nextTotal);
+    }
+
+    updateData.status = resolveSaleStatusAfterPatch(sale, data, nextTotal);
+
+    if (
+      isSalePaidStatus(String(updateData.status)) &&
+      data.invoicePaidAmount == null &&
+      updateData.invoicePaidAmount == null
+    ) {
+      // keep existing paid amount
+    }
 
     const updated = await prisma.sale.update({
       where: { id: saleId },
@@ -749,31 +739,12 @@ export const salesService = {
 
     await taxPayablesService.syncPayablesForPeriods(userId, periodsToSync);
 
-    return {
-      id: updated.id,
-      invoiceNumber: updated.invoiceNumber,
-      status: updated.status,
-      description: updated.description,
-      itemName: updated.itemName ?? null,
-      date: updated.saleDate,
-      amount: decimalToNumber(updated.amount),
-      vatInclusive: updated.vatInclusive,
-      vatAmount: decimalToNumber(updated.vatAmount),
-      totalAmount: decimalToNumber(updated.totalAmount),
-      customerName: updated.customerName ?? null,
-      customerId: updated.customerId ?? null,
-      receiptUrl: updated.receiptUrl ?? null,
-      paymentType: updated.paymentType,
-      invoiceDueDate: updated.invoiceDueDate ?? null,
-      paymentConfirmedAt: updated.paymentConfirmedAt
-        ? updated.paymentConfirmedAt.toISOString()
-        : null,
-    };
+    return mapSaleSummary(updated);
   },
 
   /**
-   * Confirm Card/Transfer payment: IN_PROGRESS → PAID.
-   * Invoice sales continue to use POST /sales/:id/mark-paid.
+   * Record full payment: sets invoicePaidAmount = totalAmount → status Paid.
+   * Works for Card / Transfer / any unpaid sale (replaces manual IN_PROGRESS toggle).
    */
   async confirmPaymentStatus(
     userId: string,
@@ -785,10 +756,10 @@ export const salesService = {
     });
     if (!sale) return null;
 
-    if (status !== SALE_STATUS.PAID) {
+    if (status !== SALE_STATUS.PAID && status !== INVOICE_PAYMENT_STATUS.PAID) {
       throw new HttpReplyError(
         400,
-        'Only status "PAID" is accepted on payment-status',
+        'Only status "PAID" or "Paid" is accepted on payment-status',
       );
     }
 
@@ -799,29 +770,17 @@ export const salesService = {
       );
     }
 
-    if (!isAsyncPaymentType(sale.paymentType)) {
-      throw new HttpReplyError(
-        400,
-        "payment-status applies only to Card or Transfer sales",
-      );
-    }
-
-    if (isSalePaidStatus(sale.status)) {
+    const total = decimalToNumber(sale.totalAmount);
+    if (isSalePaidStatus(resolveSaleInvoiceStatus(sale))) {
       return mapSaleSummary(sale);
-    }
-
-    if (sale.status !== SALE_STATUS.IN_PROGRESS) {
-      throw new HttpReplyError(
-        400,
-        "Only IN_PROGRESS sales can be confirmed as PAID",
-      );
     }
 
     const confirmedAt = new Date();
     const updated = await prisma.sale.update({
       where: { id: saleId },
       data: {
-        status: SALE_STATUS.PAID,
+        invoicePaidAmount: new Decimal(total),
+        status: INVOICE_PAYMENT_STATUS.PAID,
         paymentConfirmedAt: confirmedAt,
       },
     });
@@ -842,29 +801,18 @@ export const salesService = {
       );
     }
 
-    if (isSalePaidStatus(sale.status)) {
-      return mapSaleSummary({
-        ...sale,
-        status: SALE_STATUS.PAID,
-      });
+    const computed = resolveSaleInvoiceStatus(sale);
+    if (isSalePaidStatus(computed)) {
+      return mapSaleSummary(sale);
     }
 
-    if (
-      ![SALE_STATUS.PENDING, SALE_STATUS.OVERDUE].includes(
-        sale.status as typeof SALE_STATUS.PENDING,
-      )
-    ) {
-      throw new HttpReplyError(
-        400,
-        "Only Pending or Overdue invoice sales can be marked Paid",
-      );
-    }
-
+    const total = decimalToNumber(sale.totalAmount);
     const confirmedAt = new Date();
     const updated = await prisma.sale.update({
       where: { id: saleId },
       data: {
-        status: SALE_STATUS.PAID,
+        invoicePaidAmount: new Decimal(total),
+        status: INVOICE_PAYMENT_STATUS.PAID,
         paymentConfirmedAt: confirmedAt,
       },
     });

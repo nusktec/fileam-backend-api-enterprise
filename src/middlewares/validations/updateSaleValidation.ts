@@ -29,6 +29,10 @@ export const updateSaleValidation = [
     .optional({ nullable: true })
     .isISO8601()
     .withMessage("invoiceDueDate must be a valid ISO date"),
+  check("invoicePaidAmount")
+    .optional({ values: "null" })
+    .isFloat({ min: 0 })
+    .withMessage("invoicePaidAmount must be a non-negative number"),
   check("vatableIncome").optional().isBoolean(),
   check("vatInclusive").optional().isBoolean(),
   body().custom((value) => {
@@ -42,9 +46,17 @@ export const updateSaleValidation = [
   check("serviceIncome").optional().isBoolean(),
   check("status")
     .optional()
-    .isIn(["PAID", "Paid", "Pending", "Overdue", "IN_PROGRESS", "CANCELLED"])
+    .isIn([
+      "PAID",
+      "Paid",
+      "Partial",
+      "Pending",
+      "Overdue",
+      "IN_PROGRESS",
+      "CANCELLED",
+    ])
     .withMessage(
-      "status must be PAID, Pending, Overdue, IN_PROGRESS, or CANCELLED",
+      "status must be PAID, Paid, Partial, Pending, Overdue, IN_PROGRESS, or CANCELLED",
     ),
   handleValidation,
 ];
