@@ -14,7 +14,10 @@ import {
   PERCENT_TWO_DECIMAL_ROUND,
   MARGIN_PERCENT_NUMERATOR,
 } from "../../constants/percentages";
-import { initialSaleStatusForPaymentType } from "../../constants/salePaymentRules";
+import {
+  initialSaleStatusForPaymentType,
+  PAYMENT_TYPE_CASH,
+} from "../../constants/salePaymentRules";
 import { initialInvoicePaidAmount } from "../../constants/invoicePaymentStatus";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
@@ -171,6 +174,10 @@ async function createLinkedExpenseInTx(
       supplierName: input.supplierName ?? null,
       supplierId: input.supplierId ?? null,
       expenseDate: input.expenseDate,
+      // Stock purchases are settled when recorded.
+      paymentType: PAYMENT_TYPE_CASH,
+      invoicePaidAmount: input.totalAmount,
+      status: initialSaleStatusForPaymentType(PAYMENT_TYPE_CASH),
     },
   });
   return {

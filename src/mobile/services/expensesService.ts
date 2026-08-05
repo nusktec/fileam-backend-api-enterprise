@@ -7,14 +7,16 @@ import {
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 import { EXPENSE_TYPES } from "../../constants/expenseTypes";
 import {
+  initialSaleStatusForPaymentType,
+  isAsyncPaymentType,
   isCashPaymentType,
+  isInvoicePaymentType,
+  isSalePaidStatus,
   PAYMENT_TYPE_TRANSFER,
+  resolveSaleInvoiceStatus,
+  SALE_STATUS,
 } from "../../constants/salePaymentRules";
-import {
-  computeInvoicePaymentStatus,
-  initialInvoicePaidAmount,
-  INVOICE_PAYMENT_STATUS,
-} from "../../constants/invoicePaymentStatus";
+import { initialInvoicePaidAmount } from "../../constants/invoicePaymentStatus";
 import {
   assertMonetaryAmountInRange,
   normalizeMoneyAmount,
@@ -132,9 +134,11 @@ function mapExpenseListItem(e: {
 }) {
   const invoicePaidAmount = decimalToNumber(e.invoicePaidAmount);
   const amount = decimalToNumber(e.totalAmount);
-  const status = computeInvoicePaymentStatus({
+  const status = resolveSaleInvoiceStatus({
+    paymentType: e.paymentType,
+    status: e.status,
     invoicePaidAmount,
-    amount,
+    totalAmount: amount,
     invoiceDueDate: e.invoiceDueDate,
   });
   return {
@@ -241,9 +245,11 @@ export const expensesService = {
     if (!expense) return null;
     const invoicePaidAmount = decimalToNumber(expense.invoicePaidAmount);
     const total = decimalToNumber(expense.totalAmount);
-    const status = computeInvoicePaymentStatus({
+    const status = resolveSaleInvoiceStatus({
+      paymentType: expense.paymentType,
+      status: expense.status,
       invoicePaidAmount,
-      amount: total,
+      totalAmount: total,
       invoiceDueDate: expense.invoiceDueDate,
     });
     return {
@@ -307,9 +313,9 @@ export const expensesService = {
       data.invoicePaidAmount != null
         ? Number(data.invoicePaidAmount)
         : initialInvoicePaidAmount(paymentType, totalNum);
-    const status = computeInvoicePaymentStatus({
+    const status = initialSaleStatusForPaymentType(paymentType, {
       invoicePaidAmount,
-      amount: totalNum,
+      totalAmount: totalNum,
       invoiceDueDate,
     });
 
@@ -435,9 +441,9 @@ export const expensesService = {
         raw.invoicePaidAmount != null
           ? Number(raw.invoicePaidAmount)
           : initialInvoicePaidAmount(paymentType, totalNum);
-      const status = computeInvoicePaymentStatus({
+      const status = initialSaleStatusForPaymentType(paymentType, {
         invoicePaidAmount,
-        amount: totalNum,
+        totalAmount: totalNum,
         invoiceDueDate,
       });
       return {
@@ -656,11 +662,28 @@ export const expensesService = {
           : toCalendarDate(String(data.invoiceDueDate));
     }
 
-    updateData.status = computeInvoicePaymentStatus({
-      invoicePaidAmount: nextPaid,
-      amount: nextTotal,
-      invoiceDueDate: nextDue,
-    });
+    const nextPaymentType =
+      data.paymentType != null ? data.paymentType.trim() : expense.paymentType;
+
+    if (isInvoicePaymentType(nextPaymentType)) {
+      updateData.status = resolveSaleInvoiceStatus({
+        paymentType: nextPaymentType,
+        invoicePaidAmount: nextPaid,
+        totalAmount: nextTotal,
+        invoiceDueDate: nextDue,
+      });
+    } else if (nextPaymentType !== expense.paymentType) {
+      // Switching away from Invoice restarts the manual lifecycle.
+      updateData.status = initialSaleStatusForPaymentType(nextPaymentType);
+    }
+
+    if (
+      !isInvoicePaymentType(nextPaymentType) &&
+      data.invoicePaidAmount == null &&
+      isSalePaidStatus(String(updateData.status ?? expense.status))
+    ) {
+      updateData.invoicePaidAmount = new Decimal(nextTotal);
+    }
 
     const updated = await prisma.expense.update({
       where: { id: expenseId },
@@ -689,6 +712,60 @@ export const expensesService = {
       supplierName: updated.supplierName ?? null,
       supplierId: updated.supplierId ?? null,
     };
+  },
+
+  /**
+   * Confirm a Card / Transfer expense: IN_PROGRESS → PAID.
+   * Invoice expenses are excluded — their status is calculated from
+   * invoicePaidAmount, totalAmount and invoiceDueDate.
+   */
+  async confirmPaymentStatus(userId: string, expenseId: string, status: string) {
+    const expense = await prisma.expense.findFirst({
+      where: { id: expenseId, userId },
+    });
+    if (!expense) return null;
+
+    if (!isSalePaidStatus(status)) {
+      throw new HttpReplyError(
+        400,
+        'Only status "PAID" is accepted on payment-status',
+      );
+    }
+
+    if (isInvoicePaymentType(expense.paymentType)) {
+      throw new HttpReplyError(
+        400,
+        "Invoice expenses do not use payment-status; their status is calculated from invoicePaidAmount and invoiceDueDate (use PATCH /expenses/:id with invoicePaidAmount)",
+      );
+    }
+
+    if (!isAsyncPaymentType(expense.paymentType)) {
+      throw new HttpReplyError(
+        400,
+        "payment-status applies only to Card or Transfer expenses",
+      );
+    }
+
+    if (isSalePaidStatus(expense.status)) {
+      return mapExpenseListItem(expense);
+    }
+
+    if (expense.status !== SALE_STATUS.IN_PROGRESS) {
+      throw new HttpReplyError(
+        400,
+        "Only IN_PROGRESS expenses can be confirmed as PAID",
+      );
+    }
+
+    const updated = await prisma.expense.update({
+      where: { id: expenseId },
+      data: {
+        invoicePaidAmount: new Decimal(decimalToNumber(expense.totalAmount)),
+        status: SALE_STATUS.PAID,
+      },
+    });
+
+    return mapExpenseListItem(updated);
   },
 
   async deleteForUser(userId: string, expenseId: string): Promise<boolean> {

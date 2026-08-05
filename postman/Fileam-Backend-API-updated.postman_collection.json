@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Sales/Expenses use invoicePaidAmount + invoiceDueDate for calculated status (Paid|Partial|Pending|Overdue). VAT-inclusive sales: Base = Total/(1.075). Inventory linked sales support invoiceDueDate. Bulk sales default Transfer and fully paid. Payroll, Assets, AI evidence-vault under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoicePaidAmount, amount and invoiceDueDate. CANCELLED remains manual. Invoice payments never use payment-status. VAT-inclusive: Base = Total / 1.075, VAT = Total - Base. Inventory linked sales support invoiceDueDate. Bulk sales default paymentType Transfer and are created PAID. Payroll, Assets and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -380,7 +380,7 @@
         },
         {
           "name": "Lookups",
-          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help \u2014 use whichever folder fits your flow.",
+          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help — use whichever folder fits your flow.",
           "item": [
             {
               "name": "Tax filing constants *",
@@ -398,7 +398,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/constants",
-                "description": "taxTypes, capabilities, paymentStatuses, filingStatuses, reportTypes, period bounds. Duplicate of Filings * \u2192 Tax filing constants *."
+                "description": "taxTypes, capabilities, paymentStatuses, filingStatuses, reportTypes, period bounds. Duplicate of Filings * → Tax filing constants *."
               }
             },
             {
@@ -406,7 +406,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/contacts-and-types",
-                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, \u2026). Duplicate of User * \u2192 Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
+                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, …). Duplicate of User * → Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
               }
             },
             {
@@ -420,7 +420,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/profile",
-                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly once set (PUT \u2026/user/profile after onboarding). Duplicate of Onboarding * \u2192 Get profile *."
+                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly once set (PUT …/user/profile after onboarding). Duplicate of Onboarding * → Get profile *."
               }
             },
             {
@@ -436,7 +436,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/faqs",
-                "description": "categories + faqs. Optional query category. Duplicate of Help \u2192 Get FAQs."
+                "description": "categories + faqs. Optional query category. Duplicate of Help → Get FAQs."
               }
             }
           ]
@@ -467,7 +467,7 @@
                   "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"address\":\"123 Main St\",\"organizationName\":\"My Company\",\"taxPersona\":\"PAYEE\",\"employmentGrossSalaryMonthly\":450000}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile",
-                "description": "taxPersona: SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER. solopreneurRegistration: NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY (meaningful when persona is SOLOPRENEUR; omit or null otherwise). employmentGrossSalaryMonthly: optional non-negative number or null (clears); drives paye block on GET \u2026/tax-computation and PAYE rows on tax-payables sync when PAYE applies."
+                "description": "taxPersona: SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER. solopreneurRegistration: NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY (meaningful when persona is SOLOPRENEUR; omit or null otherwise). employmentGrossSalaryMonthly: optional non-negative number or null (clears); drives paye block on GET …/tax-computation and PAYE rows on tax-payables sync when PAYE applies."
               }
             },
             {
@@ -569,7 +569,7 @@
                   "raw": "{\"authorized\":true}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/filing-authorization",
-                "description": "Toggle authorized. Email sent to consultant when changing false\u2192true."
+                "description": "Toggle authorized. Email sent to consultant when changing false→true."
               }
             },
             {
@@ -1049,7 +1049,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20&status=Pending",
-                "description": "Filter by calculated status: Pending, Partial, Overdue, Paid, CANCELLED. Note: status on list is derived from invoicePaidAmount + invoiceDueDate."
+                "description": "Filter by stored status: PAID, IN_PROGRESS, Pending, Partial, Overdue, CANCELLED. Only Invoice sales are recalculated on read (Overdue flips once the due date passes)."
               },
               "event": [
                 {
@@ -1092,7 +1092,7 @@
               }
             },
             {
-              "name": "Create sale (Cash \u2014 PAID) **",
+              "name": "Create sale (Cash — PAID) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1102,7 +1102,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Cash \u2192 invoicePaidAmount = totalAmount \u2192 status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total \u2212 Base (e.g. 3000 \u2192 ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
+                "description": "Cash → invoicePaidAmount = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"Walk-in\"\n}"
@@ -1122,7 +1122,7 @@
               ]
             },
             {
-              "name": "Create sale (Card \u2014 unpaid / calculated status) **",
+              "name": "Create sale (Card — IN_PROGRESS) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1132,7 +1132,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Card starts unpaid (invoicePaidAmount=0). vatInclusive 3000 \u2192 base ~2790.70, VAT ~209.30, total 3000. With invoiceDueDate: Pending until due, then Overdue if still unpaid. Confirm via PATCH payment-status.",
+                "description": "Card -> status IN_PROGRESS. vatInclusive 3000 -> base 2790.70, VAT 209.30, total 3000. Confirm collection with PATCH /sales/:id/payment-status {\"status\":\"PAID\"}.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Consulting fee\",\n  \"amount\": 3000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Card\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": true,\n  \"customerName\": \"Acme Ltd\",\n  \"itemName\": \"Advisory package\"\n}"
@@ -1152,7 +1152,7 @@
               ]
             },
             {
-              "name": "Create sale (Transfer \u2014 unpaid / calculated status) **",
+              "name": "Create sale (Transfer — IN_PROGRESS) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1162,7 +1162,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Transfer starts unpaid. Optional invoiceDueDate drives Pending vs Overdue. Payment status is calculated from invoicePaidAmount vs totalAmount and invoiceDueDate: Paid (paid >= total), Overdue (past due and not fully paid), Partial (0 < paid < total), Pending (else). CANCELLED remains manual.",
+                "description": "Transfer -> status IN_PROGRESS until confirmed with PATCH /sales/:id/payment-status. invoiceDueDate is stored for the invoice PDF but does not drive status for Transfer.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Bank transfer sale\",\n  \"amount\": 50000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Transfer\",\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"XYZ Ventures\"\n}"
@@ -1182,7 +1182,7 @@
               ]
             },
             {
-              "name": "Create sale (Invoice \u2014 Pending) **",
+              "name": "Create sale (Invoice — Pending) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1192,7 +1192,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Invoice \u2192 unpaid until mark-paid or invoicePaidAmount updated. invoiceDueDate on PDF. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total \u2212 Base (e.g. 3000 \u2192 ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
+                "description": "Invoice -> status calculated: Pending (nothing paid, not yet due), Partial (0 < invoicePaidAmount < amount), PAID (invoicePaidAmount >= amount), Overdue (not fully paid after invoiceDueDate). invoiceDueDate also prints on the invoice PDF.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Invoice billed sale\",\n  \"amount\": 75000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": true,\n  \"vatInclusive\": false,\n  \"serviceIncome\": true,\n  \"customerName\": \"ABC Limited\",\n  \"customerId\": \"cust-001\"\n}"
@@ -1222,7 +1222,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
-                "description": "paymentType defaults Transfer. Bulk sets invoicePaidAmount = total \u2192 Paid immediately. VAT inclusive: Base = Total/1.075. Max 100.",
+                "description": "paymentType defaults to Transfer and bulk rows are created already settled: invoicePaidAmount = total -> status PAID (unlike single sales, where Transfer starts IN_PROGRESS). Invoice rows keep the calculated status. Max 100 items.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive)\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk transfer sale 2\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
@@ -1240,7 +1240,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/payment-status",
-                "description": "Sets invoicePaidAmount = totalAmount \u2192 status Paid. Body {\"status\":\"PAID\"}. Rejects Invoice (use mark-paid). Works for Card/Transfer (and other non-invoice unpaid sales).",
+                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoicePaidAmount = totalAmount and paymentConfirmedAt). Body {\"status\":\"PAID\"}. Rejects Invoice sales, whose status is calculated — use PATCH /sales/:id with invoicePaidAmount, or POST /sales/:id/mark-paid.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"status\": \"PAID\"}"
@@ -1253,7 +1253,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/mark-paid",
-                "description": "Invoice only: sets invoicePaidAmount = totalAmount \u2192 Paid. Sets paymentConfirmedAt."
+                "description": "Invoice only: sets invoicePaidAmount = totalAmount → Paid. Sets paymentConfirmedAt."
               }
             },
             {
@@ -1267,7 +1267,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Partial update. invoicePaidAmount 20000 on larger total \u2192 Partial (or Overdue if past due). status CANCELLED still accepted manually.",
+                "description": "Partial update. For Invoice sales, invoicePaidAmount / invoiceDueDate recalculate the status (Pending, Partial, PAID, Overdue). For Cash / Transfer / Card the stored status is kept unless you send status explicitly. status CANCELLED is always accepted.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"invoicePaidAmount\": 20000,\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
@@ -1299,7 +1299,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Set invoicePaidAmount without marking fully Paid. Status becomes Partial or Overdue.",
+                "description": "Invoice sales: record a part payment. Status becomes Partial, or Overdue when the due date has passed.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"invoicePaidAmount\": 10000,\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
@@ -1307,7 +1307,7 @@
               }
             }
           ],
-          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total \u2212 Base (e.g. 3000 \u2192 ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top. Optional invoiceDueDate + invoicePaidAmount. Payment status is calculated from invoicePaidAmount vs totalAmount and invoiceDueDate: Paid (paid >= total), Overdue (past due and not fully paid), Partial (0 < paid < total), Pending (else). CANCELLED remains manual. Cash create starts fully paid. Card/Transfer/Invoice start unpaid unless invoicePaidAmount set. Bulk: paymentType defaults Transfer; invoicePaidAmount = total (Paid). Confirm: PATCH payment-status or POST mark-paid sets paid = totalAmount."
+          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total / 1.075, VAT = Total - Base (3000 -> 2790.70 + 209.30). vatableIncome: amount is net; 7.5% VAT added on top. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoicePaidAmount, amount and invoiceDueDate. CANCELLED remains manual."
         },
         {
           "name": "Expenses *",
@@ -1368,7 +1368,7 @@
                   "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"invoicePaidAmount\": 0,\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Invoice expense starts unpaid \u2192 Pending/Overdue from due date. Payment status is calculated from invoicePaidAmount vs totalAmount and invoiceDueDate: Paid (paid >= total), Overdue (past due and not fully paid), Partial (0 < paid < total), Pending (else). CANCELLED remains manual."
+                "description": "Invoice expense -> status calculated: Pending (nothing paid, not yet due), Partial (0 < invoicePaidAmount < amount), PAID (invoicePaidAmount >= amount), Overdue (not fully paid after invoiceDueDate)."
               }
             },
             {
@@ -1386,7 +1386,7 @@
                   "raw": "{\n  \"description\": \"Google Ads\",\n  \"amount\": 25000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Marketing\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Cash\",\n  \"vatInclusive\": true\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Cash \u2192 fully paid. vatInclusive amount is gross (\u00f7 1.075)."
+                "description": "Cash -> status PAID with invoicePaidAmount = total. vatInclusive amount is gross (Base = Total / 1.075)."
               }
             },
             {
@@ -1400,7 +1400,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/bulk",
-                "description": "First item Partial (5000 paid). Second Cash \u2192 Paid. Max 100.",
+                "description": "First item is an Invoice bill with 5000 paid -> Partial. Second is Cash -> PAID. Transfer / Card rows are created IN_PROGRESS. Max 100 items.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-10\",\n      \"invoicePaidAmount\": 5000,\n      \"vatInclusive\": true\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
@@ -1422,7 +1422,30 @@
                   "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"invoicePaidAmount\": 10000,\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Update invoicePaidAmount / invoiceDueDate to recalculate status (Partial/Overdue/Paid/Pending)."
+                "description": "For Invoice expenses, invoicePaidAmount / invoiceDueDate recalculate the status (Pending, Partial, PAID, Overdue). Switching paymentType resets the lifecycle (Cash -> PAID, Transfer/Card -> IN_PROGRESS)."
+              }
+            },
+            {
+              "name": "Confirm Card/Transfer expense payment (PATCH payment-status) *",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}/payment-status",
+                "description": "Mirrors the sales endpoint. Card / Transfer only: IN_PROGRESS -> PAID (sets invoicePaidAmount = totalAmount). Body {\"status\":\"PAID\"}. Rejects Invoice expenses (status is calculated) and Cash expenses (already PAID on create).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"status\": \"PAID\"}"
+                }
               }
             },
             {
@@ -1449,7 +1472,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Record a partial bill payment. Status \u2192 Partial or Overdue.",
+                "description": "Invoice expenses: record a part payment of the bill. Status becomes Partial, or Overdue once past the due date.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"invoicePaidAmount\": 7500,\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
@@ -1457,7 +1480,7 @@
               }
             }
           ],
-          "description": "Expenses. Optional paymentType (default Transfer), invoiceDueDate, invoicePaidAmount. Payment status is calculated from invoicePaidAmount vs totalAmount and invoiceDueDate: Paid (paid >= total), Overdue (past due and not fully paid), Partial (0 < paid < total), Pending (else). CANCELLED remains manual. Cash create starts fully paid. vatInclusive expenses still extract VAT \u00f7 1.075."
+          "description": "Expenses. Optional paymentType (default Transfer), invoiceDueDate and invoicePaidAmount. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoicePaidAmount, amount and invoiceDueDate. CANCELLED remains manual. vatInclusive expenses extract VAT (Base = Total / 1.075)."
         },
         {
           "name": "Inventory *",
@@ -1518,7 +1541,7 @@
                   "raw": "{\n  \"lines\": [\n    {\n      \"inventoryItemId\": \"{{inventoryItemId}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"customerName\": \"Walk-in\",\n  \"customerId\": \"cust-walk-1\",\n  \"createSalesInvoice\": true,\n  \"paymentType\": \"Invoice\",\n  \"saleDate\": \"2026-07-24\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": false,\n  \"saleCategory\": \"Product Sales\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Creates linked Sale with invoiceDueDate. VAT-inclusive uses Base = Total/1.075. paymentType Invoice \u2192 unpaid until paid amount updated."
+                "description": "Creates linked Sale with invoiceDueDate. VAT-inclusive uses Base = Total/1.075. paymentType Invoice → unpaid until paid amount updated."
               }
             },
             {
@@ -1536,7 +1559,7 @@
                   "raw": "{\"lines\":[{\"inventoryItemId\":\"{{inventoryItemId}}\",\"quantity\":1}],\"customerName\":\"Walk-in\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Omits createSalesInvoice \u2014 only inventory_sale + movements; no row in mobile /sales."
+                "description": "Omits createSalesInvoice — only inventory_sale + movements; no row in mobile /sales."
               }
             },
             {
@@ -1666,7 +1689,7 @@
                   "raw": "{\n  \"direction\": \"in\",\n  \"quantity\": 2,\n  \"note\": \"Found in recount\",\n  \"createSalesInvoice\": true,\n  \"saleDate\": \"2026-03-29\",\n  \"saleCategory\": \"Other\",\n  \"invoiceDueDate\": \"2026-08-15\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "direction in + createSalesInvoice: true \u2014 books a mobile Sale at purchase cost \u00d7 qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome. Optional invoiceDueDate on linked sale."
+                "description": "direction in + createSalesInvoice: true — books a mobile Sale at purchase cost × qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome. Optional invoiceDueDate on linked sale."
               }
             },
             {
@@ -1695,7 +1718,7 @@
                   "raw": "{\"direction\":\"out\",\"quantity\":1,\"note\":\"Shrinkage / damaged\",\"createSalesInvoice\":true,\"saleDate\":\"2026-03-29\",\"expenseCategory\":\"Other\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "direction out + createSalesInvoice: true \u2014 books a mobile Expense at purchase cost \u00d7 qty (supplier from item if set). Response.data.linkedExpense. expenseCategory: any string (max 255); defaults to Other if omitted when booking."
+                "description": "direction out + createSalesInvoice: true — books a mobile Expense at purchase cost × qty (supplier from item if set). Response.data.linkedExpense. expenseCategory: any string (max 255); defaults to Other if omitted when booking."
               }
             },
             {
@@ -1713,7 +1736,7 @@
                   "raw": "{\"direction\":\"in\",\"quantity\":1,\"note\":\"Silent correction\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "No createSalesInvoice \u2014 inventory movement only."
+                "description": "No createSalesInvoice — inventory movement only."
               }
             }
           ],
@@ -1721,7 +1744,7 @@
         },
         {
           "name": "Assets **",
-          "description": "Fixed assets module. Base: /mobile/assets. Auth: Bearer + onboarding complete. Asset + review status: AWAITING (default when flagged for review) \u2192 PENDING_REVIEW (after consultant assigned) \u2192 ACTIVE (after approve). Also SOLD | DISPOSED. consultantReviewStatus mirrors AWAITING | PENDING_REVIEW | APPROVED | REJECTED. Codes: AST-/TRF-/SAL-/DSP-. Reviews: GET /reviews, GET /reviews/:id, POST /:id/evidence, POST /:id/assign-consultant, POST /:id/confirm-review, POST /:id/approve-review, GET /history, GET /consultants, GET /reports/:reportType (PDF).",
+          "description": "Fixed assets module. Base: /mobile/assets. Auth: Bearer + onboarding complete. Asset + review status: AWAITING (default when flagged for review) → PENDING_REVIEW (after consultant assigned) → ACTIVE (after approve). Also SOLD | DISPOSED. consultantReviewStatus mirrors AWAITING | PENDING_REVIEW | APPROVED | REJECTED. Codes: AST-/TRF-/SAL-/DSP-. Reviews: GET /reviews, GET /reviews/:id, POST /:id/evidence, POST /:id/assign-consultant, POST /:id/confirm-review, POST /:id/approve-review, GET /history, GET /consultants, GET /reports/:reportType (PDF).",
           "item": [
             {
               "name": "Get assets summary **",
@@ -1747,7 +1770,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/current-assets",
-                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales \u2212 expenses; account number from Business.bankAccount when set), inventory (qty\u00d7cost), accountsReceivable (Pending/Overdue/IN_PROGRESS sales at totalAmount). totalCurrentAssets = sum of the four."
+                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales − expenses; account number from Business.bankAccount when set), inventory (qty×cost), accountsReceivable (Pending/Overdue/IN_PROGRESS sales at totalAmount). totalCurrentAssets = sum of the four."
               }
             },
             {
@@ -1933,7 +1956,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/transfers/{{assetTransferId}}/approve",
-                "description": "PENDING \u2192 COMPLETED; updates asset.assetLocation to toLocation."
+                "description": "PENDING → COMPLETED; updates asset.assetLocation to toLocation."
               }
             },
             {
@@ -1942,7 +1965,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/transfers/{{assetTransferId}}/reject",
-                "description": "PENDING \u2192 CANCELLED."
+                "description": "PENDING → CANCELLED."
               }
             },
             {
@@ -2152,7 +2175,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation?period=2026-02",
-                "description": "taxpayerContext respects saved taxPersona (when set). taxPersonaGuidance: taxes[] flip-card lines (label, subtitle, applicable). Blocks: vat, wht, cit, pit, paye (paye uses profile employmentGrossSalaryMonthly annualised when PAYE applicable \u2014 summaryMonthlyEstimate, summaryAnnualEstimate, employmentGrossSalaryMonthlyCaptured, methodology)."
+                "description": "taxpayerContext respects saved taxPersona (when set). taxPersonaGuidance: taxes[] flip-card lines (label, subtitle, applicable). Blocks: vat, wht, cit, pit, paye (paye uses profile employmentGrossSalaryMonthly annualised when PAYE applicable — summaryMonthlyEstimate, summaryAnnualEstimate, employmentGrossSalaryMonthlyCaptured, methodology)."
               }
             }
           ]
@@ -2550,7 +2573,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/financial-overview?year={{overviewYear}}",
-                "description": "Annual summary for mobile home / What I Owe cards. Response data: year, currency (NGN), annualRevenue, annualExpense, netProfit (all ex-VAT \u2014 VAT not counted as revenue or profit), currentTaxLiability (unpaid payables for the year), potentialSavings (5% of liability, capped), taxLiabilityByType { VAT, WHT, \u2026 }, note. Syncs all 12 book months before computing liability. Omit year for current calendar year."
+                "description": "Annual summary for mobile home / What I Owe cards. Response data: year, currency (NGN), annualRevenue, annualExpense, netProfit (all ex-VAT — VAT not counted as revenue or profit), currentTaxLiability (unpaid payables for the year), potentialSavings (5% of liability, capped), taxLiabilityByType { VAT, WHT, … }, note. Syncs all 12 book months before computing liability. Omit year for current calendar year."
               }
             },
             {
@@ -2558,7 +2581,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/dashboard?period=2026-02&range=month",
-                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). expenses / operatingExpenses = book expenses (ex-VAT) + Salaries (employee monthly gross pay). netProfit = income \u2212 that total. expenseBreakdown includes category rows (ex-VAT) plus Salaries at gross. VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance. range=month|quarter|year."
+                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). expenses / operatingExpenses = book expenses (ex-VAT) + Salaries (employee monthly gross pay). netProfit = income − that total. expenseBreakdown includes category rows (ex-VAT) plus Salaries at gross. VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance. range=month|quarter|year."
               }
             }
           ]
@@ -3460,7 +3483,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
-                "description": "Consultant user profile: taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly (same semantics as mobile \u2014 PAYE salary basis when applicable)."
+                "description": "Consultant user profile: taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly (same semantics as mobile — PAYE salary basis when applicable)."
               }
             },
             {
@@ -3478,7 +3501,7 @@
                   "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"organizationName\":\"Fileam Consulting\",\"taxPersona\":\"GIG_WORKER\",\"employmentGrossSalaryMonthly\":null}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
-                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (number \u2265 0 or null to clear)."
+                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (number ≥ 0 or null to clear)."
               }
             },
             {
@@ -3910,7 +3933,7 @@
                       }
                     },
                     {
-                      "name": "Profit & Loss (defaults \u2014 current month)",
+                      "name": "Profit & Loss (defaults — current month)",
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-loss",
@@ -3922,7 +3945,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-loss?year={{plYear}}",
-                        "description": "year without month = Jan\u2013Dec for that year."
+                        "description": "year without month = Jan–Dec for that year."
                       }
                     },
                     {
@@ -4035,7 +4058,7 @@
                           "raw": "{\"description\":\"Consulting fee\",\"amount\":50000,\"type\":\"income\",\"date\":\"2026-02-23\",\"status\":\"Pending\",\"customerName\":\"Client Corp\",\"customerId\":\"cust-ent-001\"}"
                         },
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions",
-                        "description": "Creates mobile Sale with paymentType Cash \u2192 status Paid by default (Invoice would be Pending)."
+                        "description": "Creates mobile Sale with paymentType Cash → status Paid by default (Invoice would be Pending)."
                       }
                     },
                     {
@@ -4567,7 +4590,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}&status=",
-                        "description": "Optional status filters tax_payables.status. Same response shape as mobile filings list \u2014 includes missingEvidenceBreakdown (sale/expense rows missing invoice or receipt proof). Test script sets {{filingId}} from first row."
+                        "description": "Optional status filters tax_payables.status. Same response shape as mobile filings list — includes missingEvidenceBreakdown (sale/expense rows missing invoice or receipt proof). Test script sets {{filingId}} from first row."
                       }
                     },
                     {
@@ -4575,7 +4598,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}",
-                        "description": "Linked-client view \u2014 same payload as mobile GET /filings/:id (timeline, completion, missingEvidenceBreakdown, periodAttachmentGap counts). TaxPayable id = {{filingId}}. 404 if filing not found for client."
+                        "description": "Linked-client view — same payload as mobile GET /filings/:id (timeline, completion, missingEvidenceBreakdown, periodAttachmentGap counts). TaxPayable id = {{filingId}}. 404 if filing not found for client."
                       }
                     },
                     {
@@ -4844,7 +4867,7 @@
         },
         {
           "name": "Lookups",
-          "description": "Read-only lists for forms and filings. Same URLs as Profile / Clients \u2192 Filings where duplicated \u2014 use either entry.",
+          "description": "Read-only lists for forms and filings. Same URLs as Profile / Clients → Filings where duplicated — use either entry.",
           "item": [
             {
               "name": "Contacts and types",
@@ -4873,7 +4896,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/constants",
-                "description": "Requires {{clientId}} (linked mobile user UUID). Same payload as mobile GET /mobile/filings/constants. Duplicate of Clients \u2192 Client :clientId \u2192 Filings * \u2192 Filings constants *."
+                "description": "Requires {{clientId}} (linked mobile user UUID). Same payload as mobile GET /mobile/filings/constants. Duplicate of Clients → Client :clientId → Filings * → Filings constants *."
               }
             },
             {
@@ -4892,7 +4915,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/tax-types",
-                "description": "Active filing codes for this client. Duplicate of Clients \u2192 Filings * \u2192 List filing tax types *."
+                "description": "Active filing codes for this client. Duplicate of Clients → Filings * → List filing tax types *."
               }
             }
           ]

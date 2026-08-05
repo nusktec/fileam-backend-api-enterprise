@@ -6,6 +6,7 @@ import {
   createExpense,
   bulkCreateExpenses,
   updateExpense,
+  updateExpensePaymentStatus,
   downloadExpenseReceipt,
   deleteExpense,
 } from "../controllers/expensesController";
@@ -16,6 +17,7 @@ import {
   bulkCreateExpensesValidation,
 } from "../../middlewares/validations/expensesValidation";
 import { updateExpenseValidation } from "../../middlewares/validations/updateExpenseValidation";
+import { updateExpensePaymentStatusValidation } from "../../middlewares/validations/expensePaymentStatusValidation";
 import { validateIdParam } from "../../middlewares/validations/mobileValidation";
 import { withPagination } from "../../middlewares/paginationMiddleware";
 
@@ -42,6 +44,13 @@ router.post(
 router.delete("/:id", validateIdParam, deleteExpense);
 router.get("/:id/details", validateIdParam, getExpenseDetails);
 router.get("/:id/download-receipt", validateIdParam, downloadExpenseReceipt);
+router.patch(
+  "/:id/payment-status",
+  validateIdParam,
+  express.json(),
+  updateExpensePaymentStatusValidation,
+  updateExpensePaymentStatus,
+);
 router.patch(
   "/:id",
   validateIdParam,

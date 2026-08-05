@@ -331,6 +331,41 @@ export const updateExpense = async (
   }
 };
 
+export const updateExpensePaymentStatus = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const expenseId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const body = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as { status: string };
+    const updated = await expensesService.confirmPaymentStatus(
+      userId,
+      expenseId!,
+      body.status,
+    );
+    if (!updated) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Expense not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Expense payment status updated", updated));
+  } catch (error) {
+    if (replyExpenseError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to update expense payment status", null));
+  }
+};
+
 export const deleteExpense = async (
   req: IRequest,
   res: Response,

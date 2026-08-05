@@ -19,10 +19,15 @@ model Sale {
   saleDate       DateTime @map("sale_date") @db.Date
   /** Optional due date shown on invoice PDF when payment is by invoice. */
   invoiceDueDate DateTime? @map("invoice_due_date") @db.Date
-  /** Amount paid toward this invoice (status is derived from this + due date). */
+  /** Amount paid toward this invoice (drives status for Invoice payments). */
   invoicePaidAmount Decimal @default(0) @map("invoice_paid_amount") @db.Decimal(14, 2)
   vatableIncome  Boolean  @default(false) @map("vatable_income")
   serviceIncome  Boolean  @default(true) @map("service_income")
+  /**
+   * Cash → PAID; Transfer / Card → IN_PROGRESS then PAID via payment-status;
+   * Invoice → Pending | Partial | PAID | Overdue, calculated from
+   * invoicePaidAmount, totalAmount and invoiceDueDate.
+   */
   status         String   @default("Pending")
   documentUrl    String?  @map("document_url")
   /** Optional URL to a payment receipt or supplementary proof (Media upload URL, etc.) */

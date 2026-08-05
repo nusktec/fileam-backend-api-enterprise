@@ -1,9 +1,12 @@
 /**
- * Invoice payment status derived from invoicePaidAmount + invoiceDueDate.
- * Used for Sales and invoice-based Expenses (replaces manual PAID / IN_PROGRESS toggles).
+ * Payment status for Invoice payments only (Sales and invoice-based Expenses),
+ * derived from invoicePaidAmount + invoiceDueDate.
+ *
+ * Cash / Transfer / Card keep the manual lifecycle in `salePaymentRules`
+ * (Cash → PAID on create, Transfer & Card → IN_PROGRESS → PAID via payment-status).
  */
 export const INVOICE_PAYMENT_STATUS = {
-  PAID: "Paid",
+  PAID: "PAID",
   PARTIAL: "Partial",
   PENDING: "Pending",
   OVERDUE: "Overdue",
@@ -32,7 +35,7 @@ export function computeInvoicePaymentStatus(input: {
   const eps = 0.005;
 
   if (due <= eps) {
-    return paid >= 0 ? INVOICE_PAYMENT_STATUS.PAID : INVOICE_PAYMENT_STATUS.PENDING;
+    return INVOICE_PAYMENT_STATUS.PAID;
   }
 
   if (paid + eps >= due) {
@@ -57,7 +60,11 @@ export function computeInvoicePaymentStatus(input: {
   return INVOICE_PAYMENT_STATUS.PENDING;
 }
 
-/** Initial paid amount on create: Cash (and bulk fully-collected) → full total; otherwise 0. */
+/**
+ * Paid amount stored on create.
+ * Cash is collected up front; `fullyPaid` covers bulk sales (created already settled).
+ * Transfer / Card / Invoice start at 0.
+ */
 export function initialInvoicePaidAmount(
   paymentType: string,
   totalAmount: number,

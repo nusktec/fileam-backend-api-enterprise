@@ -3,6 +3,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { PERCENT, VAT_RATE_PERCENT } from "../../constants/percentages";
 import {
   initialSaleStatusForPaymentType,
+  isAsyncPaymentType,
   isCashPaymentType,
   isInvoicePaymentType,
   isSalePaidStatus,
@@ -10,10 +11,7 @@ import {
   resolveSaleInvoiceStatus,
   SALE_STATUS,
 } from "../../constants/salePaymentRules";
-import {
-  initialInvoicePaidAmount,
-  INVOICE_PAYMENT_STATUS,
-} from "../../constants/invoicePaymentStatus";
+import { initialInvoicePaidAmount } from "../../constants/invoicePaymentStatus";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import {
   assertMonetaryAmountInRange,
@@ -162,6 +160,7 @@ function mapSaleSummary(sale: {
   const invoicePaidAmount = decimalToNumber(sale.invoicePaidAmount);
   const totalAmount = decimalToNumber(sale.totalAmount);
   const status = resolveSaleInvoiceStatus({
+    paymentType: sale.paymentType,
     status: sale.status,
     invoicePaidAmount,
     totalAmount,
@@ -213,14 +212,21 @@ function resolveSaleStatusAfterPatch(
     return SALE_STATUS.CANCELLED;
   }
 
+  const nextPaymentType = data.paymentType ?? sale.paymentType;
+
+  // Non-invoice payments keep the manual lifecycle (payment-status confirms PAID).
+  if (!isInvoicePaymentType(nextPaymentType)) {
+    if (data.status != null) return data.status;
+    if (data.paymentType != null && data.paymentType !== sale.paymentType) {
+      return initialSaleStatusForPaymentType(nextPaymentType);
+    }
+    return sale.status;
+  }
+
   const paid =
     data.invoicePaidAmount != null
       ? data.invoicePaidAmount
-      : isCashPaymentType(data.paymentType ?? sale.paymentType) &&
-          data.paymentType != null &&
-          data.paymentType !== sale.paymentType
-        ? totalAmount
-        : decimalToNumber(sale.invoicePaidAmount);
+      : decimalToNumber(sale.invoicePaidAmount);
 
   let dueDate = sale.invoiceDueDate;
   if (data.invoiceDueDate !== undefined) {
@@ -231,7 +237,7 @@ function resolveSaleStatusAfterPatch(
   }
 
   return resolveSaleInvoiceStatus({
-    status: data.status === SALE_STATUS.CANCELLED ? SALE_STATUS.CANCELLED : null,
+    paymentType: nextPaymentType,
     invoicePaidAmount: paid,
     totalAmount,
     invoiceDueDate: dueDate,
@@ -292,34 +298,23 @@ export const salesService = {
       },
       {} as Record<string, number>,
     );
-    // Also include DB statuses for rows outside the current page via groupBy
     const paidCount =
-      (countByStatus[INVOICE_PAYMENT_STATUS.PAID] ?? 0) +
-      (countByStatus[SALE_STATUS.PAID] ?? 0);
-    const pendingCount = countByStatus[INVOICE_PAYMENT_STATUS.PENDING] ?? 0;
-    const overdueCount = countByStatus[INVOICE_PAYMENT_STATUS.OVERDUE] ?? 0;
-    const partialCount = countByStatus[INVOICE_PAYMENT_STATUS.PARTIAL] ?? 0;
+      (countByStatus[SALE_STATUS.PAID] ?? 0) + (countByStatus["Paid"] ?? 0);
+    const pendingCount = countByStatus[SALE_STATUS.PENDING] ?? 0;
+    const overdueCount = countByStatus[SALE_STATUS.OVERDUE] ?? 0;
+    const partialCount = countByStatus[SALE_STATUS.PARTIAL] ?? 0;
     const inProgressCount = countByStatus[SALE_STATUS.IN_PROGRESS] ?? 0;
     const cancelledCount = countByStatus[SALE_STATUS.CANCELLED] ?? 0;
 
-    // Full-dataset counts from DB groupBy (legacy) + remap paid labels
-    const dbPaid =
-      (counts.find((c) => c.status === SALE_STATUS.PAID)?._count ?? 0) +
-      (counts.find((c) => c.status === INVOICE_PAYMENT_STATUS.PAID)?._count ??
-        0);
-    const dbPending =
-      counts.find((c) => c.status === INVOICE_PAYMENT_STATUS.PENDING)?._count ??
-      0;
-    const dbOverdue =
-      counts.find((c) => c.status === INVOICE_PAYMENT_STATUS.OVERDUE)?._count ??
-      0;
-    const dbPartial =
-      counts.find((c) => c.status === INVOICE_PAYMENT_STATUS.PARTIAL)?._count ??
-      0;
-    const dbInProgress =
-      counts.find((c) => c.status === SALE_STATUS.IN_PROGRESS)?._count ?? 0;
-    const dbCancelled =
-      counts.find((c) => c.status === SALE_STATUS.CANCELLED)?._count ?? 0;
+    // Full-dataset counts from DB groupBy ("Paid" kept for legacy rows).
+    const dbCount = (status: string) =>
+      counts.find((c) => c.status === status)?._count ?? 0;
+    const dbPaid = dbCount(SALE_STATUS.PAID) + dbCount("Paid");
+    const dbPending = dbCount(SALE_STATUS.PENDING);
+    const dbOverdue = dbCount(SALE_STATUS.OVERDUE);
+    const dbPartial = dbCount(SALE_STATUS.PARTIAL);
+    const dbInProgress = dbCount(SALE_STATUS.IN_PROGRESS);
+    const dbCancelled = dbCount(SALE_STATUS.CANCELLED);
 
     return {
       summary: {
@@ -519,17 +514,20 @@ export const salesService = {
       if (!raw.date) {
         throw new HttpReplyError(400, `items[${index}]: date is required`);
       }
-      // Bulk sales: default Transfer; fully paid immediately.
+      // Bulk sales: default Transfer, already settled → PAID (unlike single sales,
+      // where Transfer starts IN_PROGRESS). Invoice items stay calculated.
       const paymentType = raw.paymentType?.trim() || PAYMENT_TYPE_TRANSFER;
       const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
       const totalNum = Number(resolved.totalAmount);
+      const fullyPaid = !isInvoicePaymentType(paymentType);
       const invoicePaidAmount = initialInvoicePaidAmount(paymentType, totalNum, {
-        fullyPaid: true,
+        fullyPaid,
       });
       const status = initialSaleStatusForPaymentType(paymentType, {
         invoicePaidAmount,
         totalAmount: totalNum,
         invoiceDueDate,
+        fullyPaid,
       });
       return {
         ...resolved,
@@ -727,9 +725,10 @@ export const salesService = {
     if (
       isSalePaidStatus(String(updateData.status)) &&
       data.invoicePaidAmount == null &&
-      updateData.invoicePaidAmount == null
+      updateData.invoicePaidAmount == null &&
+      decimalToNumber(sale.invoicePaidAmount) < nextTotal
     ) {
-      // keep existing paid amount
+      updateData.invoicePaidAmount = new Decimal(nextTotal);
     }
 
     const updated = await prisma.sale.update({
@@ -743,8 +742,8 @@ export const salesService = {
   },
 
   /**
-   * Record full payment: sets invoicePaidAmount = totalAmount → status Paid.
-   * Works for Card / Transfer / any unpaid sale (replaces manual IN_PROGRESS toggle).
+   * Confirm a Card / Transfer sale: IN_PROGRESS → PAID.
+   * Invoice sales are excluded — their status is calculated from invoicePaidAmount.
    */
   async confirmPaymentStatus(
     userId: string,
@@ -756,38 +755,51 @@ export const salesService = {
     });
     if (!sale) return null;
 
-    if (status !== SALE_STATUS.PAID && status !== INVOICE_PAYMENT_STATUS.PAID) {
+    if (!isSalePaidStatus(status)) {
       throw new HttpReplyError(
         400,
-        'Only status "PAID" or "Paid" is accepted on payment-status',
+        'Only status "PAID" is accepted on payment-status',
       );
     }
 
     if (isInvoicePaymentType(sale.paymentType)) {
       throw new HttpReplyError(
         400,
-        "Invoice sales use POST /sales/:id/mark-paid (Pending → Paid)",
+        "Invoice sales do not use payment-status; their status is calculated from invoicePaidAmount and invoiceDueDate (use PATCH /sales/:id with invoicePaidAmount, or POST /sales/:id/mark-paid)",
       );
     }
 
-    const total = decimalToNumber(sale.totalAmount);
-    if (isSalePaidStatus(resolveSaleInvoiceStatus(sale))) {
+    if (!isAsyncPaymentType(sale.paymentType)) {
+      throw new HttpReplyError(
+        400,
+        "payment-status applies only to Card or Transfer sales",
+      );
+    }
+
+    if (isSalePaidStatus(sale.status)) {
       return mapSaleSummary(sale);
     }
 
-    const confirmedAt = new Date();
+    if (sale.status !== SALE_STATUS.IN_PROGRESS) {
+      throw new HttpReplyError(
+        400,
+        "Only IN_PROGRESS sales can be confirmed as PAID",
+      );
+    }
+
     const updated = await prisma.sale.update({
       where: { id: saleId },
       data: {
-        invoicePaidAmount: new Decimal(total),
-        status: INVOICE_PAYMENT_STATUS.PAID,
-        paymentConfirmedAt: confirmedAt,
+        invoicePaidAmount: new Decimal(decimalToNumber(sale.totalAmount)),
+        status: SALE_STATUS.PAID,
+        paymentConfirmedAt: new Date(),
       },
     });
 
     return mapSaleSummary(updated);
   },
 
+  /** Invoice sales: settle in full (invoicePaidAmount = totalAmount → PAID). */
   async markInvoicePaid(userId: string, saleId: string) {
     const sale = await prisma.sale.findFirst({
       where: { id: saleId, userId },
@@ -801,19 +813,17 @@ export const salesService = {
       );
     }
 
-    const computed = resolveSaleInvoiceStatus(sale);
-    if (isSalePaidStatus(computed)) {
+    if (isSalePaidStatus(resolveSaleInvoiceStatus(sale))) {
       return mapSaleSummary(sale);
     }
 
     const total = decimalToNumber(sale.totalAmount);
-    const confirmedAt = new Date();
     const updated = await prisma.sale.update({
       where: { id: saleId },
       data: {
         invoicePaidAmount: new Decimal(total),
-        status: INVOICE_PAYMENT_STATUS.PAID,
-        paymentConfirmedAt: confirmedAt,
+        status: SALE_STATUS.PAID,
+        paymentConfirmedAt: new Date(),
       },
     });
 
