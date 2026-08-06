@@ -18,7 +18,11 @@ import {
   initialSaleStatusForPaymentType,
   PAYMENT_TYPE_CASH,
 } from "../../constants/salePaymentRules";
-import { initialInvoicePaidAmount } from "../../constants/invoicePaymentStatus";
+import {
+  initialInvoiceAmountPaid,
+  invoiceAmountPaidFromSingle,
+  invoiceAmountPaidToJson,
+} from "../../constants/invoiceAmountPaid";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
@@ -99,12 +103,12 @@ async function createLinkedSaleInTx(
   }
 
   const invoiceDueDate = input.invoiceDueDate ?? null;
-  const invoicePaidAmount = initialInvoicePaidAmount(
+  const invoiceAmountPaid = initialInvoiceAmountPaid(
     input.paymentType,
     Number(totalAmount),
   );
   const status = initialSaleStatusForPaymentType(input.paymentType, {
-    invoicePaidAmount,
+    invoiceAmountPaid,
     totalAmount: Number(totalAmount),
     invoiceDueDate,
   });
@@ -126,7 +130,7 @@ async function createLinkedSaleInTx(
       paymentType: input.paymentType,
       saleDate: input.saleDate,
       invoiceDueDate,
-      invoicePaidAmount: new Decimal(invoicePaidAmount),
+      invoiceAmountPaid: invoiceAmountPaidToJson(invoiceAmountPaid),
       vatableIncome,
       serviceIncome: input.serviceIncome,
       status,
@@ -176,7 +180,9 @@ async function createLinkedExpenseInTx(
       expenseDate: input.expenseDate,
       // Stock purchases are settled when recorded.
       paymentType: PAYMENT_TYPE_CASH,
-      invoicePaidAmount: input.totalAmount,
+      invoiceAmountPaid: invoiceAmountPaidToJson(
+        invoiceAmountPaidFromSingle(Number(input.totalAmount), PAYMENT_TYPE_CASH),
+      ),
       status: initialSaleStatusForPaymentType(PAYMENT_TYPE_CASH),
     },
   });

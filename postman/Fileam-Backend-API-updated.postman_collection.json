@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoicePaidAmount, amount and invoiceDueDate. CANCELLED remains manual. Invoice payments never use payment-status. VAT-inclusive: Base = Total / 1.075, VAT = Total - Base. Inventory linked sales support invoiceDueDate. Bulk sales default paymentType Transfer and are created PAID. Payroll, Assets and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoiceAmountPaid.total, amount and invoiceDueDate. CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). Invoice payments never use payment-status. VAT-inclusive: Base = Total / 1.075. Bulk sales default Transfer and are created PAID. Payroll, Assets and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1102,7 +1102,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Cash → invoicePaidAmount = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
+                "description": "Cash → invoiceAmountPaid.total = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"Walk-in\"\n}"
@@ -1192,7 +1192,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Invoice -> status calculated: Pending (nothing paid, not yet due), Partial (0 < invoicePaidAmount < amount), PAID (invoicePaidAmount >= amount), Overdue (not fully paid after invoiceDueDate). invoiceDueDate also prints on the invoice PDF.",
+                "description": "Invoice -> status calculated: Pending (nothing paid, not yet due), Partial (0 < invoiceAmountPaid.total < amount), PAID (invoiceAmountPaid.total >= amount), Overdue (not fully paid after invoiceDueDate). invoiceDueDate also prints on the invoice PDF.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Invoice billed sale\",\n  \"amount\": 75000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": true,\n  \"vatInclusive\": false,\n  \"serviceIncome\": true,\n  \"customerName\": \"ABC Limited\",\n  \"customerId\": \"cust-001\"\n}"
@@ -1222,7 +1222,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
-                "description": "paymentType defaults to Transfer and bulk rows are created already settled: invoicePaidAmount = total -> status PAID (unlike single sales, where Transfer starts IN_PROGRESS). Invoice rows keep the calculated status. Max 100 items.",
+                "description": "paymentType defaults to Transfer and bulk rows are created already settled: invoiceAmountPaid.total = total -> status PAID (unlike single sales, where Transfer starts IN_PROGRESS). Invoice rows keep the calculated status. Max 100 items.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive)\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk transfer sale 2\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
@@ -1240,7 +1240,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/payment-status",
-                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoicePaidAmount = totalAmount and paymentConfirmedAt). Body {\"status\":\"PAID\"}. Rejects Invoice sales, whose status is calculated — use PATCH /sales/:id with invoicePaidAmount, or POST /sales/:id/mark-paid.",
+                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid.total = totalAmount and paymentConfirmedAt). Body {\"status\":\"PAID\"}. Rejects Invoice sales, whose status is calculated — use PATCH /sales/:id with invoiceAmountPaid, or POST /sales/:id/mark-paid.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"status\": \"PAID\"}"
@@ -1253,7 +1253,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/mark-paid",
-                "description": "Invoice only: sets invoicePaidAmount = totalAmount → Paid. Sets paymentConfirmedAt."
+                "description": "Invoice only: sets invoiceAmountPaid.total = totalAmount → Paid. Sets paymentConfirmedAt."
               }
             },
             {
@@ -1267,10 +1267,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Partial update. For Invoice sales, invoicePaidAmount / invoiceDueDate recalculate the status (Pending, Partial, PAID, Overdue). For Cash / Transfer / Card the stored status is kept unless you send status explicitly. status CANCELLED is always accepted.",
+                "description": "Partial update. For Invoice sales, invoiceAmountPaid / invoiceDueDate recalculate the status (Pending, Partial, PAID, Overdue). For Cash / Transfer / Card the stored status is kept unless you send status explicitly. status CANCELLED is always accepted.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"invoicePaidAmount\": 20000,\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
+                  "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"invoiceAmountPaid\": {\n    \"total\": 20000,\n    \"items\": [\n      {\n        \"amount\": 20000,\n        \"paymentType\": \"Transfer\"\n      }\n    ]\n  },\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
                 }
               }
             },
@@ -1284,7 +1284,7 @@
               }
             },
             {
-              "name": "Update sale paid amount (Partial) **",
+              "name": "Update sale invoiceAmountPaid (Partial) **",
               "request": {
                 "method": "PATCH",
                 "header": [
@@ -1299,15 +1299,15 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Invoice sales: record a part payment. Status becomes Partial, or Overdue when the due date has passed.",
+                "description": "Replace invoiceAmountPaid with multiple payment lines. Validation: total must equal sum(items[].amount). Item paymentType: Cash, Transfer, Card. Invoice status becomes Partial or Overdue from invoiceAmountPaid.total + invoiceDueDate.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"invoicePaidAmount\": 10000,\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
+                  "raw": "{\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Transfer\"\n      },\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Cash\"\n      }\n    ]\n  },\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
                 }
               }
             }
           ],
-          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total / 1.075, VAT = Total - Base (3000 -> 2790.70 + 209.30). vatableIncome: amount is net; 7.5% VAT added on top. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoicePaidAmount, amount and invoiceDueDate. CANCELLED remains manual."
+          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total / 1.075, VAT = Total - Base (3000 -> 2790.70 + 209.30). vatableIncome: amount is net; 7.5% VAT added on top. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoiceAmountPaid, amount and invoiceDueDate. CANCELLED remains manual."
         },
         {
           "name": "Expenses *",
@@ -1365,10 +1365,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"invoicePaidAmount\": 0,\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false\n}"
+                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false,\n  \"invoiceAmountPaid\": {\n    \"total\": 0,\n    \"items\": []\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Invoice expense -> status calculated: Pending (nothing paid, not yet due), Partial (0 < invoicePaidAmount < amount), PAID (invoicePaidAmount >= amount), Overdue (not fully paid after invoiceDueDate)."
+                "description": "Invoice expense -> status calculated: Pending (nothing paid, not yet due), Partial (0 < invoiceAmountPaid.total < amount), PAID (invoiceAmountPaid.total >= amount), Overdue (not fully paid after invoiceDueDate)."
               }
             },
             {
@@ -1386,7 +1386,7 @@
                   "raw": "{\n  \"description\": \"Google Ads\",\n  \"amount\": 25000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Marketing\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Cash\",\n  \"vatInclusive\": true\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Cash -> status PAID with invoicePaidAmount = total. vatInclusive amount is gross (Base = Total / 1.075)."
+                "description": "Cash -> status PAID with invoiceAmountPaid.total = total. vatInclusive amount is gross (Base = Total / 1.075)."
               }
             },
             {
@@ -1403,7 +1403,7 @@
                 "description": "First item is an Invoice bill with 5000 paid -> Partial. Second is Cash -> PAID. Transfer / Card rows are created IN_PROGRESS. Max 100 items.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-10\",\n      \"invoicePaidAmount\": 5000,\n      \"vatInclusive\": true\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-10\",\n      \"invoiceAmountPaid\": {\n        \"total\": 5000,\n        \"items\": [\n          {\n            \"amount\": 5000,\n            \"paymentType\": \"Transfer\"\n          }\n        ]\n      },\n      \"vatInclusive\": true\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
                 }
               }
             },
@@ -1419,10 +1419,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"invoicePaidAmount\": 10000,\n  \"vatInclusive\": false\n}"
+                  "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 6000,\n        \"paymentType\": \"Transfer\"\n      },\n      {\n        \"amount\": 4000,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "For Invoice expenses, invoicePaidAmount / invoiceDueDate recalculate the status (Pending, Partial, PAID, Overdue). Switching paymentType resets the lifecycle (Cash -> PAID, Transfer/Card -> IN_PROGRESS)."
+                "description": "For Invoice expenses, invoiceAmountPaid / invoiceDueDate recalculate the status (Pending, Partial, PAID, Overdue). Switching paymentType resets the lifecycle (Cash -> PAID, Transfer/Card -> IN_PROGRESS)."
               }
             },
             {
@@ -1441,7 +1441,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}/payment-status",
-                "description": "Mirrors the sales endpoint. Card / Transfer only: IN_PROGRESS -> PAID (sets invoicePaidAmount = totalAmount). Body {\"status\":\"PAID\"}. Rejects Invoice expenses (status is calculated) and Cash expenses (already PAID on create).",
+                "description": "Mirrors the sales endpoint. Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid.total = totalAmount). Body {\"status\":\"PAID\"}. Rejects Invoice expenses (status is calculated) and Cash expenses (already PAID on create).",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"status\": \"PAID\"}"
@@ -1457,7 +1457,7 @@
               }
             },
             {
-              "name": "Update expense paid amount (Partial) *",
+              "name": "Update expense invoiceAmountPaid (Partial) *",
               "request": {
                 "method": "PATCH",
                 "header": [
@@ -1472,15 +1472,15 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Invoice expenses: record a part payment of the bill. Status becomes Partial, or Overdue once past the due date.",
+                "description": "Replace invoiceAmountPaid with multiple payment lines. Validation: total must equal sum(items[].amount). Item paymentType: Cash, Transfer, Card. Invoice status becomes Partial or Overdue from invoiceAmountPaid.total + invoiceDueDate.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"invoicePaidAmount\": 7500,\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
+                  "raw": "{\n  \"invoiceAmountPaid\": {\n    \"total\": 7500,\n    \"items\": [\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Transfer\"\n      },\n      {\n        \"amount\": 2500,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
                 }
               }
             }
           ],
-          "description": "Expenses. Optional paymentType (default Transfer), invoiceDueDate and invoicePaidAmount. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoicePaidAmount, amount and invoiceDueDate. CANCELLED remains manual. vatInclusive expenses extract VAT (Base = Total / 1.075)."
+          "description": "Expenses. Optional paymentType (default Transfer), invoiceDueDate and invoiceAmountPaid. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoiceAmountPaid, amount and invoiceDueDate. CANCELLED remains manual. vatInclusive expenses extract VAT (Base = Total / 1.075)."
         },
         {
           "name": "Inventory *",
@@ -1740,7 +1740,7 @@
               }
             }
           ],
-          "description": "Linked sales accept invoiceDueDate (and VAT flags). Status follows sale invoicePaidAmount rules."
+          "description": "Linked sales accept invoiceDueDate (and VAT flags). Status follows sale invoiceAmountPaid rules."
         },
         {
           "name": "Assets **",
@@ -1770,7 +1770,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/current-assets",
-                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales − expenses; account number from Business.bankAccount when set), inventory (qty×cost), accountsReceivable (Pending/Overdue/IN_PROGRESS sales at totalAmount). totalCurrentAssets = sum of the four."
+                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales − expenses; account number from Business.bankAccount when set), inventory (qty×cost), accountsReceivable { total, current { totalAmount, invoiceCount }, overdue { totalAmount, invoiceCount }, items[] with status CURRENT|OVERDUE and daysOverdue on overdue rows; amount = outstanding }. totalCurrentAssets = sum of the four."
               }
             },
             {

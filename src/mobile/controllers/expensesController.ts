@@ -165,8 +165,8 @@ export const createExpense = async (
           : invoiceDueDate === null
             ? null
             : undefined,
-      invoicePaidAmount:
-        b.invoicePaidAmount != null ? Number(b.invoicePaidAmount) : undefined,
+      invoiceAmountPaid:
+        b.invoiceAmountPaid != null ? b.invoiceAmountPaid : undefined,
       supplierName:
         supplierName != null && String(supplierName).trim() !== ""
           ? String(supplierName).trim()
@@ -227,10 +227,7 @@ export const bulkCreateExpenses = async (
             : raw.invoiceDueDate === null
               ? null
               : undefined,
-        invoicePaidAmount:
-          raw.invoicePaidAmount != null
-            ? Number(raw.invoicePaidAmount)
-            : undefined,
+        invoiceAmountPaid: raw.invoiceAmountPaid,
         supplierName:
           supplierName != null && String(supplierName).trim() !== ""
             ? String(supplierName).trim()
@@ -297,10 +294,8 @@ export const updateExpense = async (
             ? null
             : String(body.invoiceDueDate)
           : undefined,
-      invoicePaidAmount:
-        body.invoicePaidAmount != null
-          ? Number(body.invoicePaidAmount)
-          : undefined,
+      invoiceAmountPaid:
+        body.invoiceAmountPaid != null ? body.invoiceAmountPaid : undefined,
       supplierName:
         supplierName !== undefined
           ? supplierName === null || String(supplierName).trim() === ""

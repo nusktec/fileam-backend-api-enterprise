@@ -161,6 +161,8 @@ export const createSale = async (
           : invoiceDueDate === null
             ? null
             : undefined,
+      invoiceAmountPaid:
+        (req.body as { invoiceAmountPaid?: unknown }).invoiceAmountPaid,
       vatableIncome: Boolean(vatableIncome),
       vatInclusive: Boolean(vatInclusive),
       serviceIncome: serviceIncome !== false,
@@ -212,6 +214,7 @@ export const bulkCreateSales = async (
             : raw.invoiceDueDate === null
               ? null
               : undefined,
+        invoiceAmountPaid: raw.invoiceAmountPaid,
         vatableIncome: Boolean(raw.vatableIncome),
         vatInclusive: Boolean(raw.vatInclusive),
         serviceIncome: raw.serviceIncome !== false,
@@ -312,10 +315,8 @@ export const updateSale = async (req: IRequest, res: Response): Promise<void> =>
             ? null
             : String(body.invoiceDueDate)
           : undefined,
-      invoicePaidAmount:
-        body.invoicePaidAmount != null
-          ? Number(body.invoicePaidAmount)
-          : undefined,
+      invoiceAmountPaid:
+        body.invoiceAmountPaid != null ? body.invoiceAmountPaid : undefined,
       vatableIncome:
         body.vatableIncome !== undefined
           ? Boolean(body.vatableIncome)

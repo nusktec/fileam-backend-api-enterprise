@@ -1,6 +1,7 @@
 import { check, body } from "express-validator";
 import { handleValidation } from "../errorHandler";
 import { optionalMonetaryAmount } from "./monetaryAmountValidation";
+import { optionalInvoiceAmountPaidValidation } from "./invoiceAmountPaidValidation";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
 
@@ -29,10 +30,7 @@ export const updateSaleValidation = [
     .optional({ nullable: true })
     .isISO8601()
     .withMessage("invoiceDueDate must be a valid ISO date"),
-  check("invoicePaidAmount")
-    .optional({ values: "null" })
-    .isFloat({ min: 0 })
-    .withMessage("invoicePaidAmount must be a non-negative number"),
+  optionalInvoiceAmountPaidValidation("invoiceAmountPaid"),
   check("vatableIncome").optional().isBoolean(),
   check("vatInclusive").optional().isBoolean(),
   body().custom((value) => {

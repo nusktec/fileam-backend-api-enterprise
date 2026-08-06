@@ -1,6 +1,10 @@
 import { check, body } from "express-validator";
 import { handleValidation } from "../errorHandler";
 import { requiredMonetaryAmount } from "./monetaryAmountValidation";
+import {
+  optionalBulkInvoiceAmountPaidValidation,
+  optionalInvoiceAmountPaidValidation,
+} from "./invoiceAmountPaidValidation";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
 
@@ -37,6 +41,7 @@ export const createSaleValidation = [
     .optional({ nullable: true })
     .isISO8601()
     .withMessage("invoiceDueDate must be a valid ISO date"),
+  optionalInvoiceAmountPaidValidation("invoiceAmountPaid"),
   check("vatableIncome")
     .optional()
     .isBoolean()
@@ -77,6 +82,7 @@ export const bulkCreateSalesValidation = [
     .optional({ nullable: true })
     .isISO8601()
     .withMessage("Each invoiceDueDate must be a valid ISO date"),
+  optionalBulkInvoiceAmountPaidValidation("items.*.invoiceAmountPaid"),
   check("items.*.category")
     .optional({ values: "null" })
     .trim()

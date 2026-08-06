@@ -17,12 +17,16 @@ model Expense {
   expenseDate   DateTime @map("expense_date") @db.Date
   /** Optional invoice / bill due date. */
   invoiceDueDate DateTime? @map("invoice_due_date") @db.Date
-  /** Amount paid toward this bill (drives status for Invoice payments). */
-  invoicePaidAmount Decimal @default(0) @map("invoice_paid_amount") @db.Decimal(14, 2)
+  /**
+   * Structured payments toward this bill:
+   * { total: number, items: [{ amount, paymentType: Cash|Transfer|Card }] }
+   * Invariant: total === sum(items[].amount). Drives Invoice payment status.
+   */
+  invoiceAmountPaid Json @default("{\"total\":0,\"items\":[]}") @map("invoice_amount_paid")
   /**
    * Cash → PAID; Transfer / Card → IN_PROGRESS then PAID via payment-status;
    * Invoice → Pending | Partial | PAID | Overdue, calculated from
-   * invoicePaidAmount, totalAmount and invoiceDueDate.
+   * invoiceAmountPaid.total, totalAmount and invoiceDueDate.
    */
   status        String   @default("IN_PROGRESS")
   createdAt     DateTime @default(now()) @map("created_at")

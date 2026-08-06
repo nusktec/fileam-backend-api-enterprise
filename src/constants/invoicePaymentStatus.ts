@@ -1,6 +1,6 @@
 /**
- * Payment status for Invoice payments only (Sales and invoice-based Expenses),
- * derived from invoicePaidAmount + invoiceDueDate.
+ * Invoice payment status for Invoice paymentType only (Sales and Expenses),
+ * derived from invoiceAmountPaid.total + invoiceDueDate.
  *
  * Cash / Transfer / Card keep the manual lifecycle in `salePaymentRules`
  * (Cash → PAID on create, Transfer & Card → IN_PROGRESS → PAID via payment-status).
@@ -20,7 +20,7 @@ function startOfUtcDay(d: Date): number {
 }
 
 /**
- * @param invoicePaidAmount amount already paid toward the invoice
+ * @param invoicePaidAmount amount already paid toward the invoice (invoiceAmountPaid.total)
  * @param amount invoice total due (use totalAmount — base + VAT)
  * @param invoiceDueDate optional due date (calendar date)
  */
@@ -58,19 +58,4 @@ export function computeInvoicePaymentStatus(input: {
   }
 
   return INVOICE_PAYMENT_STATUS.PENDING;
-}
-
-/**
- * Paid amount stored on create.
- * Cash is collected up front; `fullyPaid` covers bulk sales (created already settled).
- * Transfer / Card / Invoice start at 0.
- */
-export function initialInvoicePaidAmount(
-  paymentType: string,
-  totalAmount: number,
-  opts?: { fullyPaid?: boolean },
-): number {
-  if (opts?.fullyPaid) return Number(totalAmount) || 0;
-  if (paymentType === "Cash") return Number(totalAmount) || 0;
-  return 0;
 }

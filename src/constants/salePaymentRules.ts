@@ -1,7 +1,8 @@
+import { computeInvoicePaymentStatus } from "./invoicePaymentStatus";
 import {
-  computeInvoicePaymentStatus,
-  INVOICE_PAYMENT_STATUS,
-} from "./invoicePaymentStatus";
+  coerceInvoiceAmountPaid,
+  type InvoiceAmountPaid,
+} from "./invoiceAmountPaid";
 
 /** Matches mobile validation `paymentType` values. */
 export const PAYMENT_TYPE_CASH = "Cash";
@@ -14,16 +15,16 @@ export const PAYMENT_TYPE_INVOICE = "Invoice";
  * - Cash → PAID on create.
  * - Transfer / Card → IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status.
  * - Invoice → Pending / Partial / PAID / Overdue, always calculated from
- *   invoicePaidAmount, totalAmount and invoiceDueDate.
+ *   invoiceAmountPaid.total, totalAmount and invoiceDueDate.
  * - CANCELLED is manual and never recalculated.
  */
 export const SALE_STATUS = {
   IN_PROGRESS: "IN_PROGRESS",
-  PAID: INVOICE_PAYMENT_STATUS.PAID,
+  PAID: "PAID",
   CANCELLED: "CANCELLED",
-  PENDING: INVOICE_PAYMENT_STATUS.PENDING,
-  OVERDUE: INVOICE_PAYMENT_STATUS.OVERDUE,
-  PARTIAL: INVOICE_PAYMENT_STATUS.PARTIAL,
+  PENDING: "Pending",
+  OVERDUE: "Overdue",
+  PARTIAL: "Partial",
 } as const;
 
 export type SaleStatusValue = (typeof SALE_STATUS)[keyof typeof SALE_STATUS];
@@ -45,22 +46,23 @@ export function isAsyncPaymentType(paymentType: string): boolean {
 
 /**
  * Initial stored status on create:
- * - Invoice → calculated from invoicePaidAmount / totalAmount / invoiceDueDate
+ * - Invoice → calculated from invoiceAmountPaid.total / totalAmount / invoiceDueDate
  * - Cash (or `fullyPaid`, e.g. bulk sales) → PAID
  * - Card / Transfer → IN_PROGRESS
  */
 export function initialSaleStatusForPaymentType(
   paymentType: string,
   opts?: {
-    invoicePaidAmount?: number;
+    invoiceAmountPaid?: InvoiceAmountPaid | number;
     totalAmount?: number;
     invoiceDueDate?: Date | null;
     fullyPaid?: boolean;
   },
 ): string {
   if (isInvoicePaymentType(paymentType)) {
+    const paid = coerceInvoiceAmountPaid(opts?.invoiceAmountPaid ?? 0);
     return computeInvoicePaymentStatus({
-      invoicePaidAmount: opts?.invoicePaidAmount ?? 0,
+      invoicePaidAmount: paid.total,
       amount: opts?.totalAmount ?? 0,
       invoiceDueDate: opts?.invoiceDueDate,
     });
@@ -109,6 +111,8 @@ function toNumber(
 export function resolveSaleInvoiceStatus(sale: {
   paymentType?: string | null;
   status?: string | null;
+  invoiceAmountPaid?: unknown;
+  /** @deprecated Prefer invoiceAmountPaid.total */
   invoicePaidAmount?: number | { toNumber?: () => number } | null;
   totalAmount: number | { toNumber?: () => number };
   invoiceDueDate?: Date | null;
@@ -117,8 +121,12 @@ export function resolveSaleInvoiceStatus(sale: {
   if (sale.paymentType != null && !isInvoicePaymentType(sale.paymentType)) {
     return sale.status ?? SALE_STATUS.IN_PROGRESS;
   }
+  const paid =
+    sale.invoiceAmountPaid != null
+      ? coerceInvoiceAmountPaid(sale.invoiceAmountPaid).total
+      : toNumber(sale.invoicePaidAmount);
   return computeInvoicePaymentStatus({
-    invoicePaidAmount: toNumber(sale.invoicePaidAmount),
+    invoicePaidAmount: paid,
     amount: toNumber(sale.totalAmount),
     invoiceDueDate: sale.invoiceDueDate,
   });

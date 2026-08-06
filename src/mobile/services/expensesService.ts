@@ -16,7 +16,13 @@ import {
   resolveSaleInvoiceStatus,
   SALE_STATUS,
 } from "../../constants/salePaymentRules";
-import { initialInvoicePaidAmount } from "../../constants/invoicePaymentStatus";
+import {
+  coerceInvoiceAmountPaid,
+  initialInvoiceAmountPaid,
+  invoiceAmountPaidFromSingle,
+  invoiceAmountPaidToJson,
+  parseAndValidateInvoiceAmountPaid,
+} from "../../constants/invoiceAmountPaid";
 import {
   assertMonetaryAmountInRange,
   normalizeMoneyAmount,
@@ -127,17 +133,17 @@ function mapExpenseListItem(e: {
   vatInclusive: boolean;
   paymentType: string;
   invoiceDueDate: Date | null;
-  invoicePaidAmount?: Decimal | null;
+  invoiceAmountPaid?: unknown;
   status?: string | null;
   supplierName: string | null;
   supplierId: string | null;
 }) {
-  const invoicePaidAmount = decimalToNumber(e.invoicePaidAmount);
+  const invoiceAmountPaid = coerceInvoiceAmountPaid(e.invoiceAmountPaid);
   const amount = decimalToNumber(e.totalAmount);
   const status = resolveSaleInvoiceStatus({
     paymentType: e.paymentType,
     status: e.status,
-    invoicePaidAmount,
+    invoiceAmountPaid,
     totalAmount: amount,
     invoiceDueDate: e.invoiceDueDate,
   });
@@ -157,7 +163,7 @@ function mapExpenseListItem(e: {
     vatInclusive: e.vatInclusive,
     paymentType: e.paymentType,
     invoiceDueDate: e.invoiceDueDate,
-    invoicePaidAmount,
+    invoiceAmountPaid,
     status,
     supplierName: e.supplierName ?? null,
     supplierId: e.supplierId ?? null,
@@ -243,12 +249,12 @@ export const expensesService = {
       where: { id: expenseId, userId },
     });
     if (!expense) return null;
-    const invoicePaidAmount = decimalToNumber(expense.invoicePaidAmount);
+    const invoiceAmountPaid = coerceInvoiceAmountPaid(expense.invoiceAmountPaid);
     const total = decimalToNumber(expense.totalAmount);
     const status = resolveSaleInvoiceStatus({
       paymentType: expense.paymentType,
       status: expense.status,
-      invoicePaidAmount,
+      invoiceAmountPaid,
       totalAmount: total,
       invoiceDueDate: expense.invoiceDueDate,
     });
@@ -269,7 +275,7 @@ export const expensesService = {
       vatInclusive: expense.vatInclusive,
       paymentType: expense.paymentType,
       invoiceDueDate: expense.invoiceDueDate,
-      invoicePaidAmount,
+      invoiceAmountPaid,
       status,
       supplierName: expense.supplierName ?? null,
       supplierId: expense.supplierId ?? null,
@@ -291,7 +297,7 @@ export const expensesService = {
       supplierId?: string;
       paymentType?: string;
       invoiceDueDate?: string | null;
-      invoicePaidAmount?: number;
+      invoiceAmountPaid?: unknown;
       createdById?: string;
     },
   ) {
@@ -309,12 +315,12 @@ export const expensesService = {
         : PAYMENT_TYPE_TRANSFER;
     const invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate) ?? null;
     const totalNum = Number(totalAmount);
-    const invoicePaidAmount =
-      data.invoicePaidAmount != null
-        ? Number(data.invoicePaidAmount)
-        : initialInvoicePaidAmount(paymentType, totalNum);
+    const invoiceAmountPaid =
+      data.invoiceAmountPaid != null
+        ? parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid)
+        : initialInvoiceAmountPaid(paymentType, totalNum);
     const status = initialSaleStatusForPaymentType(paymentType, {
-      invoicePaidAmount,
+      invoiceAmountPaid,
       totalAmount: totalNum,
       invoiceDueDate,
     });
@@ -342,7 +348,7 @@ export const expensesService = {
         supplierId: data.supplierId?.trim() || null,
         expenseDate,
         invoiceDueDate,
-        invoicePaidAmount: new Decimal(invoicePaidAmount),
+        invoiceAmountPaid: invoiceAmountPaidToJson(invoiceAmountPaid),
         status,
       },
     });
@@ -366,7 +372,7 @@ export const expensesService = {
       vatInclusive: expense.vatInclusive,
       paymentType: expense.paymentType,
       invoiceDueDate: expense.invoiceDueDate,
-      invoicePaidAmount: decimalToNumber(expense.invoicePaidAmount),
+      invoiceAmountPaid: coerceInvoiceAmountPaid(expense.invoiceAmountPaid),
       status: expense.status,
       supplierName: expense.supplierName ?? null,
       supplierId: expense.supplierId ?? null,
@@ -388,7 +394,7 @@ export const expensesService = {
       supplierId?: string;
       paymentType?: string;
       invoiceDueDate?: string | null;
-      invoicePaidAmount?: number;
+      invoiceAmountPaid?: unknown;
     }>,
     createdById?: string,
   ) {
@@ -437,12 +443,15 @@ export const expensesService = {
           : PAYMENT_TYPE_TRANSFER;
       const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
       const totalNum = Number(resolved.totalAmount);
-      const invoicePaidAmount =
-        raw.invoicePaidAmount != null
-          ? Number(raw.invoicePaidAmount)
-          : initialInvoicePaidAmount(paymentType, totalNum);
+      const invoiceAmountPaid =
+        raw.invoiceAmountPaid != null
+          ? parseAndValidateInvoiceAmountPaid(
+              raw.invoiceAmountPaid,
+              `items[${index}].invoiceAmountPaid`,
+            )
+          : initialInvoiceAmountPaid(paymentType, totalNum);
       const status = initialSaleStatusForPaymentType(paymentType, {
-        invoicePaidAmount,
+        invoiceAmountPaid,
         totalAmount: totalNum,
         invoiceDueDate,
       });
@@ -461,7 +470,7 @@ export const expensesService = {
         supplierId: raw.supplierId?.trim() || null,
         paymentType,
         invoiceDueDate,
-        invoicePaidAmount,
+        invoiceAmountPaid,
         status,
       };
     });
@@ -497,7 +506,7 @@ export const expensesService = {
               supplierId: row.supplierId,
               expenseDate: row.expenseDate,
               invoiceDueDate: row.invoiceDueDate,
-              invoicePaidAmount: new Decimal(row.invoicePaidAmount),
+              invoiceAmountPaid: invoiceAmountPaidToJson(row.invoiceAmountPaid),
               status: row.status,
             },
           }),
@@ -530,7 +539,7 @@ export const expensesService = {
         vatInclusive: expense.vatInclusive,
         paymentType: expense.paymentType,
         invoiceDueDate: expense.invoiceDueDate,
-        invoicePaidAmount: decimalToNumber(expense.invoicePaidAmount),
+        invoiceAmountPaid: coerceInvoiceAmountPaid(expense.invoiceAmountPaid),
         status: expense.status,
         supplierName: expense.supplierName ?? null,
         supplierId: expense.supplierId ?? null,
@@ -554,7 +563,7 @@ export const expensesService = {
       supplierId: string | null;
       paymentType: string;
       invoiceDueDate: string | null;
-      invoicePaidAmount: number;
+      invoiceAmountPaid?: unknown;
     }>,
   ) {
     const expense = await prisma.expense.findFirst({
@@ -581,8 +590,10 @@ export const expensesService = {
     if (data.invoiceDueDate !== undefined) {
       updateData.invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate);
     }
-    if (data.invoicePaidAmount != null) {
-      updateData.invoicePaidAmount = new Decimal(data.invoicePaidAmount);
+    if (data.invoiceAmountPaid != null) {
+      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+        parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid),
+      );
     }
     if (data.supplierName !== undefined) {
       updateData.supplierName =
@@ -641,19 +652,6 @@ export const expensesService = {
         ? Number(updateData.totalAmount as Decimal)
         : decimalToNumber(expense.totalAmount);
 
-    if (
-      data.paymentType != null &&
-      isCashPaymentType(data.paymentType) &&
-      data.invoicePaidAmount == null
-    ) {
-      updateData.invoicePaidAmount = new Decimal(nextTotal);
-    }
-
-    const nextPaid =
-      updateData.invoicePaidAmount != null
-        ? Number(updateData.invoicePaidAmount as Decimal)
-        : decimalToNumber(expense.invoicePaidAmount);
-
     let nextDue = expense.invoiceDueDate;
     if (data.invoiceDueDate !== undefined) {
       nextDue =
@@ -665,24 +663,44 @@ export const expensesService = {
     const nextPaymentType =
       data.paymentType != null ? data.paymentType.trim() : expense.paymentType;
 
-    if (isInvoicePaymentType(nextPaymentType)) {
+    // On update, re-apply payment defaults unless invoiceAmountPaid is explicitly sent:
+    // Cash → PAID; Card/Transfer → IN_PROGRESS (unpaid); Invoice → Pending (unpaid / calculated).
+    if (data.invoiceAmountPaid != null) {
+      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+        parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid),
+      );
+    } else if (isCashPaymentType(nextPaymentType)) {
+      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+        invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
+      );
+    } else if (
+      isAsyncPaymentType(nextPaymentType) ||
+      isInvoicePaymentType(nextPaymentType)
+    ) {
+      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+        initialInvoiceAmountPaid(nextPaymentType, nextTotal),
+      );
+    }
+
+    const nextPaidStruct =
+      data.invoiceAmountPaid != null
+        ? parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid)
+        : updateData.invoiceAmountPaid != null
+          ? coerceInvoiceAmountPaid(updateData.invoiceAmountPaid)
+          : coerceInvoiceAmountPaid(expense.invoiceAmountPaid);
+
+    if (expense.status === SALE_STATUS.CANCELLED && data.paymentType == null) {
+      // Keep cancelled expenses cancelled unless payment type is changed.
+      updateData.status = SALE_STATUS.CANCELLED;
+    } else if (isInvoicePaymentType(nextPaymentType)) {
       updateData.status = resolveSaleInvoiceStatus({
         paymentType: nextPaymentType,
-        invoicePaidAmount: nextPaid,
+        invoiceAmountPaid: nextPaidStruct,
         totalAmount: nextTotal,
         invoiceDueDate: nextDue,
       });
-    } else if (nextPaymentType !== expense.paymentType) {
-      // Switching away from Invoice restarts the manual lifecycle.
+    } else {
       updateData.status = initialSaleStatusForPaymentType(nextPaymentType);
-    }
-
-    if (
-      !isInvoicePaymentType(nextPaymentType) &&
-      data.invoicePaidAmount == null &&
-      isSalePaidStatus(String(updateData.status ?? expense.status))
-    ) {
-      updateData.invoicePaidAmount = new Decimal(nextTotal);
     }
 
     const updated = await prisma.expense.update({
@@ -707,7 +725,7 @@ export const expensesService = {
       vatInclusive: updated.vatInclusive,
       paymentType: updated.paymentType,
       invoiceDueDate: updated.invoiceDueDate,
-      invoicePaidAmount: decimalToNumber(updated.invoicePaidAmount),
+      invoiceAmountPaid: coerceInvoiceAmountPaid(updated.invoiceAmountPaid),
       status: updated.status,
       supplierName: updated.supplierName ?? null,
       supplierId: updated.supplierId ?? null,
@@ -717,7 +735,7 @@ export const expensesService = {
   /**
    * Confirm a Card / Transfer expense: IN_PROGRESS → PAID.
    * Invoice expenses are excluded — their status is calculated from
-   * invoicePaidAmount, totalAmount and invoiceDueDate.
+   * invoiceAmountPaid, totalAmount and invoiceDueDate.
    */
   async confirmPaymentStatus(userId: string, expenseId: string, status: string) {
     const expense = await prisma.expense.findFirst({
@@ -735,7 +753,7 @@ export const expensesService = {
     if (isInvoicePaymentType(expense.paymentType)) {
       throw new HttpReplyError(
         400,
-        "Invoice expenses do not use payment-status; their status is calculated from invoicePaidAmount and invoiceDueDate (use PATCH /expenses/:id with invoicePaidAmount)",
+        "Invoice expenses do not use payment-status; their status is calculated from invoiceAmountPaid and invoiceDueDate (use PATCH /expenses/:id with invoiceAmountPaid)",
       );
     }
 
@@ -757,10 +775,14 @@ export const expensesService = {
       );
     }
 
+    const paid = invoiceAmountPaidFromSingle(
+      decimalToNumber(expense.totalAmount),
+      expense.paymentType,
+    );
     const updated = await prisma.expense.update({
       where: { id: expenseId },
       data: {
-        invoicePaidAmount: new Decimal(decimalToNumber(expense.totalAmount)),
+        invoiceAmountPaid: invoiceAmountPaidToJson(paid),
         status: SALE_STATUS.PAID,
       },
     });

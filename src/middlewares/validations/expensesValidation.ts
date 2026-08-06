@@ -4,6 +4,10 @@ import {
   optionalMonetaryAmount,
   requiredMonetaryAmount,
 } from "./monetaryAmountValidation";
+import {
+  optionalBulkInvoiceAmountPaidValidation,
+  optionalInvoiceAmountPaidValidation,
+} from "./invoiceAmountPaidValidation";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
 
@@ -43,10 +47,7 @@ export const createExpenseValidation = [
     .optional({ nullable: true })
     .isISO8601()
     .withMessage("invoiceDueDate must be a valid ISO date"),
-  check("invoicePaidAmount")
-    .optional({ values: "null" })
-    .isFloat({ min: 0 })
-    .withMessage("invoicePaidAmount must be a non-negative number"),
+  optionalInvoiceAmountPaidValidation("invoiceAmountPaid"),
   handleValidation,
 ];
 
@@ -92,9 +93,6 @@ export const bulkCreateExpensesValidation = [
     .optional({ nullable: true })
     .isISO8601()
     .withMessage("Each invoiceDueDate must be a valid ISO date"),
-  check("items.*.invoicePaidAmount")
-    .optional({ values: "null" })
-    .isFloat({ min: 0 })
-    .withMessage("Each invoicePaidAmount must be a non-negative number"),
+  optionalBulkInvoiceAmountPaidValidation("items.*.invoiceAmountPaid"),
   handleValidation,
 ];

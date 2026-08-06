@@ -22,9 +22,11 @@ import {
 import {
   isCashPaymentType,
   isSalePaidStatus,
+  resolveSaleInvoiceStatus,
   SALE_RECEIVABLE_STATUSES,
   SALE_STATUS,
 } from "../../constants/salePaymentRules";
+import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
 import { appendAssetHistory } from "./assetHistoryHelper";
 
 const ASSET_COUNTER_ID = "asset_number";
@@ -37,11 +39,15 @@ const DAYS_PER_YEAR = 365.25;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function startOfUtcDayMs(d: Date): number {
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
 /**
  * Book-based current assets (no dedicated cash/bank ledger yet):
  * - Cash: PAID sales with paymentType Cash, net of expense shortfall after bank
  * - Bank: PAID Card/Transfer/Invoice sales − all expense outflows (expenses assumed bank-settled)
- * - AR: unpaid sales (Pending / Overdue / IN_PROGRESS) at invoice totalAmount
+ * - AR: unpaid sales (Pending / Partial / Overdue / IN_PROGRESS) at outstanding amount
  * - Inventory: qty × purchaseCost
  */
 async function buildCurrentAssetsSnapshot(userId: string) {
@@ -86,16 +92,73 @@ async function buildCurrentAssetsSnapshot(userId: string) {
     inventoryRows.reduce((s, r) => s + r.amount, 0),
   );
 
-  const arItems = unpaidSales.map((s) => ({
-    invoiceNumber: s.invoiceNumber,
-    customerName: s.customerName,
-    status: s.status === SALE_STATUS.OVERDUE ? "OVERDUE" : "CURRENT",
-    amount: normalizeMoneyAmount(d(s.totalAmount)),
-    paymentType: s.paymentType,
-    saleStatus: s.status,
-  }));
+  const asOfDay = startOfUtcDayMs(new Date());
+  const arItems = unpaidSales
+    .map((s) => {
+      const total = d(s.totalAmount);
+      const paid = coerceInvoiceAmountPaid(s.invoiceAmountPaid).total;
+      const amount = normalizeMoneyAmount(Math.max(0, total - paid));
+      if (amount <= 0) return null;
+
+      const resolved = resolveSaleInvoiceStatus(s);
+      if (isSalePaidStatus(resolved) || resolved === SALE_STATUS.CANCELLED) {
+        return null;
+      }
+
+      let daysOverdue: number | undefined;
+      const due = s.invoiceDueDate;
+      if (due) {
+        const dueDay = startOfUtcDayMs(due);
+        if (dueDay < asOfDay) {
+          daysOverdue = Math.max(
+            0,
+            Math.floor((asOfDay - dueDay) / MS_PER_DAY),
+          );
+        }
+      }
+
+      const isOverdue =
+        resolved === SALE_STATUS.OVERDUE || daysOverdue != null;
+
+      const item: {
+        invoiceNumber: string;
+        customerName: string | null;
+        status: "CURRENT" | "OVERDUE";
+        amount: number;
+        daysOverdue?: number;
+      } = {
+        invoiceNumber: s.invoiceNumber,
+        customerName: s.customerName,
+        status: isOverdue ? "OVERDUE" : "CURRENT",
+        amount,
+      };
+      if (isOverdue && daysOverdue != null) {
+        item.daysOverdue = daysOverdue;
+      }
+      return item;
+    })
+    .filter(
+      (
+        r,
+      ): r is {
+        invoiceNumber: string;
+        customerName: string | null;
+        status: "CURRENT" | "OVERDUE";
+        amount: number;
+        daysOverdue?: number;
+      } => r != null,
+    );
+
+  const currentAr = arItems.filter((r) => r.status === "CURRENT");
+  const overdueAr = arItems.filter((r) => r.status === "OVERDUE");
   const arTotal = normalizeMoneyAmount(
     arItems.reduce((s, r) => s + r.amount, 0),
+  );
+  const arCurrentTotal = normalizeMoneyAmount(
+    currentAr.reduce((s, r) => s + r.amount, 0),
+  );
+  const arOverdueTotal = normalizeMoneyAmount(
+    overdueAr.reduce((s, r) => s + r.amount, 0),
   );
 
   let cashReceipts = 0;
@@ -177,21 +240,39 @@ async function buildCurrentAssetsSnapshot(userId: string) {
     },
     accountsReceivable: {
       total: arTotal,
-      items: arItems.map(
-        ({ invoiceNumber, customerName, status, amount }) => ({
-          invoiceNumber,
-          customerName,
-          status,
-          amount,
-        }),
-      ),
+      current: {
+        totalAmount: arCurrentTotal,
+        invoiceCount: currentAr.length,
+      },
+      overdue: {
+        totalAmount: arOverdueTotal,
+        invoiceCount: overdueAr.length,
+      },
+      items: arItems.map((item) => {
+        const row: {
+          invoiceNumber: string;
+          customerName: string | null;
+          status: "CURRENT" | "OVERDUE";
+          amount: number;
+          daysOverdue?: number;
+        } = {
+          invoiceNumber: item.invoiceNumber,
+          customerName: item.customerName,
+          status: item.status,
+          amount: item.amount,
+        };
+        if (item.daysOverdue != null) {
+          row.daysOverdue = item.daysOverdue;
+        }
+        return row;
+      }),
     },
     /** Diagnostic totals used to derive cash/bank (not required by UI spec). */
     methodology: {
       cashReceipts,
       bankReceipts,
       expenseOutflows,
-      note: "Cash = PAID Cash sales (less expense shortfall). Bank = PAID Card/Transfer/Invoice sales − all expense totals. AR = unpaid invoice/card/transfer totals. Inventory = qty × purchase cost.",
+      note: "Cash = PAID Cash sales (less expense shortfall). Bank = PAID Card/Transfer/Invoice sales − all expense totals. AR = outstanding unpaid invoices (total − invoiceAmountPaid.total), split CURRENT vs OVERDUE by due date. Inventory = qty × purchase cost.",
     },
   };
 }
