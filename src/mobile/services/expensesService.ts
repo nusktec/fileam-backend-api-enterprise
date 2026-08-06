@@ -437,23 +437,27 @@ export const expensesService = {
         }
         throw e;
       }
+      // Bulk expenses: default Transfer, already settled → PAID (unlike single
+      // expenses, where Transfer starts IN_PROGRESS). Invoice items stay calculated.
       const paymentType =
         raw.paymentType != null && String(raw.paymentType).trim() !== ""
           ? String(raw.paymentType).trim()
           : PAYMENT_TYPE_TRANSFER;
       const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
       const totalNum = Number(resolved.totalAmount);
+      const fullyPaid = !isInvoicePaymentType(paymentType);
       const invoiceAmountPaid =
         raw.invoiceAmountPaid != null
           ? parseAndValidateInvoiceAmountPaid(
               raw.invoiceAmountPaid,
               `items[${index}].invoiceAmountPaid`,
             )
-          : initialInvoiceAmountPaid(paymentType, totalNum);
+          : initialInvoiceAmountPaid(paymentType, totalNum, { fullyPaid });
       const status = initialSaleStatusForPaymentType(paymentType, {
         invoiceAmountPaid,
         totalAmount: totalNum,
         invoiceDueDate,
+        fullyPaid,
       });
       return {
         ...resolved,
