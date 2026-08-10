@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoiceAmountPaid.total, amount and invoiceDueDate. CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). Invoice payments never use payment-status. VAT-inclusive: Base = Total / 1.075. Bulk sales default Transfer and are created PAID. Payroll, Assets and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uploads; GET /records/{category} for linkable records.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -1222,7 +1222,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
-                "description": "paymentType defaults to Transfer and bulk rows are created already settled: invoiceAmountPaid.total = total -> status PAID (unlike single sales, where Transfer starts IN_PROGRESS). Invoice rows keep the calculated status. Max 100 items.",
+                "description": "paymentType defaults to Transfer. Cash/Transfer/Card bulk rows are created already settled: invoiceAmountPaid.total = total -> status PAID (unlike single sales, where Transfer starts IN_PROGRESS). Invoice rows keep the calculated status from invoiceAmountPaid. Max 100 items.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive)\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk transfer sale 2\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
@@ -1267,7 +1267,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Partial update. For Invoice sales, invoiceAmountPaid / invoiceDueDate recalculate the status (Pending, Partial, PAID, Overdue). For Cash / Transfer / Card the stored status is kept unless you send status explicitly. status CANCELLED is always accepted.",
+                "description": "Partial update. Status is re-applied for the payment type on every update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (invoiceAmountPaid cleared unless sent; paymentConfirmedAt cleared); Invoice -> Pending when unpaid, or calculated when invoiceAmountPaid is provided. status CANCELLED is preserved unless changed.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"invoiceAmountPaid\": {\n    \"total\": 20000,\n    \"items\": [\n      {\n        \"amount\": 20000,\n        \"paymentType\": \"Transfer\"\n      }\n    ]\n  },\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
@@ -1299,7 +1299,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Replace invoiceAmountPaid with multiple payment lines. Validation: total must equal sum(items[].amount). Item paymentType: Cash, Transfer, Card. Invoice status becomes Partial or Overdue from invoiceAmountPaid.total + invoiceDueDate.",
+                "description": "Replace invoiceAmountPaid with payment lines. Validation: total must equal sum(items[].amount). Item paymentType: Cash, Transfer, Card. For Invoice sales, status becomes Partial/Overdue/PAID from invoiceAmountPaid.total + invoiceDueDate. Note: a general PATCH also resets Card/Transfer to IN_PROGRESS unless this field is sent.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Transfer\"\n      },\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Cash\"\n      }\n    ]\n  },\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
@@ -1307,7 +1307,7 @@
               }
             }
           ],
-          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total / 1.075, VAT = Total - Base (3000 -> 2790.70 + 209.30). vatableIncome: amount is net; 7.5% VAT added on top. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoiceAmountPaid, amount and invoiceDueDate. CANCELLED remains manual."
+          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total / 1.075. vatableIncome: net + 7.5% VAT. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated)."
         },
         {
           "name": "Expenses *",
@@ -1354,7 +1354,7 @@
               }
             },
             {
-              "name": "Create expense *",
+              "name": "Create expense (Transfer — IN_PROGRESS) *",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1365,10 +1365,28 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false,\n  \"invoiceAmountPaid\": {\n    \"total\": 0,\n    \"items\": []\n  }\n}"
+                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Invoice expense -> status calculated: Pending (nothing paid, not yet due), Partial (0 < invoiceAmountPaid.total < amount), PAID (invoiceAmountPaid.total >= amount), Overdue (not fully paid after invoiceDueDate)."
+                "description": "Single create. Transfer/Card -> IN_PROGRESS (unpaid). Cash -> PAID. Invoice -> calculated from invoiceAmountPaid + invoiceDueDate (Pending when unpaid). paymentType defaults to Transfer."
+              }
+            },
+            {
+              "name": "Create expense (Invoice — Pending) *",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
+                "description": "Invoice -> status calculated: Pending (nothing paid), Partial, PAID, or Overdue from invoiceAmountPaid.total + invoiceDueDate.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"description\": \"Vendor bill\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"invoiceAmountPaid\": {\n    \"total\": 0,\n    \"items\": []\n  },\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"vatInclusive\": false\n}"
+                }
               }
             },
             {
@@ -1386,7 +1404,7 @@
                   "raw": "{\n  \"description\": \"Google Ads\",\n  \"amount\": 25000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Marketing\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Cash\",\n  \"vatInclusive\": true\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Cash -> status PAID with invoiceAmountPaid.total = total. vatInclusive amount is gross (Base = Total / 1.075)."
+                "description": "Cash -> status PAID with invoiceAmountPaid covering the total. vatInclusive amount is gross (Base = Total / 1.075)."
               }
             },
             {
@@ -1400,10 +1418,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/bulk",
-                "description": "First item is an Invoice bill with 5000 paid -> Partial. Second is Cash -> PAID. Transfer / Card rows are created IN_PROGRESS. Max 100 items.",
+                "description": "Mirrors bulk sales. paymentType defaults to Transfer. Cash/Transfer/Card bulk rows are created already settled: invoiceAmountPaid.total = total -> status PAID (unlike single expenses, where Transfer starts IN_PROGRESS). Invoice rows keep the calculated status. Max 100 items.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Office supplies\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-10\",\n      \"invoiceAmountPaid\": {\n        \"total\": 5000,\n        \"items\": [\n          {\n            \"amount\": 5000,\n            \"paymentType\": \"Transfer\"\n          }\n        ]\n      },\n      \"vatInclusive\": true\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer expense (VAT inclusive) \\u2014 created PAID\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"vatInclusive\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    },\n    {\n      \"description\": \"Vendor invoice (calculated status)\",\n      \"amount\": 30000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-15\",\n      \"invoiceAmountPaid\": {\n        \"total\": 5000,\n        \"items\": [\n          {\n            \"amount\": 5000,\n            \"paymentType\": \"Transfer\"\n          }\n        ]\n      },\n      \"vatInclusive\": false\n    }\n  ]\n}"
                 }
               }
             },
@@ -1422,7 +1440,7 @@
                   "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 6000,\n        \"paymentType\": \"Transfer\"\n      },\n      {\n        \"amount\": 4000,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "For Invoice expenses, invoiceAmountPaid / invoiceDueDate recalculate the status (Pending, Partial, PAID, Overdue). Switching paymentType resets the lifecycle (Cash -> PAID, Transfer/Card -> IN_PROGRESS)."
+                "description": "Partial update. Status is re-applied for the payment type on every update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (invoiceAmountPaid cleared unless sent); Invoice -> Pending when unpaid, or calculated when invoiceAmountPaid is provided."
               }
             },
             {
@@ -1441,7 +1459,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}/payment-status",
-                "description": "Mirrors the sales endpoint. Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid.total = totalAmount). Body {\"status\":\"PAID\"}. Rejects Invoice expenses (status is calculated) and Cash expenses (already PAID on create).",
+                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid to a full-settlement line). Body {\"status\":\"PAID\"}. Rejects Invoice expenses (status is calculated) and Cash expenses (already PAID on create).",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"status\": \"PAID\"}"
@@ -1472,7 +1490,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Replace invoiceAmountPaid with multiple payment lines. Validation: total must equal sum(items[].amount). Item paymentType: Cash, Transfer, Card. Invoice status becomes Partial or Overdue from invoiceAmountPaid.total + invoiceDueDate.",
+                "description": "Replace invoiceAmountPaid with multiple payment lines. Validation: total must equal sum(items[].amount). For Invoice expenses, status becomes Partial or Overdue from invoiceAmountPaid.total + invoiceDueDate.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"invoiceAmountPaid\": {\n    \"total\": 7500,\n    \"items\": [\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Transfer\"\n      },\n      {\n        \"amount\": 2500,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
@@ -1480,7 +1498,7 @@
               }
             }
           ],
-          "description": "Expenses. Optional paymentType (default Transfer), invoiceDueDate and invoiceAmountPaid. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated automatically as Pending, Partial, PAID or Overdue from invoiceAmountPaid, amount and invoiceDueDate. CANCELLED remains manual. vatInclusive expenses extract VAT (Base = Total / 1.075)."
+          "description": "Expenses. Optional paymentType (default Transfer), invoiceDueDate, invoiceAmountPaid. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). vatInclusive expenses extract VAT (Base = Total / 1.075)."
         },
         {
           "name": "Inventory *",
@@ -1744,7 +1762,7 @@
         },
         {
           "name": "Assets **",
-          "description": "Fixed assets module. Base: /mobile/assets. Auth: Bearer + onboarding complete. Asset + review status: AWAITING (default when flagged for review) → PENDING_REVIEW (after consultant assigned) → ACTIVE (after approve). Also SOLD | DISPOSED. consultantReviewStatus mirrors AWAITING | PENDING_REVIEW | APPROVED | REJECTED. Codes: AST-/TRF-/SAL-/DSP-. Reviews: GET /reviews, GET /reviews/:id, POST /:id/evidence, POST /:id/assign-consultant, POST /:id/confirm-review, POST /:id/approve-review, GET /history, GET /consultants, GET /reports/:reportType (PDF).",
+          "description": "Fixed assets. Summary: totalAssetValue = currentAssets + netNonCurrentAssets (+ pendingCustomerReviews). Non-current: purchaseCost, accumulatedDepreciation, netNonCurrentAssets (total = NBV). Create requires depreciationMethod: STRAIGHT_LINE | REDUCING_BALANCE | UNIT_OF_PRODUCTION (legacy DECLINING_BALANCE / UNITS_OF_PRODUCTION accepted). STRAIGHT_LINE: usefulLife + residualValue. REDUCING_BALANCE: usefulLife + depreciationRate + residualValue. UNIT_OF_PRODUCTION: totalEstimatedUnit + unitProduced + residualValue. Book value never falls below residual.",
           "item": [
             {
               "name": "Get assets summary **",
@@ -1752,7 +1770,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/summary",
-                "description": "totalNetAssetValue, purchaseCost, accumulatedDepreciation for ACTIVE assets."
+                "description": "totalAssetValue (= currentAssets + netNonCurrentAssets), currentAssets, netNonCurrentAssets (NBV after depreciation), pendingCustomerReviews (assets awaiting consultant review)."
               }
             },
             {
@@ -1779,7 +1797,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/non-current-assets",
-                "description": "All 8 assetTypes always returned (even total 0). Nested assets for ACTIVE items."
+                "description": "purchaseCost, accumulatedDepreciation, netNonCurrentAssets (= purchaseCost − accumulatedDepreciation). total = netNonCurrentAssets. All 8 assetTypes always returned (even total 0); nested assets use NBV."
               }
             },
             {
@@ -1792,7 +1810,7 @@
               }
             },
             {
-              "name": "Create asset **",
+              "name": "Create asset (Reducing Balance) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1802,10 +1820,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets",
-                "description": "Required: assetType (enum), assetName, purchaseDate, purchaseCost. Optional: vendor, evidenceUrl, depreciationMethod, usefulLife (years), residualValue, serialNumber, assetLocation, additionalNote, assignToConsultant (sets consultantReviewStatus PENDING).",
+                "description": "POST /mobile/assets. depreciationMethod required. residualValue required and must be < purchaseCost. Example body is REDUCING_BALANCE; see sibling requests for other methods.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"assetType\": \"COMPUTER_IT\", \"assetName\": \"MacBook Pro M4\", \"purchaseDate\": \"2026-07-09\", \"purchaseCost\": 2500000, \"vendor\": \"Apple Store\", \"evidenceUrl\": \"https://example.com/invoice.pdf\", \"depreciationMethod\": \"STRAIGHT_LINE\", \"usefulLife\": 5, \"residualValue\": 250000, \"serialNumber\": \"MBP-2026-001\", \"assetLocation\": \"Head Office\", \"additionalNote\": \"Assigned to the engineering department.\", \"assignToConsultant\": false}"
+                  "raw": "{\n  \"assetType\": \"COMPUTER_IT\",\n  \"assetName\": \"MacBook Pro M4\",\n  \"purchaseDate\": \"2026-07-09\",\n  \"purchaseCost\": 2500000,\n  \"vendor\": \"Apple Store\",\n  \"evidenceUrl\": \"https://example.com/invoice.pdf\",\n  \"depreciationMethod\": \"REDUCING_BALANCE\",\n  \"usefulLife\": 5,\n  \"depreciationRate\": 20,\n  \"residualValue\": 250000,\n  \"serialNumber\": \"MBP-2026-001\",\n  \"assetLocation\": \"Head Office\",\n  \"additionalNote\": \"Assigned to the engineering department.\",\n  \"assignToConsultant\": false\n}"
                 }
               },
               "event": [
@@ -1824,6 +1842,42 @@
                   }
                 }
               ]
+            },
+            {
+              "name": "Create asset (Straight Line) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets",
+                "description": "STRAIGHT_LINE: Annual = (Cost - Residual) / Useful Life; Monthly = Annual / 12.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assetType\": \"FURNITURE\",\n  \"assetName\": \"Office desks\",\n  \"purchaseDate\": \"2026-01-01\",\n  \"purchaseCost\": 1200000,\n  \"depreciationMethod\": \"STRAIGHT_LINE\",\n  \"usefulLife\": 6,\n  \"residualValue\": 120000,\n  \"assignToConsultant\": false\n}"
+                }
+              }
+            },
+            {
+              "name": "Create asset (Unit of Production) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets",
+                "description": "UNIT_OF_PRODUCTION: Per unit = (Cost - Residual) / totalEstimatedUnit; Period = per unit × unitProduced. Cumulative capped at Cost - Residual.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assetType\": \"MACHINERY\",\n  \"assetName\": \"Production press\",\n  \"purchaseDate\": \"2026-01-01\",\n  \"purchaseCost\": 5000000,\n  \"depreciationMethod\": \"UNIT_OF_PRODUCTION\",\n  \"residualValue\": 500000,\n  \"totalEstimatedUnit\": 90000,\n  \"unitProduced\": 3500,\n  \"assignToConsultant\": false\n}"
+                }
+              }
             },
             {
               "name": "List assets **",
@@ -1872,7 +1926,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/{{assetId}}",
-                "description": "Partial update. Path id is UUID. Cannot update SOLD/DISPOSED assets for structural fields as enforced by service.",
+                "description": "Partial update. When changing depreciation fields, method-specific rules apply (same as create). Book values recalculate from the selected method.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"assetName\": \"MacBook Pro M4 (updated)\", \"assetLocation\": \"Engineering Department\", \"usefulLife\": 4}"
@@ -2588,6 +2642,7 @@
         },
         {
           "name": "Evidence Vault",
+          "description": "Mobile Evidence Vault. Categories (hyphenated): Sales-Transactions, Purchase-Invoices, Expense-Transactions, Assets, Payroll, Tax-Filings, Bank-Statement-Analysis, Accounts-Receivable, Accounts-Payable, Inventory-Transactions, Ledger-Watch-Findings. Auto-aggregates module evidence; POST stores manual uploads (deduped). linkedRecordDocumentId examples: SALE-DOC-{invoiceNumber}, EXP-DOC-{expenseNumber}, ASSET-DOC-{assetCode}.",
           "item": [
             {
               "name": "List documents",
@@ -2604,27 +2659,81 @@
               ],
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
+                "description": "Returns { totalDocuments, documents[], categoryCounts }. Query: category=all|{hyphenated category}, search, dateFrom, dateTo. Each doc includes linkedRecord, linkedRecordName, linkedRecordDocumentId, uploadedBy, uploadedDate, linkedDocumentCreationDate, downloadPath when no URL."
+              }
+            },
+            {
+              "name": "List documents (Sales-Transactions)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents?category=Sales-Transactions&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
+                "description": "Filter by category Sales-Transactions (sales invoices + receipts)."
+              }
+            },
+            {
+              "name": "Create / Upload document",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"url\": \"https://example.com/document/invoice-31.pdf\",\n  \"category\": \"Sales-Transactions\",\n  \"linkedRecordDocumentId\": \"SALE-DOC-31\",\n  \"uploadedBy\": \"user-123\",\n  \"uploadedDate\": \"2026-05-26T10:30:00.000Z\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents",
+                "description": "Required: url, category, linkedRecordDocumentId. Optional: uploadedBy, uploadedDate, name, fileSizeKb. Backend generates id (doc-{uuid}) and documentId. Idempotent on same category+linkedRecordDocumentId+url."
+              }
+            },
+            {
+              "name": "Get records by category (Sales-Transactions)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/records/Sales-Transactions",
+                "description": "Linkable records: { records: [{ id, name, amount }] }. Use linkedRecordDocumentId from the related module when uploading."
+              }
+            },
+            {
+              "name": "Get records by category (Expense-Transactions)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/records/Expense-Transactions",
+                "description": "Expense records for linking evidence uploads."
+              }
+            },
+            {
+              "name": "Get records by category (Assets)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/records/Assets",
+                "description": "Asset records for linking evidence uploads."
               }
             },
             {
               "name": "Get document",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/{{vaultDocId}}"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/{{vaultDocId}}",
+                "description": "Composite auto ids (sale-{uuid}, expense-{uuid}, …) or manual doc-{uuid}."
               }
             },
             {
               "name": "Get download",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/{{vaultDocId}}/download"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/{{vaultDocId}}/download",
+                "description": "Returns { url } when stored; otherwise streams generated PDF for sale/payable/report when possible."
               }
             }
           ]
         },
         {
           "name": "Employees",
+          "description": "Employee CRUD + obligations. Tax relief on create/update: annualHouseRent (actual annual rent; PAYE uses MIN(20%×rent, ₦500k)), nhf (boolean contributor; amount from statutory engine), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses. GET returns taxRelief + computedReliefs.",
           "item": [
             {
               "name": "List employees",
@@ -2641,21 +2750,24 @@
               ],
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
+                "description": "Paginated employees. Includes nhf flag, paye/netPay using tax relief fields when present."
               }
             },
             {
               "name": "Get obligations",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/obligations"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/obligations",
+                "description": "Aggregated PAYE / pension / contractor WHT. PAYE uses per-employee reliefs (rent, NHIS, life, mortgage, medical)."
               }
             },
             {
               "name": "Get employee",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
+                "description": "Includes taxRelief { annualHouseRent, nhf, nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses, computedReliefs { houseRentRelief, … } }, salaryStructure, deductions (paye/nhf/net)."
               }
             },
             {
@@ -2670,10 +2782,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\"\n}"
+                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\",\n  \"annualHouseRent\": 2000000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 120000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"qualifyingMedicalExpenses\": 100000\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
-                "description": "Optional pfa (PFA name). employmentType: Full time | Part time | Contract."
+                "description": "Optional pfa; tax relief fields: annualHouseRent (actual rent — PAYE uses MIN(20%, 500k)), nhf (boolean contributor), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses (annual, non-negative). employmentType: Full time | Part time | Contract."
               }
             },
             {
@@ -2688,10 +2800,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"fullName\": \"Jane Smith\",\n  \"jobTitle\": \"Designer\",\n  \"employmentType\": \"Part time\",\n  \"basicSalary\": 60000,\n  \"housingAllowance\": 15000,\n  \"pfa\": \"ARM Pension Managers\"\n}"
+                  "raw": "{\n  \"fullName\": \"Jane Smith\",\n  \"jobTitle\": \"Designer\",\n  \"employmentType\": \"Part time\",\n  \"basicSalary\": 60000,\n  \"housingAllowance\": 15000,\n  \"pfa\": \"ARM Pension Managers\",\n  \"annualHouseRent\": 800000,\n  \"nhf\": true\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
-                "description": "Part time employee with optional pfa."
+                "description": "Part time employee with optional pfa and tax relief fields."
               }
             },
             {
@@ -2706,10 +2818,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"jobTitle\": \"Senior Developer\",\n  \"basicSalary\": 150000,\n  \"housingAllowance\": 35000,\n  \"pfa\": \"Stanbic IBTC Pension\"\n}"
+                  "raw": "{\n  \"jobTitle\": \"Senior Developer\",\n  \"basicSalary\": 150000,\n  \"housingAllowance\": 35000,\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"annualHouseRent\": 2500000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 120000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"qualifyingMedicalExpenses\": 100000\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
-                "description": "Partial update. Optional pfa (null to clear)."
+                "description": "Partial update. Optional pfa (null to clear). Tax relief fields optional: annualHouseRent, nhf, nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses."
               }
             },
             {
@@ -5251,7 +5363,7 @@
               }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-            "description": "List vault docs + categoryCounts. Query: search, category (all|invoices|receipts|vat_schedules|filings|wht_notes), dateFrom, dateTo."
+            "description": "List vault docs. Response: { totalDocuments, documents[], categoryCounts }. Query: search, category (all or hyphenated e.g. Sales-Transactions | Expense-Transactions | Tax-Filings | Assets | Payroll | …), dateFrom, dateTo. Legacy keys invoices/receipts/filings still accepted."
           }
         },
         {
@@ -5269,7 +5381,7 @@
               }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents/{{evidenceVaultDocId}}",
-            "description": "Composite id e.g. sale-{{saleId}}, expense-{{expenseId}}, payable-{{payableId}}, report-{{reportId}}."
+            "description": "Composite auto id e.g. sale-{{saleId}}, expense-{{expenseId}}, payable-{{payableId}}, report-{{reportId}}, asset-*, payroll-*, or manual doc-{uuid}."
           }
         },
         {
@@ -5287,11 +5399,11 @@
               }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents/{{evidenceVaultDocId}}/download",
-            "description": "JSON { url } if stored; else PDF stream when generatable."
+            "description": "Returns { url } when stored; otherwise streams generated PDF when possible."
           }
         }
       ],
-      "description": "Server-to-server AI API. Headers: X-Client-Id (user id), X-Api-Secret (AI_SERVICE_SECRET). GET/PATCH /records (sales|expenses|filings). Evidence vault: GET /evidence-vault/documents, /:id, /:id/download."
+      "description": "Server-to-server AI API. Headers: X-Client-Id (user id), X-Api-Secret (AI_SERVICE_SECRET). GET/PATCH /records (sales|expenses|filings). Evidence vault: GET /evidence-vault/documents (totalDocuments + hyphenated categories), /:id, /:id/download."
     }
   ]
 }

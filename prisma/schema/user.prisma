@@ -74,4 +74,5 @@ model User {
   assetSales             AssetSale[]
   assetDisposals         AssetDisposal[]
   assetHistories         AssetHistory[]
+  evidenceVaultDocuments EvidenceVaultDocument[]
 }

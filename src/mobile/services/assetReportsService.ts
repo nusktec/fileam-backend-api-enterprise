@@ -16,7 +16,8 @@ import {
   getPdfLayout,
   tableColumns,
 } from "../../services/template/pdfLayout";
-import { assetsService, computeStraightLineDepreciation } from "./assetsService";
+import { assetsService } from "./assetsService";
+import { computeAssetDepreciation } from "../../constants/assetDepreciation";
 
 const PRIMARY = "#008b8b";
 
@@ -282,11 +283,17 @@ export const assetReportsService = {
 
     const mapped = assets.map((a) => {
       const cost = d(a.purchaseCost);
-      const dep = computeStraightLineDepreciation({
+      const dep = computeAssetDepreciation({
         purchaseCost: cost,
         purchaseDate: a.purchaseDate,
+        depreciationMethod: a.depreciationMethod,
         usefulLife: a.usefulLife,
         residualValue: d(a.residualValue),
+        depreciationRate:
+          a.depreciationRate != null ? d(a.depreciationRate) : null,
+        totalEstimatedUnit:
+          a.totalEstimatedUnit != null ? d(a.totalEstimatedUnit) : null,
+        unitProduced: a.unitProduced != null ? d(a.unitProduced) : null,
         asOf: now,
       });
       return { a, cost, dep };

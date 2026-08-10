@@ -11,8 +11,8 @@ import { HttpReplyError } from "../../utils/httpReplyError";
 import { MEDIA_CONFIG } from "../../config/s3";
 import { uploadToS3 } from "../../services/mediaUploadService";
 import {
-  computeStraightLineDepreciation,
-} from "./assetsService";
+  computeAssetDepreciation,
+} from "../../constants/assetDepreciation";
 import { appendAssetHistory, syncAssetHistoryFromRecords } from "./assetHistoryHelper";
 
 const UUID_RE =
@@ -134,11 +134,17 @@ export const assetReviewsService = {
     ]);
 
     const cost = d(asset.purchaseCost);
-    const dep = computeStraightLineDepreciation({
+    const dep = computeAssetDepreciation({
       purchaseCost: cost,
       purchaseDate: asset.purchaseDate,
+      depreciationMethod: asset.depreciationMethod,
       usefulLife: asset.usefulLife,
       residualValue: d(asset.residualValue),
+      depreciationRate:
+        asset.depreciationRate != null ? d(asset.depreciationRate) : null,
+      totalEstimatedUnit:
+        asset.totalEstimatedUnit != null ? d(asset.totalEstimatedUnit) : null,
+      unitProduced: asset.unitProduced != null ? d(asset.unitProduced) : null,
     });
     const evidenceUrls =
       asset.evidenceUrls?.length > 0

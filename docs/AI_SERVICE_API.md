@@ -75,23 +75,23 @@ curl -X PATCH "http://localhost:5000/api/v1/ai/records" \
 
 ### GET /evidence-vault/documents
 
-List evidence vault documents for the client (same aggregation as mobile: sales invoices/receipts, expenses, tax payables, reports).
+List evidence vault documents for the client (same aggregation as mobile: sales, expenses, assets, payroll, tax filings, reports, plus manual uploads).
 
 **Query params:**
 
 | Param      | Required | Description |
 |------------|----------|-------------|
 | `search`   | No       | Free-text filter |
-| `category` | No       | `all` \| `invoices` \| `receipts` \| `vat_schedules` \| `filings` \| `wht_notes` |
+| `category` | No       | `all` or hyphenated category (`Sales-Transactions`, `Expense-Transactions`, `Assets`, `Payroll`, `Tax-Filings`, …) |
 | `dateFrom` | No       | Inclusive start date (ISO) |
 | `dateTo`   | No       | Inclusive end date (ISO) |
 
-**Response `data`:** `{ documents: VaultDocument[], categoryCounts: { ... } }`
+**Response `data`:** `{ totalDocuments, documents: VaultDocument[], categoryCounts: { ... } }`
 
-Document ids are composite, e.g. `sale-{uuid}`, `expense-{uuid}`, `payable-{uuid}`, `report-{uuid}`.
+Document ids are composite for auto entries (e.g. `sale-{uuid}`, `expense-{uuid}`) or `doc-{uuid}` for manual uploads.
 
 ```bash
-curl -X GET "http://localhost:5000/api/v1/ai/evidence-vault/documents?category=invoices" \
+curl -X GET "http://localhost:5000/api/v1/ai/evidence-vault/documents?category=Sales-Transactions" \
   -H "X-Client-Id: <userId>" \
   -H "X-Api-Secret: <AI_SERVICE_SECRET>"
 ```

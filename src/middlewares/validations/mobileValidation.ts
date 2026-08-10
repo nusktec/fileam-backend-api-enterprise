@@ -44,6 +44,12 @@ export const validateCreateEmployee = [
   check("tin").optional().trim().isString(),
   check("pensionRsa").optional().trim().isString(),
   check("pfa").optional().trim().isString(),
+  check("annualHouseRent").optional().isFloat({ min: 0 }),
+  check("nhf").optional().isBoolean().withMessage("nhf must be a boolean"),
+  check("nhisHealthInsurance").optional().isFloat({ min: 0 }),
+  check("lifeAssurancePremium").optional().isFloat({ min: 0 }),
+  check("mortgageInterest").optional().isFloat({ min: 0 }),
+  check("qualifyingMedicalExpenses").optional().isFloat({ min: 0 }),
   handleValidation,
 ];
 
@@ -66,5 +72,11 @@ export const validateUpdateEmployee = [
   check("tin").optional({ nullable: true }).trim().isString(),
   check("pensionRsa").optional({ nullable: true }).trim().isString(),
   check("pfa").optional({ nullable: true }).trim().isString(),
+  check("annualHouseRent").optional().isFloat({ min: 0 }),
+  check("nhf").optional().isBoolean().withMessage("nhf must be a boolean"),
+  check("nhisHealthInsurance").optional().isFloat({ min: 0 }),
+  check("lifeAssurancePremium").optional().isFloat({ min: 0 }),
+  check("mortgageInterest").optional().isFloat({ min: 0 }),
+  check("qualifyingMedicalExpenses").optional().isFloat({ min: 0 }),
   handleValidation,
 ];

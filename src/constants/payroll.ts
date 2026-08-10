@@ -6,6 +6,20 @@ export const PENSION_EMPLOYER_RATE = 10;
 export const NHF_RATE = 2.5;
 export const PAYE_DUE_DAY = 10;
 
+/** Cap on allowable annual house rent relief (NGN). */
+export const HOUSE_RENT_RELIEF_CAP = 500_000;
+/** Fraction of actual annual rent allowed as relief before the cap. */
+export const HOUSE_RENT_RELIEF_RATE = 0.2;
+
+/** Optional annual relief inputs stored on the employee record. */
+export type PayeReliefInputs = {
+  annualHouseRent?: number;
+  nhisHealthInsurance?: number;
+  lifeAssurancePremium?: number;
+  mortgageInterest?: number;
+  qualifyingMedicalExpenses?: number;
+};
+
 /** Annual taxable income brackets (NGN) and rate. Simplified PAYE. */
 const PAYE_BRACKETS: { limit: number; rate: number }[] = [
   { limit: 300_000, rate: 7 },
@@ -16,15 +30,69 @@ const PAYE_BRACKETS: { limit: number; rate: number }[] = [
   { limit: Infinity, rate: 24 },
 ];
 
-export function computePayeMonthly(grossAnnual: number): number {
+function nonNegative(n: number | undefined | null): number {
+  const v = Number(n ?? 0);
+  if (!Number.isFinite(v) || v < 0) return 0;
+  return v;
+}
+
+/**
+ * Rent Relief = MIN(20% × Annual House Rent, ₦500,000).
+ * `annualHouseRent` is actual rent paid — not the relief amount.
+ */
+export function computeHouseRentRelief(annualHouseRent: number): number {
+  const rent = nonNegative(annualHouseRent);
+  return Math.min(rent * HOUSE_RENT_RELIEF_RATE, HOUSE_RENT_RELIEF_CAP);
+}
+
+/** Sum of annual reliefs deducted before PAYE banding (excludes CRA + pension). */
+export function computeAnnualPayeReliefs(reliefs?: PayeReliefInputs): {
+  houseRentRelief: number;
+  nhisHealthInsurance: number;
+  lifeAssurancePremium: number;
+  mortgageInterest: number;
+  qualifyingMedicalExpenses: number;
+  totalAdditionalReliefs: number;
+} {
+  const houseRentRelief = computeHouseRentRelief(reliefs?.annualHouseRent ?? 0);
+  const nhisHealthInsurance = nonNegative(reliefs?.nhisHealthInsurance);
+  const lifeAssurancePremium = nonNegative(reliefs?.lifeAssurancePremium);
+  const mortgageInterest = nonNegative(reliefs?.mortgageInterest);
+  const qualifyingMedicalExpenses = nonNegative(
+    reliefs?.qualifyingMedicalExpenses,
+  );
+  return {
+    houseRentRelief,
+    nhisHealthInsurance,
+    lifeAssurancePremium,
+    mortgageInterest,
+    qualifyingMedicalExpenses,
+    totalAdditionalReliefs:
+      houseRentRelief +
+      nhisHealthInsurance +
+      lifeAssurancePremium +
+      mortgageInterest +
+      qualifyingMedicalExpenses,
+  };
+}
+
+/**
+ * Monthly PAYE from annual gross employment income.
+ * Applies CRA, employee pension deduction, and optional statutory reliefs.
+ */
+export function computePayeMonthly(
+  grossAnnual: number,
+  reliefs?: PayeReliefInputs,
+): number {
   const consolidatedRelief = Math.max(
     grossAnnual * PAYE_CONSOLIDATED_RELIEF_MIN_RATE,
     200_000,
   );
   const pensionDeduction = grossAnnual * (PENSION_EMPLOYEE_RATE / PERCENT);
+  const { totalAdditionalReliefs } = computeAnnualPayeReliefs(reliefs);
   const taxableAnnual = Math.max(
     0,
-    grossAnnual - pensionDeduction - consolidatedRelief,
+    grossAnnual - pensionDeduction - consolidatedRelief - totalAdditionalReliefs,
   );
   if (taxableAnnual <= 0) return 0;
   let tax = 0;

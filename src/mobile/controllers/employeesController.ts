@@ -90,6 +90,12 @@ export const createEmployee = async (
       tin,
       pensionRsa,
       pfa,
+      annualHouseRent,
+      nhf,
+      nhisHealthInsurance,
+      lifeAssurancePremium,
+      mortgageInterest,
+      qualifyingMedicalExpenses,
     } = req.body ?? {};
     const data = await employeesService.create(userId, {
       fullName,
@@ -108,6 +114,19 @@ export const createEmployee = async (
       tin,
       pensionRsa,
       pfa,
+      annualHouseRent:
+        annualHouseRent != null ? Number(annualHouseRent) : undefined,
+      nhf: nhf != null ? Boolean(nhf) : undefined,
+      nhisHealthInsurance:
+        nhisHealthInsurance != null ? Number(nhisHealthInsurance) : undefined,
+      lifeAssurancePremium:
+        lifeAssurancePremium != null ? Number(lifeAssurancePremium) : undefined,
+      mortgageInterest:
+        mortgageInterest != null ? Number(mortgageInterest) : undefined,
+      qualifyingMedicalExpenses:
+        qualifyingMedicalExpenses != null
+          ? Number(qualifyingMedicalExpenses)
+          : undefined,
     });
     res.status(HttpStatusCode.OK).json(outJson(true, "Employee added", data));
   } catch (error) {
@@ -153,6 +172,23 @@ export const updateEmployee = async (
       tin: body.tin,
       pensionRsa: body.pensionRsa,
       pfa: body.pfa,
+      annualHouseRent:
+        body.annualHouseRent != null ? Number(body.annualHouseRent) : undefined,
+      nhf: body.nhf != null ? Boolean(body.nhf) : undefined,
+      nhisHealthInsurance:
+        body.nhisHealthInsurance != null
+          ? Number(body.nhisHealthInsurance)
+          : undefined,
+      lifeAssurancePremium:
+        body.lifeAssurancePremium != null
+          ? Number(body.lifeAssurancePremium)
+          : undefined,
+      mortgageInterest:
+        body.mortgageInterest != null ? Number(body.mortgageInterest) : undefined,
+      qualifyingMedicalExpenses:
+        body.qualifyingMedicalExpenses != null
+          ? Number(body.qualifyingMedicalExpenses)
+          : undefined,
     });
     if (!data) {
       res

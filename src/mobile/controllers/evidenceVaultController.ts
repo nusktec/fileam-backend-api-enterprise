@@ -1,10 +1,20 @@
 import { Response } from "express";
+import { matchedData } from "express-validator";
 import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { evidenceVaultService } from "../services/evidenceVaultService";
 import { parseDateRangeQuery } from "../../utils/dateRangeQuery";
+import { HttpReplyError } from "../../utils/httpReplyError";
+
+function replyVaultError(res: Response, error: unknown): boolean {
+  if (error instanceof HttpReplyError) {
+    res.status(error.statusCode).json(outJson(false, error.message, null));
+    return true;
+  }
+  return false;
+}
 
 export const listDocuments = async (
   req: IRequest,
@@ -32,14 +42,69 @@ export const listDocuments = async (
     ]);
     res.status(HttpStatusCode.OK).json(
       outJson(true, "Documents retrieved", {
+        totalDocuments: documents.length,
         documents,
         categoryCounts: counts,
       }),
     );
   } catch (error) {
+    if (replyVaultError(res, error)) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to retrieve documents", null));
+  }
+};
+
+export const createDocument = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, { locations: ["body"] }) as {
+      url: string;
+      category: string;
+      linkedRecordDocumentId: string;
+      uploadedBy?: string;
+      uploadedDate?: string;
+      name?: string;
+      fileSizeKb?: number;
+    };
+    const doc = await evidenceVaultService.createDocument(userId, body);
+    res
+      .status(HttpStatusCode.CREATED)
+      .json(outJson(true, "Document created", doc));
+  } catch (error) {
+    if (replyVaultError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to create document", null));
+  }
+};
+
+export const listRecordsByCategory = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const category = Array.isArray(req.params.category)
+      ? req.params.category[0]
+      : req.params.category;
+    const records = await evidenceVaultService.listRecordsByCategory(
+      userId,
+      category!,
+    );
+    res.status(HttpStatusCode.OK).json(
+      outJson(true, "Records retrieved successfully", {
+        records,
+      }),
+    );
+  } catch (error) {
+    if (replyVaultError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to retrieve records", null));
   }
 };
 
@@ -61,6 +126,7 @@ export const getDocumentById = async (
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Document retrieved", doc));
   } catch (error) {
+    if (replyVaultError(res, error)) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to retrieve document", null));
@@ -109,6 +175,7 @@ export const getDocumentDownload = async (
       .status(HttpStatusCode.NOT_FOUND)
       .json(outJson(false, "Download not available for this document", null));
   } catch (error) {
+    if (replyVaultError(res, error)) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to get download", null));

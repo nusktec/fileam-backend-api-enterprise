@@ -15,6 +15,14 @@ model Employee {
   pensionRsa          String?  @map("pension_rsa")
   /** Pension Fund Administrator name (e.g. Stanbic IBTC Pension). */
   pfa                 String?
+  /** Actual annual house rent paid (relief = MIN(20% × rent, 500000) in PAYE engine). */
+  annualHouseRent     Decimal  @default(0) @map("annual_house_rent") @db.Decimal(14, 2)
+  /** Whether this employee is an NHF contributor (amount from statutory rules). */
+  nhf                 Boolean  @default(true)
+  nhisHealthInsurance Decimal  @default(0) @map("nhis_health_insurance") @db.Decimal(14, 2)
+  lifeAssurancePremium Decimal @default(0) @map("life_assurance_premium") @db.Decimal(14, 2)
+  mortgageInterest    Decimal  @default(0) @map("mortgage_interest") @db.Decimal(14, 2)
+  qualifyingMedicalExpenses Decimal @default(0) @map("qualifying_medical_expenses") @db.Decimal(14, 2)
   startDate           DateTime @map("start_date") @db.Date
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")

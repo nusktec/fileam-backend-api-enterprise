@@ -8,6 +8,7 @@ import {
   EVIDENCE_CATEGORIES,
   evidenceVaultService,
 } from "../mobile/services/evidenceVaultService";
+import { normalizeEvidenceVaultCategory } from "../constants/evidenceVault";
 
 async function resolveAiClient(
   req: IRequest,
@@ -40,12 +41,7 @@ export async function listEvidenceVaultDocuments(
 
   const search = req.query.search as string | undefined;
   const category = req.query.category as string | undefined;
-  if (
-    category &&
-    !EVIDENCE_CATEGORIES.includes(
-      category.toLowerCase() as (typeof EVIDENCE_CATEGORIES)[number],
-    )
-  ) {
+  if (category && normalizeEvidenceVaultCategory(category) === null) {
     res.status(HttpStatusCode.BAD_REQUEST).json(
       outJson(
         false,
@@ -76,6 +72,7 @@ export async function listEvidenceVaultDocuments(
     ]);
     res.status(HttpStatusCode.OK).json(
       outJson(true, "Evidence vault documents retrieved", {
+        totalDocuments: documents.length,
         documents,
         categoryCounts,
       }),

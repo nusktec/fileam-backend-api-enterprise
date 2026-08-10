@@ -17,16 +17,34 @@ export function isValidAssetType(value: string): value is AssetType {
 
 export const DEPRECIATION_METHODS = [
   "STRAIGHT_LINE",
-  "DECLINING_BALANCE",
-  "UNITS_OF_PRODUCTION",
+  "REDUCING_BALANCE",
+  "UNIT_OF_PRODUCTION",
 ] as const;
 
 export type DepreciationMethod = (typeof DEPRECIATION_METHODS)[number];
 
+/** Legacy client / DB values → canonical method. */
+const DEPRECIATION_METHOD_ALIASES: Record<string, DepreciationMethod> = {
+  DECLINING_BALANCE: "REDUCING_BALANCE",
+  UNITS_OF_PRODUCTION: "UNIT_OF_PRODUCTION",
+};
+
+export function normalizeDepreciationMethod(
+  value: string | null | undefined,
+): DepreciationMethod | null {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  if ((DEPRECIATION_METHODS as readonly string[]).includes(trimmed)) {
+    return trimmed as DepreciationMethod;
+  }
+  return DEPRECIATION_METHOD_ALIASES[trimmed] ?? null;
+}
+
 export function isValidDepreciationMethod(
   value: string,
 ): value is DepreciationMethod {
-  return (DEPRECIATION_METHODS as readonly string[]).includes(value);
+  return normalizeDepreciationMethod(value) != null;
 }
 
 export const TRANSFER_TYPES = [

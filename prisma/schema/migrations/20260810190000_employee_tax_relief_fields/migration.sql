@@ -1,0 +1,9 @@
+-- Employee tax & relief fields for PAYE engine
+
+ALTER TABLE "employees"
+  ADD COLUMN IF NOT EXISTS "annual_house_rent" DECIMAL(14,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "nhf" BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS "nhis_health_insurance" DECIMAL(14,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "life_assurance_premium" DECIMAL(14,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "mortgage_interest" DECIMAL(14,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "qualifying_medical_expenses" DECIMAL(14,2) NOT NULL DEFAULT 0;

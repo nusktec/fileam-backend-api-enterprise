@@ -10,9 +10,15 @@ import {
   TRANSFER_STATUSES,
   isAssetInReviewStatus,
   isAssetOnBooks,
+  normalizeDepreciationMethod,
   type AssetStatus,
+  type DepreciationMethod,
   type GainLossType,
 } from "../../constants/assets";
+import {
+  computeAssetDepreciation,
+  computeStraightLineDepreciation,
+} from "../../constants/assetDepreciation";
 import { PERCENT } from "../../constants/percentages";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import {
@@ -29,13 +35,14 @@ import {
 import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
 import { appendAssetHistory } from "./assetHistoryHelper";
 
+export { computeAssetDepreciation, computeStraightLineDepreciation };
+
 const ASSET_COUNTER_ID = "asset_number";
 const TRANSFER_COUNTER_ID = "asset_transfer_number";
 const SALE_COUNTER_ID = "asset_sale_number";
 const DISPOSAL_COUNTER_ID = "asset_disposal_number";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const DAYS_PER_YEAR = 365.25;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -306,55 +313,90 @@ async function nextCodedNumber(
   return `${prefix}-${String(counter.lastNumber).padStart(4, "0")}`;
 }
 
-type DepreciationInput = {
-  purchaseCost: number;
+type DepreciationAssetFields = {
+  purchaseCost: Decimal | number;
   purchaseDate: Date;
-  usefulLife: number | null | undefined;
-  residualValue: number | null | undefined;
-  asOf?: Date;
+  depreciationMethod?: string | null;
+  usefulLife?: number | null;
+  residualValue?: Decimal | number | null;
+  depreciationRate?: Decimal | number | null;
+  totalEstimatedUnit?: Decimal | number | null;
+  unitProduced?: Decimal | number | null;
 };
 
-export function computeStraightLineDepreciation(input: DepreciationInput) {
-  const cost = normalizeMoneyAmount(input.purchaseCost);
-  const residual = normalizeMoneyAmount(Math.max(0, input.residualValue ?? 0));
-  const usefulLife = input.usefulLife ?? null;
-  const asOf = input.asOf ?? new Date();
+function depFromAsset(asset: DepreciationAssetFields, asOf?: Date) {
+  return computeAssetDepreciation({
+    purchaseCost: d(asset.purchaseCost as Decimal),
+    purchaseDate: asset.purchaseDate,
+    depreciationMethod: asset.depreciationMethod,
+    usefulLife: asset.usefulLife,
+    residualValue: d(asset.residualValue as Decimal | null | undefined),
+    depreciationRate:
+      asset.depreciationRate != null ? d(asset.depreciationRate as Decimal) : null,
+    totalEstimatedUnit:
+      asset.totalEstimatedUnit != null
+        ? d(asset.totalEstimatedUnit as Decimal)
+        : null,
+    unitProduced:
+      asset.unitProduced != null ? d(asset.unitProduced as Decimal) : null,
+    asOf,
+  });
+}
 
-  if (!usefulLife || usefulLife <= 0 || cost <= residual) {
-    return {
-      annualDepreciation: 0,
-      accumulatedDepreciation: 0,
-      bookValue: cost,
-      remainingUsefulLife: usefulLife ?? null,
-      depreciationPercentage: 0,
-    };
+function assertAssetDepreciationInput(input: {
+  purchaseCost: number;
+  depreciationMethod?: string | null;
+  usefulLife?: number | null;
+  residualValue?: number | null;
+  depreciationRate?: number | null;
+  totalEstimatedUnit?: number | null;
+  unitProduced?: number | null;
+}): DepreciationMethod {
+  const method = normalizeDepreciationMethod(input.depreciationMethod);
+  if (!method) {
+    throw new HttpReplyError(
+      400,
+      "depreciationMethod must be STRAIGHT_LINE, REDUCING_BALANCE, or UNIT_OF_PRODUCTION",
+    );
   }
-
-  const depreciable = cost - residual;
-  const annualDepreciation = normalizeMoneyAmount(depreciable / usefulLife);
-  const yearsElapsed = Math.max(
-    0,
-    (asOf.getTime() - input.purchaseDate.getTime()) / (MS_PER_DAY * DAYS_PER_YEAR),
-  );
-  const rawAccumulated = annualDepreciation * yearsElapsed;
-  const accumulatedDepreciation = normalizeMoneyAmount(
-    Math.min(depreciable, Math.max(0, rawAccumulated)),
-  );
-  const bookValue = normalizeMoneyAmount(
-    Math.max(residual, cost - accumulatedDepreciation),
-  );
-  const remainingUsefulLife = normalizeMoneyAmount(
-    Math.max(0, usefulLife - yearsElapsed),
-  );
-  const depreciationPercentage = normalizeMoneyAmount(PERCENT / usefulLife);
-
-  return {
-    annualDepreciation,
-    accumulatedDepreciation,
-    bookValue,
-    remainingUsefulLife,
-    depreciationPercentage,
-  };
+  if (input.residualValue == null) {
+    throw new HttpReplyError(400, "residualValue is required");
+  }
+  if (input.residualValue < 0) {
+    throw new HttpReplyError(400, "residualValue must be non-negative");
+  }
+  if (input.residualValue >= input.purchaseCost) {
+    throw new HttpReplyError(400, "residualValue must be less than purchaseCost");
+  }
+  if (method === "STRAIGHT_LINE" || method === "REDUCING_BALANCE") {
+    if (input.usefulLife == null || input.usefulLife <= 0) {
+      throw new HttpReplyError(400, "usefulLife must be a positive integer (years)");
+    }
+  }
+  if (method === "REDUCING_BALANCE") {
+    if (input.depreciationRate == null || input.depreciationRate <= 0) {
+      throw new HttpReplyError(400, "depreciationRate must be greater than 0");
+    }
+    if (input.depreciationRate > 100) {
+      throw new HttpReplyError(400, "depreciationRate must be at most 100");
+    }
+  }
+  if (method === "UNIT_OF_PRODUCTION") {
+    if (input.totalEstimatedUnit == null || input.totalEstimatedUnit <= 0) {
+      throw new HttpReplyError(400, "totalEstimatedUnit must be greater than 0");
+    }
+    const produced = input.unitProduced ?? 0;
+    if (produced < 0) {
+      throw new HttpReplyError(400, "unitProduced must be non-negative");
+    }
+    if (produced > input.totalEstimatedUnit) {
+      throw new HttpReplyError(
+        400,
+        "unitProduced cannot exceed totalEstimatedUnit",
+      );
+    }
+  }
+  return method;
 }
 
 function deriveGainLoss(
@@ -428,7 +470,10 @@ function mapAssetRow(
     evidenceUrls?: string[];
     depreciationMethod: string | null;
     usefulLife: number | null;
+    depreciationRate?: Decimal | null;
     residualValue: Decimal | null;
+    totalEstimatedUnit?: Decimal | null;
+    unitProduced?: Decimal | null;
     serialNumber: string | null;
     assetLocation: string | null;
     additionalNote: string | null;
@@ -442,13 +487,7 @@ function mapAssetRow(
   asOf = new Date(),
 ) {
   const cost = d(asset.purchaseCost);
-  const dep = computeStraightLineDepreciation({
-    purchaseCost: cost,
-    purchaseDate: asset.purchaseDate,
-    usefulLife: asset.usefulLife,
-    residualValue: d(asset.residualValue),
-    asOf,
-  });
+  const dep = depFromAsset(asset, asOf);
   const evidenceUrls =
     asset.evidenceUrls && asset.evidenceUrls.length > 0
       ? asset.evidenceUrls
@@ -470,9 +509,16 @@ function mapAssetRow(
     evidenceUrls,
     depreciationMethod: asset.depreciationMethod,
     depreciationPercentage: dep.depreciationPercentage,
+    depreciationRate:
+      asset.depreciationRate != null ? d(asset.depreciationRate) : null,
     usefulLife: asset.usefulLife,
     remainingUsefulLife: dep.remainingUsefulLife,
     residualValue: asset.residualValue != null ? d(asset.residualValue) : null,
+    totalEstimatedUnit:
+      asset.totalEstimatedUnit != null ? d(asset.totalEstimatedUnit) : null,
+    unitProduced: asset.unitProduced != null ? d(asset.unitProduced) : null,
+    depreciationPerUnit: dep.depreciationPerUnit,
+    monthlyDepreciation: dep.monthlyDepreciation,
     accumulatedDepreciation: dep.accumulatedDepreciation,
     annualDepreciation: dep.annualDepreciation,
     serialNumber: asset.serialNumber,
@@ -489,30 +535,34 @@ function mapAssetRow(
 
 export const assetsService = {
   async summary(userId: string) {
-    const assets = await prisma.asset.findMany({
-      where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
-    });
-    let purchaseCost = 0;
-    let accumulatedDepreciation = 0;
-    let totalNetAssetValue = 0;
+    const [assets, pendingCustomerReviews, current] = await Promise.all([
+      prisma.asset.findMany({
+        where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
+      }),
+      prisma.asset.count({
+        where: {
+          userId,
+          assignToConsultant: true,
+          consultantReviewStatus: { in: [...CONSULTANT_REVIEW_OPEN_STATUSES] },
+        },
+      }),
+      buildCurrentAssetsSnapshot(userId),
+    ]);
+
     const now = new Date();
+    let netNonCurrentAssets = 0;
     for (const a of assets) {
-      const cost = d(a.purchaseCost);
-      const dep = computeStraightLineDepreciation({
-        purchaseCost: cost,
-        purchaseDate: a.purchaseDate,
-        usefulLife: a.usefulLife,
-        residualValue: d(a.residualValue),
-        asOf: now,
-      });
-      purchaseCost += cost;
-      accumulatedDepreciation += dep.accumulatedDepreciation;
-      totalNetAssetValue += dep.bookValue;
+      netNonCurrentAssets += depFromAsset(a, now).bookValue;
     }
+
+    const currentAssets = current.totalCurrentAssets;
+    const netNonCurrent = normalizeMoneyAmount(netNonCurrentAssets);
+
     return {
-      totalNetAssetValue: normalizeMoneyAmount(totalNetAssetValue),
-      purchaseCost: normalizeMoneyAmount(purchaseCost),
-      accumulatedDepreciation: normalizeMoneyAmount(accumulatedDepreciation),
+      totalAssetValue: normalizeMoneyAmount(currentAssets + netNonCurrent),
+      currentAssets,
+      netNonCurrentAssets: netNonCurrent,
+      pendingCustomerReviews,
     };
   },
 
@@ -525,9 +575,12 @@ export const assetsService = {
       purchaseCost: number;
       vendor?: string;
       evidenceUrl?: string;
-      depreciationMethod?: string;
+      depreciationMethod: string;
       usefulLife?: number;
-      residualValue?: number;
+      depreciationRate?: number;
+      residualValue: number;
+      totalEstimatedUnit?: number;
+      unitProduced?: number;
       serialNumber?: string;
       assetLocation?: string;
       additionalNote?: string;
@@ -535,9 +588,20 @@ export const assetsService = {
     },
   ) {
     assertMonetaryAmountInRange(data.purchaseCost, "purchaseCost");
-    if (data.residualValue != null) {
-      assertMonetaryAmountInRange(data.residualValue, "residualValue");
+    assertMonetaryAmountInRange(data.residualValue, "residualValue");
+    if (data.depreciationRate != null) {
+      assertMonetaryAmountInRange(data.depreciationRate, "depreciationRate");
     }
+
+    const method = assertAssetDepreciationInput({
+      purchaseCost: data.purchaseCost,
+      depreciationMethod: data.depreciationMethod,
+      usefulLife: data.usefulLife,
+      residualValue: data.residualValue,
+      depreciationRate: data.depreciationRate,
+      totalEstimatedUnit: data.totalEstimatedUnit,
+      unitProduced: data.unitProduced,
+    });
 
     const assignToConsultant = data.assignToConsultant === true;
     const assetCode = await nextCodedNumber(ASSET_COUNTER_ID, "AST");
@@ -555,10 +619,17 @@ export const assetsService = {
           vendor: data.vendor?.trim() || null,
           evidenceUrl,
           evidenceUrls: evidenceUrl ? [evidenceUrl] : [],
-          depreciationMethod: data.depreciationMethod?.trim() || null,
+          depreciationMethod: method,
           usefulLife: data.usefulLife ?? null,
-          residualValue:
-            data.residualValue != null ? dec(data.residualValue) : null,
+          depreciationRate:
+            data.depreciationRate != null ? dec(data.depreciationRate) : null,
+          residualValue: dec(data.residualValue),
+          totalEstimatedUnit:
+            data.totalEstimatedUnit != null
+              ? dec(data.totalEstimatedUnit)
+              : null,
+          unitProduced:
+            data.unitProduced != null ? dec(data.unitProduced) : null,
           serialNumber: data.serialNumber?.trim() || null,
           assetLocation: data.assetLocation?.trim() || null,
           additionalNote: data.additionalNote?.trim() || null,
@@ -580,6 +651,7 @@ export const assetsService = {
           assetName: row.assetName,
           vendor: row.vendor,
           purchaseCost: data.purchaseCost,
+          depreciationMethod: method,
           assignedEmployee: null,
         },
       });
@@ -600,7 +672,10 @@ export const assetsService = {
       evidenceUrl: string | null;
       depreciationMethod: string | null;
       usefulLife: number | null;
+      depreciationRate: number | null;
       residualValue: number | null;
+      totalEstimatedUnit: number | null;
+      unitProduced: number | null;
       serialNumber: string | null;
       assetLocation: string | null;
       additionalNote: string | null;
@@ -623,6 +698,54 @@ export const assetsService = {
     }
     if (data.residualValue != null) {
       assertMonetaryAmountInRange(data.residualValue, "residualValue");
+    }
+    if (data.depreciationRate != null) {
+      assertMonetaryAmountInRange(data.depreciationRate, "depreciationRate");
+    }
+
+    const nextPurchaseCost =
+      data.purchaseCost != null ? data.purchaseCost : d(existing.purchaseCost);
+    const nextMethodRaw =
+      data.depreciationMethod !== undefined
+        ? data.depreciationMethod
+        : existing.depreciationMethod;
+    const nextUsefulLife =
+      data.usefulLife !== undefined ? data.usefulLife : existing.usefulLife;
+    const nextResidual =
+      data.residualValue !== undefined
+        ? data.residualValue
+        : existing.residualValue != null
+          ? d(existing.residualValue)
+          : null;
+    const nextRate =
+      data.depreciationRate !== undefined
+        ? data.depreciationRate
+        : existing.depreciationRate != null
+          ? d(existing.depreciationRate)
+          : null;
+    const nextTotalUnits =
+      data.totalEstimatedUnit !== undefined
+        ? data.totalEstimatedUnit
+        : existing.totalEstimatedUnit != null
+          ? d(existing.totalEstimatedUnit)
+          : null;
+    const nextUnitProduced =
+      data.unitProduced !== undefined
+        ? data.unitProduced
+        : existing.unitProduced != null
+          ? d(existing.unitProduced)
+          : null;
+
+    if (nextMethodRaw != null && String(nextMethodRaw).trim() !== "") {
+      assertAssetDepreciationInput({
+        purchaseCost: nextPurchaseCost,
+        depreciationMethod: nextMethodRaw,
+        usefulLife: nextUsefulLife,
+        residualValue: nextResidual,
+        depreciationRate: nextRate,
+        totalEstimatedUnit: nextTotalUnits,
+        unitProduced: nextUnitProduced,
+      });
     }
 
     const updateData: Record<string, unknown> = {};
@@ -648,12 +771,26 @@ export const assetsService = {
       }
     }
     if (data.depreciationMethod !== undefined) {
-      updateData.depreciationMethod = data.depreciationMethod?.trim() || null;
+      updateData.depreciationMethod = data.depreciationMethod
+        ? normalizeDepreciationMethod(data.depreciationMethod)
+        : null;
     }
     if (data.usefulLife !== undefined) updateData.usefulLife = data.usefulLife;
+    if (data.depreciationRate !== undefined) {
+      updateData.depreciationRate =
+        data.depreciationRate != null ? dec(data.depreciationRate) : null;
+    }
     if (data.residualValue !== undefined) {
       updateData.residualValue =
         data.residualValue != null ? dec(data.residualValue) : null;
+    }
+    if (data.totalEstimatedUnit !== undefined) {
+      updateData.totalEstimatedUnit =
+        data.totalEstimatedUnit != null ? dec(data.totalEstimatedUnit) : null;
+    }
+    if (data.unitProduced !== undefined) {
+      updateData.unitProduced =
+        data.unitProduced != null ? dec(data.unitProduced) : null;
     }
     if (data.serialNumber !== undefined) {
       updateData.serialNumber = data.serialNumber?.trim() || null;
@@ -672,7 +809,6 @@ export const assetsService = {
             CONSULTANT_REVIEW_STATUS.AWAITING;
         }
         if (isAssetOnBooks(existing.status)) {
-          // Default review state until a consultant is assigned.
           updateData.status = ASSET_STATUS.AWAITING;
         }
       } else if (data.assignToConsultant === false) {
@@ -788,13 +924,7 @@ export const assetsService = {
       const cost = d(a.purchaseCost);
       totalCost += cost;
       costByType.set(a.assetType, (costByType.get(a.assetType) ?? 0) + cost);
-      const dep = computeStraightLineDepreciation({
-        purchaseCost: cost,
-        purchaseDate: a.purchaseDate,
-        usefulLife: a.usefulLife,
-        residualValue: d(a.residualValue),
-        asOf: now,
-      });
+      const dep = depFromAsset(a, now);
       nonCurrentNetBookValue += dep.bookValue;
       annualDepreciation += dep.annualDepreciation;
       if (a.assetType === "SOFTWARE_LICENSES") {
@@ -868,29 +998,32 @@ export const assetsService = {
     >();
     for (const t of ASSET_TYPES) byType.set(t, []);
 
-    let total = 0;
+    let purchaseCost = 0;
+    let accumulatedDepreciation = 0;
+    let netNonCurrentAssets = 0;
     for (const a of assets) {
-      const dep = computeStraightLineDepreciation({
-        purchaseCost: d(a.purchaseCost),
-        purchaseDate: a.purchaseDate,
-        usefulLife: a.usefulLife,
-        residualValue: d(a.residualValue),
-        asOf: now,
-      });
-      const amount = dep.bookValue;
-      total += amount;
+      const cost = d(a.purchaseCost);
+      const dep = depFromAsset(a, now);
+      purchaseCost += cost;
+      accumulatedDepreciation += dep.accumulatedDepreciation;
+      netNonCurrentAssets += dep.bookValue;
       const list = byType.get(a.assetType) ?? [];
       list.push({
         assetId: a.assetCode,
         name: a.assetName,
         assetLocation: a.assetLocation,
-        amount,
+        amount: dep.bookValue,
       });
       byType.set(a.assetType, list);
     }
 
+    const net = normalizeMoneyAmount(netNonCurrentAssets);
+
     return {
-      total: normalizeMoneyAmount(total),
+      total: net,
+      purchaseCost: normalizeMoneyAmount(purchaseCost),
+      accumulatedDepreciation: normalizeMoneyAmount(accumulatedDepreciation),
+      netNonCurrentAssets: net,
       categories: ASSET_TYPES.map((assetType) => {
         const rows = byType.get(assetType) ?? [];
         return {
@@ -909,13 +1042,7 @@ export const assetsService = {
     });
     const now = new Date();
     const rows = assets.map((a) => {
-      const dep = computeStraightLineDepreciation({
-        purchaseCost: d(a.purchaseCost),
-        purchaseDate: a.purchaseDate,
-        usefulLife: a.usefulLife,
-        residualValue: d(a.residualValue),
-        asOf: now,
-      });
+      const dep = depFromAsset(a, now);
       return {
         assetId: a.assetCode,
         name: a.assetName,
@@ -1253,13 +1380,7 @@ export const assetsService = {
     }
 
     const saleDate = parseDateOnly(data.saleDate);
-    const dep = computeStraightLineDepreciation({
-      purchaseCost: d(asset.purchaseCost),
-      purchaseDate: asset.purchaseDate,
-      usefulLife: asset.usefulLife,
-      residualValue: d(asset.residualValue),
-      asOf: saleDate,
-    });
+    const dep = depFromAsset(asset, saleDate);
     const bookValue = dep.bookValue;
     const { gainLossType, gainLossAmount } = deriveGainLoss(
       data.salePrice,
@@ -1384,13 +1505,7 @@ export const assetsService = {
     }
 
     const disposalDate = parseDateOnly(data.disposalDate);
-    const dep = computeStraightLineDepreciation({
-      purchaseCost: d(asset.purchaseCost),
-      purchaseDate: asset.purchaseDate,
-      usefulLife: asset.usefulLife,
-      residualValue: d(asset.residualValue),
-      asOf: disposalDate,
-    });
+    const dep = depFromAsset(asset, disposalDate);
 
     const disposalCode = await nextCodedNumber(DISPOSAL_COUNTER_ID, "DSP");
     const disposal = await prisma.$transaction(async (tx) => {

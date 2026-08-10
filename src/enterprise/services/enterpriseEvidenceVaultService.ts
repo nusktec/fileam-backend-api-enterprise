@@ -148,19 +148,24 @@ export const enterpriseEvidenceVaultService = {
     if (linkedUserId) {
       const { evidenceVaultService } = await import("../../mobile/services/evidenceVaultService");
       const catMap: Record<string, string> = {
-        Invoices: "invoices",
-        Receipts: "receipts",
-        "VAT Schedules": "vat_schedules",
-        "WHT Notes": "wht_notes",
-        "Legal Documents": "filings",
-        Reports: "filings",
-        Contracts: "filings",
-        "Tax Documents": "filings",
+        Invoices: "Sales-Transactions",
+        Receipts: "Expense-Transactions",
+        "VAT Schedules": "Tax-Filings",
+        "WHT Notes": "Tax-Filings",
+        "Legal Documents": "Tax-Filings",
+        Reports: "Tax-Filings",
+        Contracts: "Tax-Filings",
+        "Tax Documents": "Tax-Filings",
         Other: "all",
+        "Sales-Transactions": "Sales-Transactions",
+        "Expense-Transactions": "Expense-Transactions",
+        "Tax-Filings": "Tax-Filings",
+        Assets: "Assets",
+        Payroll: "Payroll",
       };
       const mobileCat =
         filters?.category && filters.category !== "all"
-          ? catMap[filters.category] ?? "all"
+          ? catMap[filters.category] ?? filters.category
           : undefined;
       const docs = await evidenceVaultService.listDocuments(linkedUserId, {
         search: filters?.search,

@@ -54,9 +54,12 @@ export const createAsset = async (
       purchaseCost: number;
       vendor?: string;
       evidenceUrl?: string;
-      depreciationMethod?: string;
+      depreciationMethod: string;
       usefulLife?: number;
-      residualValue?: number;
+      depreciationRate?: number;
+      residualValue: number;
+      totalEstimatedUnit?: number;
+      unitProduced?: number;
       serialNumber?: string;
       assetLocation?: string;
       additionalNote?: string;
@@ -67,8 +70,15 @@ export const createAsset = async (
       purchaseCost: Number(data.purchaseCost),
       usefulLife:
         data.usefulLife != null ? Number(data.usefulLife) : undefined,
-      residualValue:
-        data.residualValue != null ? Number(data.residualValue) : undefined,
+      depreciationRate:
+        data.depreciationRate != null ? Number(data.depreciationRate) : undefined,
+      residualValue: Number(data.residualValue),
+      totalEstimatedUnit:
+        data.totalEstimatedUnit != null
+          ? Number(data.totalEstimatedUnit)
+          : undefined,
+      unitProduced:
+        data.unitProduced != null ? Number(data.unitProduced) : undefined,
     });
     res
       .status(HttpStatusCode.CREATED)
@@ -120,11 +130,29 @@ export const updateAsset = async (
             ? null
             : Number(data.usefulLife)
           : undefined,
+      depreciationRate:
+        data.depreciationRate !== undefined
+          ? data.depreciationRate == null
+            ? null
+            : Number(data.depreciationRate)
+          : undefined,
       residualValue:
         data.residualValue !== undefined
           ? data.residualValue == null
             ? null
             : Number(data.residualValue)
+          : undefined,
+      totalEstimatedUnit:
+        data.totalEstimatedUnit !== undefined
+          ? data.totalEstimatedUnit == null
+            ? null
+            : Number(data.totalEstimatedUnit)
+          : undefined,
+      unitProduced:
+        data.unitProduced !== undefined
+          ? data.unitProduced == null
+            ? null
+            : Number(data.unitProduced)
           : undefined,
       serialNumber:
         data.serialNumber !== undefined

@@ -13,7 +13,13 @@ model Asset {
   evidenceUrls           String[] @default([]) @map("evidence_urls")
   depreciationMethod     String?  @map("depreciation_method")
   usefulLife             Int?     @map("useful_life")
+  /** Percent rate for REDUCING_BALANCE (e.g. 20 = 20%). */
+  depreciationRate       Decimal? @map("depreciation_rate") @db.Decimal(5, 2)
   residualValue          Decimal? @map("residual_value") @db.Decimal(14, 2)
+  /** Estimated lifetime units for UNIT_OF_PRODUCTION. */
+  totalEstimatedUnit     Decimal? @map("total_estimated_unit") @db.Decimal(14, 2)
+  /** Cumulative units produced to date for UNIT_OF_PRODUCTION. */
+  unitProduced           Decimal? @map("unit_produced") @db.Decimal(14, 2)
   serialNumber           String?  @map("serial_number")
   assetLocation          String?  @map("asset_location")
   additionalNote         String?  @map("additional_note")

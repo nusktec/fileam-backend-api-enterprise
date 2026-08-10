@@ -1,0 +1,32 @@
+/** Manually uploaded (and optionally mirrored) Evidence Vault documents for mobile users. */
+model EvidenceVaultDocument {
+  id                         String   @id @default(uuid())
+  userId                     String   @map("user_id")
+  documentId                 String   @map("document_id")
+  name                       String
+  category                   String
+  source                     String
+  date                       DateTime @db.Date
+  fileSizeKb                 Int?     @map("file_size_kb")
+  documentUrl                String?  @map("document_url")
+  evidenceVaultId            String?  @map("evidence_vault_id")
+  linkedRecord               String?  @map("linked_record")
+  linkedRecordName           String?  @map("linked_record_name")
+  linkedRecordDocumentId     String?  @map("linked_record_document_id")
+  uploadedBy                 String?  @map("uploaded_by")
+  uploadedDate               DateTime @map("uploaded_date")
+  linkedDocumentCreationDate DateTime? @map("linked_document_creation_date")
+  /** Dedup key: category + linkedRecordDocumentId + normalized url (or kind). */
+  dedupeKey                  String   @map("dedupe_key")
+  /** MANUAL | AUTO */
+  origin                     String   @default("MANUAL")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, category])
+  @@index([userId, linkedRecordDocumentId])
+  @@map("evidence_vault_documents")
+}

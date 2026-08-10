@@ -1,11 +1,13 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import {
+  computeAnnualPayeReliefs,
   computePayeMonthly,
   computePensionEmployee,
   computePensionEmployer,
   computeNhf,
   PAYE_DUE_DAY,
+  type PayeReliefInputs,
 } from "../../constants/payroll";
 import { isContractorEmployment } from "../../constants/employmentTypes";
 import { PERCENT, WHT_RATE_SERVICES_PERCENT } from "../../constants/percentages";
@@ -17,13 +19,22 @@ function decimalToNumber(d: Decimal | null | undefined): number {
   return Number(d);
 }
 
-function grossMonthly(e: {
+type EmployeeCompensation = {
   basicSalary: Decimal;
   housingAllowance: Decimal;
   transportAllowance: Decimal;
   mealAllowance: Decimal;
   otherAllowances: Decimal;
-}): number {
+  employmentType: string;
+  annualHouseRent?: Decimal;
+  nhf?: boolean;
+  nhisHealthInsurance?: Decimal;
+  lifeAssurancePremium?: Decimal;
+  mortgageInterest?: Decimal;
+  qualifyingMedicalExpenses?: Decimal;
+};
+
+function grossMonthly(e: EmployeeCompensation): number {
   return (
     decimalToNumber(e.basicSalary) +
     decimalToNumber(e.housingAllowance) +
@@ -31,6 +42,24 @@ function grossMonthly(e: {
     decimalToNumber(e.mealAllowance) +
     decimalToNumber(e.otherAllowances)
   );
+}
+
+export function payeReliefsFromEmployee(e: {
+  annualHouseRent?: Decimal | number | null;
+  nhisHealthInsurance?: Decimal | number | null;
+  lifeAssurancePremium?: Decimal | number | null;
+  mortgageInterest?: Decimal | number | null;
+  qualifyingMedicalExpenses?: Decimal | number | null;
+}): PayeReliefInputs {
+  return {
+    annualHouseRent: decimalToNumber(e.annualHouseRent as Decimal),
+    nhisHealthInsurance: decimalToNumber(e.nhisHealthInsurance as Decimal),
+    lifeAssurancePremium: decimalToNumber(e.lifeAssurancePremium as Decimal),
+    mortgageInterest: decimalToNumber(e.mortgageInterest as Decimal),
+    qualifyingMedicalExpenses: decimalToNumber(
+      e.qualifyingMedicalExpenses as Decimal,
+    ),
+  };
 }
 
 /** Monthly gross pay (basic + allowances) — used in analytics expense totals / breakdown. */
@@ -41,30 +70,29 @@ export function computeEmployeeMonthlyGrossPay(e: {
   mealAllowance: Decimal;
   otherAllowances: Decimal;
 }): number {
-  return grossMonthly(e);
+  return grossMonthly(e as EmployeeCompensation);
+}
+
+function employeeNhfContributor(e: { nhf?: boolean | null }): boolean {
+  return e.nhf !== false;
 }
 
 /** Monthly net pay (gross − employee deductions / estimated contractor WHT). */
 export function computeEmployeeMonthlyNetPay(
-  e: {
-    basicSalary: Decimal;
-    housingAllowance: Decimal;
-    transportAllowance: Decimal;
-    mealAllowance: Decimal;
-    otherAllowances: Decimal;
-    employmentType: string;
-  },
+  e: EmployeeCompensation,
   opts?: { nhfApplicable?: boolean },
 ): number {
   const gross = computeEmployeeMonthlyGrossPay(e);
   const contractor = isContractorEmployment(e.employmentType);
   const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
-  const nhfApplicable = opts?.nhfApplicable !== false;
+  const businessNhf = opts?.nhfApplicable !== false;
   const nhf =
-    contractor || !nhfApplicable
+    contractor || !businessNhf || !employeeNhfContributor(e)
       ? 0
       : computeNhf(decimalToNumber(e.basicSalary));
-  const paye = contractor ? 0 : computePayeMonthly(gross * 12);
+  const paye = contractor
+    ? 0
+    : computePayeMonthly(gross * 12, payeReliefsFromEmployee(e));
   const whtEstimated = contractor
     ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
     : 0;
@@ -77,6 +105,34 @@ async function isNhfApplicableForUser(userId: string): Promise<boolean> {
     select: { isNhfApplicable: true },
   });
   return settings?.isNhfApplicable !== false;
+}
+
+function taxReliefPayload(e: {
+  annualHouseRent: Decimal;
+  nhf: boolean;
+  nhisHealthInsurance: Decimal;
+  lifeAssurancePremium: Decimal;
+  mortgageInterest: Decimal;
+  qualifyingMedicalExpenses: Decimal;
+}) {
+  const inputs = payeReliefsFromEmployee(e);
+  const computed = computeAnnualPayeReliefs(inputs);
+  return {
+    annualHouseRent: inputs.annualHouseRent ?? 0,
+    nhf: e.nhf,
+    nhisHealthInsurance: inputs.nhisHealthInsurance ?? 0,
+    lifeAssurancePremium: inputs.lifeAssurancePremium ?? 0,
+    mortgageInterest: inputs.mortgageInterest ?? 0,
+    qualifyingMedicalExpenses: inputs.qualifyingMedicalExpenses ?? 0,
+    computedReliefs: {
+      houseRentRelief: computed.houseRentRelief,
+      nhisHealthInsurance: computed.nhisHealthInsurance,
+      lifeAssurancePremium: computed.lifeAssurancePremium,
+      mortgageInterest: computed.mortgageInterest,
+      qualifyingMedicalExpenses: computed.qualifyingMedicalExpenses,
+      totalAdditionalReliefs: computed.totalAdditionalReliefs,
+    },
+  };
 }
 
 export const employeesService = {
@@ -119,7 +175,9 @@ export const employeesService = {
       const gross = grossMonthly(e);
       monthlyPayroll += gross;
       const contractor = isContractorEmployment(e.employmentType);
-      const paye = contractor ? 0 : computePayeMonthly(gross * 12);
+      const paye = contractor
+        ? 0
+        : computePayeMonthly(gross * 12, payeReliefsFromEmployee(e));
       const whtEstimated = contractor
         ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
         : 0;
@@ -130,6 +188,7 @@ export const employeesService = {
         employmentType: e.employmentType,
         employeeId: e.employeeId,
         pfa: e.pfa ?? null,
+        nhf: e.nhf,
         grossPay: gross,
         paye,
         estimatedWhtMonthly: contractor ? whtEstimated : undefined,
@@ -159,7 +218,7 @@ export const employeesService = {
         totalContractorWht += (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT;
         continue;
       }
-      totalPaye += computePayeMonthly(gross * 12);
+      totalPaye += computePayeMonthly(gross * 12, payeReliefsFromEmployee(e));
       totalPension +=
         computePensionEmployee(gross) + computePensionEmployer(gross);
     }
@@ -197,8 +256,12 @@ export const employeesService = {
     const nhfApplicable = await isNhfApplicableForUser(userId);
     const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
     const nhf =
-      contractor || !nhfApplicable ? 0 : computeNhf(basic);
-    const paye = contractor ? 0 : computePayeMonthly(gross * 12);
+      contractor || !nhfApplicable || !employeeNhfContributor(e)
+        ? 0
+        : computeNhf(basic);
+    const paye = contractor
+      ? 0
+      : computePayeMonthly(gross * 12, payeReliefsFromEmployee(e));
     const whtEstimated = contractor
       ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
       : 0;
@@ -216,6 +279,7 @@ export const employeesService = {
       tin: e.tin,
       pensionRsa: e.pensionRsa,
       pfa: e.pfa ?? null,
+      taxRelief: taxReliefPayload(e),
       salaryStructure: {
         basicSalary: basic,
         housingAllowance: decimalToNumber(e.housingAllowance),
@@ -254,6 +318,12 @@ export const employeesService = {
       tin?: string;
       pensionRsa?: string;
       pfa?: string;
+      annualHouseRent?: number;
+      nhf?: boolean;
+      nhisHealthInsurance?: number;
+      lifeAssurancePremium?: number;
+      mortgageInterest?: number;
+      qualifyingMedicalExpenses?: number;
     },
   ) {
     const counter = await prisma.counter.upsert({
@@ -279,6 +349,14 @@ export const employeesService = {
         tin: data.tin ?? null,
         pensionRsa: data.pensionRsa ?? null,
         pfa: data.pfa?.trim() || null,
+        annualHouseRent: new Decimal(data.annualHouseRent ?? 0),
+        nhf: data.nhf !== false,
+        nhisHealthInsurance: new Decimal(data.nhisHealthInsurance ?? 0),
+        lifeAssurancePremium: new Decimal(data.lifeAssurancePremium ?? 0),
+        mortgageInterest: new Decimal(data.mortgageInterest ?? 0),
+        qualifyingMedicalExpenses: new Decimal(
+          data.qualifyingMedicalExpenses ?? 0,
+        ),
         startDate,
       },
     });
@@ -302,6 +380,12 @@ export const employeesService = {
       tin: string | null;
       pensionRsa: string | null;
       pfa: string | null;
+      annualHouseRent: number;
+      nhf: boolean;
+      nhisHealthInsurance: number;
+      lifeAssurancePremium: number;
+      mortgageInterest: number;
+      qualifyingMedicalExpenses: number;
     }>,
   ) {
     const existing = await prisma.employee.findFirst({
@@ -334,6 +418,24 @@ export const employeesService = {
     }
     if (data.pfa !== undefined) {
       updateData.pfa = data.pfa?.trim() || null;
+    }
+    if (data.annualHouseRent != null) {
+      updateData.annualHouseRent = new Decimal(data.annualHouseRent);
+    }
+    if (data.nhf !== undefined) updateData.nhf = Boolean(data.nhf);
+    if (data.nhisHealthInsurance != null) {
+      updateData.nhisHealthInsurance = new Decimal(data.nhisHealthInsurance);
+    }
+    if (data.lifeAssurancePremium != null) {
+      updateData.lifeAssurancePremium = new Decimal(data.lifeAssurancePremium);
+    }
+    if (data.mortgageInterest != null) {
+      updateData.mortgageInterest = new Decimal(data.mortgageInterest);
+    }
+    if (data.qualifyingMedicalExpenses != null) {
+      updateData.qualifyingMedicalExpenses = new Decimal(
+        data.qualifyingMedicalExpenses,
+      );
     }
 
     if (Object.keys(updateData).length === 0) {

@@ -164,14 +164,23 @@ function computePeriodTotals(
 
     const pensionEmp = computePensionEmployee(gross);
     const pensionEr = computePensionEmployer(gross);
-    const paye = computePayeMonthly(gross * 12);
+    const paye = computePayeMonthly(gross * 12, {
+      annualHouseRent: decimalToNumber(e.annualHouseRent),
+      nhisHealthInsurance: decimalToNumber(e.nhisHealthInsurance),
+      lifeAssurancePremium: decimalToNumber(e.lifeAssurancePremium),
+      mortgageInterest: decimalToNumber(e.mortgageInterest),
+      qualifyingMedicalExpenses: decimalToNumber(e.qualifyingMedicalExpenses),
+    });
+    const employeeNhf = e.nhf !== false;
     const nhf =
-      nhfApplicable ? computeNhf(decimalToNumber(e.basicSalary)) : 0;
+      nhfApplicable && employeeNhf
+        ? computeNhf(decimalToNumber(e.basicSalary))
+        : 0;
 
     totalPaye += paye;
     totalNhf += nhf;
     totalPension += pensionEmp + pensionEr;
-    if (nhfApplicable) applicableNhfCount += 1;
+    if (nhfApplicable && employeeNhf) applicableNhfCount += 1;
     if (e.pfa?.trim()) pfas.add(e.pfa.trim());
 
     payeLines.push({
@@ -181,7 +190,7 @@ function computePeriodTotals(
       gross: round2(gross),
       taxable: taxableMonthly(gross, paye, pensionEmp),
     });
-    if (nhfApplicable) {
+    if (nhfApplicable && employeeNhf) {
       nhfLines.push({
         name: e.fullName,
         id: e.employeeId,
