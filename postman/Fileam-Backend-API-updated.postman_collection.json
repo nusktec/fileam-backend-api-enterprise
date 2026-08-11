@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position (assets + liabilities + equity + financialHealth). Liability module: GET /mobile/liability/summary and /dashboard (AP ageing, tax by type, payroll payables). Liability totals are shared with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is { name, email, businessName }. GET /records/{category} for linkable records.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position (assets + liabilities + equity + financialHealth). Liability module: GET /mobile/liability/summary and /dashboard (AP ageing, tax by type, payroll payables). Liability totals are shared with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is { name, email, businessName }. GET /records/{category} for linkable records.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, \u20a6500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -380,7 +380,7 @@
         },
         {
           "name": "Lookups",
-          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help — use whichever folder fits your flow.",
+          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help \u2014 use whichever folder fits your flow.",
           "item": [
             {
               "name": "Tax filing constants *",
@@ -398,7 +398,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/constants",
-                "description": "taxTypes, capabilities, paymentStatuses, filingStatuses, reportTypes, period bounds. Duplicate of Filings * → Tax filing constants *."
+                "description": "taxTypes, capabilities, paymentStatuses, filingStatuses, reportTypes, period bounds. Duplicate of Filings * \u2192 Tax filing constants *."
               }
             },
             {
@@ -406,7 +406,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/contacts-and-types",
-                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, …). Duplicate of User * → Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
+                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, \u2026). Duplicate of User * \u2192 Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
               }
             },
             {
@@ -420,7 +420,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/profile",
-                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly once set (PUT …/user/profile after onboarding). Duplicate of Onboarding * → Get profile *."
+                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly once set (PUT \u2026/user/profile after onboarding). Duplicate of Onboarding * \u2192 Get profile *."
               }
             },
             {
@@ -436,7 +436,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/faqs",
-                "description": "categories + faqs. Optional query category. Duplicate of Help → Get FAQs."
+                "description": "categories + faqs. Optional query category. Duplicate of Help \u2192 Get FAQs."
               }
             }
           ]
@@ -467,7 +467,7 @@
                   "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"address\":\"123 Main St\",\"organizationName\":\"My Company\",\"taxPersona\":\"PAYEE\",\"employmentGrossSalaryMonthly\":450000}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile",
-                "description": "taxPersona: SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER. solopreneurRegistration: NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY (meaningful when persona is SOLOPRENEUR; omit or null otherwise). employmentGrossSalaryMonthly: optional non-negative number or null (clears); drives paye block on GET …/tax-computation and PAYE rows on tax-payables sync when PAYE applies."
+                "description": "taxPersona: SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER. solopreneurRegistration: NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY (meaningful when persona is SOLOPRENEUR; omit or null otherwise). employmentGrossSalaryMonthly: optional non-negative number or null (clears); drives paye block on GET \u2026/tax-computation and PAYE rows on tax-payables sync when PAYE applies."
               }
             },
             {
@@ -569,7 +569,7 @@
                   "raw": "{\"authorized\":true}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/filing-authorization",
-                "description": "Toggle authorized. Email sent to consultant when changing false→true."
+                "description": "Toggle authorized. Email sent to consultant when changing false\u2192true."
               }
             },
             {
@@ -1092,7 +1092,7 @@
               }
             },
             {
-              "name": "Create sale (Cash — PAID) **",
+              "name": "Create sale (Cash \u2014 PAID) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1102,7 +1102,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Cash → invoiceAmountPaid.total = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
+                "description": "Cash \u2192 invoiceAmountPaid.total = totalAmount \u2192 status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total \u2212 Base (e.g. 3000 \u2192 ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"Walk-in\"\n}"
@@ -1122,7 +1122,7 @@
               ]
             },
             {
-              "name": "Create sale (Card — IN_PROGRESS) **",
+              "name": "Create sale (Card \u2014 IN_PROGRESS) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1152,7 +1152,7 @@
               ]
             },
             {
-              "name": "Create sale (Transfer — IN_PROGRESS) **",
+              "name": "Create sale (Transfer \u2014 IN_PROGRESS) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1182,7 +1182,7 @@
               ]
             },
             {
-              "name": "Create sale (Invoice — Pending) **",
+              "name": "Create sale (Invoice \u2014 Pending) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1240,7 +1240,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/payment-status",
-                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid.total = totalAmount and paymentConfirmedAt). Body {\"status\":\"PAID\"}. Rejects Invoice sales, whose status is calculated — use PATCH /sales/:id with invoiceAmountPaid, or POST /sales/:id/mark-paid.",
+                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid.total = totalAmount and paymentConfirmedAt). Body {\"status\":\"PAID\"}. Rejects Invoice sales, whose status is calculated \u2014 use PATCH /sales/:id with invoiceAmountPaid, or POST /sales/:id/mark-paid.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"status\": \"PAID\"}"
@@ -1253,7 +1253,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/mark-paid",
-                "description": "Invoice only: sets invoiceAmountPaid.total = totalAmount → Paid. Sets paymentConfirmedAt."
+                "description": "Invoice only: sets invoiceAmountPaid.total = totalAmount \u2192 Paid. Sets paymentConfirmedAt."
               }
             },
             {
@@ -1354,7 +1354,7 @@
               }
             },
             {
-              "name": "Create expense (Transfer — IN_PROGRESS) *",
+              "name": "Create expense (Transfer \u2014 IN_PROGRESS) *",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1372,7 +1372,7 @@
               }
             },
             {
-              "name": "Create expense (Invoice — Pending) *",
+              "name": "Create expense (Invoice \u2014 Pending) *",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1559,7 +1559,7 @@
                   "raw": "{\n  \"lines\": [\n    {\n      \"inventoryItemId\": \"{{inventoryItemId}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"customerName\": \"Walk-in\",\n  \"customerId\": \"cust-walk-1\",\n  \"createSalesInvoice\": true,\n  \"paymentType\": \"Invoice\",\n  \"saleDate\": \"2026-07-24\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": false,\n  \"saleCategory\": \"Product Sales\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Creates linked Sale with invoiceDueDate. VAT-inclusive uses Base = Total/1.075. paymentType Invoice → unpaid until paid amount updated."
+                "description": "Creates linked Sale with invoiceDueDate. VAT-inclusive uses Base = Total/1.075. paymentType Invoice \u2192 unpaid until paid amount updated."
               }
             },
             {
@@ -1577,7 +1577,7 @@
                   "raw": "{\"lines\":[{\"inventoryItemId\":\"{{inventoryItemId}}\",\"quantity\":1}],\"customerName\":\"Walk-in\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Omits createSalesInvoice — only inventory_sale + movements; no row in mobile /sales."
+                "description": "Omits createSalesInvoice \u2014 only inventory_sale + movements; no row in mobile /sales."
               }
             },
             {
@@ -1707,7 +1707,7 @@
                   "raw": "{\n  \"direction\": \"in\",\n  \"quantity\": 2,\n  \"note\": \"Found in recount\",\n  \"createSalesInvoice\": true,\n  \"saleDate\": \"2026-03-29\",\n  \"saleCategory\": \"Other\",\n  \"invoiceDueDate\": \"2026-08-15\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "direction in + createSalesInvoice: true — books a mobile Sale at purchase cost × qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome. Optional invoiceDueDate on linked sale."
+                "description": "direction in + createSalesInvoice: true \u2014 books a mobile Sale at purchase cost \u00d7 qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome. Optional invoiceDueDate on linked sale."
               }
             },
             {
@@ -1736,7 +1736,7 @@
                   "raw": "{\"direction\":\"out\",\"quantity\":1,\"note\":\"Shrinkage / damaged\",\"createSalesInvoice\":true,\"saleDate\":\"2026-03-29\",\"expenseCategory\":\"Other\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "direction out + createSalesInvoice: true — books a mobile Expense at purchase cost × qty (supplier from item if set). Response.data.linkedExpense. expenseCategory: any string (max 255); defaults to Other if omitted when booking."
+                "description": "direction out + createSalesInvoice: true \u2014 books a mobile Expense at purchase cost \u00d7 qty (supplier from item if set). Response.data.linkedExpense. expenseCategory: any string (max 255); defaults to Other if omitted when booking."
               }
             },
             {
@@ -1754,7 +1754,7 @@
                   "raw": "{\"direction\":\"in\",\"quantity\":1,\"note\":\"Silent correction\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "No createSalesInvoice — inventory movement only."
+                "description": "No createSalesInvoice \u2014 inventory movement only."
               }
             }
           ],
@@ -1788,7 +1788,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/current-assets",
-                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales − expenses; account number from Business.bankAccount when set), inventory (qty×cost), accountsReceivable { total, current { totalAmount, invoiceCount }, overdue { totalAmount, invoiceCount }, items[] with status CURRENT|OVERDUE and daysOverdue on overdue rows; amount = outstanding }. totalCurrentAssets = sum of the four."
+                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales \u2212 expenses; account number from Business.bankAccount when set), inventory (qty\u00d7cost), accountsReceivable { total, current { totalAmount, invoiceCount }, overdue { totalAmount, invoiceCount }, items[] with status CURRENT|OVERDUE and daysOverdue on overdue rows; amount = outstanding }. totalCurrentAssets = sum of the four."
               }
             },
             {
@@ -1797,7 +1797,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/non-current-assets",
-                "description": "purchaseCost, accumulatedDepreciation, netNonCurrentAssets (= purchaseCost − accumulatedDepreciation). total = netNonCurrentAssets. All 8 assetTypes always returned (even total 0); nested assets use NBV."
+                "description": "purchaseCost, accumulatedDepreciation, netNonCurrentAssets (= purchaseCost \u2212 accumulatedDepreciation). total = netNonCurrentAssets. All 8 assetTypes always returned (even total 0); nested assets use NBV."
               }
             },
             {
@@ -1872,7 +1872,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets",
-                "description": "UNIT_OF_PRODUCTION: Per unit = (Cost - Residual) / totalEstimatedUnit; Period = per unit × unitProduced. Cumulative capped at Cost - Residual.",
+                "description": "UNIT_OF_PRODUCTION: Per unit = (Cost - Residual) / totalEstimatedUnit; Period = per unit \u00d7 unitProduced. Cumulative capped at Cost - Residual.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assetType\": \"MACHINERY\",\n  \"assetName\": \"Production press\",\n  \"purchaseDate\": \"2026-01-01\",\n  \"purchaseCost\": 5000000,\n  \"depreciationMethod\": \"UNIT_OF_PRODUCTION\",\n  \"residualValue\": 500000,\n  \"totalEstimatedUnit\": 90000,\n  \"unitProduced\": 3500,\n  \"assignToConsultant\": false\n}"
@@ -2010,7 +2010,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/transfers/{{assetTransferId}}/approve",
-                "description": "PENDING → COMPLETED; updates asset.assetLocation to toLocation."
+                "description": "PENDING \u2192 COMPLETED; updates asset.assetLocation to toLocation."
               }
             },
             {
@@ -2019,7 +2019,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/transfers/{{assetTransferId}}/reject",
-                "description": "PENDING → CANCELLED."
+                "description": "PENDING \u2192 CANCELLED."
               }
             },
             {
@@ -2229,7 +2229,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation?period=2026-02",
-                "description": "taxpayerContext respects saved taxPersona (when set). taxPersonaGuidance: taxes[] flip-card lines (label, subtitle, applicable). Blocks: vat, wht, cit, pit, paye (paye uses profile employmentGrossSalaryMonthly annualised when PAYE applicable — summaryMonthlyEstimate, summaryAnnualEstimate, employmentGrossSalaryMonthlyCaptured, methodology)."
+                "description": "taxpayerContext respects saved taxPersona (when set). taxPersonaGuidance: taxes[] flip-card lines (label, subtitle, applicable). Blocks: vat, wht, cit, pit, paye (paye uses profile employmentGrossSalaryMonthly annualised when PAYE applicable \u2014 summaryMonthlyEstimate, summaryAnnualEstimate, employmentGrossSalaryMonthlyCaptured, methodology)."
               }
             }
           ]
@@ -2621,7 +2621,7 @@
         },
         {
           "name": "Liability **",
-          "description": "Liability reporting over existing books (do not duplicate data).\n\nRoutes (spelling: liability):\n• GET /mobile/liability/summary\n• GET /mobile/liability/dashboard\n\nSources: Accounts Payable ← unpaid expenses; Tax Payable ← unpaid tax_payables (PAYE/VAT/WHT/CIT/PIT); Salaries Payable ← unpaid Salary expenses; Pension/NHF ← pending payroll_obligations. Interest Payable, Short-Term Loan, and all non-current loan categories are stubbed at 0 until a loan register exists.\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID. Percentages use class totals as denominator; divide-by-zero → 0.",
+          "description": "Liability reporting over existing books (do not duplicate data).\n\nRoutes (spelling: liability):\n\u2022 GET /mobile/liability/summary\n\u2022 GET /mobile/liability/dashboard\n\nSources: Accounts Payable \u2190 unpaid expenses; Tax Payable \u2190 unpaid tax_payables (PAYE/VAT/WHT/CIT/PIT); Salaries Payable \u2190 unpaid Salary expenses; Pension/NHF \u2190 pending payroll_obligations. Interest Payable, Short-Term Loan, and all non-current loan categories are stubbed at 0 until a loan register exists.\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID. Percentages use class totals as denominator; divide-by-zero \u2192 0.",
           "item": [
             {
               "name": "Get liability summary **",
@@ -2638,14 +2638,14 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/dashboard",
-                "description": "Response data:\n• summary: totalLiability, currentLiability, nonCurrentLiability, overduePayable\n• currentLiabilities[]: each { name, amount, percentage, … }\n  – Accounts Payable: payables { summary, items, upcomingPayables (30d), ageingAnalysis, suppliers, reports }\n  – Tax Payable: items { PAYE, VAT, WHT, CIT, PIT }[]\n  – Salaries Payable | Pension Payable | NHF Payable | Interest Payable | Short-Term Loan: items[]\n• nonCurrentLiabilities[]: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings (amount 0 until loans module)\n• cashFlowImpact: netCashOutflow (settlements this calendar month), overdueSettlement, scheduledDebtRepayment, interestExpense, interestDue"
+                "description": "Response data:\n\u2022 summary: totalLiability, currentLiability, nonCurrentLiability, overduePayable\n\u2022 currentLiabilities[]: each { name, amount, percentage, \u2026 }\n  \u2013 Accounts Payable: payables { summary, items, upcomingPayables (30d), ageingAnalysis, suppliers, reports }\n  \u2013 Tax Payable: items { PAYE, VAT, WHT, CIT, PIT }[]\n  \u2013 Salaries Payable | Pension Payable | NHF Payable | Interest Payable | Short-Term Loan: items[]\n\u2022 nonCurrentLiabilities[]: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings (amount 0 until loans module)\n\u2022 cashFlowImpact: netCashOutflow (settlements this calendar month), overdueSettlement, scheduledDebtRepayment, interestExpense, interestDue"
               }
             }
           ]
         },
         {
           "name": "Financial Position **",
-          "description": "GET /mobile/financial-position — complete financial position for the mobile Financial Position screen. Backend owns all totals, percentages, and health metrics. Liability amounts come from the same aggregation as /mobile/liability (shared totals).",
+          "description": "GET /mobile/financial-position \u2014 complete financial position for the mobile Financial Position screen. Backend owns all totals, percentages, and health metrics. Liability amounts come from the same aggregation as /mobile/liability (shared totals).",
           "item": [
             {
               "name": "Get financial position **",
@@ -2653,7 +2653,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/financial-position",
-                "description": "Response data:\n• summary: asset|liability|equity { amount, percentage }, total (= total assets). Asset % = 100 when assets > 0; liability% + equity% ≈ 100.\n• assets: current (Cash, Bank Balance, Inventory, AR) + non-current (PPE, Intangibles from SOFTWARE_LICENSES)\n• liabilities: current (AP, Tax Payable, Payroll Payable = salaries+pension+NHF) + non-current loan lines\n• equity.total = Assets − Liabilities\n• financialHealth: currentRatio (ratio, not %), debtToAssetRatio %, equityRatio %, workingCapital\nDivide-by-zero → 0. Amounts are numeric (not currency strings)."
+                "description": "Response data:\n\u2022 summary: asset|liability|equity { amount, percentage }, total (= total assets). Asset % = 100 when assets > 0; liability% + equity% \u2248 100.\n\u2022 assets: current (Cash, Bank Balance, Inventory, AR) + non-current (PPE, Intangibles from SOFTWARE_LICENSES)\n\u2022 liabilities: current (AP, Tax Payable, Payroll Payable = salaries+pension+NHF) + non-current loan lines\n\u2022 equity.total = Assets \u2212 Liabilities\n\u2022 financialHealth: currentRatio (ratio, not %), debtToAssetRatio %, equityRatio %, workingCapital\nDivide-by-zero \u2192 0. Amounts are numeric (not currency strings)."
               }
             }
           ]
@@ -2666,7 +2666,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/financial-overview?year={{overviewYear}}",
-                "description": "Annual summary for mobile home / What I Owe cards. Response data: year, currency (NGN), annualRevenue, annualExpense, netProfit (all ex-VAT — VAT not counted as revenue or profit), currentTaxLiability (unpaid payables for the year), potentialSavings (5% of liability, capped), taxLiabilityByType { VAT, WHT, … }, note. Syncs all 12 book months before computing liability. Omit year for current calendar year."
+                "description": "Annual summary for mobile home / What I Owe cards. Response data: year, currency (NGN), annualRevenue, annualExpense, netProfit (all ex-VAT \u2014 VAT not counted as revenue or profit), currentTaxLiability (unpaid payables for the year), potentialSavings (5% of liability, capped), taxLiabilityByType { VAT, WHT, \u2026 }, note. Syncs all 12 book months before computing liability. Omit year for current calendar year."
               }
             },
             {
@@ -2674,14 +2674,14 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/dashboard?period=2026-02&range=month",
-                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). expenses / operatingExpenses = book expenses (ex-VAT) + Salaries (employee monthly gross pay). netProfit = income − that total. expenseBreakdown includes category rows (ex-VAT) plus Salaries at gross. VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance. range=month|quarter|year."
+                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). expenses / operatingExpenses = book expenses (ex-VAT) + Salaries (employee monthly gross pay). netProfit = income \u2212 that total. expenseBreakdown includes category rows (ex-VAT) plus Salaries at gross. VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance. range=month|quarter|year."
               }
             }
           ]
         },
         {
           "name": "Evidence Vault",
-          "description": "Mobile Evidence Vault. Categories (hyphenated): Sales-Transactions, Purchase-Invoices, Expense-Transactions, Assets, Payroll, Tax-Filings, Bank-Statement-Analysis, Accounts-Receivable, Accounts-Payable, Inventory-Transactions, Ledger-Watch-Findings. Auto-aggregates module evidence; POST stores manual uploads (deduped). Create with linkedRecord = main record id (e.g. sale-{uuid}), not SALE-DOC-*. uploadedBy in responses is { name, email, businessName } — never the internal userId.",
+          "description": "Mobile Evidence Vault. Categories (hyphenated): Sales-Transactions, Purchase-Invoices, Expense-Transactions, Assets, Payroll, Tax-Filings, Bank-Statement-Analysis, Accounts-Receivable, Accounts-Payable, Inventory-Transactions, Ledger-Watch-Findings. Auto-aggregates module evidence; POST stores manual uploads (deduped). Create with linkedRecord = main record id (e.g. sale-{uuid}), not SALE-DOC-*. uploadedBy in responses is { name, email, businessName } \u2014 never the internal userId.",
           "item": [
             {
               "name": "List documents",
@@ -2757,7 +2757,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/{{vaultDocId}}",
-                "description": "Composite auto ids (sale-{uuid}, expense-{uuid}, …) or manual doc-{uuid}."
+                "description": "Composite auto ids (sale-{uuid}, expense-{uuid}, \u2026) or manual doc-{uuid}."
               }
             },
             {
@@ -2772,7 +2772,7 @@
         },
         {
           "name": "Employees",
-          "description": "Employee CRUD + obligations. Tax relief on create/update: annualHouseRent (actual annual rent; PAYE uses MIN(20%×rent, ₦500k)), nhf (boolean contributor; amount from statutory engine), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses. GET returns taxRelief + computedReliefs.",
+          "description": "Employee CRUD + obligations. Optional pfa (Pension Fund Administrator) on create/update; returned on list/detail. Used by Payroll pension remittance.",
           "item": [
             {
               "name": "List employees",
@@ -2806,7 +2806,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
-                "description": "Includes taxRelief { annualHouseRent, nhf, nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses, computedReliefs { houseRentRelief, … } }, salaryStructure, deductions (paye/nhf/net)."
+                "description": "Includes taxRelief { annualHouseRent, nhf, nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses, computedReliefs { houseRentRelief, \u2026 } }, salaryStructure, deductions (paye/nhf/net)."
               }
             },
             {
@@ -2824,7 +2824,7 @@
                   "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\",\n  \"annualHouseRent\": 2000000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 120000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"qualifyingMedicalExpenses\": 100000\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
-                "description": "Optional pfa; tax relief fields: annualHouseRent (actual rent — PAYE uses MIN(20%, 500k)), nhf (boolean contributor), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses (annual, non-negative). employmentType: Full time | Part time | Contract."
+                "description": "Optional pfa; tax relief fields: annualHouseRent (actual rent \u2014 PAYE uses MIN(20%, 500k)), nhf (boolean contributor), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses (annual, non-negative). employmentType: Full time | Part time | Contract."
               }
             },
             {
@@ -2879,8 +2879,7 @@
                 "description": "Creates expense with category Salary, expenseType OPEX, total = gross pay + employer pension."
               }
             }
-          ],
-          "description": "Employee CRUD + obligations. Optional pfa (Pension Fund Administrator) on create/update; returned on list/detail. Used by Payroll pension remittance."
+          ]
         },
         {
           "name": "Payroll **",
@@ -3634,7 +3633,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
-                "description": "Consultant user profile: taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly (same semantics as mobile — PAYE salary basis when applicable)."
+                "description": "Consultant user profile: taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly (same semantics as mobile \u2014 PAYE salary basis when applicable)."
               }
             },
             {
@@ -3652,7 +3651,7 @@
                   "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"organizationName\":\"Fileam Consulting\",\"taxPersona\":\"GIG_WORKER\",\"employmentGrossSalaryMonthly\":null}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
-                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (number ≥ 0 or null to clear)."
+                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (number \u2265 0 or null to clear)."
               }
             },
             {
@@ -4084,7 +4083,7 @@
                       }
                     },
                     {
-                      "name": "Profit & Loss (defaults — current month)",
+                      "name": "Profit & Loss (defaults \u2014 current month)",
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-loss",
@@ -4096,7 +4095,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-loss?year={{plYear}}",
-                        "description": "year without month = Jan–Dec for that year."
+                        "description": "year without month = Jan\u2013Dec for that year."
                       }
                     },
                     {
@@ -4209,7 +4208,7 @@
                           "raw": "{\"description\":\"Consulting fee\",\"amount\":50000,\"type\":\"income\",\"date\":\"2026-02-23\",\"status\":\"Pending\",\"customerName\":\"Client Corp\",\"customerId\":\"cust-ent-001\"}"
                         },
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions",
-                        "description": "Creates mobile Sale with paymentType Cash → status Paid by default (Invoice would be Pending)."
+                        "description": "Creates mobile Sale with paymentType Cash \u2192 status Paid by default (Invoice would be Pending)."
                       }
                     },
                     {
@@ -4648,6 +4647,157 @@
                   ]
                 },
                 {
+                  "name": "Assets",
+                  "item": [
+                    {
+                      "name": "List pending",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/pending?status=",
+                        "description": "status optional: pending | approved | returned"
+                      }
+                    },
+                    {
+                      "name": "Get pending",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/pending/{{assetId}}"
+                      }
+                    },
+                    {
+                      "name": "Approve",
+                      "request": {
+                        "method": "POST",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/{{assetId}}/approve",
+                        "description": "Do not use classification Expense \u2014 use Expense endpoint",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"classification\": \"Vehicle\",\n  \"useful_life_years\": 5,\n  \"residual_value\": 50000,\n  \"depreciation_method\": \"straight-line\",\n  \"consultant_notes\": \"Approved after document review\"\n}"
+                        }
+                      }
+                    },
+                    {
+                      "name": "Return to owner",
+                      "request": {
+                        "method": "POST",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/{{assetId}}/return",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"reason\": \"Missing purchase invoice\"\n}"
+                        }
+                      }
+                    },
+                    {
+                      "name": "Classify as expense",
+                      "request": {
+                        "method": "POST",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/{{assetId}}/expense",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"consultant_notes\": \"Below capitalization threshold\"\n}"
+                        }
+                      }
+                    },
+                    {
+                      "name": "List register",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/register?search="
+                      }
+                    },
+                    {
+                      "name": "Get register asset",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/register/{{assetId}}"
+                      }
+                    },
+                    {
+                      "name": "Patch register asset",
+                      "request": {
+                        "method": "PATCH",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/register/{{assetId}}",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"name\": \"Toyota Hilux\",\n  \"location\": \"Lagos HQ\",\n  \"useful_life_years\": 6,\n  \"residual_value\": 40000,\n  \"asset_notes\": \"Updated useful life\",\n  \"reason_for_change\": \"Corrected useful life after review\"\n}"
+                        }
+                      }
+                    },
+                    {
+                      "name": "Export register",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/register/export?format=pdf",
+                        "description": "format=pdf|excel"
+                      }
+                    },
+                    {
+                      "name": "Depreciation schedule",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/{{assetId}}/depreciation-schedule"
+                      }
+                    },
+                    {
+                      "name": "History",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/history?asset_id=&event_type=&page=1&per_page=50"
+                      }
+                    },
+                    {
+                      "name": "Generate report",
+                      "request": {
+                        "method": "POST",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/reports/generate",
+                        "description": "report_type: register_summary | depreciation_schedule | asset_movement | audit_trail",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"report_type\": \"register_summary\",\n  \"format\": \"pdf\",\n  \"date_from\": \"2025-01-01\",\n  \"date_to\": \"2025-12-31\"\n}"
+                        }
+                      }
+                    },
+                    {
+                      "name": "Download file",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/downloads/{{downloadId}}",
+                        "description": "Use download_url id from export/report"
+                      }
+                    }
+                  ]
+                },
+                {
                   "name": "Filings *",
                   "item": [
                     {
@@ -4741,7 +4891,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}&status=",
-                        "description": "Optional status filters tax_payables.status. Same response shape as mobile filings list — includes missingEvidenceBreakdown (sale/expense rows missing invoice or receipt proof). Test script sets {{filingId}} from first row."
+                        "description": "Optional status filters tax_payables.status. Same response shape as mobile filings list \u2014 includes missingEvidenceBreakdown (sale/expense rows missing invoice or receipt proof). Test script sets {{filingId}} from first row."
                       }
                     },
                     {
@@ -4749,7 +4899,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}",
-                        "description": "Linked-client view — same payload as mobile GET /filings/:id (timeline, completion, missingEvidenceBreakdown, periodAttachmentGap counts). TaxPayable id = {{filingId}}. 404 if filing not found for client."
+                        "description": "Linked-client view \u2014 same payload as mobile GET /filings/:id (timeline, completion, missingEvidenceBreakdown, periodAttachmentGap counts). TaxPayable id = {{filingId}}. 404 if filing not found for client."
                       }
                     },
                     {
@@ -5018,7 +5168,7 @@
         },
         {
           "name": "Lookups",
-          "description": "Read-only lists for forms and filings. Same URLs as Profile / Clients → Filings where duplicated — use either entry.",
+          "description": "Read-only lists for forms and filings. Same URLs as Profile / Clients \u2192 Filings where duplicated \u2014 use either entry.",
           "item": [
             {
               "name": "Contacts and types",
@@ -5047,7 +5197,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/constants",
-                "description": "Requires {{clientId}} (linked mobile user UUID). Same payload as mobile GET /mobile/filings/constants. Duplicate of Clients → Client :clientId → Filings * → Filings constants *."
+                "description": "Requires {{clientId}} (linked mobile user UUID). Same payload as mobile GET /mobile/filings/constants. Duplicate of Clients \u2192 Client :clientId \u2192 Filings * \u2192 Filings constants *."
               }
             },
             {
@@ -5066,7 +5216,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/tax-types",
-                "description": "Active filing codes for this client. Duplicate of Clients → Filings * → List filing tax types *."
+                "description": "Active filing codes for this client. Duplicate of Clients \u2192 Filings * \u2192 List filing tax types *."
               }
             }
           ]
@@ -5402,7 +5552,7 @@
               }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-            "description": "List vault docs. Response: { totalDocuments, documents[], categoryCounts }. Query: search, category (all or hyphenated e.g. Sales-Transactions | Expense-Transactions | Tax-Filings | Assets | Payroll | …), dateFrom, dateTo. Legacy keys invoices/receipts/filings still accepted."
+            "description": "List vault docs. Response: { totalDocuments, documents[], categoryCounts }. Query: search, category (all or hyphenated e.g. Sales-Transactions | Expense-Transactions | Tax-Filings | Assets | Payroll | \u2026), dateFrom, dateTo. Legacy keys invoices/receipts/filings still accepted."
           }
         },
         {

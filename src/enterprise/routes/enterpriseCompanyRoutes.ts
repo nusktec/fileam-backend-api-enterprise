@@ -5,6 +5,7 @@ import enterpriseFinancialsRoutes from "./enterpriseFinancialsRoutes";
 import enterpriseEvidenceVaultRoutes from "./enterpriseEvidenceVaultRoutes";
 import enterpriseFilingsRoutes from "./enterpriseFilingsRoutes";
 import enterpriseReportsRoutes from "./enterpriseReportsRoutes";
+import enterpriseAssetsRoutes from "./enterpriseAssetsRoutes";
 import {
   putClientBusinessProfile,
   putClientContact,
@@ -40,5 +41,6 @@ router.use("/financials", enterpriseFinancialsRoutes);
 router.use("/evidence-vault", enterpriseEvidenceVaultRoutes);
 router.use("/filings", enterpriseFilingsRoutes);
 router.use("/reports", enterpriseReportsRoutes);
+router.use("/assets", enterpriseAssetsRoutes);
 
 export default router;
