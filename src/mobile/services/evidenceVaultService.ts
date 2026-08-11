@@ -20,6 +20,12 @@ function decimalToNumber(d: Decimal | null | undefined): number {
   return Number(d);
 }
 
+export type VaultUploadedBy = {
+  name: string;
+  email: string;
+  businessName: string | null;
+};
+
 export type VaultDocument = {
   id: string;
   documentId: string;
@@ -34,9 +40,14 @@ export type VaultDocument = {
   linkedRecord: string | null;
   linkedRecordName: string | null;
   linkedRecordDocumentId: string | null;
-  uploadedBy: string | null;
+  uploadedBy: VaultUploadedBy | null;
   uploadedDate: Date;
   linkedDocumentCreationDate: Date | null;
+};
+
+/** Internal shape before uploadedBy is resolved to identifiable info. */
+type VaultDocumentDraft = Omit<VaultDocument, "uploadedBy"> & {
+  uploadedBy: string | null;
 };
 
 export type VaultRecord = {
@@ -45,14 +56,87 @@ export type VaultRecord = {
   amount: number;
 };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function buildDedupeKey(
   category: string,
-  linkedRecordDocumentId: string,
+  linkedKey: string,
   documentUrl: string | null | undefined,
   kind?: string,
 ): string {
   const urlPart = (documentUrl ?? "").trim().toLowerCase() || kind || "default";
-  return `${category}|${linkedRecordDocumentId}|${urlPart}`;
+  return `${category}|${linkedKey}|${urlPart}`;
+}
+
+async function resolveUploadedByMap(
+  userIds: string[],
+): Promise<Map<string, VaultUploadedBy>> {
+  const unique = [...new Set(userIds.filter((id) => UUID_RE.test(id)))];
+  const map = new Map<string, VaultUploadedBy>();
+  if (unique.length === 0) return map;
+
+  const [users, businesses] = await Promise.all([
+    prisma.user.findMany({
+      where: { id: { in: unique } },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        organizationName: true,
+      },
+    }),
+    prisma.business.findMany({
+      where: { userId: { in: unique } },
+      select: { userId: true, name: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
+
+  const businessByUser = new Map<string, string>();
+  for (const b of businesses) {
+    if (!businessByUser.has(b.userId) && b.name?.trim()) {
+      businessByUser.set(b.userId, b.name.trim());
+    }
+  }
+
+  for (const u of users) {
+    const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email;
+    map.set(u.id, {
+      name,
+      email: u.email,
+      businessName:
+        businessByUser.get(u.id) ?? u.organizationName?.trim() ?? null,
+    });
+  }
+  return map;
+}
+
+function toUploadedBy(
+  raw: string | null | undefined,
+  map: Map<string, VaultUploadedBy>,
+): VaultUploadedBy | null {
+  if (!raw || !String(raw).trim()) return null;
+  const value = String(raw).trim();
+  if (map.has(value)) return map.get(value)!;
+  // Never expose raw user IDs; email-only fallback if client stored an email
+  if (value.includes("@") && !UUID_RE.test(value)) {
+    return { name: value, email: value, businessName: null };
+  }
+  return null;
+}
+
+async function hydrateUploadedBy(
+  docs: VaultDocumentDraft[],
+): Promise<VaultDocument[]> {
+  const map = await resolveUploadedByMap(
+    docs.map((d) => d.uploadedBy).filter((id): id is string => Boolean(id)),
+  );
+  return docs.map((d) => ({
+    ...d,
+    uploadedBy: toUploadedBy(d.uploadedBy, map),
+  }));
 }
 
 function toVaultFromRow(row: {
@@ -71,7 +155,7 @@ function toVaultFromRow(row: {
   uploadedBy: string | null;
   uploadedDate: Date;
   linkedDocumentCreationDate: Date | null;
-}): VaultDocument {
+}): VaultDocumentDraft {
   const id = `doc-${row.id}`;
   return {
     id,
@@ -96,9 +180,9 @@ function toVaultFromRow(row: {
 }
 
 function pushDoc(
-  docs: VaultDocument[],
+  docs: VaultDocumentDraft[],
   seen: Set<string>,
-  doc: VaultDocument,
+  doc: VaultDocumentDraft,
   searchLower?: string,
 ): void {
   if (searchLower) {
@@ -117,7 +201,7 @@ function pushDoc(
   }
   const key = buildDedupeKey(
     doc.category,
-    doc.linkedRecordDocumentId ?? doc.id,
+    doc.linkedRecord ?? doc.linkedRecordDocumentId ?? doc.id,
     doc.documentUrl,
     doc.id,
   );
@@ -126,33 +210,35 @@ function pushDoc(
   docs.push(doc);
 }
 
-async function resolveLinkedRecord(
-  userId: string,
-  category: EvidenceVaultCategory,
-  linkedRecordDocumentId: string,
-): Promise<{
+type ResolvedLink = {
   linkedRecord: string;
   linkedRecordName: string;
+  linkedRecordDocumentId: string;
   linkedDocumentCreationDate: Date;
   source: string;
   name: string;
   date: Date;
-} | null> {
-  const ref = linkedRecordDocumentId.trim();
-  const refUpper = ref.toUpperCase();
+};
+
+/** Resolve create payload linkedRecord (e.g. sale-{uuid}) to the underlying entity. */
+async function resolveByLinkedRecord(
+  userId: string,
+  category: EvidenceVaultCategory,
+  linkedRecord: string,
+): Promise<ResolvedLink | null> {
+  const ref = linkedRecord.trim();
 
   if (category === "Sales-Transactions" || category === "Accounts-Receivable") {
-    const invoiceNum = refUpper.startsWith("SALE-DOC-")
-      ? ref.slice("SALE-DOC-".length)
-      : ref;
-    const sale = await prisma.sale.findFirst({
-      where: { userId, invoiceNumber: invoiceNum },
-    });
+    if (!ref.startsWith("sale-") || ref.startsWith("sale-receipt-")) return null;
+    const id = ref.slice("sale-".length);
+    if (!UUID_RE.test(id)) return null;
+    const sale = await prisma.sale.findFirst({ where: { id, userId } });
     if (!sale) return null;
     const name = `Invoice ${sale.invoiceNumber}${sale.customerName ? ` - ${sale.customerName}` : ""}`;
     return {
       linkedRecord: `sale-${sale.id}`,
       linkedRecordName: name,
+      linkedRecordDocumentId: saleLinkedRecordDocumentId(sale.invoiceNumber),
       linkedDocumentCreationDate: sale.saleDate,
       source: "Sales",
       name,
@@ -165,17 +251,19 @@ async function resolveLinkedRecord(
     category === "Purchase-Invoices" ||
     category === "Accounts-Payable"
   ) {
-    const expenseNum = refUpper.startsWith("EXP-DOC-")
-      ? ref.slice("EXP-DOC-".length)
-      : ref;
+    const expenseId = ref.match(
+      /^expense-(?:purchase-)?([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i,
+    )?.[1];
+    if (!expenseId) return null;
     const expense = await prisma.expense.findFirst({
-      where: { userId, expenseNumber: expenseNum },
+      where: { id: expenseId, userId },
     });
     if (!expense) return null;
     const name = expense.description;
     return {
       linkedRecord: `expense-${expense.id}`,
       linkedRecordName: name,
+      linkedRecordDocumentId: expenseLinkedRecordDocumentId(expense.expenseNumber),
       linkedDocumentCreationDate: expense.expenseDate,
       source: "Expenses",
       name: `Receipt - ${name}`,
@@ -184,16 +272,18 @@ async function resolveLinkedRecord(
   }
 
   if (category === "Assets") {
-    const code = refUpper.startsWith("ASSET-DOC-")
-      ? ref.slice("ASSET-DOC-".length)
-      : ref;
+    const assetId = ref.match(
+      /^asset-([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i,
+    )?.[1];
+    if (!assetId) return null;
     const asset = await prisma.asset.findFirst({
-      where: { userId, assetCode: code },
+      where: { id: assetId, userId },
     });
     if (!asset) return null;
     return {
       linkedRecord: `asset-${asset.id}`,
       linkedRecordName: asset.assetName,
+      linkedRecordDocumentId: assetLinkedRecordDocumentId(asset.assetCode),
       linkedDocumentCreationDate: asset.purchaseDate,
       source: "Assets",
       name: `Asset evidence - ${asset.assetName}`,
@@ -202,30 +292,19 @@ async function resolveLinkedRecord(
   }
 
   if (category === "Payroll") {
-    let type: string | undefined;
-    let period: string | undefined;
-    if (refUpper.startsWith("PAYROLL-DOC-")) {
-      const rest = ref.slice("PAYROLL-DOC-".length);
-      const idx = rest.lastIndexOf("-");
-      // period is YYYY-MM at end
-      const m = rest.match(/^(PAYE|NHF|PENSION)-(\d{4}-\d{2})$/i);
-      if (m) {
-        type = m[1]!.toUpperCase();
-        period = m[2]!;
-      } else if (idx > 0) {
-        type = rest.slice(0, idx);
-        period = rest.slice(idx + 1);
-      }
-    }
-    if (!type || !period) return null;
+    const payrollId = ref.match(
+      /^payroll-([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i,
+    )?.[1];
+    if (!payrollId) return null;
     const row = await prisma.payrollObligation.findFirst({
-      where: { userId, type, period },
+      where: { id: payrollId, userId },
     });
     if (!row) return null;
     const name = `${row.type} ${row.period}`;
     return {
       linkedRecord: `payroll-${row.id}`,
       linkedRecordName: name,
+      linkedRecordDocumentId: payrollLinkedRecordDocumentId(row.type, row.period),
       linkedDocumentCreationDate: row.createdAt,
       source: "Payroll",
       name: `Payroll evidence - ${name}`,
@@ -234,13 +313,11 @@ async function resolveLinkedRecord(
   }
 
   if (category === "Tax-Filings") {
-    const m = refUpper.match(/^TAX-DOC-([A-Z]+)-(\d{4})-(\d{2})$/);
-    if (m) {
-      const taxType = m[1]!;
-      const periodYear = Number(m[2]);
-      const periodMonth = Number(m[3]);
+    if (ref.startsWith("payable-") && !ref.startsWith("payable-receipt-")) {
+      const id = ref.slice("payable-".length);
+      if (!UUID_RE.test(id)) return null;
       const payable = await prisma.taxPayable.findFirst({
-        where: { userId, taxType, periodYear, periodMonth },
+        where: { id, userId },
       });
       if (!payable) return null;
       const periodLabel = `${new Date(payable.periodYear, payable.periodMonth - 1).toLocaleString("default", { month: "short" })} ${payable.periodYear}`;
@@ -248,27 +325,29 @@ async function resolveLinkedRecord(
       return {
         linkedRecord: `payable-${payable.id}`,
         linkedRecordName: name,
+        linkedRecordDocumentId: taxLinkedRecordDocumentId(
+          payable.taxType,
+          payable.periodYear,
+          payable.periodMonth,
+        ),
         linkedDocumentCreationDate: payable.createdAt,
         source: "Filings",
         name,
         date: payable.submittedAt || payable.createdAt,
       };
     }
-    if (refUpper.startsWith("REPORT-DOC-")) {
-      const prefix = ref.slice("REPORT-DOC-".length).toUpperCase();
-      const reports = await prisma.report.findMany({
-        where: { userId },
-        take: 50,
-        orderBy: { generatedAt: "desc" },
+    if (ref.startsWith("report-")) {
+      const id = ref.slice("report-".length);
+      if (!UUID_RE.test(id)) return null;
+      const report = await prisma.report.findFirst({
+        where: { id, userId },
       });
-      const report = reports.find((r) =>
-        r.id.slice(0, 8).toUpperCase() === prefix,
-      );
       if (!report) return null;
       const name = `${report.reportType} - ${report.periodLabel}`;
       return {
         linkedRecord: `report-${report.id}`,
         linkedRecordName: name,
+        linkedRecordDocumentId: reportLinkedRecordDocumentId(report.id),
         linkedDocumentCreationDate: report.generatedAt,
         source: "Reports",
         name,
@@ -278,15 +357,12 @@ async function resolveLinkedRecord(
   }
 
   if (category === "Inventory-Transactions") {
-    const prefix = refUpper.startsWith("INV-DOC-")
-      ? ref.slice("INV-DOC-".length).toUpperCase()
-      : refUpper;
-    const sales = await prisma.inventorySale.findMany({
-      where: { userId },
-      take: 100,
-      orderBy: { soldAt: "desc" },
+    if (!ref.startsWith("inventory-sale-")) return null;
+    const id = ref.slice("inventory-sale-".length);
+    if (!UUID_RE.test(id)) return null;
+    const sale = await prisma.inventorySale.findFirst({
+      where: { id, userId },
     });
-    const sale = sales.find((s) => s.id.slice(0, 8).toUpperCase() === prefix);
     if (!sale) return null;
     const name = sale.customerName
       ? `Inventory sale - ${sale.customerName}`
@@ -294,6 +370,7 @@ async function resolveLinkedRecord(
     return {
       linkedRecord: `inventory-sale-${sale.id}`,
       linkedRecordName: name,
+      linkedRecordDocumentId: `INV-DOC-${sale.id.slice(0, 8).toUpperCase()}`,
       linkedDocumentCreationDate: sale.soldAt,
       source: "Inventory",
       name,
@@ -314,7 +391,7 @@ export const evidenceVaultService = {
       dateTo?: Date;
     },
   ): Promise<VaultDocument[]> {
-    const docs: VaultDocument[] = [];
+    const docs: VaultDocumentDraft[] = [];
     const seen = new Set<string>();
     const searchLower = filters?.search?.toLowerCase().trim();
     const categoryNorm = normalizeEvidenceVaultCategory(filters?.category);
@@ -721,7 +798,7 @@ export const evidenceVaultService = {
     if (categoryNorm !== "all") {
       out = out.filter((d) => d.category === categoryNorm);
     }
-    return out;
+    return hydrateUploadedBy(out);
   },
 
   async getCategoryCounts(userId: string): Promise<Record<string, number>> {
@@ -743,7 +820,10 @@ export const evidenceVaultService = {
       const row = await prisma.evidenceVaultDocument.findFirst({
         where: { id, userId },
       });
-      if (row) return toVaultFromRow(row);
+      if (row) {
+        const [hydrated] = await hydrateUploadedBy([toVaultFromRow(row)]);
+        return hydrated ?? null;
+      }
     }
     const list = await this.listDocuments(userId, {});
     return list.find((d) => d.id === compositeId) ?? null;
@@ -773,8 +853,7 @@ export const evidenceVaultService = {
     data: {
       url: string;
       category: string;
-      linkedRecordDocumentId: string;
-      uploadedBy?: string;
+      linkedRecord: string;
       uploadedDate?: Date | string;
       name?: string;
       fileSizeKb?: number | null;
@@ -791,15 +870,15 @@ export const evidenceVaultService = {
     const url = data.url?.trim();
     if (!url) throw new HttpReplyError(400, "url is required");
 
-    const linkedRecordDocumentId = data.linkedRecordDocumentId?.trim();
-    if (!linkedRecordDocumentId) {
-      throw new HttpReplyError(400, "linkedRecordDocumentId is required");
+    const linkedRecord = data.linkedRecord?.trim();
+    if (!linkedRecord) {
+      throw new HttpReplyError(400, "linkedRecord is required");
     }
 
-    const resolved = await resolveLinkedRecord(
+    const resolved = await resolveByLinkedRecord(
       userId,
       categoryNorm,
-      linkedRecordDocumentId,
+      linkedRecord,
     );
 
     const allowUnresolved =
@@ -809,7 +888,7 @@ export const evidenceVaultService = {
     if (!resolved && !allowUnresolved) {
       throw new HttpReplyError(
         404,
-        "No matching record found for linkedRecordDocumentId in this category",
+        "No matching record found for linkedRecord in this category",
       );
     }
 
@@ -827,41 +906,38 @@ export const evidenceVaultService = {
       "Ledger-Watch-Findings": "Ledger Watch",
     };
 
-    const linked = resolved ?? {
-      linkedRecord: linkedRecordDocumentId,
-      linkedRecordName: data.name?.trim() || linkedRecordDocumentId,
+    const linked: ResolvedLink = resolved ?? {
+      linkedRecord,
+      linkedRecordName: data.name?.trim() || linkedRecord,
+      linkedRecordDocumentId: linkedRecord,
       linkedDocumentCreationDate: new Date(),
       source: sourceByCategory[categoryNorm],
-      name: data.name?.trim() || `Evidence - ${linkedRecordDocumentId}`,
+      name: data.name?.trim() || `Evidence - ${linkedRecord}`,
       date: new Date(),
     };
 
-    const dedupeKey = buildDedupeKey(
-      categoryNorm,
-      linkedRecordDocumentId,
-      url,
-    );
+    const dedupeKey = buildDedupeKey(categoryNorm, linked.linkedRecord, url);
 
     const existing = await prisma.evidenceVaultDocument.findUnique({
       where: { userId_dedupeKey: { userId, dedupeKey } },
     });
-    if (existing) return toVaultFromRow(existing);
+    if (existing) {
+      const [hydrated] = await hydrateUploadedBy([toVaultFromRow(existing)]);
+      return hydrated!;
+    }
 
-    // Also block if an auto-aggregated doc already exposes the same URL for this link
     const existingList = await this.listDocuments(userId, {
       category: categoryNorm,
     });
     const dup = existingList.find(
       (d) =>
-        d.linkedRecordDocumentId === linkedRecordDocumentId &&
+        d.linkedRecord === linked.linkedRecord &&
         (d.documentUrl ?? "").trim().toLowerCase() === url.toLowerCase(),
     );
     if (dup) return dup;
 
     const uploadedDate =
-      data.uploadedDate != null
-        ? new Date(data.uploadedDate)
-        : new Date();
+      data.uploadedDate != null ? new Date(data.uploadedDate) : new Date();
 
     const row = await prisma.evidenceVaultDocument.create({
       data: {
@@ -878,8 +954,8 @@ export const evidenceVaultService = {
         evidenceVaultId: null,
         linkedRecord: linked.linkedRecord,
         linkedRecordName: linked.linkedRecordName,
-        linkedRecordDocumentId,
-        uploadedBy: data.uploadedBy?.trim() || userId,
+        linkedRecordDocumentId: linked.linkedRecordDocumentId,
+        uploadedBy: userId,
         uploadedDate,
         linkedDocumentCreationDate: linked.linkedDocumentCreationDate,
         dedupeKey,
@@ -887,7 +963,8 @@ export const evidenceVaultService = {
       },
     });
 
-    return toVaultFromRow(row);
+    const [hydrated] = await hydrateUploadedBy([toVaultFromRow(row)]);
+    return hydrated!;
   },
 
   async listRecordsByCategory(

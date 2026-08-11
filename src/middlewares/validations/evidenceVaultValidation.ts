@@ -12,11 +12,12 @@ export const createEvidenceVaultDocumentValidation = [
     .withMessage(
       `category must be one of: ${EVIDENCE_VAULT_CATEGORIES.join(", ")}`,
     ),
-  check("linkedRecordDocumentId")
+  check("linkedRecord")
     .trim()
     .notEmpty()
-    .withMessage("linkedRecordDocumentId is required"),
-  check("uploadedBy").optional().trim().isString(),
+    .withMessage(
+      "linkedRecord is required (main record id, e.g. sale-{uuid})",
+    ),
   check("uploadedDate")
     .optional()
     .isISO8601()

@@ -64,8 +64,7 @@ export const createDocument = async (
     const body = matchedData(req, { locations: ["body"] }) as {
       url: string;
       category: string;
-      linkedRecordDocumentId: string;
-      uploadedBy?: string;
+      linkedRecord: string;
       uploadedDate?: string;
       name?: string;
       fileSizeKb?: number;

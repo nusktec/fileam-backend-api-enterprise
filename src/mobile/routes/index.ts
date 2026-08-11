@@ -23,6 +23,8 @@ import payrollRoutes from "./payrollRoutes";
 import payeeRoutes from "./payeeRoutes";
 import nhfRoutes from "./nhfRoutes";
 import pensionRoutes from "./pensionRoutes";
+import financialPositionRoutes from "./financialPositionRoutes";
+import liabilityRoutes from "./liabilityRoutes";
 
 const router = express.Router();
 
@@ -50,6 +52,8 @@ router.use("/account-deletion", accountDeletionRoutes);
 router.use("/contacts-and-types", contactsAndTypesRoutes);
 router.use("/inventory", inventoryRoutes);
 router.use("/assets", assetsRoutes);
+router.use("/financial-position", financialPositionRoutes);
+router.use("/liability", liabilityRoutes);
 
 export default router;
 
