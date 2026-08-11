@@ -20,12 +20,12 @@ function decimalToNumber(d: Decimal | null | undefined): number {
   return Number(d);
 }
 
-export type VaultUploadedBy = {
-  name: string;
-  email: string;
-  businessName: string | null;
-};
-
+/**
+ * uploadedBy is always a plain string (never an object).
+ * - Manual create with body.uploadedBy → exact string supplied
+ * - Manual create without uploadedBy → business name
+ * - Auto-aggregated evidence → business name
+ */
 export type VaultDocument = {
   id: string;
   documentId: string;
@@ -40,14 +40,9 @@ export type VaultDocument = {
   linkedRecord: string | null;
   linkedRecordName: string | null;
   linkedRecordDocumentId: string | null;
-  uploadedBy: VaultUploadedBy | null;
+  uploadedBy: string;
   uploadedDate: Date;
   linkedDocumentCreationDate: Date | null;
-};
-
-/** Internal shape before uploadedBy is resolved to identifiable info. */
-type VaultDocumentDraft = Omit<VaultDocument, "uploadedBy"> & {
-  uploadedBy: string | null;
 };
 
 export type VaultRecord = {
@@ -69,93 +64,66 @@ function buildDedupeKey(
   return `${category}|${linkedKey}|${urlPart}`;
 }
 
-async function resolveUploadedByMap(
-  userIds: string[],
-): Promise<Map<string, VaultUploadedBy>> {
-  const unique = [...new Set(userIds.filter((id) => UUID_RE.test(id)))];
-  const map = new Map<string, VaultUploadedBy>();
-  if (unique.length === 0) return map;
-
-  const [users, businesses] = await Promise.all([
-    prisma.user.findMany({
-      where: { id: { in: unique } },
+/** Business name for the vault owner (auto evidence + create fallback). */
+async function resolveBusinessName(userId: string): Promise<string> {
+  const [business, user] = await Promise.all([
+    prisma.business.findFirst({
+      where: { userId },
+      select: { name: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
       select: {
-        id: true,
+        organizationName: true,
         firstName: true,
         lastName: true,
         email: true,
-        organizationName: true,
       },
     }),
-    prisma.business.findMany({
-      where: { userId: { in: unique } },
-      select: { userId: true, name: true },
-      orderBy: { createdAt: "asc" },
-    }),
   ]);
-
-  const businessByUser = new Map<string, string>();
-  for (const b of businesses) {
-    if (!businessByUser.has(b.userId) && b.name?.trim()) {
-      businessByUser.set(b.userId, b.name.trim());
-    }
-  }
-
-  for (const u of users) {
-    const name = `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() || u.email;
-    map.set(u.id, {
-      name,
-      email: u.email,
-      businessName:
-        businessByUser.get(u.id) ?? u.organizationName?.trim() ?? null,
-    });
-  }
-  return map;
+  const fromBusiness = business?.name?.trim();
+  if (fromBusiness) return fromBusiness;
+  const fromOrg = user?.organizationName?.trim();
+  if (fromOrg) return fromOrg;
+  const fromName = `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim();
+  if (fromName) return fromName;
+  return user?.email?.trim() || "Unknown";
 }
 
-function toUploadedBy(
+/**
+ * Persist/return uploadedBy as a display string.
+ * Legacy rows that stored a user UUID fall back to business name.
+ */
+function normalizeUploadedByString(
   raw: string | null | undefined,
-  map: Map<string, VaultUploadedBy>,
-): VaultUploadedBy | null {
-  if (!raw || !String(raw).trim()) return null;
-  const value = String(raw).trim();
-  if (map.has(value)) return map.get(value)!;
-  // Never expose raw user IDs; email-only fallback if client stored an email
-  if (value.includes("@") && !UUID_RE.test(value)) {
-    return { name: value, email: value, businessName: null };
-  }
-  return null;
+  businessName: string,
+): string {
+  const value = raw?.trim();
+  if (!value || UUID_RE.test(value)) return businessName;
+  return value;
 }
 
-async function hydrateUploadedBy(
-  docs: VaultDocumentDraft[],
-): Promise<VaultDocument[]> {
-  const map = await resolveUploadedByMap(
-    docs.map((d) => d.uploadedBy).filter((id): id is string => Boolean(id)),
-  );
-  return docs.map((d) => ({
-    ...d,
-    uploadedBy: toUploadedBy(d.uploadedBy, map),
-  }));
-}
-
-function toVaultFromRow(row: {
-  id: string;
-  documentId: string;
-  name: string;
-  category: string;
-  source: string;
-  date: Date;
-  fileSizeKb: number | null;
-  documentUrl: string | null;
-  evidenceVaultId: string | null;
-  linkedRecord: string | null;
-  linkedRecordName: string | null;
-  linkedRecordDocumentId: string | null;
-  uploadedBy: string | null;
-  uploadedDate: Date;
-  linkedDocumentCreationDate: Date | null;
-}): VaultDocumentDraft {
+function toVaultFromRow(
+  row: {
+    id: string;
+    documentId: string;
+    name: string;
+    category: string;
+    source: string;
+    date: Date;
+    fileSizeKb: number | null;
+    documentUrl: string | null;
+    evidenceVaultId: string | null;
+    linkedRecord: string | null;
+    linkedRecordName: string | null;
+    linkedRecordDocumentId: string | null;
+    uploadedBy: string | null;
+    uploadedDate: Date;
+    linkedDocumentCreationDate: Date | null;
+  },
+  businessName: string,
+): VaultDocument {
   const id = `doc-${row.id}`;
   return {
     id,
@@ -173,16 +141,16 @@ function toVaultFromRow(row: {
     linkedRecord: row.linkedRecord,
     linkedRecordName: row.linkedRecordName,
     linkedRecordDocumentId: row.linkedRecordDocumentId,
-    uploadedBy: row.uploadedBy,
+    uploadedBy: normalizeUploadedByString(row.uploadedBy, businessName),
     uploadedDate: row.uploadedDate,
     linkedDocumentCreationDate: row.linkedDocumentCreationDate,
   };
 }
 
 function pushDoc(
-  docs: VaultDocumentDraft[],
+  docs: VaultDocument[],
   seen: Set<string>,
-  doc: VaultDocumentDraft,
+  doc: VaultDocument,
   searchLower?: string,
 ): void {
   if (searchLower) {
@@ -391,7 +359,7 @@ export const evidenceVaultService = {
       dateTo?: Date;
     },
   ): Promise<VaultDocument[]> {
-    const docs: VaultDocumentDraft[] = [];
+    const docs: VaultDocument[] = [];
     const seen = new Set<string>();
     const searchLower = filters?.search?.toLowerCase().trim();
     const categoryNorm = normalizeEvidenceVaultCategory(filters?.category);
@@ -402,6 +370,7 @@ export const evidenceVaultService = {
       );
     }
 
+    const businessName = await resolveBusinessName(userId);
     const saleWhere: { userId: string; saleDate?: { gte?: Date; lte?: Date } } =
       { userId };
     const expenseWhere: {
@@ -487,7 +456,7 @@ export const evidenceVaultService = {
           linkedRecord: docId,
           linkedRecordName: name,
           linkedRecordDocumentId,
-          uploadedBy: s.createdById ?? s.userId,
+          uploadedBy: businessName,
           uploadedDate: s.createdAt,
           linkedDocumentCreationDate: s.saleDate,
         },
@@ -522,7 +491,7 @@ export const evidenceVaultService = {
             linkedRecord: `sale-${s.id}`,
             linkedRecordName: name,
             linkedRecordDocumentId,
-            uploadedBy: s.createdById ?? s.userId,
+            uploadedBy: businessName,
             uploadedDate: s.updatedAt,
             linkedDocumentCreationDate: s.saleDate,
           },
@@ -553,7 +522,7 @@ export const evidenceVaultService = {
           linkedRecord: `expense-${e.id}`,
           linkedRecordName: e.description,
           linkedRecordDocumentId,
-          uploadedBy: e.createdById ?? e.userId,
+          uploadedBy: businessName,
           uploadedDate: e.createdAt,
           linkedDocumentCreationDate: e.expenseDate,
         },
@@ -577,7 +546,7 @@ export const evidenceVaultService = {
             linkedRecord: `expense-${e.id}`,
             linkedRecordName: e.description,
             linkedRecordDocumentId,
-            uploadedBy: e.createdById ?? e.userId,
+            uploadedBy: businessName,
             uploadedDate: e.createdAt,
             linkedDocumentCreationDate: e.expenseDate,
           },
@@ -611,7 +580,7 @@ export const evidenceVaultService = {
               linkedRecord: `payable-${p.id}`,
               linkedRecordName: `${p.taxType} Filing ${periodLabel}`,
               linkedRecordDocumentId,
-              uploadedBy: p.userId,
+              uploadedBy: businessName,
               uploadedDate: p.submittedAt || p.createdAt,
               linkedDocumentCreationDate: p.createdAt,
             },
@@ -639,7 +608,7 @@ export const evidenceVaultService = {
             linkedRecord: docId,
             linkedRecordName: filingName,
             linkedRecordDocumentId,
-            uploadedBy: p.userId,
+            uploadedBy: businessName,
             uploadedDate: p.submittedAt || p.createdAt,
             linkedDocumentCreationDate: p.createdAt,
           },
@@ -670,7 +639,7 @@ export const evidenceVaultService = {
           linkedRecord: docId,
           linkedRecordName: name,
           linkedRecordDocumentId: reportLinkedRecordDocumentId(r.id),
-          uploadedBy: r.userId,
+          uploadedBy: businessName,
           uploadedDate: r.generatedAt,
           linkedDocumentCreationDate: r.generatedAt,
         },
@@ -705,7 +674,7 @@ export const evidenceVaultService = {
             linkedRecord: `asset-${a.id}`,
             linkedRecordName: a.assetName,
             linkedRecordDocumentId,
-            uploadedBy: a.userId,
+            uploadedBy: businessName,
             uploadedDate: a.createdAt,
             linkedDocumentCreationDate: a.purchaseDate,
           },
@@ -735,7 +704,7 @@ export const evidenceVaultService = {
           linkedRecord: `asset-${d.assetId}`,
           linkedRecordName: assetName,
           linkedRecordDocumentId: assetLinkedRecordDocumentId(assetCode),
-          uploadedBy: d.userId,
+          uploadedBy: businessName,
           uploadedDate: d.createdAt,
           linkedDocumentCreationDate: d.disposalDate,
         },
@@ -768,7 +737,7 @@ export const evidenceVaultService = {
             linkedRecord: `payroll-${p.id}`,
             linkedRecordName: nameBase,
             linkedRecordDocumentId,
-            uploadedBy: p.userId,
+            uploadedBy: businessName,
             uploadedDate: p.updatedAt,
             linkedDocumentCreationDate: p.createdAt,
           },
@@ -778,7 +747,7 @@ export const evidenceVaultService = {
     }
 
     for (const row of stored) {
-      pushDoc(docs, seen, toVaultFromRow(row), searchLower);
+      pushDoc(docs, seen, toVaultFromRow(row, businessName), searchLower);
     }
 
     docs.sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -798,7 +767,7 @@ export const evidenceVaultService = {
     if (categoryNorm !== "all") {
       out = out.filter((d) => d.category === categoryNorm);
     }
-    return hydrateUploadedBy(out);
+    return out;
   },
 
   async getCategoryCounts(userId: string): Promise<Record<string, number>> {
@@ -821,8 +790,8 @@ export const evidenceVaultService = {
         where: { id, userId },
       });
       if (row) {
-        const [hydrated] = await hydrateUploadedBy([toVaultFromRow(row)]);
-        return hydrated ?? null;
+        const businessName = await resolveBusinessName(userId);
+        return toVaultFromRow(row, businessName);
       }
     }
     const list = await this.listDocuments(userId, {});
@@ -854,6 +823,7 @@ export const evidenceVaultService = {
       url: string;
       category: string;
       linkedRecord: string;
+      uploadedBy?: string;
       uploadedDate?: Date | string;
       name?: string;
       fileSizeKb?: number | null;
@@ -874,6 +844,10 @@ export const evidenceVaultService = {
     if (!linkedRecord) {
       throw new HttpReplyError(400, "linkedRecord is required");
     }
+
+    const businessName = await resolveBusinessName(userId);
+    const uploadedByLabel =
+      data.uploadedBy?.trim() || businessName;
 
     const resolved = await resolveByLinkedRecord(
       userId,
@@ -922,8 +896,7 @@ export const evidenceVaultService = {
       where: { userId_dedupeKey: { userId, dedupeKey } },
     });
     if (existing) {
-      const [hydrated] = await hydrateUploadedBy([toVaultFromRow(existing)]);
-      return hydrated!;
+      return toVaultFromRow(existing, businessName);
     }
 
     const existingList = await this.listDocuments(userId, {
@@ -955,7 +928,7 @@ export const evidenceVaultService = {
         linkedRecord: linked.linkedRecord,
         linkedRecordName: linked.linkedRecordName,
         linkedRecordDocumentId: linked.linkedRecordDocumentId,
-        uploadedBy: userId,
+        uploadedBy: uploadedByLabel,
         uploadedDate,
         linkedDocumentCreationDate: linked.linkedDocumentCreationDate,
         dedupeKey,
@@ -963,8 +936,7 @@ export const evidenceVaultService = {
       },
     });
 
-    const [hydrated] = await hydrateUploadedBy([toVaultFromRow(row)]);
-    return hydrated!;
+    return toVaultFromRow(row, businessName);
   },
 
   async listRecordsByCategory(

@@ -1,9 +1,35 @@
+import { ASSET_TYPES, type AssetType } from "../../constants/assets";
 import { PERCENT, PERCENT_TWO_DECIMAL_ROUND } from "../../constants/percentages";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { assetsService } from "./assetsService";
 import { liabilityService } from "./liabilityService";
 
-const INTANGIBLE_ASSET_TYPES = new Set(["SOFTWARE_LICENSES"]);
+/** Display names for Financial Position — must match Asset module categories. */
+const NON_CURRENT_ASSET_LABELS: Record<AssetType, string> = {
+  VEHICLE: "Vehicle",
+  COMPUTER_IT: "Computer & IT",
+  MACHINERY: "Machinery",
+  FURNITURE: "Furniture",
+  BUILDING: "Buildings",
+  SOFTWARE_LICENSES: "Software Licences",
+  LAND: "Land",
+  OTHER_ASSET: "Others",
+};
+
+const CURRENT_LIABILITY_NAMES = [
+  "Accounts Payable",
+  "Tax Payable",
+  "Salaries Payable",
+  "Pension Payable",
+  "NHF Payable",
+  "Interest Payable",
+  "Short-term Loans",
+] as const;
+
+/** Liability dashboard uses "Short-Term Loan"; FP correction uses "Short-term Loans". */
+const LIABILITY_DASH_TO_FP_NAME: Record<string, string> = {
+  "Short-Term Loan": "Short-term Loans",
+};
 
 const NON_CURRENT_LIABILITY_NAMES = [
   "Bank Loan",
@@ -38,26 +64,28 @@ function namedItem(name: string, amount: number) {
 
 export const financialPositionService = {
   async get(userId: string) {
-    const [current, nonCurrent, liab] = await Promise.all([
+    const [current, nonCurrent, liabDash] = await Promise.all([
       assetsService.getCurrentAssetsSnapshot(userId),
       assetsService.nonCurrentAssets(userId),
-      liabilityService.getTotals(userId),
+      liabilityService.getDashboard(userId),
     ]);
 
-    let ppe = 0;
-    let intangible = 0;
+    const amountByAssetType = new Map<string, number>();
     for (const cat of nonCurrent.categories) {
-      if (INTANGIBLE_ASSET_TYPES.has(cat.assetType)) {
-        intangible += cat.total;
-      } else {
-        ppe += cat.total;
-      }
+      amountByAssetType.set(cat.assetType, cat.total);
     }
-    ppe = normalizeMoneyAmount(ppe);
-    intangible = normalizeMoneyAmount(intangible);
+
+    const nonCurrentAssetItems = ASSET_TYPES.map((assetType) =>
+      namedItem(
+        NON_CURRENT_ASSET_LABELS[assetType],
+        amountByAssetType.get(assetType) ?? 0,
+      ),
+    );
 
     const nonCurrentAssetsTotal = normalizeMoneyAmount(
-      nonCurrent.netNonCurrentAssets ?? nonCurrent.total ?? ppe + intangible,
+      nonCurrent.netNonCurrentAssets ??
+        nonCurrent.total ??
+        nonCurrentAssetItems.reduce((s, i) => s + i.amount, 0),
     );
     const currentAssetsTotal = normalizeMoneyAmount(current.totalCurrentAssets);
 
@@ -68,34 +96,33 @@ export const financialPositionService = {
       namedItem("Accounts Receivable", current.accountsReceivable.total),
     ];
 
-    const nonCurrentAssetItems = [
-      namedItem("Property, Plant & Equipment", ppe),
-      namedItem("Intangible Assets", intangible),
-    ];
+    const liabAmountByName = new Map<string, number>();
+    for (const c of liabDash.currentLiabilities) {
+      const fpName = LIABILITY_DASH_TO_FP_NAME[c.name] ?? c.name;
+      liabAmountByName.set(fpName, c.amount);
+    }
 
-    const currentLiabilityItems = [
-      namedItem("Accounts Payable", liab.accountsPayable),
-      namedItem("Tax Payable", liab.taxPayable),
-      namedItem(
-        "Payroll Payable",
-        normalizeMoneyAmount(
-          liab.salariesPayable + liab.pensionPayable + liab.nhfPayable,
-        ),
-      ),
-    ];
-    const currentLiabilitiesTotal = normalizeMoneyAmount(liab.currentLiability);
-
-    const nonCurrentLiabilityItems = NON_CURRENT_LIABILITY_NAMES.map((name) =>
-      namedItem(name, 0),
+    const currentLiabilityItems = CURRENT_LIABILITY_NAMES.map((name) =>
+      namedItem(name, liabAmountByName.get(name) ?? 0),
     );
+    const currentLiabilitiesTotal = normalizeMoneyAmount(
+      liabDash.summary.currentLiability,
+    );
+
+    const nonCurrentLiabilityItems = NON_CURRENT_LIABILITY_NAMES.map((name) => {
+      const hit = liabDash.nonCurrentLiabilities.find((c) => c.name === name);
+      return namedItem(name, hit?.amount ?? 0);
+    });
     const nonCurrentLiabilitiesTotal = normalizeMoneyAmount(
-      liab.nonCurrentLiability,
+      liabDash.summary.nonCurrentLiability,
     );
 
     const totalAssets = normalizeMoneyAmount(
       currentAssetsTotal + nonCurrentAssetsTotal,
     );
-    const totalLiabilities = normalizeMoneyAmount(liab.totalLiability);
+    const totalLiabilities = normalizeMoneyAmount(
+      liabDash.summary.totalLiability,
+    );
     const equityTotal = normalizeMoneyAmount(totalAssets - totalLiabilities);
 
     const assetPct = totalAssets > 0 ? PERCENT : 0;

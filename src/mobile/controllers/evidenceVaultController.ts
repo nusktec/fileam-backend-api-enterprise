@@ -61,10 +61,14 @@ export const createDocument = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const body = matchedData(req, { locations: ["body"] }) as {
+    const body = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as {
       url: string;
       category: string;
       linkedRecord: string;
+      uploadedBy?: string;
       uploadedDate?: string;
       name?: string;
       fileSizeKb?: number;

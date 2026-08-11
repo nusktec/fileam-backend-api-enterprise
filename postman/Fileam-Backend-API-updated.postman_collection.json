@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position (assets + liabilities + equity + financialHealth). Liability module: GET /mobile/liability/summary and /dashboard (AP ageing, tax by type, payroll payables). Liability totals are shared with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is { name, email, businessName }. GET /records/{category} for linkable records.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, \u20a6500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position (assets + liabilities + equity + financialHealth). Liability module: GET /mobile/liability/summary and /dashboard (AP ageing, tax by type, payroll payables). Liability totals are shared with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, \u20a6500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -2621,7 +2621,7 @@
         },
         {
           "name": "Liability **",
-          "description": "Liability reporting over existing books (do not duplicate data).\n\nRoutes (spelling: liability):\n\u2022 GET /mobile/liability/summary\n\u2022 GET /mobile/liability/dashboard\n\nSources: Accounts Payable \u2190 unpaid expenses; Tax Payable \u2190 unpaid tax_payables (PAYE/VAT/WHT/CIT/PIT); Salaries Payable \u2190 unpaid Salary expenses; Pension/NHF \u2190 pending payroll_obligations. Interest Payable, Short-Term Loan, and all non-current loan categories are stubbed at 0 until a loan register exists.\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID. Percentages use class totals as denominator; divide-by-zero \u2192 0.",
+          "description": "Liability reporting over existing books (do not duplicate data).\n\nRoutes (spelling: liability):\n\u2022 GET /mobile/liability/summary\n\u2022 GET /mobile/liability/dashboard\n\nSources (correction):\n\u2022 Accounts Payable \u2190 Invoice / Pay Later expenses only, less invoiceAmountPaid; Salary category excluded\n\u2022 Tax Payable \u2190 tax_payables less completed remittances\n\u2022 Salaries Payable \u2190 unpaid Salary expenses (not duplicated in AP)\n\u2022 Pension/NHF \u2190 pending payroll_obligations (items: payrollDate, status, amount)\n\u2022 Interest Payable, Short-Term Loan, non-current loans stubbed at 0 until loan register exists\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID.\nOUTSTANDING = unpaid not overdue (item payment status). ACTIVE = AP summary activePayables (open/not-overdue total) \u2014 not used interchangeably with OUTSTANDING on item rows.\nPercentages use class totals as denominator; divide-by-zero \u2192 0. Partial payments reduce category, supplier, and ageing totals.",
           "item": [
             {
               "name": "Get liability summary **",
@@ -2638,14 +2638,14 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/dashboard",
-                "description": "Response data:\n\u2022 summary: totalLiability, currentLiability, nonCurrentLiability, overduePayable\n\u2022 currentLiabilities[]: each { name, amount, percentage, \u2026 }\n  \u2013 Accounts Payable: payables { summary, items, upcomingPayables (30d), ageingAnalysis, suppliers, reports }\n  \u2013 Tax Payable: items { PAYE, VAT, WHT, CIT, PIT }[]\n  \u2013 Salaries Payable | Pension Payable | NHF Payable | Interest Payable | Short-Term Loan: items[]\n\u2022 nonCurrentLiabilities[]: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings (amount 0 until loans module)\n\u2022 cashFlowImpact: netCashOutflow (settlements this calendar month), overdueSettlement, scheduledDebtRepayment, interestExpense, interestDue"
+                "description": "Response data:\n\u2022 summary: totalLiability, currentLiability, nonCurrentLiability, overduePayable\n\u2022 currentLiabilities[]: each { name, amount, percentage, \u2026 }\n  \u2013 Accounts Payable: payables { summary (activePayables/overduePayables/totalPayable), items (no amount), upcomingPayables (30d), ageingAnalysis, suppliers, reports (URLs) }\n  \u2013 Tax Payable: items { PAYE, VAT, WHT, CIT, PIT }[] with outstanding after remittances\n  \u2013 Salaries | Pension | NHF | Interest | Short-Term Loan: items[]\n\u2022 nonCurrentLiabilities[]: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings\n\u2022 cashFlowImpact: netCashOutflow (AP invoice + salary + tax + payroll settlements this month; no double-count), overdueSettlement, scheduledDebtRepayment, interestExpense, interestDue"
               }
             }
           ]
         },
         {
           "name": "Financial Position **",
-          "description": "GET /mobile/financial-position \u2014 complete financial position for the mobile Financial Position screen. Backend owns all totals, percentages, and health metrics. Liability amounts come from the same aggregation as /mobile/liability (shared totals).",
+          "description": "GET /mobile/financial-position \u2014 complete financial position for the mobile Financial Position screen. Backend owns all totals, percentages, and health metrics. Category names match Asset/Liability modules (no PPE/Intangible/Payroll Payable rollups). Non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others. Current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans.",
           "item": [
             {
               "name": "Get financial position **",
@@ -2653,7 +2653,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/financial-position",
-                "description": "Response data:\n\u2022 summary: asset|liability|equity { amount, percentage }, total (= total assets). Asset % = 100 when assets > 0; liability% + equity% \u2248 100.\n\u2022 assets: current (Cash, Bank Balance, Inventory, AR) + non-current (PPE, Intangibles from SOFTWARE_LICENSES)\n\u2022 liabilities: current (AP, Tax Payable, Payroll Payable = salaries+pension+NHF) + non-current loan lines\n\u2022 equity.total = Assets \u2212 Liabilities\n\u2022 financialHealth: currentRatio (ratio, not %), debtToAssetRatio %, equityRatio %, workingCapital\nDivide-by-zero \u2192 0. Amounts are numeric (not currency strings)."
+                "description": "Response data:\n\u2022 summary: asset|liability|equity { amount, percentage }, total (= total assets)\n\u2022 assets.currentAssets.items: Cash, Bank Balance, Inventory, Accounts Receivable\n\u2022 assets.nonCurrentAssets.items: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others (amounts from asset type NBV; zeros included)\n\u2022 liabilities.currentLiabilities.items: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans\n\u2022 liabilities.nonCurrentLiabilities.items: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings\n\u2022 equity.total = Assets \u2212 Liabilities\n\u2022 financialHealth: currentRatio, debtToAssetRatio %, equityRatio %, workingCapital\nDo not use Property, Plant & Equipment / Intangible Assets / Payroll Payable labels."
               }
             }
           ]
@@ -2681,7 +2681,7 @@
         },
         {
           "name": "Evidence Vault",
-          "description": "Mobile Evidence Vault. Categories (hyphenated): Sales-Transactions, Purchase-Invoices, Expense-Transactions, Assets, Payroll, Tax-Filings, Bank-Statement-Analysis, Accounts-Receivable, Accounts-Payable, Inventory-Transactions, Ledger-Watch-Findings. Auto-aggregates module evidence; POST stores manual uploads (deduped). Create with linkedRecord = main record id (e.g. sale-{uuid}), not SALE-DOC-*. uploadedBy in responses is { name, email, businessName } \u2014 never the internal userId.",
+          "description": "Mobile Evidence Vault. Categories (hyphenated): Sales-Transactions, Purchase-Invoices, Expense-Transactions, Assets, Payroll, Tax-Filings, Bank-Statement-Analysis, Accounts-Receivable, Accounts-Payable, Inventory-Transactions, Ledger-Watch-Findings. Auto-aggregates module evidence; POST stores manual uploads (deduped). Create with linkedRecord = main record id (e.g. sale-{uuid}), not SALE-DOC-*. uploadedBy is a string everywhere. Optional on POST; if omitted, business name is saved. Auto-aggregated evidence always uses business name. Never an object.",
           "item": [
             {
               "name": "List documents",
@@ -2699,7 +2699,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Returns { totalDocuments, documents[], categoryCounts }. Query: category=all|{hyphenated category}, search, dateFrom, dateTo. Each doc includes linkedRecord, linkedRecordName, linkedRecordDocumentId, uploadedBy { name, email, businessName }, uploadedDate, linkedDocumentCreationDate, downloadPath when no URL."
+                "description": "Returns { totalDocuments, documents[], categoryCounts }. Query: category=all|{hyphenated category}, search, dateFrom, dateTo. Each doc includes linkedRecord, linkedRecordName, linkedRecordDocumentId, uploadedBy (string), uploadedDate, linkedDocumentCreationDate, downloadPath when no URL."
               }
             },
             {
@@ -2722,10 +2722,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"url\": \"https://example.com/document/invoice-31.pdf\",\n  \"category\": \"Sales-Transactions\",\n  \"linkedRecord\": \"sale-67df9206-9dad-42cd-a2d1-b584df0b55b4\",\n  \"uploadedDate\": \"2026-05-26T10:30:00.000Z\"\n}"
+                  "raw": "{\n  \"url\": \"https://example.com/document/invoice-31.pdf\",\n  \"category\": \"Sales-Transactions\",\n  \"linkedRecord\": \"sale-67df9206-9dad-42cd-a2d1-b584df0b55b4\",\n  \"uploadedBy\": \"Ronald Gold\",\n  \"uploadedDate\": \"2026-05-26T10:30:00.000Z\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents",
-                "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. uploadedBy is set from the authenticated user and returned as { name, email, businessName }. Idempotent on same category+linkedRecord+url."
+                "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string \u2014 if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
               }
             },
             {
@@ -2757,7 +2757,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents/{{vaultDocId}}",
-                "description": "Composite auto ids (sale-{uuid}, expense-{uuid}, \u2026) or manual doc-{uuid}."
+                "description": "GET by id. uploadedBy is a plain string (same rules as list)."
               }
             },
             {
@@ -4392,21 +4392,24 @@
                       "name": "Get document",
                       "request": {
                         "method": "GET",
-                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}"
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}",
+                        "description": "GET by id. uploadedBy is a plain string (same rules as list)."
                       }
                     },
                     {
                       "name": "Document status",
                       "request": {
                         "method": "GET",
-                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}/status"
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}/status",
+                        "description": "GET by id. uploadedBy is a plain string (same rules as list)."
                       }
                     },
                     {
                       "name": "Review document",
                       "request": {
                         "method": "GET",
-                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}/review"
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/documents/{{documentId}}/review",
+                        "description": "GET by id. uploadedBy is a plain string (same rules as list)."
                       }
                     },
                     {
@@ -4596,7 +4599,8 @@
                           "mode": "raw",
                           "raw": "{\"documentName\":\"Contract\",\"category\":\"Contracts\",\"fileUrl\":\"https://example.com/doc.pdf\"}"
                         },
-                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/upload"
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/upload",
+                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string \u2014 if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
                       }
                     },
                     {
@@ -4605,7 +4609,7 @@
                         "method": "GET",
                         "header": [],
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/invoice-extraction-preview",
-                        "description": "Mock suggestedInvoice (client fields, lineItems). Wire real extraction later."
+                        "description": "GET by id. uploadedBy is a plain string (same rules as list)."
                       }
                     },
                     {
@@ -4634,7 +4638,7 @@
                           "raw": "{\"clientName\":\"Client A\",\"clientAddress\":\"123 St\",\"clientEmail\":\"client@a.com\",\"totalAmount\":250750.25}"
                         },
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/convert-to-invoice",
-                        "description": "Sets invoice documentId to this evidence document. Optionally align body with extraction preview."
+                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string \u2014 if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
                       }
                     },
                     {
@@ -5552,7 +5556,7 @@
               }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-            "description": "List vault docs. Response: { totalDocuments, documents[], categoryCounts }. Query: search, category (all or hyphenated e.g. Sales-Transactions | Expense-Transactions | Tax-Filings | Assets | Payroll | \u2026), dateFrom, dateTo. Legacy keys invoices/receipts/filings still accepted."
+            "description": "Returns { totalDocuments, documents[], categoryCounts }. Query: category=all|{hyphenated category}, search, dateFrom, dateTo. Each doc includes linkedRecord, linkedRecordName, linkedRecordDocumentId, uploadedBy (string), uploadedDate, linkedDocumentCreationDate, downloadPath when no URL."
           }
         },
         {
@@ -5570,7 +5574,7 @@
               }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents/{{evidenceVaultDocId}}",
-            "description": "Composite auto id e.g. sale-{{saleId}}, expense-{{expenseId}}, payable-{{payableId}}, report-{{reportId}}, asset-*, payroll-*, or manual doc-{uuid}."
+            "description": "GET by id. uploadedBy is a plain string (same rules as list)."
           }
         },
         {

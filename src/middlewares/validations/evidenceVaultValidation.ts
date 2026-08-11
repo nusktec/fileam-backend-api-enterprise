@@ -23,6 +23,11 @@ export const createEvidenceVaultDocumentValidation = [
     .isISO8601()
     .withMessage("uploadedDate must be a valid ISO date"),
   check("name").optional().trim().isString(),
+  check("uploadedBy")
+    .optional()
+    .trim()
+    .isString()
+    .withMessage("uploadedBy must be a string"),
   check("fileSizeKb")
     .optional({ nullable: true })
     .isInt({ min: 0 })

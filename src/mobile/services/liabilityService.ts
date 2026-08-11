@@ -2,9 +2,12 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { PERCENT, PERCENT_TWO_DECIMAL_ROUND } from "../../constants/percentages";
 import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
-import { isSalePaidStatus, SALE_STATUS } from "../../constants/salePaymentRules";
 import {
-  NHF_COLLECTING_AUTHORITY,
+  isSalePaidStatus,
+  PAYMENT_TYPE_INVOICE,
+  SALE_STATUS,
+} from "../../constants/salePaymentRules";
+import {
   OBLIGATION_STATUS,
   OBLIGATION_TYPE,
   PAYE_COLLECTING_AUTHORITY_DEFAULT,
@@ -13,9 +16,19 @@ import { TAX_TYPES } from "../../constants/taxPayable";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+/** Upcoming payables window (active / not-overdue, due within this many days). */
 const UPCOMING_WINDOW_DAYS = 30;
 const API_VERSION = process.env.API_VERSION || "1";
 
+/**
+ * Canonical payable statuses (Liability API).
+ * - OUTSTANDING — unpaid balance, not overdue (payment status)
+ * - OVERDUE — due date passed with unpaid balance
+ * - PARTIALLY_PAID — some payment made, balance remains
+ * - PAID — no outstanding balance
+ * - ACTIVE — open / not-overdue lifecycle label used in AP summary
+ *   (`activePayables`); not used interchangeably with OUTSTANDING on item rows
+ */
 export const LIABILITY_STATUS = {
   OUTSTANDING: "OUTSTANDING",
   OVERDUE: "OVERDUE",
@@ -100,6 +113,10 @@ function apiPath(path: string): string {
   return `/api/v${API_VERSION}${p}`;
 }
 
+function isSalaryExpenseCategory(category: string | null | undefined): boolean {
+  return (category ?? "").trim().toLowerCase() === "salary";
+}
+
 type ApRow = {
   name: string;
   status: LiabilityStatus;
@@ -135,9 +152,16 @@ function addToAgeBucket(
   else buckets.overNinetyDays += amount;
 }
 
+/**
+ * Accounts Payable ← Pay Later / supplier invoices only.
+ * Salary expenses are excluded (they belong under Salaries Payable).
+ */
 async function buildAccountsPayable(userId: string, asOfMs: number) {
   const expenses = await prisma.expense.findMany({
-    where: { userId },
+    where: {
+      userId,
+      paymentType: PAYMENT_TYPE_INVOICE,
+    },
     orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
   });
 
@@ -146,21 +170,11 @@ async function buildAccountsPayable(userId: string, asOfMs: number) {
 
   for (const e of expenses) {
     if (e.status === SALE_STATUS.CANCELLED) continue;
+    if (isSalaryExpenseCategory(e.category)) continue;
 
     const total = d(e.totalAmount);
-    let paid = 0;
-    let outstanding = 0;
-
-    if (e.paymentType === "Invoice") {
-      paid = coerceInvoiceAmountPaid(e.invoiceAmountPaid).total;
-      outstanding = Math.max(0, total - paid);
-    } else if (isSalePaidStatus(e.status)) {
-      continue;
-    } else {
-      outstanding = total;
-      paid = 0;
-    }
-
+    const paid = coerceInvoiceAmountPaid(e.invoiceAmountPaid).total;
+    const outstanding = Math.max(0, total - paid);
     if (outstanding <= 0) continue;
 
     const due = e.invoiceDueDate ?? e.expenseDate;
@@ -192,7 +206,9 @@ async function buildAccountsPayable(userId: string, asOfMs: number) {
     items.reduce((s, r) => s + r.amount, 0),
   );
   const overduePayables = normalizeMoneyAmount(
-    items.filter((r) => r.status === LIABILITY_STATUS.OVERDUE).reduce((s, r) => s + r.amount, 0),
+    items
+      .filter((r) => r.status === LIABILITY_STATUS.OVERDUE)
+      .reduce((s, r) => s + r.amount, 0),
   );
   const activePayables = normalizeMoneyAmount(
     items
@@ -276,12 +292,14 @@ async function buildAccountsPayable(userId: string, asOfMs: number) {
         items: listItems,
         upcomingPayables,
         reports: {
-          apAgeingReport: "",
+          apAgeingReport: apiPath("/mobile/liability/dashboard"),
           balanceSheet: apiPath("/mobile/financial-position"),
           cashFlowStatement: apiPath("/mobile/analytics/dashboard"),
           taxLiabilityReport: apiPath("/mobile/tax-payables"),
           expenseIntelligence: apiPath("/mobile/expenses"),
-          profitabilityAnalysis: apiPath("/mobile/analytics/financial-overview"),
+          profitabilityAnalysis: apiPath(
+            "/mobile/analytics/financial-overview",
+          ),
         },
         ageingAnalysis: {
           totalOutstanding: totalPayable,
@@ -293,9 +311,13 @@ async function buildAccountsPayable(userId: string, asOfMs: number) {
   };
 }
 
+/** Tax Payable ← tax_payables less completed remittances. */
 async function buildTaxPayable(userId: string, asOfMs: number) {
   const payables = await prisma.taxPayable.findMany({
     where: { userId },
+    include: {
+      payments: { where: { status: "completed" } },
+    },
     orderBy: [{ periodYear: "desc" }, { periodMonth: "desc" }],
   });
 
@@ -306,23 +328,21 @@ async function buildTaxPayable(userId: string, asOfMs: number) {
   let overduePayable = 0;
 
   for (const p of payables) {
-    const statusLower = (p.status ?? "").toLowerCase();
-    if (statusLower === "paid" || statusLower === "overpaid") continue;
-
-    const amount = normalizeMoneyAmount(d(p.totalPayable));
-    if (amount <= 0) continue;
+    const recognized = d(p.totalPayable);
+    const remitted = p.payments.reduce((s, r) => s + d(r.amountPaid), 0);
+    const outstanding = normalizeMoneyAmount(Math.max(0, recognized - remitted));
+    if (outstanding <= 0) continue;
 
     const days = overdueDays(p.filingDueDate, asOfMs);
-    const paidHint = statusLower === "partially_paid" ? amount * 0.5 : 0;
     const status = liabilityStatus({
-      outstanding: amount,
-      total: amount + paidHint,
-      paid: paidHint,
+      outstanding,
+      total: recognized,
+      paid: remitted,
       daysOverdue: days,
     });
 
-    total += amount;
-    if (days > 0) overduePayable += amount;
+    total += outstanding;
+    if (days > 0) overduePayable += outstanding;
 
     const taxType = TAX_TYPES.includes(p.taxType as (typeof TAX_TYPES)[number])
       ? p.taxType
@@ -333,7 +353,7 @@ async function buildTaxPayable(userId: string, asOfMs: number) {
       name: `${taxType} - ${label}`,
       status,
       dueDate: formatYmd(p.filingDueDate),
-      amount,
+      amount: outstanding,
       taxAuthority:
         p.stateOfOperation?.trim() ||
         (taxType === "PAYE" ? PAYE_COLLECTING_AUTHORITY_DEFAULT : "FIRS"),
@@ -365,7 +385,6 @@ async function buildPayrollCategory(
   type: string,
   name: string,
   asOfMs: number,
-  authorityFallback: string,
 ) {
   const rows = await prisma.payrollObligation.findMany({
     where: { userId, type, status: OBLIGATION_STATUS.PENDING },
@@ -389,8 +408,6 @@ async function buildPayrollCategory(
       payrollDate: formatYmd(r.dueDate) ?? `${r.period}-01`,
       status,
       amount,
-      period: r.period,
-      collectingAuthority: r.collectingAuthority ?? authorityFallback,
     };
   });
 
@@ -406,6 +423,10 @@ async function buildPayrollCategory(
   };
 }
 
+/**
+ * Salaries Payable ← unpaid Salary expenses (payroll settlements recorded as
+ * expenses), less partial invoice payments. Not included in Accounts Payable.
+ */
 async function buildSalariesPayable(userId: string, asOfMs: number) {
   const expenses = await prisma.expense.findMany({
     where: {
@@ -430,7 +451,7 @@ async function buildSalariesPayable(userId: string, asOfMs: number) {
     const totalAmt = d(e.totalAmount);
     let outstanding = totalAmt;
     let paid = 0;
-    if (e.paymentType === "Invoice") {
+    if (e.paymentType === PAYMENT_TYPE_INVOICE) {
       paid = coerceInvoiceAmountPaid(e.invoiceAmountPaid).total;
       outstanding = Math.max(0, totalAmt - paid);
     }
@@ -477,6 +498,11 @@ function emptyNamedCategory(name: string) {
   };
 }
 
+/**
+ * Cash leaving the business for liability settlement this calendar month.
+ * Components are disjoint: AP invoice settlements, tax remittances, payroll
+ * remittances, salary expense settlements — no double-counting.
+ */
 async function buildCashFlowImpact(userId: string) {
   const now = new Date();
   const periodStart = new Date(
@@ -486,51 +512,81 @@ async function buildCashFlowImpact(userId: string) {
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
   );
 
-  const [expensePayments, taxPayments, payrollPaid] = await Promise.all([
-    prisma.expense.findMany({
-      where: {
-        userId,
-        status: { in: [SALE_STATUS.PAID, "Paid"] },
-        updatedAt: { gte: periodStart, lt: periodEnd },
-      },
-      select: { totalAmount: true, invoiceAmountPaid: true, paymentType: true },
-    }),
-    prisma.paymentRecord.findMany({
-      where: {
-        userId,
-        status: "completed",
-        OR: [
-          { paidAt: { gte: periodStart, lt: periodEnd } },
-          {
-            paidAt: null,
-            createdAt: { gte: periodStart, lt: periodEnd },
-          },
-        ],
-      },
-      select: { amountPaid: true },
-    }),
-    prisma.payrollObligation.findMany({
-      where: {
-        userId,
-        status: OBLIGATION_STATUS.PAID,
-        paidAt: { gte: periodStart, lt: periodEnd },
-      },
-      select: { amount: true },
-    }),
-  ]);
+  const [apSettlements, salarySettlements, taxPayments, payrollPaid] =
+    await Promise.all([
+      prisma.expense.findMany({
+        where: {
+          userId,
+          paymentType: PAYMENT_TYPE_INVOICE,
+          updatedAt: { gte: periodStart, lt: periodEnd },
+          NOT: { category: { equals: "Salary", mode: "insensitive" } },
+        },
+        select: {
+          invoiceAmountPaid: true,
+          status: true,
+        },
+      }),
+      prisma.expense.findMany({
+        where: {
+          userId,
+          category: { equals: "Salary", mode: "insensitive" },
+          status: { in: [SALE_STATUS.PAID, "Paid"] },
+          updatedAt: { gte: periodStart, lt: periodEnd },
+        },
+        select: {
+          totalAmount: true,
+          invoiceAmountPaid: true,
+          paymentType: true,
+        },
+      }),
+      prisma.paymentRecord.findMany({
+        where: {
+          userId,
+          status: "completed",
+          OR: [
+            { paidAt: { gte: periodStart, lt: periodEnd } },
+            {
+              paidAt: null,
+              createdAt: { gte: periodStart, lt: periodEnd },
+            },
+          ],
+        },
+        select: { amountPaid: true },
+      }),
+      prisma.payrollObligation.findMany({
+        where: {
+          userId,
+          status: OBLIGATION_STATUS.PAID,
+          paidAt: { gte: periodStart, lt: periodEnd },
+        },
+        select: { amount: true },
+      }),
+    ]);
 
-  let expenseOut = 0;
-  for (const e of expensePayments) {
-    if (e.paymentType === "Invoice") {
-      expenseOut += coerceInvoiceAmountPaid(e.invoiceAmountPaid).total;
-    } else {
-      expenseOut += d(e.totalAmount);
+  let apOut = 0;
+  for (const e of apSettlements) {
+    const paid = coerceInvoiceAmountPaid(e.invoiceAmountPaid).total;
+    if (paid > 0) apOut += paid;
+    else if (isSalePaidStatus(e.status)) {
+      // fully settled invoice without itemized paid blob — skip; paid via coerce
     }
   }
+
+  let salaryOut = 0;
+  for (const e of salarySettlements) {
+    if (e.paymentType === PAYMENT_TYPE_INVOICE) {
+      salaryOut += coerceInvoiceAmountPaid(e.invoiceAmountPaid).total;
+    } else {
+      salaryOut += d(e.totalAmount);
+    }
+  }
+
   const taxOut = taxPayments.reduce((s, p) => s + d(p.amountPaid), 0);
   const payrollOut = payrollPaid.reduce((s, p) => s + d(p.amount), 0);
 
-  const netCashOutflow = normalizeMoneyAmount(expenseOut + taxOut + payrollOut);
+  const netCashOutflow = normalizeMoneyAmount(
+    apOut + salaryOut + taxOut + payrollOut,
+  );
 
   return {
     netCashOutflow,
@@ -591,33 +647,25 @@ export const liabilityService = {
   async getDashboard(userId: string) {
     const asOfMs = startOfUtcDayMs(new Date());
 
-    const [
-      ap,
-      tax,
-      salaries,
-      pension,
-      nhf,
-      cashFlowImpact,
-    ] = await Promise.all([
-      buildAccountsPayable(userId, asOfMs),
-      buildTaxPayable(userId, asOfMs),
-      buildSalariesPayable(userId, asOfMs),
-      buildPayrollCategory(
-        userId,
-        OBLIGATION_TYPE.PENSION,
-        "Pension Payable",
-        asOfMs,
-        "Pension Fund Administrators",
-      ),
-      buildPayrollCategory(
-        userId,
-        OBLIGATION_TYPE.NHF,
-        "NHF Payable",
-        asOfMs,
-        NHF_COLLECTING_AUTHORITY,
-      ),
-      buildCashFlowImpact(userId),
-    ]);
+    const [ap, tax, salaries, pension, nhf, cashFlowImpact] =
+      await Promise.all([
+        buildAccountsPayable(userId, asOfMs),
+        buildTaxPayable(userId, asOfMs),
+        buildSalariesPayable(userId, asOfMs),
+        buildPayrollCategory(
+          userId,
+          OBLIGATION_TYPE.PENSION,
+          "Pension Payable",
+          asOfMs,
+        ),
+        buildPayrollCategory(
+          userId,
+          OBLIGATION_TYPE.NHF,
+          "NHF Payable",
+          asOfMs,
+        ),
+        buildCashFlowImpact(userId),
+      ]);
 
     const interest = emptyNamedCategory("Interest Payable");
     const shortTermLoan = emptyNamedCategory("Short-Term Loan");
