@@ -2621,7 +2621,7 @@
         },
         {
           "name": "Liability **",
-          "description": "Liability reporting over existing books (do not duplicate data).\n\nSix routes (spelling: liability):\n1. GET /mobile/liability/summary\n2. GET /mobile/liability/dashboard\n3. GET /mobile/liability/current-liabilities\n4. GET /mobile/liability/non-current-liabilities\n5. GET /mobile/liability/accounts-payable\n6. GET /mobile/liability/cash-flow-impact\n\nSources: AP \u2190 Invoice/Pay Later (Salary excluded); Tax \u2190 payables less remittances; Salaries \u2190 unpaid Salary expenses; Pension/NHF \u2190 pending payroll_obligations. Interest / Short-Term / non-current loans stubbed at 0 until loan register exists.\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID. Percentages use class totals; divide-by-zero \u2192 0.",
+          "description": "Liability reporting over existing books (do not duplicate data).\n\nSix routes (spelling: liability):\n1. GET /mobile/liability/summary\n2. GET /mobile/liability/dashboard\n3. GET /mobile/liability/current-liabilities\n4. GET /mobile/liability/non-current-liabilities\n5. GET /mobile/liability/accounts-payable\n6. GET /mobile/liability/cash-flow-impact\n\nSources: AP \u2190 Invoice/Pay Later (Salary excluded); Tax \u2190 payables less remittances; Salaries \u2190 unpaid Salary expenses; Pension/NHF \u2190 pending payroll_obligations. Non-current loan balances \u2190 Liability Register (/mobile/liabilities). Interest Payable / Short-Term Loan still stubbed at 0.\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID. Percentages use class totals; divide-by-zero \u2192 0.",
           "item": [
             {
               "name": "Get liability summary **",
@@ -2644,7 +2644,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/current-liabilities",
-                "description": "Full current liability trees: Accounts Payable (with payables nested), Tax Payable (PAYE/VAT/WHT/CIT/PIT), Salaries, Pension, NHF, Interest Payable, Short-Term Loan. Returns { total, overduePayable, items[] }."
+                "description": "Full current liability trees: Accounts Payable (with payables nested), Tax Payable (PAYE/VAT/WHT/CIT/PIT), Salaries, Pension, NHF, Interest Payable, Short-Term Loan. Returns { total, overduePayable, items[] }. Payable amount is included on payables.items[], upcomingPayables[], and suppliers[].payables[]."
               }
             },
             {
@@ -2652,7 +2652,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/non-current-liabilities",
-                "description": "Non-current categories: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings. Returns { total, items[] } (amounts 0 until loan register)."
+                "description": "Non-current categories from Liability Register outstanding principal: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings. Returns { total, items[] }."
               }
             },
             {
@@ -2660,7 +2660,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/accounts-payable",
-                "description": "AP detail only: name, amount, percentage, payables { summary, items, upcomingPayables, ageingAnalysis, suppliers, reports }."
+                "description": "AP detail only: name, amount, percentage, payables { summary, items, upcomingPayables, ageingAnalysis, suppliers, reports }. Each payable item includes amount (outstanding) in items[], upcomingPayables[], and suppliers[].payables[] \u2014 same amount wherever the payable appears."
               }
             },
             {
@@ -2668,7 +2668,124 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/cash-flow-impact",
-                "description": "Liability settlement cash impact for current calendar month: netCashOutflow, overdueSettlement, scheduledDebtRepayment, interestExpense, interestDue."
+                "description": "Liability settlement cash impact for current calendar month: netCashOutflow (incl. debt principal+interest repayments), overdueSettlement, scheduledDebtRepayment, interestExpense, interestDue (open accrued on register)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Liabilities Register & Repayments **",
+          "description": "Liability Register (Latest v2) + Detailed Repayment History.\n\nRegister:\n- POST /mobile/liabilities\n- GET /mobile/liabilities (summary + paginated list)\n- GET /mobile/liabilities/:liabilityId\n\nRepayments:\n- POST /mobile/liabilities/repayments\n- GET /mobile/liabilities/repayments\n- GET /mobile/liabilities/repayments/:repaymentId\n\nliabilityType: BANK_LOAN | DIRECTOR_LOAN | SHAREHOLDER_LOAN | MORTGAGE | EQUIPMENT_FINANCING | LEASE_LIABILITY | CONVERTIBLE_LOAN | OTHER_LONG_TERM_BORROWING\ninterestRateType: ANNUAL | MONTHLY | QUARTERLY | WEEKLY | DAILY | CUSTOM\ninterestCalculationMethod: FLAT | REDUCING_BALANCE | COMPOUNDING | CUSTOM\nrepaymentFrequency: WEEKLY | BIWEEKLY | MONTHLY | QUARTERLY | SEMI_ANNUALLY | ANNUALLY | CUSTOM\nrepaymentStructure: AMORTIZED | INTEREST_ONLY | BULLET | CUSTOM\npaymentSource: CASH | BANK\n\nBackend owns outstandingBalance, schedule, overdue, current/non-current classification, and repayment allocation.",
+          "item": [
+            {
+              "name": "Register liability **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"GTBank Business Loan\",\n  \"liabilityType\": \"BANK_LOAN\",\n  \"creditor\": \"GTBank\",\n  \"principalAmount\": 10000000,\n  \"interestRate\": 8,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-01-01\",\n  \"maturityDate\": \"2027-01-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"evidenceUrl\": \"https://example.com/loan-agreement.pdf\",\n  \"note\": \"Business expansion loan\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                "description": "Creates LIAB-xxx. Required: name, liabilityType, creditor, principalAmount, startDate, repaymentFrequency, repaymentStructure. Interest fields required when interestRate > 0. Response: terms, financialSummary, status, repaymentSummary."
+              }
+            },
+            {
+              "name": "List registered liabilities **",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities?page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v{{apiVersion}}",
+                    "mobile",
+                    "liabilities"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "summary: totalLiabilities, currentLiabilities, nonCurrentLiabilities, totalOutstanding, totalOverdue + paginated liabilities[] preview."
+              }
+            },
+            {
+              "name": "Get registered liability **",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}",
+                "description": "Full detail by uuid or LIAB-xxx: terms, financialSummary, classification (current/non-current portions), status, schedule, repaymentSummary, evidence."
+              }
+            },
+            {
+              "name": "Create liability repayment **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"liabilityId\": \"{{liabilityId}}\",\n  \"repaymentAmount\": 500000,\n  \"paymentDate\": \"2026-08-12\",\n  \"paymentSource\": \"BANK\",\n  \"evidenceUrl\": \"https://example.com/receipt.pdf\",\n  \"note\": \"August installment\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments",
+                "description": "Records immutable REPAY-xxx. liabilityId accepts uuid or LIAB-xxx. Allocates interest then principal using registered interest terms; FULL/PARTIAL server-side."
+              }
+            },
+            {
+              "name": "List liability repayments **",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments?page=1&limit=20",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v{{apiVersion}}",
+                    "mobile",
+                    "liabilities",
+                    "repayments"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "summary: dueThisMonth, paidThisMonth, overdue, overdueCount + paginated repayments[]."
+              }
+            },
+            {
+              "name": "Get liability repayment detail **",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments/{{repaymentId}}",
+                "description": "Full allocation, cumulative balances, accounting, taxGPT. Accepts uuid or REPAY-xxx."
               }
             }
           ]

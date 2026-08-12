@@ -1,0 +1,1289 @@
+import { Decimal } from "@prisma/client/runtime/library";
+import type { Prisma } from "@prisma/client";
+import { prisma } from "../../config/database";
+import {
+  LIABILITY_CLASS,
+  LIABILITY_CURRENT_PORTION_MONTHS,
+  LIABILITY_INTEREST_CALC_METHODS,
+  LIABILITY_INTEREST_RATE_TYPES,
+  LIABILITY_PAYMENT_STATUSES,
+  LIABILITY_REPAYMENT_FREQUENCIES,
+  LIABILITY_REPAYMENT_STRUCTURES,
+  LIABILITY_TYPE_LABELS,
+  LIABILITY_TYPES,
+  TAX_GPT_TREATMENT,
+  type LiabilityInterestCalcMethod,
+  type LiabilityInterestRateType,
+  type LiabilityPaymentSource,
+  type LiabilityRepaymentFrequency,
+  type LiabilityRepaymentStructure,
+  type LiabilityType,
+  isValidInterestCalcMethod,
+  isValidInterestRateType,
+  isValidLiabilityPaymentSource,
+  isValidLiabilityType,
+  isValidRepaymentFrequency,
+  isValidRepaymentStructure,
+} from "../../constants/liabilityRegister";
+import { SALE_STATUS } from "../../constants/salePaymentRules";
+import { HttpReplyError } from "../../utils/httpReplyError";
+import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const LIAB_COUNTER = "liability_code";
+const REPAY_COUNTER = "liability_repayment_code";
+
+type ScheduleRow = {
+  id: string;
+  dueDate: Date;
+  amountDue: Decimal;
+  amountPaid: Decimal;
+  status: string;
+};
+
+type LiabilityRow = {
+  id: string;
+  liabilityCode: string;
+  name: string;
+  liabilityType: string;
+  creditor: string;
+  originalAmount: Decimal;
+  outstandingPrincipal: Decimal;
+  accruedInterest: Decimal;
+  interestRate: Decimal | null;
+  interestRateType: string | null;
+  interestCalcMethod: string | null;
+  repaymentFrequency: string;
+  repaymentStructure: string;
+  installmentAmount: Decimal | null;
+  startDate: Date;
+  maturityDate: Date | null;
+  nextDueDate: Date | null;
+  totalPrincipalPaid: Decimal;
+  totalInterestPaid: Decimal;
+  totalAmountRepaid: Decimal;
+  paymentStatus: string;
+  repaymentCount: number;
+  lastRepaymentDate: Date | null;
+  evidenceUrl: string | null;
+  note: string | null;
+};
+
+function d(v: Decimal | number | null | undefined): number {
+  if (v == null) return 0;
+  return typeof v === "number" ? v : Number(v);
+}
+
+function startOfUtcDay(date: Date): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+}
+
+function formatYmd(date: Date | null | undefined): string | null {
+  if (!date) return null;
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseDateOnly(value: string, field = "date"): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (!m) throw new HttpReplyError(400, `${field} must be YYYY-MM-DD`);
+  return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+
+function monthBounds(asOf = new Date()) {
+  const start = new Date(
+    Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), 1),
+  );
+  const end = new Date(
+    Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() + 1, 1),
+  );
+  return { start, end };
+}
+
+function daysBetween(from: Date, to: Date): number {
+  const a = startOfUtcDay(from).getTime();
+  const b = startOfUtcDay(to).getTime();
+  if (b <= a) return 0;
+  return Math.floor((b - a) / MS_PER_DAY);
+}
+
+function addMonths(date: Date, months: number): Date {
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()),
+  );
+}
+
+async function nextCode(counterId: string, prefix: string): Promise<string> {
+  const counter = await prisma.counter.upsert({
+    where: { id: counterId },
+    create: { id: counterId, lastNumber: 1 },
+    update: { lastNumber: { increment: 1 } },
+  });
+  return `${prefix}-${String(counter.lastNumber).padStart(3, "0")}`;
+}
+
+async function nextExpenseNumber(
+  tx: Prisma.TransactionClient,
+): Promise<string> {
+  const counter = await tx.counter.upsert({
+    where: { id: "expense_number" },
+    create: { id: "expense_number", lastNumber: 1 },
+    update: { lastNumber: { increment: 1 } },
+  });
+  return `EXP-${String(counter.lastNumber).padStart(3, "0")}`;
+}
+
+function paymentTypeFromSource(source: LiabilityPaymentSource): string {
+  return source === "CASH" ? "Cash" : "Transfer";
+}
+
+function settlementBalance(liability: {
+  outstandingPrincipal: Decimal;
+  accruedInterest: Decimal;
+}): number {
+  return normalizeMoneyAmount(
+    d(liability.outstandingPrincipal) + d(liability.accruedInterest),
+  );
+}
+
+function periodsPerYear(frequency: string): number {
+  switch (frequency) {
+    case "WEEKLY":
+      return 52;
+    case "BIWEEKLY":
+      return 26;
+    case "MONTHLY":
+      return 12;
+    case "QUARTERLY":
+      return 4;
+    case "SEMI_ANNUALLY":
+      return 2;
+    case "ANNUALLY":
+    case "ANNUAL":
+      return 1;
+    default:
+      return 12;
+  }
+}
+
+/** Convert stated rate (%) + rate type into an annual decimal fraction (e.g. 0.08). */
+function toAnnualRateFraction(
+  ratePercent: number,
+  rateType: string | null | undefined,
+): number {
+  const r = ratePercent / 100;
+  switch (rateType) {
+    case "MONTHLY":
+      return r * 12;
+    case "QUARTERLY":
+      return r * 4;
+    case "WEEKLY":
+      return r * 52;
+    case "DAILY":
+      return r * 365;
+    case "ANNUAL":
+    case "CUSTOM":
+    default:
+      return r;
+  }
+}
+
+function periodInterestAmount(opts: {
+  originalPrincipal: number;
+  outstandingPrincipal: number;
+  interestRate: number | null;
+  interestRateType: string | null;
+  interestCalcMethod: string | null;
+  repaymentFrequency: string;
+}): number {
+  if (opts.interestRate == null || !(opts.interestRate > 0)) return 0;
+  const annual = toAnnualRateFraction(opts.interestRate, opts.interestRateType);
+  const perPeriod = annual / periodsPerYear(opts.repaymentFrequency);
+  const method = (opts.interestCalcMethod || "REDUCING_BALANCE") as string;
+  if (method === "FLAT") {
+    return normalizeMoneyAmount(opts.originalPrincipal * perPeriod);
+  }
+  // REDUCING_BALANCE, COMPOUNDING, CUSTOM → use outstanding principal for period
+  return normalizeMoneyAmount(opts.outstandingPrincipal * perPeriod);
+}
+
+function overdueFromSchedule(
+  schedule: ScheduleRow[],
+  paymentStatus: string,
+  asOf = startOfUtcDay(new Date()),
+): { isOverdue: boolean; daysOverdue: number; overdueAmount: number } {
+  if (paymentStatus === "FULLY_PAID") {
+    return { isOverdue: false, daysOverdue: 0, overdueAmount: 0 };
+  }
+  let overdueAmount = 0;
+  let oldestDue: Date | null = null;
+  for (const s of schedule) {
+    if (s.status === "PAID") continue;
+    const due = startOfUtcDay(s.dueDate);
+    if (due.getTime() >= asOf.getTime()) continue;
+    const open = Math.max(0, d(s.amountDue) - d(s.amountPaid));
+    if (open <= 0) continue;
+    overdueAmount += open;
+    if (!oldestDue || due.getTime() < oldestDue.getTime()) oldestDue = due;
+  }
+  if (!oldestDue || overdueAmount <= 0) {
+    return { isOverdue: false, daysOverdue: 0, overdueAmount: 0 };
+  }
+  return {
+    isOverdue: true,
+    daysOverdue: daysBetween(oldestDue, asOf),
+    overdueAmount: normalizeMoneyAmount(overdueAmount),
+  };
+}
+
+function nextOpenSchedule(schedule: ScheduleRow[]): ScheduleRow | null {
+  const open = schedule
+    .filter((s) => s.status !== "PAID")
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+  return open[0] ?? null;
+}
+
+function classifyLiability(
+  outstandingBalance: number,
+  schedule: ScheduleRow[],
+  maturityDate: Date | null,
+  asOf = startOfUtcDay(new Date()),
+): {
+  liabilityClass: string;
+  currentPortion: number;
+  nonCurrentPortion: number;
+} {
+  if (outstandingBalance <= 0) {
+    return {
+      liabilityClass: LIABILITY_CLASS.NON_CURRENT,
+      currentPortion: 0,
+      nonCurrentPortion: 0,
+    };
+  }
+
+  const horizon = addMonths(asOf, LIABILITY_CURRENT_PORTION_MONTHS);
+  let currentPortion = 0;
+
+  if (schedule.length > 0) {
+    for (const s of schedule) {
+      if (s.status === "PAID") continue;
+      const open = Math.max(0, d(s.amountDue) - d(s.amountPaid));
+      if (open <= 0) continue;
+      const due = startOfUtcDay(s.dueDate);
+      if (due.getTime() <= horizon.getTime()) currentPortion += open;
+    }
+  } else if (maturityDate) {
+    const mat = startOfUtcDay(maturityDate);
+    currentPortion =
+      mat.getTime() <= horizon.getTime() ? outstandingBalance : 0;
+  } else {
+    currentPortion = 0;
+  }
+
+  currentPortion = normalizeMoneyAmount(
+    Math.min(currentPortion, outstandingBalance),
+  );
+  const nonCurrentPortion = normalizeMoneyAmount(
+    outstandingBalance - currentPortion,
+  );
+
+  let liabilityClass: string = LIABILITY_CLASS.MIXED;
+  if (currentPortion <= 0) liabilityClass = LIABILITY_CLASS.NON_CURRENT;
+  else if (nonCurrentPortion <= 0) liabilityClass = LIABILITY_CLASS.CURRENT;
+
+  return { liabilityClass, currentPortion, nonCurrentPortion };
+}
+
+function generateScheduleDates(
+  start: Date,
+  maturity: Date | null,
+  frequency: string,
+  maxPeriods = 120,
+): Date[] {
+  if (frequency === "CUSTOM") {
+    return maturity ? [startOfUtcDay(maturity)] : [];
+  }
+
+  const dates: Date[] = [];
+  let cursor = startOfUtcDay(start);
+  // First installment typically one period after start
+  cursor = advanceByFrequency(cursor, frequency);
+  const end = maturity
+    ? startOfUtcDay(maturity)
+    : addMonths(cursor, 120);
+
+  for (let i = 0; i < maxPeriods; i++) {
+    if (cursor.getTime() > end.getTime()) break;
+    dates.push(new Date(cursor));
+    cursor = advanceByFrequency(cursor, frequency);
+  }
+
+  if (maturity && dates.length === 0) {
+    dates.push(startOfUtcDay(maturity));
+  }
+  return dates;
+}
+
+function advanceByFrequency(date: Date, frequency: string): Date {
+  switch (frequency) {
+    case "WEEKLY":
+      return new Date(date.getTime() + 7 * MS_PER_DAY);
+    case "BIWEEKLY":
+      return new Date(date.getTime() + 14 * MS_PER_DAY);
+    case "QUARTERLY":
+      return addMonths(date, 3);
+    case "SEMI_ANNUALLY":
+      return addMonths(date, 6);
+    case "ANNUALLY":
+    case "ANNUAL":
+      return addMonths(date, 12);
+    case "MONTHLY":
+    default:
+      return addMonths(date, 1);
+  }
+}
+
+function buildScheduleAmounts(opts: {
+  principal: number;
+  dates: Date[];
+  structure: string;
+  interestPerPeriod: number;
+}): { amountDue: number; installment: number | null }[] {
+  const n = opts.dates.length;
+  if (n === 0) return [];
+
+  if (opts.structure === "BULLET") {
+    return opts.dates.map((due, idx) => {
+      const isLast = idx === n - 1;
+      const interest = opts.interestPerPeriod;
+      const principal = isLast ? opts.principal : 0;
+      const amountDue = normalizeMoneyAmount(principal + interest);
+      return { amountDue, installment: amountDue };
+    });
+  }
+
+  if (opts.structure === "INTEREST_ONLY") {
+    return opts.dates.map((_, idx) => {
+      const isLast = idx === n - 1;
+      const interest = opts.interestPerPeriod;
+      const principal = isLast ? opts.principal : 0;
+      const amountDue = normalizeMoneyAmount(principal + interest);
+      return { amountDue, installment: amountDue };
+    });
+  }
+
+  // AMORTIZED / CUSTOM — equal principal + period interest
+  const principalEach = normalizeMoneyAmount(opts.principal / n);
+  let allocated = 0;
+  return opts.dates.map((_, idx) => {
+    const isLast = idx === n - 1;
+    const principal = isLast
+      ? normalizeMoneyAmount(opts.principal - allocated)
+      : principalEach;
+    allocated = normalizeMoneyAmount(allocated + principal);
+    const amountDue = normalizeMoneyAmount(principal + opts.interestPerPeriod);
+    return { amountDue, installment: amountDue };
+  });
+}
+
+function allocateToSchedule(
+  items: ScheduleRow[],
+  payment: number,
+  paymentDate: Date,
+): {
+  updates: Array<{ id: string; amountPaid: number; status: string }>;
+  isOverdue: boolean;
+  daysOverdue: number;
+} {
+  let remaining = payment;
+  const updates: Array<{ id: string; amountPaid: number; status: string }> = [];
+  let isOverdue = false;
+  let daysOverdue = 0;
+  const asOf = startOfUtcDay(paymentDate);
+
+  const open = items
+    .filter((i) => i.status !== "PAID")
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+
+  for (const item of open) {
+    if (remaining <= 0) break;
+    const due = startOfUtcDay(item.dueDate);
+    const openAmt = Math.max(0, d(item.amountDue) - d(item.amountPaid));
+    if (openAmt <= 0) continue;
+    if (due.getTime() < asOf.getTime()) {
+      isOverdue = true;
+      daysOverdue = Math.max(daysOverdue, daysBetween(due, asOf));
+    }
+    const apply = Math.min(openAmt, remaining);
+    const newPaid = normalizeMoneyAmount(d(item.amountPaid) + apply);
+    remaining = normalizeMoneyAmount(remaining - apply);
+    updates.push({
+      id: item.id,
+      amountPaid: newPaid,
+      status:
+        newPaid >= d(item.amountDue) - 0.001
+          ? "PAID"
+          : newPaid > 0
+            ? "PARTIAL"
+            : "PENDING",
+    });
+  }
+
+  return { updates, isOverdue, daysOverdue };
+}
+
+function statusBlock(l: LiabilityRow, schedule: ScheduleRow[]) {
+  const overdue = overdueFromSchedule(schedule, l.paymentStatus);
+  return {
+    paymentStatus: l.paymentStatus,
+    isOverdue: overdue.isOverdue,
+    daysOverdue: overdue.daysOverdue,
+  };
+}
+
+function termsBlock(l: LiabilityRow) {
+  return {
+    principalAmount: d(l.originalAmount),
+    interestRate: l.interestRate != null ? d(l.interestRate) : null,
+    interestRateType: l.interestRateType,
+    interestCalculationMethod: l.interestCalcMethod,
+    startDate: formatYmd(l.startDate),
+    maturityDate: formatYmd(l.maturityDate),
+    repaymentFrequency: l.repaymentFrequency,
+    repaymentStructure: l.repaymentStructure,
+  };
+}
+
+function listPreview(l: LiabilityRow, schedule: ScheduleRow[]) {
+  const next = nextOpenSchedule(schedule);
+  const overdue = overdueFromSchedule(schedule, l.paymentStatus);
+  return {
+    id: l.liabilityCode,
+    uuid: l.id,
+    name: l.name,
+    liabilityType: l.liabilityType,
+    creditor: l.creditor,
+    originalAmount: d(l.originalAmount),
+    outstandingBalance: settlementBalance(l),
+    totalAmountRepaid: d(l.totalAmountRepaid),
+    nextPaymentDate: formatYmd(next?.dueDate ?? l.nextDueDate),
+    nextPaymentAmount: next
+      ? normalizeMoneyAmount(d(next.amountDue) - d(next.amountPaid))
+      : l.installmentAmount != null
+        ? d(l.installmentAmount)
+        : null,
+    paymentStatus: l.paymentStatus,
+    isOverdue: overdue.isOverdue,
+    daysOverdue: overdue.daysOverdue,
+  };
+}
+
+function createResponse(l: LiabilityRow, schedule: ScheduleRow[] = []) {
+  return {
+    id: l.liabilityCode,
+    uuid: l.id,
+    name: l.name,
+    liabilityType: l.liabilityType,
+    creditor: l.creditor,
+    terms: termsBlock(l),
+    financialSummary: {
+      outstandingBalance: settlementBalance(l),
+      totalPrincipalPaid: d(l.totalPrincipalPaid),
+      totalInterestPaid: d(l.totalInterestPaid),
+      totalAmountRepaid: d(l.totalAmountRepaid),
+    },
+    status: statusBlock(l, schedule),
+    repaymentSummary: {
+      repaymentCount: l.repaymentCount,
+      lastRepaymentDate: formatYmd(l.lastRepaymentDate),
+    },
+  };
+}
+
+function detailResponse(l: LiabilityRow, schedule: ScheduleRow[]) {
+  const outstanding = settlementBalance(l);
+  const classification = classifyLiability(
+    outstanding,
+    schedule,
+    l.maturityDate,
+  );
+  const next = nextOpenSchedule(schedule);
+  return {
+    id: l.liabilityCode,
+    uuid: l.id,
+    name: l.name,
+    liabilityType: l.liabilityType,
+    creditor: l.creditor,
+    terms: termsBlock(l),
+    financialSummary: {
+      originalAmount: d(l.originalAmount),
+      outstandingBalance: outstanding,
+      totalPrincipalPaid: d(l.totalPrincipalPaid),
+      totalInterestPaid: d(l.totalInterestPaid),
+      totalAmountRepaid: d(l.totalAmountRepaid),
+    },
+    classification,
+    status: statusBlock(l, schedule),
+    schedule: {
+      nextPaymentDate: formatYmd(next?.dueDate ?? l.nextDueDate),
+      nextPaymentAmount: next
+        ? normalizeMoneyAmount(d(next.amountDue) - d(next.amountPaid))
+        : l.installmentAmount != null
+          ? d(l.installmentAmount)
+          : null,
+      items: schedule.map((s) => ({
+        id: s.id,
+        dueDate: formatYmd(s.dueDate),
+        amountDue: d(s.amountDue),
+        amountPaid: d(s.amountPaid),
+        outstanding: normalizeMoneyAmount(d(s.amountDue) - d(s.amountPaid)),
+        status: s.status,
+      })),
+    },
+    repaymentSummary: {
+      repaymentCount: l.repaymentCount,
+      lastRepaymentDate: formatYmd(l.lastRepaymentDate),
+    },
+    evidence: {
+      url: l.evidenceUrl,
+    },
+    note: l.note,
+  };
+}
+
+function validateInterestFields(data: {
+  interestRate?: number;
+  interestRateType?: string;
+  interestCalculationMethod?: string;
+}) {
+  const hasRate = data.interestRate != null && data.interestRate > 0;
+  if (data.interestRate != null && data.interestRate < 0) {
+    throw new HttpReplyError(400, "interestRate must be >= 0");
+  }
+  if (hasRate) {
+    if (!data.interestRateType) {
+      throw new HttpReplyError(
+        400,
+        "interestRateType is required when interestRate is set",
+      );
+    }
+    if (!isValidInterestRateType(data.interestRateType)) {
+      throw new HttpReplyError(
+        400,
+        `interestRateType must be one of: ${LIABILITY_INTEREST_RATE_TYPES.join(", ")}`,
+      );
+    }
+    if (!data.interestCalculationMethod) {
+      throw new HttpReplyError(
+        400,
+        "interestCalculationMethod is required when interestRate is set",
+      );
+    }
+    if (!isValidInterestCalcMethod(data.interestCalculationMethod)) {
+      throw new HttpReplyError(
+        400,
+        `interestCalculationMethod must be one of: ${LIABILITY_INTEREST_CALC_METHODS.join(", ")}`,
+      );
+    }
+  } else if (data.interestRateType && !isValidInterestRateType(data.interestRateType)) {
+    throw new HttpReplyError(
+      400,
+      `interestRateType must be one of: ${LIABILITY_INTEREST_RATE_TYPES.join(", ")}`,
+    );
+  } else if (
+    data.interestCalculationMethod &&
+    !isValidInterestCalcMethod(data.interestCalculationMethod)
+  ) {
+    throw new HttpReplyError(
+      400,
+      `interestCalculationMethod must be one of: ${LIABILITY_INTEREST_CALC_METHODS.join(", ")}`,
+    );
+  }
+}
+
+function validateFrequencyStructure(
+  frequency: string,
+  structure: string,
+  maturityDate: Date | null,
+) {
+  if (!isValidRepaymentFrequency(frequency)) {
+    throw new HttpReplyError(
+      400,
+      `repaymentFrequency must be one of: ${LIABILITY_REPAYMENT_FREQUENCIES.join(", ")}`,
+    );
+  }
+  if (!isValidRepaymentStructure(structure)) {
+    throw new HttpReplyError(
+      400,
+      `repaymentStructure must be one of: ${LIABILITY_REPAYMENT_STRUCTURES.join(", ")}`,
+    );
+  }
+  if (structure === "BULLET" && frequency !== "CUSTOM" && !maturityDate) {
+    throw new HttpReplyError(
+      400,
+      "BULLET structure requires maturityDate (use CUSTOM frequency when there is no recurring interval)",
+    );
+  }
+  if (frequency === "CUSTOM" && structure === "BULLET" && !maturityDate) {
+    throw new HttpReplyError(
+      400,
+      "CUSTOM + BULLET requires maturityDate",
+    );
+  }
+}
+
+export const liabilityRegisterService = {
+  async create(
+    userId: string,
+    data: {
+      name: string;
+      liabilityType: string;
+      creditor: string;
+      principalAmount: number;
+      interestRate?: number;
+      interestRateType?: string;
+      interestCalculationMethod?: string;
+      startDate: string;
+      maturityDate?: string;
+      repaymentFrequency: string;
+      repaymentStructure: string;
+      evidenceUrl?: string;
+      note?: string;
+    },
+  ) {
+    if (!isValidLiabilityType(data.liabilityType)) {
+      throw new HttpReplyError(
+        400,
+        `liabilityType must be one of: ${LIABILITY_TYPES.join(", ")}`,
+      );
+    }
+    const name = data.name?.trim();
+    if (!name) throw new HttpReplyError(400, "name is required");
+    const creditor = data.creditor?.trim();
+    if (!creditor) throw new HttpReplyError(400, "creditor is required");
+
+    const principal = normalizeMoneyAmount(data.principalAmount);
+    if (!(principal > 0)) {
+      throw new HttpReplyError(400, "principalAmount must be greater than 0");
+    }
+
+    validateInterestFields(data);
+
+    const startDate = parseDateOnly(data.startDate, "startDate");
+    const maturityDate = data.maturityDate
+      ? parseDateOnly(data.maturityDate, "maturityDate")
+      : null;
+    if (maturityDate && maturityDate.getTime() < startDate.getTime()) {
+      throw new HttpReplyError(400, "maturityDate must be on or after startDate");
+    }
+
+    const frequency = data.repaymentFrequency.trim() as LiabilityRepaymentFrequency;
+    const structure = data.repaymentStructure.trim() as LiabilityRepaymentStructure;
+    validateFrequencyStructure(frequency, structure, maturityDate);
+
+    const interestRate =
+      data.interestRate != null ? Number(data.interestRate) : null;
+    const interestRateType = (data.interestRateType?.trim() ||
+      null) as LiabilityInterestRateType | null;
+    const interestCalcMethod = (data.interestCalculationMethod?.trim() ||
+      null) as LiabilityInterestCalcMethod | null;
+
+    const interestPerPeriod = periodInterestAmount({
+      originalPrincipal: principal,
+      outstandingPrincipal: principal,
+      interestRate,
+      interestRateType,
+      interestCalcMethod,
+      repaymentFrequency: frequency === "CUSTOM" ? "ANNUALLY" : frequency,
+    });
+
+    const scheduleDates = generateScheduleDates(
+      startDate,
+      maturityDate,
+      frequency,
+    );
+    const schedulePlan = buildScheduleAmounts({
+      principal,
+      dates: scheduleDates,
+      structure,
+      interestPerPeriod,
+    });
+    const installment =
+      schedulePlan.length > 0 ? schedulePlan[0]!.installment : null;
+
+    const liabilityCode = await nextCode(LIAB_COUNTER, "LIAB");
+
+    const created = await prisma.$transaction(async (tx) => {
+      const row = await tx.registeredLiability.create({
+        data: {
+          userId,
+          liabilityCode,
+          name,
+          liabilityType: data.liabilityType,
+          creditor,
+          originalAmount: new Decimal(principal),
+          outstandingPrincipal: new Decimal(principal),
+          accruedInterest: new Decimal(0),
+          interestRate:
+            interestRate != null ? new Decimal(interestRate) : null,
+          interestRateType,
+          interestCalcMethod,
+          repaymentFrequency: frequency,
+          repaymentStructure: structure,
+          installmentAmount:
+            installment != null ? new Decimal(installment) : null,
+          startDate,
+          maturityDate,
+          nextDueDate: scheduleDates[0] ?? maturityDate ?? null,
+          evidenceUrl: data.evidenceUrl?.trim() || null,
+          note: data.note?.trim() || null,
+          paymentStatus: LIABILITY_PAYMENT_STATUSES[0],
+        },
+      });
+
+      if (schedulePlan.length > 0) {
+        await tx.liabilityScheduleItem.createMany({
+          data: schedulePlan.map((plan, idx) => ({
+            liabilityId: row.id,
+            dueDate: scheduleDates[idx]!,
+            amountDue: new Decimal(plan.amountDue),
+            amountPaid: new Decimal(0),
+            status: "PENDING",
+          })),
+        });
+      }
+
+      return row;
+    });
+
+    const schedule = await prisma.liabilityScheduleItem.findMany({
+      where: { liabilityId: created.id },
+      orderBy: { dueDate: "asc" },
+    });
+
+    return createResponse(created, schedule);
+  },
+
+  async list(
+    userId: string,
+    opts?: { page?: number; limit?: number },
+  ) {
+    const page = Math.max(1, opts?.page ?? 1);
+    const limit = Math.min(100, Math.max(1, opts?.limit ?? 20));
+
+    const [total, rows] = await Promise.all([
+      prisma.registeredLiability.count({ where: { userId } }),
+      prisma.registeredLiability.findMany({
+        where: { userId },
+        include: { schedule: { orderBy: { dueDate: "asc" } } },
+        orderBy: [{ createdAt: "desc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    // Summary over all liabilities (not just page)
+    const all = await prisma.registeredLiability.findMany({
+      where: { userId },
+      include: { schedule: true },
+    });
+
+    let totalOutstanding = 0;
+    let currentLiabilities = 0;
+    let nonCurrentLiabilities = 0;
+    let totalOverdue = 0;
+
+    for (const r of all) {
+      const outstanding = settlementBalance(r);
+      totalOutstanding += outstanding;
+      const cls = classifyLiability(outstanding, r.schedule, r.maturityDate);
+      currentLiabilities += cls.currentPortion;
+      nonCurrentLiabilities += cls.nonCurrentPortion;
+      totalOverdue += overdueFromSchedule(r.schedule, r.paymentStatus)
+        .overdueAmount;
+    }
+
+    totalOutstanding = normalizeMoneyAmount(totalOutstanding);
+    currentLiabilities = normalizeMoneyAmount(currentLiabilities);
+    nonCurrentLiabilities = normalizeMoneyAmount(nonCurrentLiabilities);
+    totalOverdue = normalizeMoneyAmount(totalOverdue);
+
+    return {
+      summary: {
+        totalLiabilities: totalOutstanding,
+        currentLiabilities,
+        nonCurrentLiabilities,
+        totalOutstanding,
+        totalOverdue,
+      },
+      liabilities: rows.map((r) => listPreview(r, r.schedule)),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  },
+
+  async getById(userId: string, liabilityIdOrCode: string) {
+    const row = await prisma.registeredLiability.findFirst({
+      where: {
+        userId,
+        OR: [{ id: liabilityIdOrCode }, { liabilityCode: liabilityIdOrCode }],
+      },
+      include: {
+        schedule: { orderBy: { dueDate: "asc" } },
+      },
+    });
+    if (!row) throw new HttpReplyError(404, "Registered liability not found");
+    return detailResponse(row, row.schedule);
+  },
+
+  /** Outstanding principal by Financial Position category label. */
+  async totalsByDisplayCategory(userId: string): Promise<Map<string, number>> {
+    const rows = await prisma.registeredLiability.findMany({
+      where: {
+        userId,
+        paymentStatus: { not: "FULLY_PAID" },
+      },
+      select: { liabilityType: true, outstandingPrincipal: true },
+    });
+    const map = new Map<string, number>();
+    for (const label of Object.values(LIABILITY_TYPE_LABELS)) {
+      map.set(label, 0);
+    }
+    for (const r of rows) {
+      const label =
+        LIABILITY_TYPE_LABELS[r.liabilityType as LiabilityType] ?? null;
+      if (!label) continue;
+      map.set(
+        label,
+        normalizeMoneyAmount((map.get(label) ?? 0) + d(r.outstandingPrincipal)),
+      );
+    }
+    return map;
+  },
+};
+
+export const liabilityRepaymentService = {
+  async create(
+    userId: string,
+    data: {
+      liabilityId: string;
+      repaymentAmount: number;
+      paymentDate: string;
+      paymentSource: string;
+      evidenceUrl?: string;
+      note?: string;
+    },
+  ) {
+    const liabilityIdOrCode = data.liabilityId?.trim();
+    if (!liabilityIdOrCode) {
+      throw new HttpReplyError(400, "liabilityId is required");
+    }
+    const repaymentAmount = normalizeMoneyAmount(data.repaymentAmount);
+    if (!(repaymentAmount > 0)) {
+      throw new HttpReplyError(400, "repaymentAmount must be greater than 0");
+    }
+    if (!isValidLiabilityPaymentSource(data.paymentSource)) {
+      throw new HttpReplyError(400, "paymentSource must be CASH or BANK");
+    }
+    const paymentSource = data.paymentSource as LiabilityPaymentSource;
+    const paymentDate = parseDateOnly(data.paymentDate, "paymentDate");
+
+    const liability = await prisma.registeredLiability.findFirst({
+      where: {
+        userId,
+        OR: [{ id: liabilityIdOrCode }, { liabilityCode: liabilityIdOrCode }],
+      },
+      include: { schedule: { orderBy: { dueDate: "asc" } } },
+    });
+    if (!liability) throw new HttpReplyError(404, "Registered liability not found");
+    if (liability.paymentStatus === "FULLY_PAID") {
+      throw new HttpReplyError(
+        400,
+        "Liability is already fully settled. Use a correction/reversal process if needed.",
+      );
+    }
+
+    const calculatedInterest = periodInterestAmount({
+      originalPrincipal: d(liability.originalAmount),
+      outstandingPrincipal: d(liability.outstandingPrincipal),
+      interestRate: liability.interestRate != null ? d(liability.interestRate) : null,
+      interestRateType: liability.interestRateType,
+      interestCalcMethod: liability.interestCalcMethod,
+      repaymentFrequency:
+        liability.repaymentFrequency === "CUSTOM"
+          ? "ANNUALLY"
+          : liability.repaymentFrequency,
+    });
+    const accrued = Math.max(d(liability.accruedInterest), calculatedInterest);
+
+    const outstanding = normalizeMoneyAmount(
+      d(liability.outstandingPrincipal) + accrued,
+    );
+    if (repaymentAmount > outstanding + 0.001) {
+      throw new HttpReplyError(
+        400,
+        "Repayment amount exceeds the outstanding liability balance.",
+        {
+          outstandingAmount: outstanding,
+          repaymentAmount,
+          excessAmount: normalizeMoneyAmount(repaymentAmount - outstanding),
+        },
+      );
+    }
+
+    const interestAmount = normalizeMoneyAmount(
+      Math.min(accrued, repaymentAmount),
+    );
+    const principalAmount = normalizeMoneyAmount(
+      repaymentAmount - interestAmount,
+    );
+    const balanceBefore = outstanding;
+    const balanceAfter = normalizeMoneyAmount(outstanding - repaymentAmount);
+    const repaymentType =
+      balanceAfter <= 0.001 ? "FULL" : ("PARTIAL" as const);
+    const paymentStatus =
+      balanceAfter <= 0.001 ? "FULLY_PAID" : "PARTIALLY_PAID";
+
+    const scheduleAlloc = allocateToSchedule(
+      liability.schedule,
+      repaymentAmount,
+      paymentDate,
+    );
+
+    const repaymentCode = await nextCode(REPAY_COUNTER, "REPAY");
+    const expensePaymentType = paymentTypeFromSource(paymentSource);
+
+    const result = await prisma.$transaction(async (tx) => {
+      let interestExpenseId: string | null = null;
+      let principalExpenseId: string | null = null;
+
+      if (interestAmount > 0) {
+        const expenseNumber = await nextExpenseNumber(tx);
+        const exp = await tx.expense.create({
+          data: {
+            userId,
+            createdById: userId,
+            expenseNumber,
+            description: `Interest expense — ${liability.name} (${repaymentCode})`,
+            category: "Other",
+            expenseType: "OPEX",
+            amount: new Decimal(interestAmount),
+            totalAmount: new Decimal(interestAmount),
+            vatInclusive: false,
+            paymentType: expensePaymentType,
+            expenseDate: paymentDate,
+            status: SALE_STATUS.PAID,
+            receiptUrl: data.evidenceUrl?.trim() || null,
+          },
+        });
+        interestExpenseId = exp.id;
+      }
+
+      if (principalAmount > 0) {
+        const expenseNumber = await nextExpenseNumber(tx);
+        const exp = await tx.expense.create({
+          data: {
+            userId,
+            createdById: userId,
+            expenseNumber,
+            description: `Loan principal repayment — ${liability.name} (${repaymentCode})`,
+            category: "Other",
+            expenseType: "OPEX",
+            amount: new Decimal(principalAmount),
+            totalAmount: new Decimal(principalAmount),
+            vatInclusive: false,
+            paymentType: expensePaymentType,
+            expenseDate: paymentDate,
+            status: SALE_STATUS.PAID,
+            receiptUrl: data.evidenceUrl?.trim() || null,
+          },
+        });
+        principalExpenseId = exp.id;
+      }
+
+      for (const u of scheduleAlloc.updates) {
+        await tx.liabilityScheduleItem.update({
+          where: { id: u.id },
+          data: {
+            amountPaid: new Decimal(u.amountPaid),
+            status: u.status,
+          },
+        });
+      }
+
+      const remainingSchedule = await tx.liabilityScheduleItem.findMany({
+        where: {
+          liabilityId: liability.id,
+          status: { in: ["PENDING", "PARTIAL"] },
+        },
+        orderBy: { dueDate: "asc" },
+        take: 1,
+      });
+      const nextOpen = remainingSchedule[0] ?? null;
+
+      const newPrincipal = normalizeMoneyAmount(
+        Math.max(0, d(liability.outstandingPrincipal) - principalAmount),
+      );
+      const newAccrued = normalizeMoneyAmount(
+        Math.max(0, accrued - interestAmount),
+      );
+
+      await tx.registeredLiability.update({
+        where: { id: liability.id },
+        data: {
+          outstandingPrincipal: new Decimal(newPrincipal),
+          accruedInterest: new Decimal(newAccrued),
+          totalPrincipalPaid: new Decimal(
+            normalizeMoneyAmount(d(liability.totalPrincipalPaid) + principalAmount),
+          ),
+          totalInterestPaid: new Decimal(
+            normalizeMoneyAmount(d(liability.totalInterestPaid) + interestAmount),
+          ),
+          totalAmountRepaid: new Decimal(
+            normalizeMoneyAmount(d(liability.totalAmountRepaid) + repaymentAmount),
+          ),
+          paymentStatus,
+          repaymentCount: { increment: 1 },
+          lastRepaymentDate: paymentDate,
+          nextDueDate: nextOpen?.dueDate ?? liability.maturityDate,
+        },
+      });
+
+      const repayment = await tx.liabilityRepayment.create({
+        data: {
+          userId,
+          liabilityId: liability.id,
+          repaymentCode,
+          repaymentType,
+          repaymentAmount: new Decimal(repaymentAmount),
+          principalAmount: new Decimal(principalAmount),
+          interestAmount: new Decimal(interestAmount),
+          paymentDate,
+          paymentSource,
+          balanceBeforeRepayment: new Decimal(balanceBefore),
+          balanceAfterRepayment: new Decimal(balanceAfter),
+          paymentStatus,
+          isOverdue: scheduleAlloc.isOverdue,
+          daysOverdue: scheduleAlloc.daysOverdue,
+          evidenceUrl: data.evidenceUrl?.trim() || null,
+          note: data.note?.trim() || null,
+          interestExpenseId,
+          principalExpenseId,
+        },
+      });
+
+      return repayment;
+    });
+
+    const taxGPT = {
+      accountingTreatment:
+        interestAmount > 0
+          ? TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_AND_INTEREST_EXPENSE
+          : TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_ONLY,
+      principalTreatment: "LIABILITY_REDUCTION",
+      interestTreatment: interestAmount > 0 ? "EXPENSE" : "NONE",
+      warning: null as string | null,
+    };
+
+    return {
+      id: result.repaymentCode,
+      uuid: result.id,
+      liability: {
+        id: liability.liabilityCode,
+        name: liability.name,
+        liabilityType: liability.liabilityType,
+      },
+      repaymentType: result.repaymentType,
+      repaymentAmount: d(result.repaymentAmount),
+      principalAmount: d(result.principalAmount),
+      interestAmount: d(result.interestAmount),
+      paymentDate: formatYmd(result.paymentDate),
+      paymentSource: result.paymentSource,
+      balanceBeforeRepayment: d(result.balanceBeforeRepayment),
+      balanceAfterRepayment: d(result.balanceAfterRepayment),
+      paymentStatus: result.paymentStatus,
+      isOverdue: result.isOverdue,
+      daysOverdue: result.daysOverdue,
+      evidenceUrl: result.evidenceUrl,
+      note: result.note,
+      createdAt: result.createdAt.toISOString(),
+      taxGPT,
+    };
+  },
+
+  async list(
+    userId: string,
+    opts?: { page?: number; limit?: number },
+  ) {
+    const page = Math.max(1, opts?.page ?? 1);
+    const limit = Math.min(100, Math.max(1, opts?.limit ?? 20));
+    const { start, end } = monthBounds();
+    const asOf = startOfUtcDay(new Date());
+
+    const [dueAgg, paidAgg, overdueItems, total, rows] = await Promise.all([
+      prisma.liabilityScheduleItem.aggregate({
+        where: {
+          liability: { userId },
+          dueDate: { gte: start, lt: end },
+        },
+        _sum: { amountDue: true },
+      }),
+      prisma.liabilityRepayment.aggregate({
+        where: {
+          userId,
+          paymentDate: { gte: start, lt: end },
+        },
+        _sum: { repaymentAmount: true },
+      }),
+      prisma.liabilityScheduleItem.findMany({
+        where: {
+          liability: { userId },
+          dueDate: { lt: asOf },
+          status: { in: ["PENDING", "PARTIAL"] },
+        },
+        select: {
+          amountDue: true,
+          amountPaid: true,
+          liabilityId: true,
+        },
+      }),
+      prisma.liabilityRepayment.count({ where: { userId } }),
+      prisma.liabilityRepayment.findMany({
+        where: { userId },
+        include: {
+          liability: {
+            select: {
+              liabilityCode: true,
+              name: true,
+              liabilityType: true,
+            },
+          },
+        },
+        orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    let overdue = 0;
+    const overdueLiabilityIds = new Set<string>();
+    for (const s of overdueItems) {
+      const open = Math.max(0, d(s.amountDue) - d(s.amountPaid));
+      if (open > 0) {
+        overdue += open;
+        overdueLiabilityIds.add(s.liabilityId);
+      }
+    }
+
+    return {
+      summary: {
+        dueThisMonth: normalizeMoneyAmount(d(dueAgg._sum.amountDue)),
+        paidThisMonth: normalizeMoneyAmount(d(paidAgg._sum.repaymentAmount)),
+        overdue: normalizeMoneyAmount(overdue),
+        overdueCount: overdueLiabilityIds.size,
+      },
+      repayments: rows.map((r) => ({
+        id: r.repaymentCode,
+        liability: {
+          id: r.liability.liabilityCode,
+          name: r.liability.name,
+          liabilityType: r.liability.liabilityType,
+        },
+        repaymentType: r.repaymentType,
+        repaymentAmount: d(r.repaymentAmount),
+        principalAmount: d(r.principalAmount),
+        interestAmount: d(r.interestAmount),
+        paymentDate: formatYmd(r.paymentDate),
+        paymentSource: r.paymentSource,
+        balanceBeforeRepayment: d(r.balanceBeforeRepayment),
+        balanceAfterRepayment: d(r.balanceAfterRepayment),
+        paymentStatus: r.paymentStatus,
+        isOverdue: r.isOverdue,
+        daysOverdue: r.daysOverdue,
+        evidenceUrl: r.evidenceUrl,
+        createdAt: r.createdAt.toISOString(),
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  },
+
+  async getById(userId: string, repaymentIdOrCode: string) {
+    const row = await prisma.liabilityRepayment.findFirst({
+      where: {
+        userId,
+        OR: [{ id: repaymentIdOrCode }, { repaymentCode: repaymentIdOrCode }],
+      },
+      include: { liability: true },
+    });
+    if (!row) throw new HttpReplyError(404, "Repayment not found");
+
+    const l = row.liability;
+    return {
+      id: row.repaymentCode,
+      uuid: row.id,
+      liability: {
+        id: l.liabilityCode,
+        name: l.name,
+        liabilityType: l.liabilityType,
+        originalAmount: d(l.originalAmount),
+        outstandingBalance: settlementBalance(l),
+      },
+      repayment: {
+        repaymentType: row.repaymentType,
+        repaymentAmount: d(row.repaymentAmount),
+        principalAmount: d(row.principalAmount),
+        interestAmount: d(row.interestAmount),
+        paymentDate: formatYmd(row.paymentDate),
+        paymentSource: row.paymentSource,
+      },
+      balance: {
+        balanceBeforeRepayment: d(row.balanceBeforeRepayment),
+        principalReduced: d(row.principalAmount),
+        interestCharged: d(row.interestAmount),
+        balanceAfterRepayment: d(row.balanceAfterRepayment),
+      },
+      cumulative: {
+        totalPrincipalPaid: d(l.totalPrincipalPaid),
+        totalInterestPaid: d(l.totalInterestPaid),
+        totalAmountPaid: d(l.totalAmountRepaid),
+      },
+      status: {
+        paymentStatus: row.paymentStatus,
+        isOverdue: row.isOverdue,
+        daysOverdue: row.daysOverdue,
+      },
+      accounting: {
+        liabilityReduction: d(row.principalAmount),
+        interestExpense: d(row.interestAmount),
+        cashBankReduction: d(row.repaymentAmount),
+      },
+      evidence: {
+        url: row.evidenceUrl,
+      },
+      note: row.note,
+      createdAt: row.createdAt.toISOString(),
+      taxGPT: {
+        accountingTreatment:
+          d(row.interestAmount) > 0
+            ? TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_AND_INTEREST_EXPENSE
+            : TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_ONLY,
+        principalTreatment: "LIABILITY_REDUCTION",
+        interestTreatment: d(row.interestAmount) > 0 ? "EXPENSE" : "NONE",
+        warning: null,
+      },
+    };
+  },
+};

@@ -25,6 +25,7 @@ import nhfRoutes from "./nhfRoutes";
 import pensionRoutes from "./pensionRoutes";
 import financialPositionRoutes from "./financialPositionRoutes";
 import liabilityRoutes from "./liabilityRoutes";
+import liabilitiesRoutes from "./liabilitiesRoutes";
 
 const router = express.Router();
 
@@ -54,6 +55,7 @@ router.use("/inventory", inventoryRoutes);
 router.use("/assets", assetsRoutes);
 router.use("/financial-position", financialPositionRoutes);
 router.use("/liability", liabilityRoutes);
+router.use("/liabilities", liabilitiesRoutes);
 
 export default router;
 

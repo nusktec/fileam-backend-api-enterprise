@@ -75,4 +75,6 @@ model User {
   assetDisposals         AssetDisposal[]
   assetHistories         AssetHistory[]
   evidenceVaultDocuments EvidenceVaultDocument[]
+  registeredLiabilities  RegisteredLiability[]
+  liabilityRepayments    LiabilityRepayment[]
 }

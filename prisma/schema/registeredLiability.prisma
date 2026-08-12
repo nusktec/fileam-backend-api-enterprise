@@ -1,0 +1,108 @@
+model RegisteredLiability {
+  id                   String    @id @default(uuid())
+  userId               String    @map("user_id")
+  /** Display code e.g. LIAB-001 */
+  liabilityCode        String    @map("liability_code")
+  name                 String
+  /** BANK_LOAN | DIRECTOR_LOAN | … */
+  liabilityType        String    @map("liability_type")
+  /** Bank, director, shareholder, lender, lessor, etc. */
+  creditor             String
+  /** Original principal / financed amount (API: principalAmount / originalAmount) */
+  originalAmount       Decimal   @map("original_amount") @db.Decimal(14, 2)
+  outstandingPrincipal Decimal   @map("outstanding_principal") @db.Decimal(14, 2)
+  /** Accrued / due interest awaiting settlement */
+  accruedInterest      Decimal   @default(0) @map("accrued_interest") @db.Decimal(14, 2)
+  /** Stated contractual interest rate percent (e.g. 8 = 8%) */
+  interestRate         Decimal?  @map("interest_rate") @db.Decimal(8, 4)
+  /** ANNUAL | MONTHLY | QUARTERLY | WEEKLY | DAILY | CUSTOM */
+  interestRateType     String?   @map("interest_rate_type")
+  /** FLAT | REDUCING_BALANCE | COMPOUNDING | CUSTOM */
+  interestCalcMethod   String?   @map("interest_calculation_method")
+  /**
+   * WEEKLY | BIWEEKLY | MONTHLY | QUARTERLY | SEMI_ANNUALLY | ANNUALLY | CUSTOM
+   */
+  repaymentFrequency   String    @map("repayment_frequency")
+  /** AMORTIZED | INTEREST_ONLY | BULLET | CUSTOM */
+  repaymentStructure   String    @map("repayment_structure")
+  /** Backend-derived installment used for schedule generation */
+  installmentAmount    Decimal?  @map("installment_amount") @db.Decimal(14, 2)
+  startDate            DateTime  @map("start_date") @db.Date
+  maturityDate         DateTime? @map("maturity_date") @db.Date
+  nextDueDate          DateTime? @map("next_due_date") @db.Date
+  totalPrincipalPaid   Decimal   @default(0) @map("total_principal_paid") @db.Decimal(14, 2)
+  totalInterestPaid    Decimal   @default(0) @map("total_interest_paid") @db.Decimal(14, 2)
+  totalAmountRepaid    Decimal   @default(0) @map("total_amount_repaid") @db.Decimal(14, 2)
+  /** PENDING | PARTIALLY_PAID | FULLY_PAID */
+  paymentStatus        String    @default("PENDING") @map("payment_status")
+  repaymentCount       Int       @default(0) @map("repayment_count")
+  lastRepaymentDate    DateTime? @map("last_repayment_date") @db.Date
+  evidenceUrl          String?   @map("evidence_url")
+  note                 String?
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  user       User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schedule   LiabilityScheduleItem[]
+  repayments LiabilityRepayment[]
+
+  @@unique([userId, liabilityCode])
+  @@index([userId, liabilityType])
+  @@map("registered_liabilities")
+}
+
+model LiabilityScheduleItem {
+  id          String   @id @default(uuid())
+  liabilityId String   @map("liability_id")
+  dueDate     DateTime @map("due_date") @db.Date
+  amountDue   Decimal  @map("amount_due") @db.Decimal(14, 2)
+  amountPaid  Decimal  @default(0) @map("amount_paid") @db.Decimal(14, 2)
+  /** PENDING | PARTIAL | PAID */
+  status      String   @default("PENDING")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  liability RegisteredLiability @relation(fields: [liabilityId], references: [id], onDelete: Cascade)
+
+  @@index([liabilityId, dueDate])
+  @@map("liability_schedule_items")
+}
+
+/** Immutable repayment history for registered liabilities. */
+model LiabilityRepayment {
+  id                     String   @id @default(uuid())
+  userId                 String   @map("user_id")
+  liabilityId            String   @map("liability_id")
+  /** Display code e.g. REPAY-001 */
+  repaymentCode          String   @map("repayment_code")
+  /** FULL | PARTIAL — server-determined */
+  repaymentType          String   @map("repayment_type")
+  repaymentAmount        Decimal  @map("repayment_amount") @db.Decimal(14, 2)
+  principalAmount        Decimal  @map("principal_amount") @db.Decimal(14, 2)
+  interestAmount         Decimal  @map("interest_amount") @db.Decimal(14, 2)
+  paymentDate            DateTime @map("payment_date") @db.Date
+  /** CASH | BANK */
+  paymentSource          String   @map("payment_source")
+  balanceBeforeRepayment Decimal  @map("balance_before_repayment") @db.Decimal(14, 2)
+  balanceAfterRepayment  Decimal  @map("balance_after_repayment") @db.Decimal(14, 2)
+  /** PARTIALLY_PAID | FULLY_PAID */
+  paymentStatus          String   @map("payment_status")
+  isOverdue              Boolean  @default(false) @map("is_overdue")
+  daysOverdue            Int      @default(0) @map("days_overdue")
+  evidenceUrl            String?  @map("evidence_url")
+  note                   String?
+  /** Linked expense ids for accounting trace */
+  interestExpenseId      String?  @map("interest_expense_id")
+  principalExpenseId     String?  @map("principal_expense_id")
+  evidenceVaultDocId     String?  @map("evidence_vault_doc_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  liability RegisteredLiability @relation(fields: [liabilityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, repaymentCode])
+  @@index([userId, paymentDate])
+  @@index([liabilityId])
+  @@map("liability_repayments")
+}
