@@ -292,9 +292,9 @@ async function buildAccountsPayable(userId: string, asOfMs: number) {
         items: listItems,
         upcomingPayables,
         reports: {
-          apAgeingReport: apiPath("/mobile/liability/dashboard"),
+          apAgeingReport: apiPath("/mobile/liability/accounts-payable"),
           balanceSheet: apiPath("/mobile/financial-position"),
-          cashFlowStatement: apiPath("/mobile/analytics/dashboard"),
+          cashFlowStatement: apiPath("/mobile/liability/cash-flow-impact"),
           taxLiabilityReport: apiPath("/mobile/tax-payables"),
           expenseIntelligence: apiPath("/mobile/expenses"),
           profitabilityAnalysis: apiPath(
@@ -609,113 +609,186 @@ export type LiabilityTotals = {
   nhfPayable: number;
 };
 
+type LiabilityBundle = {
+  summary: {
+    totalLiability: number;
+    currentLiability: number;
+    nonCurrentLiability: number;
+    overduePayable: number;
+  };
+  currentLiabilities: Array<Record<string, unknown> & { name: string; amount: number; percentage: number }>;
+  nonCurrentLiabilities: Array<{ name: string; amount: number; percentage: number }>;
+  accountsPayable: Record<string, unknown>;
+  cashFlowImpact: {
+    netCashOutflow: number;
+    overdueSettlement: number;
+    scheduledDebtRepayment: number;
+    interestExpense: number;
+    interestDue: number;
+  };
+};
+
+async function loadLiabilityBundle(userId: string): Promise<LiabilityBundle> {
+  const asOfMs = startOfUtcDayMs(new Date());
+
+  const [ap, tax, salaries, pension, nhf, cashFlowImpact] = await Promise.all([
+    buildAccountsPayable(userId, asOfMs),
+    buildTaxPayable(userId, asOfMs),
+    buildSalariesPayable(userId, asOfMs),
+    buildPayrollCategory(
+      userId,
+      OBLIGATION_TYPE.PENSION,
+      "Pension Payable",
+      asOfMs,
+    ),
+    buildPayrollCategory(userId, OBLIGATION_TYPE.NHF, "NHF Payable", asOfMs),
+    buildCashFlowImpact(userId),
+  ]);
+
+  const interest = emptyNamedCategory("Interest Payable");
+  const shortTermLoan = emptyNamedCategory("Short-Term Loan");
+
+  const currentRaw = [
+    ap.category,
+    tax.category,
+    salaries.category,
+    pension.category,
+    nhf.category,
+    interest.category,
+    shortTermLoan.category,
+  ];
+
+  const currentLiability = normalizeMoneyAmount(
+    currentRaw.reduce((s, c) => s + c.amount, 0),
+  );
+
+  const currentLiabilities = currentRaw.map((c) => ({
+    ...c,
+    percentage: percentOf(c.amount, currentLiability),
+  }));
+
+  const nonCurrentLiabilities = NON_CURRENT_LIABILITY_NAMES.map((name) => ({
+    name,
+    amount: 0,
+    percentage: 0,
+  }));
+  const nonCurrentLiability = 0;
+
+  const overduePayable = normalizeMoneyAmount(
+    ap.overduePayable +
+      tax.overduePayable +
+      salaries.overduePayable +
+      pension.overduePayable +
+      nhf.overduePayable,
+  );
+
+  return {
+    summary: {
+      totalLiability: normalizeMoneyAmount(
+        currentLiability + nonCurrentLiability,
+      ),
+      currentLiability,
+      nonCurrentLiability,
+      overduePayable,
+    },
+    currentLiabilities,
+    nonCurrentLiabilities,
+    accountsPayable: {
+      ...ap.category,
+      percentage: percentOf(ap.category.amount, currentLiability),
+    },
+    cashFlowImpact,
+  };
+}
+
+function categoryOverview(
+  categories: Array<{ name: string; amount: number; percentage: number }>,
+) {
+  return categories.map(({ name, amount, percentage }) => ({
+    name,
+    amount,
+    percentage,
+  }));
+}
+
 export const liabilityService = {
   async getTotals(userId: string): Promise<LiabilityTotals> {
-    const dash = await this.getDashboard(userId);
+    const bundle = await loadLiabilityBundle(userId);
     return {
-      totalLiability: dash.summary.totalLiability,
-      currentLiability: dash.summary.currentLiability,
-      nonCurrentLiability: dash.summary.nonCurrentLiability,
-      overduePayable: dash.summary.overduePayable,
+      totalLiability: bundle.summary.totalLiability,
+      currentLiability: bundle.summary.currentLiability,
+      nonCurrentLiability: bundle.summary.nonCurrentLiability,
+      overduePayable: bundle.summary.overduePayable,
       accountsPayable:
-        dash.currentLiabilities.find((c) => c.name === "Accounts Payable")
+        bundle.currentLiabilities.find((c) => c.name === "Accounts Payable")
           ?.amount ?? 0,
       taxPayable:
-        dash.currentLiabilities.find((c) => c.name === "Tax Payable")?.amount ??
-        0,
+        bundle.currentLiabilities.find((c) => c.name === "Tax Payable")
+          ?.amount ?? 0,
       salariesPayable:
-        dash.currentLiabilities.find((c) => c.name === "Salaries Payable")
+        bundle.currentLiabilities.find((c) => c.name === "Salaries Payable")
           ?.amount ?? 0,
       pensionPayable:
-        dash.currentLiabilities.find((c) => c.name === "Pension Payable")
+        bundle.currentLiabilities.find((c) => c.name === "Pension Payable")
           ?.amount ?? 0,
       nhfPayable:
-        dash.currentLiabilities.find((c) => c.name === "NHF Payable")?.amount ??
-        0,
+        bundle.currentLiabilities.find((c) => c.name === "NHF Payable")
+          ?.amount ?? 0,
     };
   },
 
+  /** 1 — High-level totals only. */
   async getSummary(userId: string) {
-    const dash = await this.getDashboard(userId);
+    const { summary } = await loadLiabilityBundle(userId);
     return {
-      totalLiability: dash.summary.totalLiability,
-      currentLiability: dash.summary.currentLiability,
-      nonCurrentLiability: dash.summary.nonCurrentLiability,
+      totalLiability: summary.totalLiability,
+      currentLiability: summary.currentLiability,
+      nonCurrentLiability: summary.nonCurrentLiability,
     };
   },
 
+  /**
+   * 2 — Dashboard overview: summary + overdue + lightweight category lists
+   * (name/amount/percentage) + cash-flow totals. Deep AP nesting lives on
+   * /accounts-payable; full category trees on /current-liabilities.
+   */
   async getDashboard(userId: string) {
-    const asOfMs = startOfUtcDayMs(new Date());
-
-    const [ap, tax, salaries, pension, nhf, cashFlowImpact] =
-      await Promise.all([
-        buildAccountsPayable(userId, asOfMs),
-        buildTaxPayable(userId, asOfMs),
-        buildSalariesPayable(userId, asOfMs),
-        buildPayrollCategory(
-          userId,
-          OBLIGATION_TYPE.PENSION,
-          "Pension Payable",
-          asOfMs,
-        ),
-        buildPayrollCategory(
-          userId,
-          OBLIGATION_TYPE.NHF,
-          "NHF Payable",
-          asOfMs,
-        ),
-        buildCashFlowImpact(userId),
-      ]);
-
-    const interest = emptyNamedCategory("Interest Payable");
-    const shortTermLoan = emptyNamedCategory("Short-Term Loan");
-
-    const currentRaw = [
-      ap.category,
-      tax.category,
-      salaries.category,
-      pension.category,
-      nhf.category,
-      interest.category,
-      shortTermLoan.category,
-    ];
-
-    const currentLiability = normalizeMoneyAmount(
-      currentRaw.reduce((s, c) => s + c.amount, 0),
-    );
-
-    const currentLiabilities = currentRaw.map((c) => ({
-      ...c,
-      percentage: percentOf(c.amount, currentLiability),
-    }));
-
-    const nonCurrentLiabilities = NON_CURRENT_LIABILITY_NAMES.map((name) => ({
-      name,
-      amount: 0,
-      percentage: 0,
-    }));
-    const nonCurrentLiability = 0;
-
-    const overduePayable = normalizeMoneyAmount(
-      ap.overduePayable +
-        tax.overduePayable +
-        salaries.overduePayable +
-        pension.overduePayable +
-        nhf.overduePayable,
-    );
-
+    const bundle = await loadLiabilityBundle(userId);
     return {
-      summary: {
-        totalLiability: normalizeMoneyAmount(
-          currentLiability + nonCurrentLiability,
-        ),
-        currentLiability,
-        nonCurrentLiability,
-        overduePayable,
-      },
-      currentLiabilities,
-      nonCurrentLiabilities,
-      cashFlowImpact,
+      summary: bundle.summary,
+      currentLiabilities: categoryOverview(bundle.currentLiabilities),
+      nonCurrentLiabilities: categoryOverview(bundle.nonCurrentLiabilities),
+      cashFlowImpact: bundle.cashFlowImpact,
     };
+  },
+
+  /** 3 — Full current-liability category trees (incl. nested items / AP payables). */
+  async getCurrentLiabilities(userId: string) {
+    const bundle = await loadLiabilityBundle(userId);
+    return {
+      total: bundle.summary.currentLiability,
+      overduePayable: bundle.summary.overduePayable,
+      items: bundle.currentLiabilities,
+    };
+  },
+
+  /** 4 — Non-current liability categories. */
+  async getNonCurrentLiabilities(userId: string) {
+    const bundle = await loadLiabilityBundle(userId);
+    return {
+      total: bundle.summary.nonCurrentLiability,
+      items: bundle.nonCurrentLiabilities,
+    };
+  },
+
+  /** 5 — Accounts Payable detail (ageing, suppliers, upcoming, reports). */
+  async getAccountsPayable(userId: string) {
+    const bundle = await loadLiabilityBundle(userId);
+    return bundle.accountsPayable;
+  },
+
+  /** 6 — Cash flow impact of liability settlements. */
+  async getCashFlowImpact(userId: string) {
+    return buildCashFlowImpact(userId);
   },
 };
