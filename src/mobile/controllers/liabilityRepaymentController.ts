@@ -181,3 +181,47 @@ export const listLiabilityRepayments = async (
       .json(outJson(false, "Failed to list repayments", null));
   }
 };
+
+export const listAllLiabilityRepayments = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const page = req.query.page ? Number(req.query.page) : undefined;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const data = await liabilityRepaymentService.listAll(userId, {
+      page,
+      limit,
+    });
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Liability repayments retrieved successfully.", data));
+  } catch (error) {
+    if (replyError(res, error, "Failed to list repayments")) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to list repayments", null));
+  }
+};
+
+export const getLiabilityRepayment = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = await liabilityRepaymentService.getById(
+      userId,
+      paramId(req, "repaymentId"),
+    );
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Repayment retrieved successfully.", data));
+  } catch (error) {
+    if (replyError(res, error, "Failed to get repayment")) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to get repayment", null));
+  }
+};

@@ -5,6 +5,8 @@ import {
   getRegisteredLiability,
   createLiabilityRepayment,
   listLiabilityRepayments,
+  listAllLiabilityRepayments,
+  getLiabilityRepayment,
 } from "../controllers/liabilityRepaymentController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
@@ -17,7 +19,14 @@ const router = express.Router();
 
 router.use(authenticate(), requireOnboardingComplete);
 
-/** Nested repayment history (before GET /:liabilityId). */
+/**
+ * Static /repayments paths MUST be registered before /:liabilityId
+ * or GET /repayments is captured as liabilityId="repayments".
+ */
+router.get("/repayments", listAllLiabilityRepayments);
+router.get("/repayments/:repaymentId", getLiabilityRepayment);
+
+/** Nested repayment history for one liability. */
 router.post(
   "/:liabilityId/repayments",
   express.json(),

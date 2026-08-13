@@ -225,6 +225,11 @@
       "key": "liabilityId",
       "value": "",
       "description": "Liability code e.g. LIAB-001 from POST /mobile/liabilities (also accepts uuid)"
+    },
+    {
+      "key": "repaymentId",
+      "value": "",
+      "description": "Repayment code e.g. REP-001 from POST .../repayments (also accepts uuid)"
     }
   ],
   "event": [
@@ -2993,6 +2998,36 @@
                   "mode": "raw",
                   "raw": "{\n  \"amount\": 500000,\n  \"paymentDate\": \"2026-08-01\",\n  \"paymentSource\": \"BANK\",\n  \"evidenceUrl\": \"https://example.com/payment-proof.pdf\"\n}"
                 }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('repaymentId', d.id);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List all liability repayments **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments?page=1&limit=20",
+                "description": "GET /mobile/liabilities/repayments — all repayments for the business (newest first). summary: dueThisMonth, paidThisMonth, overdue, overdueCount + paginated repayments[] history items. Must be this exact path; /repayments is registered before /:liabilityId so it is not treated as a liability id."
+              }
+            },
+            {
+              "name": "Get liability repayment by id **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments/{{repaymentId}}",
+                "description": "GET /mobile/liabilities/repayments/{repaymentId}. Accepts uuid or REP-xxx. Returns history item fields plus liability, balance, cumulative, accounting, evidence, overdue, taxGPT."
               }
             },
             {

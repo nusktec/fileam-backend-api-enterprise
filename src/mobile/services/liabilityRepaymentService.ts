@@ -14,6 +14,7 @@ import {
   LIABILITY_TYPE_LABELS,
   LIABILITY_TYPES,
   REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE,
+  TAX_GPT_TREATMENT,
   type LiabilityInterestCalcMethod,
   type LiabilityInterestRateType,
   type LiabilityPaymentSource,
@@ -136,6 +137,16 @@ function parseDateOnly(value: string, field = "date"): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
   if (!m) throw new HttpReplyError(400, `${field} must be YYYY-MM-DD`);
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+}
+
+function monthBounds(asOf = new Date()) {
+  const start = new Date(
+    Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), 1),
+  );
+  const end = new Date(
+    Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() + 1, 1),
+  );
+  return { start, end };
 }
 
 function daysBetween(from: Date, to: Date): number {
@@ -1394,6 +1405,156 @@ export const liabilityRepaymentService = {
             },
           }
         : {}),
+    };
+  },
+
+  /** GET /mobile/liabilities/repayments — all repayments, newest first. */
+  async listAll(
+    userId: string,
+    opts?: { page?: number; limit?: number },
+  ) {
+    const page = Math.max(1, opts?.page ?? 1);
+    const limit = Math.min(100, Math.max(1, opts?.limit ?? 20));
+    const { start, end } = monthBounds();
+    const asOf = startOfUtcDay(new Date());
+
+    const [dueAgg, paidAgg, overdueItems, total, rows] = await Promise.all([
+      prisma.liabilityScheduleItem.aggregate({
+        where: {
+          liability: { userId },
+          dueDate: { gte: start, lt: end },
+        },
+        _sum: { amountDue: true },
+      }),
+      prisma.liabilityRepayment.aggregate({
+        where: {
+          userId,
+          paymentDate: { gte: start, lt: end },
+        },
+        _sum: { repaymentAmount: true },
+      }),
+      prisma.liabilityScheduleItem.findMany({
+        where: {
+          liability: { userId },
+          dueDate: { lt: asOf },
+          status: { in: ["PENDING", "PARTIAL"] },
+        },
+        select: {
+          amountDue: true,
+          amountPaid: true,
+          liabilityId: true,
+        },
+      }),
+      prisma.liabilityRepayment.count({ where: { userId } }),
+      prisma.liabilityRepayment.findMany({
+        where: { userId },
+        include: {
+          liability: {
+            select: {
+              liabilityCode: true,
+              name: true,
+              liabilityType: true,
+            },
+          },
+        },
+        orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
+
+    let overdue = 0;
+    const overdueLiabilityIds = new Set<string>();
+    for (const s of overdueItems) {
+      const open = Math.max(0, d(s.amountDue) - d(s.amountPaid));
+      if (open > 0) {
+        overdue += open;
+        overdueLiabilityIds.add(s.liabilityId);
+      }
+    }
+
+    return {
+      summary: {
+        dueThisMonth: normalizeMoneyAmount(d(dueAgg._sum.amountDue)),
+        paidThisMonth: normalizeMoneyAmount(d(paidAgg._sum.repaymentAmount)),
+        overdue: normalizeMoneyAmount(overdue),
+        overdueCount: overdueLiabilityIds.size,
+      },
+      repayments: rows.map(historyItem),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    };
+  },
+
+  /** GET /mobile/liabilities/repayments/{repaymentId} */
+  async getById(userId: string, repaymentIdOrCode: string) {
+    const row = await prisma.liabilityRepayment.findFirst({
+      where: {
+        userId,
+        OR: [{ id: repaymentIdOrCode }, { repaymentCode: repaymentIdOrCode }],
+      },
+      include: { liability: true },
+    });
+    if (!row) throw new HttpReplyError(404, "Repayment not found");
+
+    const l = row.liability;
+    const item = historyItem({
+      ...row,
+      liability: {
+        liabilityCode: l.liabilityCode,
+        name: l.name,
+        liabilityType: l.liabilityType,
+      },
+    });
+
+    return {
+      ...item,
+      uuid: row.id,
+      liability: {
+        id: l.liabilityCode,
+        name: l.name,
+        type: l.liabilityType,
+        originalAmount: d(l.originalAmount),
+        outstandingBalance: d(l.outstandingPrincipal),
+      },
+      balance: {
+        balanceBeforePayment: d(row.balanceBeforeRepayment),
+        principalReduced: d(row.principalAmount),
+        interestCharged: d(row.interestAmount),
+        balanceAfterPayment: d(row.balanceAfterRepayment),
+      },
+      cumulative: {
+        totalPrincipalPaid: d(l.totalPrincipalPaid),
+        totalInterestPaid: d(l.totalInterestPaid),
+        totalAmountPaid: d(l.totalAmountRepaid),
+      },
+      accounting: {
+        liabilityReduction: d(row.principalAmount),
+        interestExpense: d(row.interestAmount),
+        cashBankReduction: d(row.repaymentAmount),
+      },
+      evidence: {
+        url: row.evidenceUrl,
+      },
+      note: row.note,
+      createdAt: row.createdAt.toISOString(),
+      overdue: {
+        isOverdue: row.isOverdue,
+        daysOverdue: row.daysOverdue,
+      },
+      taxGPT: {
+        accountingTreatment:
+          d(row.interestAmount) > 0
+            ? TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_AND_INTEREST_EXPENSE
+            : TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_ONLY,
+        principalTreatment: "LIABILITY_REDUCTION",
+        interestTreatment: d(row.interestAmount) > 0 ? "EXPENSE" : "NONE",
+        warning: null,
+      },
     };
   },
 };
