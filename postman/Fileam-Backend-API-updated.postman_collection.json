@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position \u2014 category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability module (6 endpoints): /summary, /dashboard, /current-liabilities, /non-current-liabilities, /accounts-payable, /cash-flow-impact \u2014 AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nEnterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, \u20a6500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayment history: POST/GET /mobile/liabilities/{liabilityId}/repayments. AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nEnterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -220,6 +220,11 @@
     {
       "key": "consultantId",
       "value": ""
+    },
+    {
+      "key": "liabilityId",
+      "value": "",
+      "description": "Liability code e.g. LIAB-001 from POST /mobile/liabilities (also accepts uuid)"
     }
   ],
   "event": [
@@ -380,7 +385,7 @@
         },
         {
           "name": "Lookups",
-          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help \u2014 use whichever folder fits your flow.",
+          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help — use whichever folder fits your flow.",
           "item": [
             {
               "name": "Tax filing constants *",
@@ -398,7 +403,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/constants",
-                "description": "taxTypes, capabilities, paymentStatuses, filingStatuses, reportTypes, period bounds. Duplicate of Filings * \u2192 Tax filing constants *."
+                "description": "taxTypes, capabilities, paymentStatuses, filingStatuses, reportTypes, period bounds. Duplicate of Filings * → Tax filing constants *."
               }
             },
             {
@@ -406,7 +411,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/contacts-and-types",
-                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, \u2026). Duplicate of User * \u2192 Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
+                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, …). Duplicate of User * → Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
               }
             },
             {
@@ -420,7 +425,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/profile",
-                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly once set (PUT \u2026/user/profile after onboarding). Duplicate of Onboarding * \u2192 Get profile *."
+                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly once set (PUT …/user/profile after onboarding). Duplicate of Onboarding * → Get profile *."
               }
             },
             {
@@ -436,7 +441,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/faqs",
-                "description": "categories + faqs. Optional query category. Duplicate of Help \u2192 Get FAQs."
+                "description": "categories + faqs. Optional query category. Duplicate of Help → Get FAQs."
               }
             }
           ]
@@ -467,7 +472,7 @@
                   "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"address\":\"123 Main St\",\"organizationName\":\"My Company\",\"taxPersona\":\"PAYEE\",\"employmentGrossSalaryMonthly\":450000}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile",
-                "description": "taxPersona: SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER. solopreneurRegistration: NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY (meaningful when persona is SOLOPRENEUR; omit or null otherwise). employmentGrossSalaryMonthly: optional non-negative number or null (clears); drives paye block on GET \u2026/tax-computation and PAYE rows on tax-payables sync when PAYE applies."
+                "description": "taxPersona: SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER. solopreneurRegistration: NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY (meaningful when persona is SOLOPRENEUR; omit or null otherwise). employmentGrossSalaryMonthly: optional non-negative number or null (clears); drives paye block on GET …/tax-computation and PAYE rows on tax-payables sync when PAYE applies."
               }
             },
             {
@@ -569,7 +574,7 @@
                   "raw": "{\"authorized\":true}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/filing-authorization",
-                "description": "Toggle authorized. Email sent to consultant when changing false\u2192true."
+                "description": "Toggle authorized. Email sent to consultant when changing false→true."
               }
             },
             {
@@ -1092,7 +1097,7 @@
               }
             },
             {
-              "name": "Create sale (Cash \u2014 PAID) **",
+              "name": "Create sale (Cash — PAID) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1102,7 +1107,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Cash \u2192 invoiceAmountPaid.total = totalAmount \u2192 status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total \u2212 Base (e.g. 3000 \u2192 ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
+                "description": "Cash → invoiceAmountPaid.total = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"Walk-in\"\n}"
@@ -1122,7 +1127,7 @@
               ]
             },
             {
-              "name": "Create sale (Card \u2014 IN_PROGRESS) **",
+              "name": "Create sale (Card — IN_PROGRESS) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1152,7 +1157,7 @@
               ]
             },
             {
-              "name": "Create sale (Transfer \u2014 IN_PROGRESS) **",
+              "name": "Create sale (Transfer — IN_PROGRESS) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1182,7 +1187,7 @@
               ]
             },
             {
-              "name": "Create sale (Invoice \u2014 Pending) **",
+              "name": "Create sale (Invoice — Pending) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1240,7 +1245,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/payment-status",
-                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid.total = totalAmount and paymentConfirmedAt). Body {\"status\":\"PAID\"}. Rejects Invoice sales, whose status is calculated \u2014 use PATCH /sales/:id with invoiceAmountPaid, or POST /sales/:id/mark-paid.",
+                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid.total = totalAmount and paymentConfirmedAt). Body {\"status\":\"PAID\"}. Rejects Invoice sales, whose status is calculated — use PATCH /sales/:id with invoiceAmountPaid, or POST /sales/:id/mark-paid.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"status\": \"PAID\"}"
@@ -1253,7 +1258,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/mark-paid",
-                "description": "Invoice only: sets invoiceAmountPaid.total = totalAmount \u2192 Paid. Sets paymentConfirmedAt."
+                "description": "Invoice only: sets invoiceAmountPaid.total = totalAmount → Paid. Sets paymentConfirmedAt."
               }
             },
             {
@@ -1354,7 +1359,7 @@
               }
             },
             {
-              "name": "Create expense (Transfer \u2014 IN_PROGRESS) *",
+              "name": "Create expense (Transfer — IN_PROGRESS) *",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1372,7 +1377,7 @@
               }
             },
             {
-              "name": "Create expense (Invoice \u2014 Pending) *",
+              "name": "Create expense (Invoice — Pending) *",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1559,7 +1564,7 @@
                   "raw": "{\n  \"lines\": [\n    {\n      \"inventoryItemId\": \"{{inventoryItemId}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"customerName\": \"Walk-in\",\n  \"customerId\": \"cust-walk-1\",\n  \"createSalesInvoice\": true,\n  \"paymentType\": \"Invoice\",\n  \"saleDate\": \"2026-07-24\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": false,\n  \"saleCategory\": \"Product Sales\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Creates linked Sale with invoiceDueDate. VAT-inclusive uses Base = Total/1.075. paymentType Invoice \u2192 unpaid until paid amount updated."
+                "description": "Creates linked Sale with invoiceDueDate. VAT-inclusive uses Base = Total/1.075. paymentType Invoice → unpaid until paid amount updated."
               }
             },
             {
@@ -1577,7 +1582,7 @@
                   "raw": "{\"lines\":[{\"inventoryItemId\":\"{{inventoryItemId}}\",\"quantity\":1}],\"customerName\":\"Walk-in\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Omits createSalesInvoice \u2014 only inventory_sale + movements; no row in mobile /sales."
+                "description": "Omits createSalesInvoice — only inventory_sale + movements; no row in mobile /sales."
               }
             },
             {
@@ -1707,7 +1712,7 @@
                   "raw": "{\n  \"direction\": \"in\",\n  \"quantity\": 2,\n  \"note\": \"Found in recount\",\n  \"createSalesInvoice\": true,\n  \"saleDate\": \"2026-03-29\",\n  \"saleCategory\": \"Other\",\n  \"invoiceDueDate\": \"2026-08-15\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "direction in + createSalesInvoice: true \u2014 books a mobile Sale at purchase cost \u00d7 qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome. Optional invoiceDueDate on linked sale."
+                "description": "direction in + createSalesInvoice: true — books a mobile Sale at purchase cost × qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome. Optional invoiceDueDate on linked sale."
               }
             },
             {
@@ -1736,7 +1741,7 @@
                   "raw": "{\"direction\":\"out\",\"quantity\":1,\"note\":\"Shrinkage / damaged\",\"createSalesInvoice\":true,\"saleDate\":\"2026-03-29\",\"expenseCategory\":\"Other\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "direction out + createSalesInvoice: true \u2014 books a mobile Expense at purchase cost \u00d7 qty (supplier from item if set). Response.data.linkedExpense. expenseCategory: any string (max 255); defaults to Other if omitted when booking."
+                "description": "direction out + createSalesInvoice: true — books a mobile Expense at purchase cost × qty (supplier from item if set). Response.data.linkedExpense. expenseCategory: any string (max 255); defaults to Other if omitted when booking."
               }
             },
             {
@@ -1754,7 +1759,7 @@
                   "raw": "{\"direction\":\"in\",\"quantity\":1,\"note\":\"Silent correction\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "No createSalesInvoice \u2014 inventory movement only."
+                "description": "No createSalesInvoice — inventory movement only."
               }
             }
           ],
@@ -1788,7 +1793,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/current-assets",
-                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales \u2212 expenses; account number from Business.bankAccount when set), inventory (qty\u00d7cost), accountsReceivable { total, current { totalAmount, invoiceCount }, overdue { totalAmount, invoiceCount }, items[] with status CURRENT|OVERDUE and daysOverdue on overdue rows; amount = outstanding }. totalCurrentAssets = sum of the four."
+                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales − expenses; account number from Business.bankAccount when set), inventory (qty×cost), accountsReceivable { total, current { totalAmount, invoiceCount }, overdue { totalAmount, invoiceCount }, items[] with status CURRENT|OVERDUE and daysOverdue on overdue rows; amount = outstanding }. totalCurrentAssets = sum of the four."
               }
             },
             {
@@ -1797,7 +1802,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/non-current-assets",
-                "description": "purchaseCost, accumulatedDepreciation, netNonCurrentAssets (= purchaseCost \u2212 accumulatedDepreciation). total = netNonCurrentAssets. All 8 assetTypes always returned (even total 0); nested assets use NBV."
+                "description": "purchaseCost, accumulatedDepreciation, netNonCurrentAssets (= purchaseCost − accumulatedDepreciation). total = netNonCurrentAssets. All 8 assetTypes always returned (even total 0); nested assets use NBV."
               }
             },
             {
@@ -1872,7 +1877,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets",
-                "description": "UNIT_OF_PRODUCTION: Per unit = (Cost - Residual) / totalEstimatedUnit; Period = per unit \u00d7 unitProduced. Cumulative capped at Cost - Residual.",
+                "description": "UNIT_OF_PRODUCTION: Per unit = (Cost - Residual) / totalEstimatedUnit; Period = per unit × unitProduced. Cumulative capped at Cost - Residual.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assetType\": \"MACHINERY\",\n  \"assetName\": \"Production press\",\n  \"purchaseDate\": \"2026-01-01\",\n  \"purchaseCost\": 5000000,\n  \"depreciationMethod\": \"UNIT_OF_PRODUCTION\",\n  \"residualValue\": 500000,\n  \"totalEstimatedUnit\": 90000,\n  \"unitProduced\": 3500,\n  \"assignToConsultant\": false\n}"
@@ -2010,7 +2015,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/transfers/{{assetTransferId}}/approve",
-                "description": "PENDING \u2192 COMPLETED; updates asset.assetLocation to toLocation."
+                "description": "PENDING → COMPLETED; updates asset.assetLocation to toLocation."
               }
             },
             {
@@ -2019,7 +2024,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/transfers/{{assetTransferId}}/reject",
-                "description": "PENDING \u2192 CANCELLED."
+                "description": "PENDING → CANCELLED."
               }
             },
             {
@@ -2229,7 +2234,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation?period=2026-02",
-                "description": "taxpayerContext respects saved taxPersona (when set). taxPersonaGuidance: taxes[] flip-card lines (label, subtitle, applicable). Blocks: vat, wht, cit, pit, paye (paye uses profile employmentGrossSalaryMonthly annualised when PAYE applicable \u2014 summaryMonthlyEstimate, summaryAnnualEstimate, employmentGrossSalaryMonthlyCaptured, methodology)."
+                "description": "taxpayerContext respects saved taxPersona (when set). taxPersonaGuidance: taxes[] flip-card lines (label, subtitle, applicable). Blocks: vat, wht, cit, pit, paye (paye uses profile employmentGrossSalaryMonthly annualised when PAYE applicable — summaryMonthlyEstimate, summaryAnnualEstimate, employmentGrossSalaryMonthlyCaptured, methodology)."
               }
             }
           ]
@@ -2621,7 +2626,7 @@
         },
         {
           "name": "Liability **",
-          "description": "Liability reporting over existing books (do not duplicate data).\n\nSix routes (spelling: liability):\n1. GET /mobile/liability/summary\n2. GET /mobile/liability/dashboard\n3. GET /mobile/liability/current-liabilities\n4. GET /mobile/liability/non-current-liabilities\n5. GET /mobile/liability/accounts-payable\n6. GET /mobile/liability/cash-flow-impact\n\nSources: AP \u2190 Invoice/Pay Later (Salary excluded); Tax \u2190 payables less remittances; Salaries \u2190 unpaid Salary expenses; Pension/NHF \u2190 pending payroll_obligations. Non-current loan balances \u2190 Liability Register (/mobile/liabilities). Interest Payable / Short-Term Loan still stubbed at 0.\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID. Percentages use class totals; divide-by-zero \u2192 0.",
+          "description": "Liability reporting over existing books (do not duplicate data).\n\nSix routes (spelling: liability):\n1. GET /mobile/liability/summary\n2. GET /mobile/liability/dashboard\n3. GET /mobile/liability/current-liabilities\n4. GET /mobile/liability/non-current-liabilities\n5. GET /mobile/liability/accounts-payable\n6. GET /mobile/liability/cash-flow-impact\n\nSources: AP ← Invoice/Pay Later (Salary excluded); Tax ← payables less remittances; Salaries ← unpaid Salary expenses; Pension/NHF ← pending payroll_obligations. Non-current loan balances ← Liability Register (/mobile/liabilities). Interest Payable / Short-Term Loan still stubbed at 0.\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID. Percentages use class totals; divide-by-zero → 0.",
           "item": [
             {
               "name": "Get liability summary **",
@@ -2636,7 +2641,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/dashboard",
-                "description": "Overview: summary (incl. overduePayable) + lightweight current/non-current category lists (name, amount, percentage) + cashFlowImpact. Full trees \u2192 current-liabilities / accounts-payable."
+                "description": "Overview: summary (incl. overduePayable) + lightweight current/non-current category lists (name, amount, percentage) + cashFlowImpact. Full trees → current-liabilities / accounts-payable."
               }
             },
             {
@@ -2660,7 +2665,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/accounts-payable",
-                "description": "AP detail only: name, amount, percentage, payables { summary, items, upcomingPayables, ageingAnalysis, suppliers, reports }. Each payable item includes amount (outstanding) in items[], upcomingPayables[], and suppliers[].payables[] \u2014 same amount wherever the payable appears."
+                "description": "AP detail only: name, amount, percentage, payables { summary, items, upcomingPayables, ageingAnalysis, suppliers, reports }. Each payable item includes amount (outstanding) in items[], upcomingPayables[], and suppliers[].payables[] — same amount wherever the payable appears."
               }
             },
             {
@@ -2675,10 +2680,10 @@
         },
         {
           "name": "Liabilities Register & Repayments **",
-          "description": "Liability Register POST spec + Repayment History spec.\n\nRegister: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}\nHistory: POST/GET /mobile/liabilities/{liabilityId}/repayments\n\nCreate repayment body: amount (>0), paymentDate, paymentSource (CASH|BANK), evidenceUrl optional. Backend sets type FULL_REPAYMENT|PARTIAL_REPAYMENT, status COMPLETED, id REP-xxx. balanceAfterPayment = balanceBeforePayment - principal (interest does not reduce principal). Overpayment: errorCode REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE.\nHistory item: id, liabilityId, liabilityName, liabilityType, amount, principal, interest, paymentDate, paymentSource, balanceBeforePayment, balanceAfterPayment, status, type.\nFilters: page, limit, dateFrom, dateTo, status, paymentSource, type.",
+          "description": "Liability Register + Repayment History.\n\nRegister:\n- POST /api/v1/mobile/liabilities\n- GET /api/v1/mobile/liabilities?page&limit\n- GET /api/v1/mobile/liabilities/{liabilityId}\n\nRepayments (nested):\n- POST /api/v1/mobile/liabilities/{liabilityId}/repayments\n- GET /api/v1/mobile/liabilities/{liabilityId}/repayments?page&limit&dateFrom&dateTo&status&paymentSource&type\n\nAuth: Bearer {{accessToken}} (collection prerequest). Run a Register request first to set {{liabilityId}}.\nliabilityType: BANK_LOAN | DIRECTOR_LOAN | SHAREHOLDER_LOAN | MORTGAGE | EQUIPMENT_FINANCING | LEASE_LIABILITY | CONVERTIBLE_LOAN | OTHER_LONG_TERM_BORROWINGS",
           "item": [
             {
-              "name": "Register liability **",
+              "name": "Register liability (BANK_LOAN) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -2687,49 +2692,289 @@
                     "value": "application/json"
                   }
                 ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                "description": "POST /mobile/liabilities. All shared fields required. BANK_LOAN also requires bankName, loanPurpose, collateral. Saves {{liabilityId}} from data.id (LIAB-xxx).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Business Expansion Loan\",\n  \"liabilityType\": \"BANK_LOAN\",\n  \"creditor\": \"Access Bank\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Loan for business expansion\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"bankName\": \"Access Bank\",\n  \"loanPurpose\": \"Business expansion\",\n  \"collateral\": \"Commercial property\"\n}"
-                },
+                  "raw": "{\n  \"creditor\": \"Access Bank\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Loan for business expansion\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Business Expansion Loan\",\n  \"liabilityType\": \"BANK_LOAN\",\n  \"bankName\": \"Access Bank\",\n  \"loanPurpose\": \"Business expansion\",\n  \"collateral\": \"Commercial property\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d){",
+                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register liability (DIRECTOR_LOAN) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "POST /mobile/liabilities \u2014 all shared fields required. BANK_LOAN also requires bankName, loanPurpose, collateral. outstandingBalance = principalAmount; schedule generated; repayment history empty."
-              }
+                "description": "DIRECTOR_LOAN: name is Director Name. No extra type-specific fields.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"creditor\": \"Adebayo Okonkwo\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Director loan for working capital\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Adebayo Okonkwo\",\n  \"liabilityType\": \"DIRECTOR_LOAN\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d){",
+                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register liability (SHAREHOLDER_LOAN) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                "description": "SHAREHOLDER_LOAN: name is Shareholder Name. No extra type-specific fields.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"creditor\": \"Chioma Holdings\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Shareholder loan\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Chioma Holdings\",\n  \"liabilityType\": \"SHAREHOLDER_LOAN\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d){",
+                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register liability (MORTGAGE) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                "description": "MORTGAGE requires propertyDescription and propertyValue.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"creditor\": \"GTBank\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Property financing\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Head Office Mortgage\",\n  \"liabilityType\": \"MORTGAGE\",\n  \"propertyDescription\": \"Commercial building, Victoria Island\",\n  \"propertyValue\": 80000000\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d){",
+                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register liability (EQUIPMENT_FINANCING) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                "description": "EQUIPMENT_FINANCING requires equipmentName and equipmentValue; serialNumber optional.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"creditor\": \"Stanbic IBTC\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Equipment financing\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"CNC Machine Facility\",\n  \"liabilityType\": \"EQUIPMENT_FINANCING\",\n  \"equipmentName\": \"CNC Lathe\",\n  \"equipmentValue\": 12000000,\n  \"serialNumber\": \"CNC-2026-014\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d){",
+                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register liability (LEASE_LIABILITY) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                "description": "LEASE_LIABILITY requires assetDescription and leasePaymentAmount (used as schedule installment).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"creditor\": \"Ikeja Properties Ltd\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Registered lease\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Office Lease\",\n  \"liabilityType\": \"LEASE_LIABILITY\",\n  \"assetDescription\": \"3rd floor office suite\",\n  \"leasePaymentAmount\": 250000\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d){",
+                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register liability (CONVERTIBLE_LOAN) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                "description": "CONVERTIBLE_LOAN requires conversionTrigger, conversionPrice, conversionDate (YYYY-MM-DD).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"creditor\": \"Future Capital\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Convertible loan\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Seed Convertible Note\",\n  \"liabilityType\": \"CONVERTIBLE_LOAN\",\n  \"conversionTrigger\": \"Qualified financing round\",\n  \"conversionPrice\": \"20% discount to next round\",\n  \"conversionDate\": \"2027-08-01\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d){",
+                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register liability (OTHER_LONG_TERM_BORROWINGS) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                "description": "OTHER_LONG_TERM_BORROWINGS (plural). name is Liability Name.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"creditor\": \"Sister Company Ltd\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Other long-term borrowing\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Related-party facility\",\n  \"liabilityType\": \"OTHER_LONG_TERM_BORROWINGS\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d){",
+                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
+                      "}"
+                    ]
+                  }
+                }
+              ]
             },
             {
               "name": "List registered liabilities **",
               "request": {
                 "method": "GET",
-                "url": {
-                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities?page=1&limit=20",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v{{apiVersion}}",
-                    "mobile",
-                    "liabilities"
-                  ],
-                  "query": [
-                    {
-                      "key": "page",
-                      "value": "1"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "20"
-                    }
-                  ]
-                },
-                "description": "summary: totalLiabilities, currentLiabilities, nonCurrentLiabilities, totalOutstanding, totalOverdue + paginated liabilities[] preview."
-              }
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities?page=1&limit=20",
+                "description": "GET /mobile/liabilities. summary: totalLiabilities, currentLiabilities, nonCurrentLiabilities, totalOutstanding, totalOverdue + paginated liabilities[]. Saves first item id to {{liabilityId}}."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "var rows=d&&d.liabilities?d.liabilities:[];",
+                      "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('liabilityId', rows[0].id);}"
+                    ]
+                  }
+                }
+              ]
             },
             {
               "name": "Get registered liability **",
               "request": {
                 "method": "GET",
+                "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}",
-                "description": "Full detail by uuid or LIAB-xxx: terms, financialSummary, classification (current/non-current portions), status, schedule, repaymentSummary, evidence."
+                "description": "GET /mobile/liabilities/{liabilityId}. Accepts uuid or LIAB-xxx. Returns terms, type-specific fields, financialSummary, classification, status, schedule, repaymentSummary, evidence."
               }
             },
             {
@@ -2742,75 +2987,28 @@
                     "value": "application/json"
                   }
                 ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments",
+                "description": "POST /mobile/liabilities/{liabilityId}/repayments. Body: amount (>0), paymentDate, paymentSource (CASH|BANK), evidenceUrl optional. Backend returns history item + liabilityStatus. Overpayment: errorCode REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"amount\": 500000,\n  \"paymentDate\": \"2026-08-01\",\n  \"paymentSource\": \"BANK\",\n  \"evidenceUrl\": \"https://example.com/payment-proof.pdf\"\n}"
-                },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments",
-                "description": "POST /mobile/liabilities/{liabilityId}/repayments. User sends amount, paymentDate, paymentSource, optional evidenceUrl. Backend returns history item fields + liabilityStatus. Overpayment: errorCode REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE with requestedAmount and outstandingBalance."
+                }
               }
             },
             {
               "name": "Get liability repayment history **",
               "request": {
                 "method": "GET",
-                "url": {
-                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments?page=1&limit=20",
-                  "host": [
-                    "{{baseUrl}}"
-                  ],
-                  "path": [
-                    "api",
-                    "v{{apiVersion}}",
-                    "mobile",
-                    "liabilities",
-                    "{{liabilityId}}",
-                    "repayments"
-                  ],
-                  "query": [
-                    {
-                      "key": "page",
-                      "value": "1"
-                    },
-                    {
-                      "key": "limit",
-                      "value": "20"
-                    },
-                    {
-                      "key": "dateFrom",
-                      "value": "",
-                      "disabled": true
-                    },
-                    {
-                      "key": "dateTo",
-                      "value": "",
-                      "disabled": true
-                    },
-                    {
-                      "key": "status",
-                      "value": "COMPLETED",
-                      "disabled": true
-                    },
-                    {
-                      "key": "paymentSource",
-                      "value": "BANK",
-                      "disabled": true
-                    },
-                    {
-                      "key": "type",
-                      "value": "PARTIAL_REPAYMENT",
-                      "disabled": true
-                    }
-                  ]
-                },
-                "description": "GET /mobile/liabilities/{liabilityId}/repayments. Newest first. data.liability + summary (totalRepayments, totalAmountPaid, totalPrincipalPaid, totalInterestPaid, lastPaymentDate) + repayments[] history items + pagination. Optional overdue { isOverdue, daysOverdue, overdueAmount }."
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments?page=1&limit=20",
+                "description": "GET /mobile/liabilities/{liabilityId}/repayments. Newest first. data.liability + summary (totalRepayments, totalAmountPaid, totalPrincipalPaid, totalInterestPaid, lastPaymentDate) + repayments[] + pagination. Optional query: dateFrom, dateTo, status, paymentSource, type."
               }
             }
           ]
         },
         {
           "name": "Financial Position **",
-          "description": "GET /mobile/financial-position \u2014 complete financial position for the mobile Financial Position screen. Backend owns all totals, percentages, and health metrics. Category names match Asset/Liability modules (no PPE/Intangible/Payroll Payable rollups). Non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others. Current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans.",
+          "description": "GET /mobile/financial-position — complete financial position for the mobile Financial Position screen. Backend owns all totals, percentages, and health metrics. Category names match Asset/Liability modules (no PPE/Intangible/Payroll Payable rollups). Non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others. Current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans.",
           "item": [
             {
               "name": "Get financial position **",
@@ -2818,7 +3016,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/financial-position",
-                "description": "Response data:\n\u2022 summary: asset|liability|equity { amount, percentage }, total (= total assets)\n\u2022 assets.currentAssets.items: Cash, Bank Balance, Inventory, Accounts Receivable\n\u2022 assets.nonCurrentAssets.items: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others (amounts from asset type NBV; zeros included)\n\u2022 liabilities.currentLiabilities.items: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans\n\u2022 liabilities.nonCurrentLiabilities.items: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings\n\u2022 equity.total = Assets \u2212 Liabilities\n\u2022 financialHealth: currentRatio, debtToAssetRatio %, equityRatio %, workingCapital\nDo not use Property, Plant & Equipment / Intangible Assets / Payroll Payable labels."
+                "description": "Response data:\n• summary: asset|liability|equity { amount, percentage }, total (= total assets)\n• assets.currentAssets.items: Cash, Bank Balance, Inventory, Accounts Receivable\n• assets.nonCurrentAssets.items: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others (amounts from asset type NBV; zeros included)\n• liabilities.currentLiabilities.items: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans\n• liabilities.nonCurrentLiabilities.items: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings\n• equity.total = Assets − Liabilities\n• financialHealth: currentRatio, debtToAssetRatio %, equityRatio %, workingCapital\nDo not use Property, Plant & Equipment / Intangible Assets / Payroll Payable labels."
               }
             }
           ]
@@ -2831,7 +3029,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/financial-overview?year={{overviewYear}}",
-                "description": "Annual summary for mobile home / What I Owe cards. Response data: year, currency (NGN), annualRevenue, annualExpense, netProfit (all ex-VAT \u2014 VAT not counted as revenue or profit), currentTaxLiability (unpaid payables for the year), potentialSavings (5% of liability, capped), taxLiabilityByType { VAT, WHT, \u2026 }, note. Syncs all 12 book months before computing liability. Omit year for current calendar year."
+                "description": "Annual summary for mobile home / What I Owe cards. Response data: year, currency (NGN), annualRevenue, annualExpense, netProfit (all ex-VAT — VAT not counted as revenue or profit), currentTaxLiability (unpaid payables for the year), potentialSavings (5% of liability, capped), taxLiabilityByType { VAT, WHT, … }, note. Syncs all 12 book months before computing liability. Omit year for current calendar year."
               }
             },
             {
@@ -2839,7 +3037,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/dashboard?period=2026-02&range=month",
-                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). expenses / operatingExpenses = book expenses (ex-VAT) + Salaries (employee monthly gross pay). netProfit = income \u2212 that total. expenseBreakdown includes category rows (ex-VAT) plus Salaries at gross. VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance. range=month|quarter|year."
+                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). expenses / operatingExpenses = book expenses (ex-VAT) + Salaries (employee monthly gross pay). netProfit = income − that total. expenseBreakdown includes category rows (ex-VAT) plus Salaries at gross. VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance. range=month|quarter|year."
               }
             }
           ]
@@ -2890,7 +3088,7 @@
                   "raw": "{\n  \"url\": \"https://example.com/document/invoice-31.pdf\",\n  \"category\": \"Sales-Transactions\",\n  \"linkedRecord\": \"sale-67df9206-9dad-42cd-a2d1-b584df0b55b4\",\n  \"uploadedBy\": \"Ronald Gold\",\n  \"uploadedDate\": \"2026-05-26T10:30:00.000Z\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents",
-                "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string \u2014 if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
+                "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string — if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
               }
             },
             {
@@ -2908,7 +3106,7 @@
                   "raw": "{\n  \"url\": \"https://example.com/document/invoice-31.pdf\",\n  \"category\": \"Sales-Transactions\",\n  \"linkedRecord\": \"sale-67df9206-9dad-42cd-a2d1-b584df0b55b4\",\n  \"uploadedDate\": \"2026-05-26T10:30:00.000Z\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents",
-                "description": "Same as create but omits uploadedBy \u2014 backend saves/returns the business name as a string."
+                "description": "Same as create but omits uploadedBy — backend saves/returns the business name as a string."
               }
             },
             {
@@ -2989,7 +3187,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
-                "description": "Includes taxRelief { annualHouseRent, nhf, nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses, computedReliefs { houseRentRelief, \u2026 } }, salaryStructure, deductions (paye/nhf/net)."
+                "description": "Includes taxRelief { annualHouseRent, nhf, nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses, computedReliefs { houseRentRelief, … } }, salaryStructure, deductions (paye/nhf/net)."
               }
             },
             {
@@ -3007,7 +3205,7 @@
                   "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\",\n  \"annualHouseRent\": 2000000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 120000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"qualifyingMedicalExpenses\": 100000\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
-                "description": "Optional pfa; tax relief fields: annualHouseRent (actual rent \u2014 PAYE uses MIN(20%, 500k)), nhf (boolean contributor), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses (annual, non-negative). employmentType: Full time | Part time | Contract."
+                "description": "Optional pfa; tax relief fields: annualHouseRent (actual rent — PAYE uses MIN(20%, 500k)), nhf (boolean contributor), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses (annual, non-negative). employmentType: Full time | Part time | Contract."
               }
             },
             {
@@ -3816,7 +4014,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
-                "description": "Consultant user profile: taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly (same semantics as mobile \u2014 PAYE salary basis when applicable)."
+                "description": "Consultant user profile: taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly (same semantics as mobile — PAYE salary basis when applicable)."
               }
             },
             {
@@ -3834,7 +4032,7 @@
                   "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"organizationName\":\"Fileam Consulting\",\"taxPersona\":\"GIG_WORKER\",\"employmentGrossSalaryMonthly\":null}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
-                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (number \u2265 0 or null to clear)."
+                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (number ≥ 0 or null to clear)."
               }
             },
             {
@@ -4266,7 +4464,7 @@
                       }
                     },
                     {
-                      "name": "Profit & Loss (defaults \u2014 current month)",
+                      "name": "Profit & Loss (defaults — current month)",
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-loss",
@@ -4278,7 +4476,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-loss?year={{plYear}}",
-                        "description": "year without month = Jan\u2013Dec for that year."
+                        "description": "year without month = Jan–Dec for that year."
                       }
                     },
                     {
@@ -4391,7 +4589,7 @@
                           "raw": "{\"description\":\"Consulting fee\",\"amount\":50000,\"type\":\"income\",\"date\":\"2026-02-23\",\"status\":\"Pending\",\"customerName\":\"Client Corp\",\"customerId\":\"cust-ent-001\"}"
                         },
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions",
-                        "description": "Creates mobile Sale with paymentType Cash \u2192 status Paid by default (Invoice would be Pending)."
+                        "description": "Creates mobile Sale with paymentType Cash → status Paid by default (Invoice would be Pending)."
                       }
                     },
                     {
@@ -4783,7 +4981,7 @@
                           "raw": "{\"documentName\":\"Contract\",\"category\":\"Contracts\",\"fileUrl\":\"https://example.com/doc.pdf\"}"
                         },
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/upload",
-                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string \u2014 if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
+                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string — if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
                       }
                     },
                     {
@@ -4821,7 +5019,7 @@
                           "raw": "{\"clientName\":\"Client A\",\"clientAddress\":\"123 St\",\"clientEmail\":\"client@a.com\",\"totalAmount\":250750.25}"
                         },
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/convert-to-invoice",
-                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string \u2014 if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
+                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string — if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
                       }
                     },
                     {
@@ -4856,7 +5054,7 @@
                       "request": {
                         "method": "POST",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/{{assetId}}/approve",
-                        "description": "Transactional approve \u2192 register. Body: classification, useful_life_years, residual_value, depreciation_method (or amortisation_method for Software License), optional consultant_notes. Do not send classification Expense \u2014 use Classify as expense.",
+                        "description": "Transactional approve → register. Body: classification, useful_life_years, residual_value, depreciation_method (or amortisation_method for Software License), optional consultant_notes. Do not send classification Expense — use Classify as expense.",
                         "header": [
                           {
                             "key": "Content-Type",
@@ -4985,7 +5183,7 @@
                       }
                     }
                   ],
-                  "description": "Enterprise Asset Management under /enterprise/clients/:clientId/assets.\n\nFacade over mobile Asset + AssetHistory (clientId = linked mobile user).\n\u2022 GET /pending?status=pending|approved|returned\n\u2022 GET /pending/:assetId\n\u2022 POST /:assetId/approve \u2014 classification + useful_life_years + residual_value + depreciation/amortisation_method (do NOT use Expense here)\n\u2022 POST /:assetId/return \u2014 body { reason }\n\u2022 POST /:assetId/expense \u2014 classify as expense (excluded from register)\n\u2022 GET|PATCH /register[/:assetId] \u2014 NBV fields server-computed; PATCH requires reason_for_change\n\u2022 GET /register/export?format=pdf|excel\n\u2022 GET /:assetId/depreciation-schedule\n\u2022 GET /history?asset_id=&event_type=&page=&per_page=\n\u2022 POST /reports/generate \u2014 report_type + format\n\u2022 GET /downloads/:downloadId\nnotification_sent is always false until a push queue exists."
+                  "description": "Enterprise Asset Management under /enterprise/clients/:clientId/assets.\n\nFacade over mobile Asset + AssetHistory (clientId = linked mobile user).\n• GET /pending?status=pending|approved|returned\n• GET /pending/:assetId\n• POST /:assetId/approve — classification + useful_life_years + residual_value + depreciation/amortisation_method (do NOT use Expense here)\n• POST /:assetId/return — body { reason }\n• POST /:assetId/expense — classify as expense (excluded from register)\n• GET|PATCH /register[/:assetId] — NBV fields server-computed; PATCH requires reason_for_change\n• GET /register/export?format=pdf|excel\n• GET /:assetId/depreciation-schedule\n• GET /history?asset_id=&event_type=&page=&per_page=\n• POST /reports/generate — report_type + format\n• GET /downloads/:downloadId\nnotification_sent is always false until a push queue exists."
                 },
                 {
                   "name": "Filings *",
@@ -5081,7 +5279,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}&status=",
-                        "description": "Optional status filters tax_payables.status. Same response shape as mobile filings list \u2014 includes missingEvidenceBreakdown (sale/expense rows missing invoice or receipt proof). Test script sets {{filingId}} from first row."
+                        "description": "Optional status filters tax_payables.status. Same response shape as mobile filings list — includes missingEvidenceBreakdown (sale/expense rows missing invoice or receipt proof). Test script sets {{filingId}} from first row."
                       }
                     },
                     {
@@ -5089,7 +5287,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}",
-                        "description": "Linked-client view \u2014 same payload as mobile GET /filings/:id (timeline, completion, missingEvidenceBreakdown, periodAttachmentGap counts). TaxPayable id = {{filingId}}. 404 if filing not found for client."
+                        "description": "Linked-client view — same payload as mobile GET /filings/:id (timeline, completion, missingEvidenceBreakdown, periodAttachmentGap counts). TaxPayable id = {{filingId}}. 404 if filing not found for client."
                       }
                     },
                     {
@@ -5358,7 +5556,7 @@
         },
         {
           "name": "Lookups",
-          "description": "Read-only lists for forms and filings. Same URLs as Profile / Clients \u2192 Filings where duplicated \u2014 use either entry.",
+          "description": "Read-only lists for forms and filings. Same URLs as Profile / Clients → Filings where duplicated — use either entry.",
           "item": [
             {
               "name": "Contacts and types",
@@ -5387,7 +5585,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/constants",
-                "description": "Requires {{clientId}} (linked mobile user UUID). Same payload as mobile GET /mobile/filings/constants. Duplicate of Clients \u2192 Client :clientId \u2192 Filings * \u2192 Filings constants *."
+                "description": "Requires {{clientId}} (linked mobile user UUID). Same payload as mobile GET /mobile/filings/constants. Duplicate of Clients → Client :clientId → Filings * → Filings constants *."
               }
             },
             {
@@ -5406,7 +5604,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/tax-types",
-                "description": "Active filing codes for this client. Duplicate of Clients \u2192 Filings * \u2192 List filing tax types *."
+                "description": "Active filing codes for this client. Duplicate of Clients → Filings * → List filing tax types *."
               }
             }
           ]
@@ -5742,7 +5940,7 @@
               }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-            "description": "AI Service list. Same document shape as mobile vault: totalDocuments, documents[] with linkedRecord / uploadedBy (string \u2014 business name for auto evidence), categoryCounts."
+            "description": "AI Service list. Same document shape as mobile vault: totalDocuments, documents[] with linkedRecord / uploadedBy (string — business name for auto evidence), categoryCounts."
           }
         },
         {
