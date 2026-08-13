@@ -13,17 +13,15 @@ model RegisteredLiability {
   outstandingPrincipal Decimal   @map("outstanding_principal") @db.Decimal(14, 2)
   /** Accrued / due interest awaiting settlement */
   accruedInterest      Decimal   @default(0) @map("accrued_interest") @db.Decimal(14, 2)
-  /** Stated contractual interest rate percent (e.g. 8 = 8%) */
+  /** Stated contractual interest rate percent (0–100) */
   interestRate         Decimal?  @map("interest_rate") @db.Decimal(8, 4)
-  /** ANNUAL | MONTHLY | QUARTERLY | WEEKLY | DAILY | CUSTOM */
+  /** ANNUAL | MONTHLY | QUARTERLY | WEEKLY | DAILY */
   interestRateType     String?   @map("interest_rate_type")
-  /** FLAT | REDUCING_BALANCE | COMPOUNDING | CUSTOM */
+  /** FLAT | REDUCING_BALANCE | COMPOUNDING */
   interestCalcMethod   String?   @map("interest_calculation_method")
-  /**
-   * WEEKLY | BIWEEKLY | MONTHLY | QUARTERLY | SEMI_ANNUALLY | ANNUALLY | CUSTOM
-   */
+  /** WEEKLY | BIWEEKLY | MONTHLY | QUARTERLY | SEMI_ANNUALLY | ANNUALLY */
   repaymentFrequency   String    @map("repayment_frequency")
-  /** AMORTIZED | INTEREST_ONLY | BULLET | CUSTOM */
+  /** AMORTIZED | INTEREST_ONLY | BULLET */
   repaymentStructure   String    @map("repayment_structure")
   /** Backend-derived installment used for schedule generation */
   installmentAmount    Decimal?  @map("installment_amount") @db.Decimal(14, 2)
@@ -39,6 +37,25 @@ model RegisteredLiability {
   lastRepaymentDate    DateTime? @map("last_repayment_date") @db.Date
   evidenceUrl          String?   @map("evidence_url")
   note                 String?
+
+  /** BANK_LOAN */
+  bankName             String?   @map("bank_name")
+  loanPurpose          String?   @map("loan_purpose")
+  collateral           String?
+  /** MORTGAGE */
+  propertyDescription  String?   @map("property_description")
+  propertyValue        Decimal?  @map("property_value") @db.Decimal(14, 2)
+  /** EQUIPMENT_FINANCING */
+  equipmentName        String?   @map("equipment_name")
+  equipmentValue       Decimal?  @map("equipment_value") @db.Decimal(14, 2)
+  serialNumber         String?   @map("serial_number")
+  /** LEASE_LIABILITY */
+  assetDescription     String?   @map("asset_description")
+  leasePaymentAmount   Decimal?  @map("lease_payment_amount") @db.Decimal(14, 2)
+  /** CONVERTIBLE_LOAN */
+  conversionTrigger    String?   @map("conversion_trigger")
+  conversionPrice      String?   @map("conversion_price")
+  conversionDate       DateTime? @map("conversion_date") @db.Date
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 

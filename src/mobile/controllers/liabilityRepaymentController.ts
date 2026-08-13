@@ -14,7 +14,9 @@ function replyError(res: Response, error: unknown, fallback: string): boolean {
   if (error instanceof HttpReplyError) {
     res
       .status(error.statusCode)
-      .json(outJson(false, error.message, error.data ?? null));
+      .json(
+        outJson(false, error.message, error.data ?? null, error.errorCode),
+      );
     return true;
   }
   return false;
@@ -39,15 +41,28 @@ export const createRegisteredLiability = async (
       liabilityType: string;
       creditor: string;
       principalAmount: number;
-      interestRate?: number;
-      interestRateType?: string;
-      interestCalculationMethod?: string;
+      interestRate: number;
+      interestRateType: string;
+      interestCalculationMethod: string;
       startDate: string;
-      maturityDate?: string;
+      maturityDate: string;
       repaymentFrequency: string;
       repaymentStructure: string;
-      evidenceUrl?: string;
-      note?: string;
+      note: string;
+      evidenceUrl: string;
+      bankName?: string;
+      loanPurpose?: string;
+      collateral?: string;
+      propertyDescription?: string;
+      propertyValue?: number;
+      equipmentName?: string;
+      equipmentValue?: number;
+      serialNumber?: string;
+      assetDescription?: string;
+      leasePaymentAmount?: number;
+      conversionTrigger?: string;
+      conversionPrice?: string;
+      conversionDate?: string;
     };
     const data = await liabilityRegisterService.create(userId, body);
     res
@@ -112,17 +127,18 @@ export const createLiabilityRepayment = async (
       locations: ["body"],
       includeOptionals: true,
     }) as {
-      liabilityId: string;
-      repaymentAmount: number;
+      amount: number;
       paymentDate: string;
       paymentSource: string;
       evidenceUrl?: string;
-      note?: string;
     };
-    const data = await liabilityRepaymentService.create(userId, body);
+    const data = await liabilityRepaymentService.create(userId, {
+      liabilityId: paramId(req, "liabilityId"),
+      ...body,
+    });
     res
       .status(HttpStatusCode.CREATED)
-      .json(outJson(true, "Liability repayment recorded successfully.", data));
+      .json(outJson(true, "Repayment recorded successfully.", data));
   } catch (error) {
     if (replyError(res, error, "Failed to create repayment")) return;
     res
@@ -137,39 +153,31 @@ export const listLiabilityRepayments = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const page = req.query.page ? Number(req.query.page) : undefined;
-    const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const data = await liabilityRepaymentService.list(userId, { page, limit });
+    const q = req.query;
+    const str = (v: unknown): string | undefined => {
+      if (typeof v === "string" && v.trim()) return v.trim();
+      return undefined;
+    };
+    const data = await liabilityRepaymentService.listForLiability(
+      userId,
+      paramId(req, "liabilityId"),
+      {
+        page: q.page ? Number(q.page) : undefined,
+        limit: q.limit ? Number(q.limit) : undefined,
+        dateFrom: str(q.dateFrom),
+        dateTo: str(q.dateTo),
+        status: str(q.status),
+        paymentSource: str(q.paymentSource),
+        type: str(q.type),
+      },
+    );
     res
       .status(HttpStatusCode.OK)
-      .json(
-        outJson(true, "Liability repayments retrieved successfully.", data),
-      );
+      .json(outJson(true, "Repayment history retrieved successfully.", data));
   } catch (error) {
     if (replyError(res, error, "Failed to list repayments")) return;
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to list repayments", null));
-  }
-};
-
-export const getLiabilityRepayment = async (
-  req: IRequest,
-  res: Response,
-): Promise<void> => {
-  try {
-    const userId = getAuthUserId(req);
-    const data = await liabilityRepaymentService.getById(
-      userId,
-      paramId(req, "repaymentId"),
-    );
-    res
-      .status(HttpStatusCode.OK)
-      .json(outJson(true, "Repayment retrieved successfully.", data));
-  } catch (error) {
-    if (replyError(res, error, "Failed to get repayment")) return;
-    res
-      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "Failed to get repayment", null));
   }
 };

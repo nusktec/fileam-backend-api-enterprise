@@ -1,6 +1,6 @@
 /**
  * Registered long-term liability categories (Liability Register / repayments).
- * Display labels align with Financial Position non-current liability names.
+ * POST /mobile/liabilities — Liability Registration POST Request Specification.
  */
 export const LIABILITY_TYPES = [
   "BANK_LOAN",
@@ -10,7 +10,7 @@ export const LIABILITY_TYPES = [
   "EQUIPMENT_FINANCING",
   "LEASE_LIABILITY",
   "CONVERTIBLE_LOAN",
-  "OTHER_LONG_TERM_BORROWING",
+  "OTHER_LONG_TERM_BORROWINGS",
 ] as const;
 
 export type LiabilityType = (typeof LIABILITY_TYPES)[number];
@@ -23,7 +23,7 @@ export const LIABILITY_TYPE_LABELS: Record<LiabilityType, string> = {
   EQUIPMENT_FINANCING: "Equipment Financing",
   LEASE_LIABILITY: "Lease Liability",
   CONVERTIBLE_LOAN: "Convertible Loan",
-  OTHER_LONG_TERM_BORROWING: "Other Long-term Borrowings",
+  OTHER_LONG_TERM_BORROWINGS: "Other Long-term Borrowings",
 };
 
 /** Financial Position / liability dashboard display name → enum */
@@ -35,7 +35,7 @@ export const LIABILITY_LABEL_TO_TYPE: Record<string, LiabilityType> = {
   "Equipment Financing": "EQUIPMENT_FINANCING",
   "Lease Liability": "LEASE_LIABILITY",
   "Convertible Loan": "CONVERTIBLE_LOAN",
-  "Other Long-term Borrowings": "OTHER_LONG_TERM_BORROWING",
+  "Other Long-term Borrowings": "OTHER_LONG_TERM_BORROWINGS",
 };
 
 export function isValidLiabilityType(value: string): value is LiabilityType {
@@ -52,10 +52,15 @@ export function isValidLiabilityPaymentSource(
   return (LIABILITY_PAYMENT_SOURCES as readonly string[]).includes(value);
 }
 
-export const LIABILITY_REPAYMENT_TYPES = ["FULL", "PARTIAL"] as const;
+/** History item type — backend-determined. */
+export const LIABILITY_REPAYMENT_TYPES = [
+  "FULL_REPAYMENT",
+  "PARTIAL_REPAYMENT",
+] as const;
 export type LiabilityRepaymentType =
   (typeof LIABILITY_REPAYMENT_TYPES)[number];
 
+/** Liability register payment status. */
 export const LIABILITY_PAYMENT_STATUSES = [
   "PENDING",
   "PARTIALLY_PAID",
@@ -64,6 +69,20 @@ export const LIABILITY_PAYMENT_STATUSES = [
 export type LiabilityPaymentStatus =
   (typeof LIABILITY_PAYMENT_STATUSES)[number];
 
+/** Repayment history posting status. */
+export const LIABILITY_REPAYMENT_STATUSES = [
+  "PENDING",
+  "PROCESSING",
+  "COMPLETED",
+  "FAILED",
+  "REVERSED",
+] as const;
+export type LiabilityRepaymentStatus =
+  (typeof LIABILITY_REPAYMENT_STATUSES)[number];
+
+export const REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE =
+  "REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE";
+
 export const LIABILITY_REPAYMENT_FREQUENCIES = [
   "WEEKLY",
   "BIWEEKLY",
@@ -71,7 +90,6 @@ export const LIABILITY_REPAYMENT_FREQUENCIES = [
   "QUARTERLY",
   "SEMI_ANNUALLY",
   "ANNUALLY",
-  "CUSTOM",
 ] as const;
 export type LiabilityRepaymentFrequency =
   (typeof LIABILITY_REPAYMENT_FREQUENCIES)[number];
@@ -86,7 +104,6 @@ export const LIABILITY_REPAYMENT_STRUCTURES = [
   "AMORTIZED",
   "INTEREST_ONLY",
   "BULLET",
-  "CUSTOM",
 ] as const;
 export type LiabilityRepaymentStructure =
   (typeof LIABILITY_REPAYMENT_STRUCTURES)[number];
@@ -103,7 +120,6 @@ export const LIABILITY_INTEREST_RATE_TYPES = [
   "QUARTERLY",
   "WEEKLY",
   "DAILY",
-  "CUSTOM",
 ] as const;
 export type LiabilityInterestRateType =
   (typeof LIABILITY_INTEREST_RATE_TYPES)[number];
@@ -118,7 +134,6 @@ export const LIABILITY_INTEREST_CALC_METHODS = [
   "FLAT",
   "REDUCING_BALANCE",
   "COMPOUNDING",
-  "CUSTOM",
 ] as const;
 export type LiabilityInterestCalcMethod =
   (typeof LIABILITY_INTEREST_CALC_METHODS)[number];

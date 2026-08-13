@@ -8,10 +8,12 @@ import {
   LIABILITY_INTEREST_RATE_TYPES,
   LIABILITY_PAYMENT_STATUSES,
   LIABILITY_REPAYMENT_FREQUENCIES,
+  LIABILITY_REPAYMENT_STATUSES,
   LIABILITY_REPAYMENT_STRUCTURES,
+  LIABILITY_REPAYMENT_TYPES,
   LIABILITY_TYPE_LABELS,
   LIABILITY_TYPES,
-  TAX_GPT_TREATMENT,
+  REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE,
   type LiabilityInterestCalcMethod,
   type LiabilityInterestRateType,
   type LiabilityPaymentSource,
@@ -67,6 +69,48 @@ type LiabilityRow = {
   lastRepaymentDate: Date | null;
   evidenceUrl: string | null;
   note: string | null;
+  bankName: string | null;
+  loanPurpose: string | null;
+  collateral: string | null;
+  propertyDescription: string | null;
+  propertyValue: Decimal | null;
+  equipmentName: string | null;
+  equipmentValue: Decimal | null;
+  serialNumber: string | null;
+  assetDescription: string | null;
+  leasePaymentAmount: Decimal | null;
+  conversionTrigger: string | null;
+  conversionPrice: string | null;
+  conversionDate: Date | null;
+};
+
+export type CreateLiabilityInput = {
+  name: string;
+  liabilityType: string;
+  creditor: string;
+  principalAmount: number;
+  interestRate: number;
+  interestRateType: string;
+  interestCalculationMethod: string;
+  startDate: string;
+  maturityDate: string;
+  repaymentFrequency: string;
+  repaymentStructure: string;
+  note: string;
+  evidenceUrl: string;
+  bankName?: string;
+  loanPurpose?: string;
+  collateral?: string;
+  propertyDescription?: string;
+  propertyValue?: number;
+  equipmentName?: string;
+  equipmentValue?: number;
+  serialNumber?: string;
+  assetDescription?: string;
+  leasePaymentAmount?: number;
+  conversionTrigger?: string;
+  conversionPrice?: string;
+  conversionDate?: string;
 };
 
 function d(v: Decimal | number | null | undefined): number {
@@ -92,16 +136,6 @@ function parseDateOnly(value: string, field = "date"): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
   if (!m) throw new HttpReplyError(400, `${field} must be YYYY-MM-DD`);
   return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-}
-
-function monthBounds(asOf = new Date()) {
-  const start = new Date(
-    Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth(), 1),
-  );
-  const end = new Date(
-    Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() + 1, 1),
-  );
-  return { start, end };
 }
 
 function daysBetween(from: Date, to: Date): number {
@@ -186,7 +220,6 @@ function toAnnualRateFraction(
     case "DAILY":
       return r * 365;
     case "ANNUAL":
-    case "CUSTOM":
     default:
       return r;
   }
@@ -207,7 +240,7 @@ function periodInterestAmount(opts: {
   if (method === "FLAT") {
     return normalizeMoneyAmount(opts.originalPrincipal * perPeriod);
   }
-  // REDUCING_BALANCE, COMPOUNDING, CUSTOM → use outstanding principal for period
+  // REDUCING_BALANCE and COMPOUNDING use outstanding principal for the period
   return normalizeMoneyAmount(opts.outstandingPrincipal * perPeriod);
 }
 
@@ -300,21 +333,15 @@ function classifyLiability(
 
 function generateScheduleDates(
   start: Date,
-  maturity: Date | null,
+  maturity: Date,
   frequency: string,
   maxPeriods = 120,
 ): Date[] {
-  if (frequency === "CUSTOM") {
-    return maturity ? [startOfUtcDay(maturity)] : [];
-  }
-
   const dates: Date[] = [];
   let cursor = startOfUtcDay(start);
   // First installment typically one period after start
   cursor = advanceByFrequency(cursor, frequency);
-  const end = maturity
-    ? startOfUtcDay(maturity)
-    : addMonths(cursor, 120);
+  const end = startOfUtcDay(maturity);
 
   for (let i = 0; i < maxPeriods; i++) {
     if (cursor.getTime() > end.getTime()) break;
@@ -322,8 +349,8 @@ function generateScheduleDates(
     cursor = advanceByFrequency(cursor, frequency);
   }
 
-  if (maturity && dates.length === 0) {
-    dates.push(startOfUtcDay(maturity));
+  if (dates.length === 0) {
+    dates.push(end);
   }
   return dates;
 }
@@ -376,7 +403,7 @@ function buildScheduleAmounts(opts: {
     });
   }
 
-  // AMORTIZED / CUSTOM — equal principal + period interest
+  // AMORTIZED — equal principal + period interest
   const principalEach = normalizeMoneyAmount(opts.principal / n);
   let allocated = 0;
   return opts.dates.map((_, idx) => {
@@ -458,6 +485,42 @@ function termsBlock(l: LiabilityRow) {
   };
 }
 
+function typeSpecificFields(l: LiabilityRow): Record<string, unknown> {
+  switch (l.liabilityType) {
+    case "BANK_LOAN":
+      return {
+        bankName: l.bankName,
+        loanPurpose: l.loanPurpose,
+        collateral: l.collateral,
+      };
+    case "MORTGAGE":
+      return {
+        propertyDescription: l.propertyDescription,
+        propertyValue: l.propertyValue != null ? d(l.propertyValue) : null,
+      };
+    case "EQUIPMENT_FINANCING":
+      return {
+        equipmentName: l.equipmentName,
+        equipmentValue: l.equipmentValue != null ? d(l.equipmentValue) : null,
+        serialNumber: l.serialNumber,
+      };
+    case "LEASE_LIABILITY":
+      return {
+        assetDescription: l.assetDescription,
+        leasePaymentAmount:
+          l.leasePaymentAmount != null ? d(l.leasePaymentAmount) : null,
+      };
+    case "CONVERTIBLE_LOAN":
+      return {
+        conversionTrigger: l.conversionTrigger,
+        conversionPrice: l.conversionPrice,
+        conversionDate: formatYmd(l.conversionDate),
+      };
+    default:
+      return {};
+  }
+}
+
 function listPreview(l: LiabilityRow, schedule: ScheduleRow[]) {
   const next = nextOpenSchedule(schedule);
   const overdue = overdueFromSchedule(schedule, l.paymentStatus);
@@ -489,6 +552,7 @@ function createResponse(l: LiabilityRow, schedule: ScheduleRow[] = []) {
     name: l.name,
     liabilityType: l.liabilityType,
     creditor: l.creditor,
+    ...typeSpecificFields(l),
     terms: termsBlock(l),
     financialSummary: {
       outstandingBalance: settlementBalance(l),
@@ -501,6 +565,10 @@ function createResponse(l: LiabilityRow, schedule: ScheduleRow[] = []) {
       repaymentCount: l.repaymentCount,
       lastRepaymentDate: formatYmd(l.lastRepaymentDate),
     },
+    evidence: {
+      url: l.evidenceUrl,
+    },
+    note: l.note,
   };
 }
 
@@ -518,6 +586,7 @@ function detailResponse(l: LiabilityRow, schedule: ScheduleRow[]) {
     name: l.name,
     liabilityType: l.liabilityType,
     creditor: l.creditor,
+    ...typeSpecificFields(l),
     terms: termsBlock(l),
     financialSummary: {
       originalAmount: d(l.originalAmount),
@@ -555,106 +624,89 @@ function detailResponse(l: LiabilityRow, schedule: ScheduleRow[]) {
   };
 }
 
-function validateInterestFields(data: {
-  interestRate?: number;
-  interestRateType?: string;
-  interestCalculationMethod?: string;
-}) {
-  const hasRate = data.interestRate != null && data.interestRate > 0;
-  if (data.interestRate != null && data.interestRate < 0) {
-    throw new HttpReplyError(400, "interestRate must be >= 0");
-  }
-  if (hasRate) {
-    if (!data.interestRateType) {
-      throw new HttpReplyError(
-        400,
-        "interestRateType is required when interestRate is set",
-      );
-    }
-    if (!isValidInterestRateType(data.interestRateType)) {
-      throw new HttpReplyError(
-        400,
-        `interestRateType must be one of: ${LIABILITY_INTEREST_RATE_TYPES.join(", ")}`,
-      );
-    }
-    if (!data.interestCalculationMethod) {
-      throw new HttpReplyError(
-        400,
-        "interestCalculationMethod is required when interestRate is set",
-      );
-    }
-    if (!isValidInterestCalcMethod(data.interestCalculationMethod)) {
-      throw new HttpReplyError(
-        400,
-        `interestCalculationMethod must be one of: ${LIABILITY_INTEREST_CALC_METHODS.join(", ")}`,
-      );
-    }
-  } else if (data.interestRateType && !isValidInterestRateType(data.interestRateType)) {
-    throw new HttpReplyError(
-      400,
-      `interestRateType must be one of: ${LIABILITY_INTEREST_RATE_TYPES.join(", ")}`,
-    );
-  } else if (
-    data.interestCalculationMethod &&
-    !isValidInterestCalcMethod(data.interestCalculationMethod)
-  ) {
-    throw new HttpReplyError(
-      400,
-      `interestCalculationMethod must be one of: ${LIABILITY_INTEREST_CALC_METHODS.join(", ")}`,
-    );
-  }
+function requireTrimmed(value: unknown, field: string): string {
+  const s = typeof value === "string" ? value.trim() : "";
+  if (!s) throw new HttpReplyError(400, `${field} is required`);
+  return s;
 }
 
-function validateFrequencyStructure(
-  frequency: string,
-  structure: string,
-  maturityDate: Date | null,
-) {
-  if (!isValidRepaymentFrequency(frequency)) {
-    throw new HttpReplyError(
-      400,
-      `repaymentFrequency must be one of: ${LIABILITY_REPAYMENT_FREQUENCIES.join(", ")}`,
+function parseTypeSpecific(data: CreateLiabilityInput) {
+  const type = data.liabilityType;
+  const out: {
+    bankName: string | null;
+    loanPurpose: string | null;
+    collateral: string | null;
+    propertyDescription: string | null;
+    propertyValue: number | null;
+    equipmentName: string | null;
+    equipmentValue: number | null;
+    serialNumber: string | null;
+    assetDescription: string | null;
+    leasePaymentAmount: number | null;
+    conversionTrigger: string | null;
+    conversionPrice: string | null;
+    conversionDate: Date | null;
+  } = {
+    bankName: null,
+    loanPurpose: null,
+    collateral: null,
+    propertyDescription: null,
+    propertyValue: null,
+    equipmentName: null,
+    equipmentValue: null,
+    serialNumber: null,
+    assetDescription: null,
+    leasePaymentAmount: null,
+    conversionTrigger: null,
+    conversionPrice: null,
+    conversionDate: null,
+  };
+
+  if (type === "BANK_LOAN") {
+    out.bankName = requireTrimmed(data.bankName, "bankName");
+    out.loanPurpose = requireTrimmed(data.loanPurpose, "loanPurpose");
+    out.collateral = requireTrimmed(data.collateral, "collateral");
+  }
+  if (type === "MORTGAGE") {
+    out.propertyDescription = requireTrimmed(
+      data.propertyDescription,
+      "propertyDescription",
+    );
+    const v = normalizeMoneyAmount(Number(data.propertyValue));
+    if (!(v > 0)) throw new HttpReplyError(400, "propertyValue must be greater than 0");
+    out.propertyValue = v;
+  }
+  if (type === "EQUIPMENT_FINANCING") {
+    out.equipmentName = requireTrimmed(data.equipmentName, "equipmentName");
+    const v = normalizeMoneyAmount(Number(data.equipmentValue));
+    if (!(v > 0)) throw new HttpReplyError(400, "equipmentValue must be greater than 0");
+    out.equipmentValue = v;
+    out.serialNumber = data.serialNumber?.trim() || null;
+  }
+  if (type === "LEASE_LIABILITY") {
+    out.assetDescription = requireTrimmed(data.assetDescription, "assetDescription");
+    const v = normalizeMoneyAmount(Number(data.leasePaymentAmount));
+    if (!(v > 0)) {
+      throw new HttpReplyError(400, "leasePaymentAmount must be greater than 0");
+    }
+    out.leasePaymentAmount = v;
+  }
+  if (type === "CONVERTIBLE_LOAN") {
+    out.conversionTrigger = requireTrimmed(
+      data.conversionTrigger,
+      "conversionTrigger",
+    );
+    out.conversionPrice = requireTrimmed(data.conversionPrice, "conversionPrice");
+    out.conversionDate = parseDateOnly(
+      requireTrimmed(data.conversionDate, "conversionDate"),
+      "conversionDate",
     );
   }
-  if (!isValidRepaymentStructure(structure)) {
-    throw new HttpReplyError(
-      400,
-      `repaymentStructure must be one of: ${LIABILITY_REPAYMENT_STRUCTURES.join(", ")}`,
-    );
-  }
-  if (structure === "BULLET" && frequency !== "CUSTOM" && !maturityDate) {
-    throw new HttpReplyError(
-      400,
-      "BULLET structure requires maturityDate (use CUSTOM frequency when there is no recurring interval)",
-    );
-  }
-  if (frequency === "CUSTOM" && structure === "BULLET" && !maturityDate) {
-    throw new HttpReplyError(
-      400,
-      "CUSTOM + BULLET requires maturityDate",
-    );
-  }
+  return out;
 }
 
 export const liabilityRegisterService = {
-  async create(
-    userId: string,
-    data: {
-      name: string;
-      liabilityType: string;
-      creditor: string;
-      principalAmount: number;
-      interestRate?: number;
-      interestRateType?: string;
-      interestCalculationMethod?: string;
-      startDate: string;
-      maturityDate?: string;
-      repaymentFrequency: string;
-      repaymentStructure: string;
-      evidenceUrl?: string;
-      note?: string;
-    },
-  ) {
+  async create(userId: string, data: CreateLiabilityInput) {
     if (!isValidLiabilityType(data.liabilityType)) {
       throw new HttpReplyError(
         400,
@@ -665,32 +717,57 @@ export const liabilityRegisterService = {
     if (!name) throw new HttpReplyError(400, "name is required");
     const creditor = data.creditor?.trim();
     if (!creditor) throw new HttpReplyError(400, "creditor is required");
+    const note = data.note?.trim();
+    if (!note) throw new HttpReplyError(400, "note is required");
+    const evidenceUrl = data.evidenceUrl?.trim();
+    if (!evidenceUrl) throw new HttpReplyError(400, "evidenceUrl is required");
 
     const principal = normalizeMoneyAmount(data.principalAmount);
     if (!(principal > 0)) {
       throw new HttpReplyError(400, "principalAmount must be greater than 0");
     }
 
-    validateInterestFields(data);
+    const interestRate = Number(data.interestRate);
+    if (!Number.isFinite(interestRate) || interestRate < 0 || interestRate > 100) {
+      throw new HttpReplyError(400, "interestRate must be between 0 and 100");
+    }
+    if (!isValidInterestRateType(data.interestRateType)) {
+      throw new HttpReplyError(
+        400,
+        `interestRateType must be one of: ${LIABILITY_INTEREST_RATE_TYPES.join(", ")}`,
+      );
+    }
+    if (!isValidInterestCalcMethod(data.interestCalculationMethod)) {
+      throw new HttpReplyError(
+        400,
+        `interestCalculationMethod must be one of: ${LIABILITY_INTEREST_CALC_METHODS.join(", ")}`,
+      );
+    }
+    if (!isValidRepaymentFrequency(data.repaymentFrequency)) {
+      throw new HttpReplyError(
+        400,
+        `repaymentFrequency must be one of: ${LIABILITY_REPAYMENT_FREQUENCIES.join(", ")}`,
+      );
+    }
+    if (!isValidRepaymentStructure(data.repaymentStructure)) {
+      throw new HttpReplyError(
+        400,
+        `repaymentStructure must be one of: ${LIABILITY_REPAYMENT_STRUCTURES.join(", ")}`,
+      );
+    }
 
     const startDate = parseDateOnly(data.startDate, "startDate");
-    const maturityDate = data.maturityDate
-      ? parseDateOnly(data.maturityDate, "maturityDate")
-      : null;
-    if (maturityDate && maturityDate.getTime() < startDate.getTime()) {
+    const maturityDate = parseDateOnly(data.maturityDate, "maturityDate");
+    if (maturityDate.getTime() < startDate.getTime()) {
       throw new HttpReplyError(400, "maturityDate must be on or after startDate");
     }
 
     const frequency = data.repaymentFrequency.trim() as LiabilityRepaymentFrequency;
     const structure = data.repaymentStructure.trim() as LiabilityRepaymentStructure;
-    validateFrequencyStructure(frequency, structure, maturityDate);
-
-    const interestRate =
-      data.interestRate != null ? Number(data.interestRate) : null;
-    const interestRateType = (data.interestRateType?.trim() ||
-      null) as LiabilityInterestRateType | null;
-    const interestCalcMethod = (data.interestCalculationMethod?.trim() ||
-      null) as LiabilityInterestCalcMethod | null;
+    const interestRateType = data.interestRateType.trim() as LiabilityInterestRateType;
+    const interestCalcMethod =
+      data.interestCalculationMethod.trim() as LiabilityInterestCalcMethod;
+    const typeFields = parseTypeSpecific(data);
 
     const interestPerPeriod = periodInterestAmount({
       originalPrincipal: principal,
@@ -698,20 +775,25 @@ export const liabilityRegisterService = {
       interestRate,
       interestRateType,
       interestCalcMethod,
-      repaymentFrequency: frequency === "CUSTOM" ? "ANNUALLY" : frequency,
+      repaymentFrequency: frequency,
     });
 
-    const scheduleDates = generateScheduleDates(
-      startDate,
-      maturityDate,
-      frequency,
-    );
-    const schedulePlan = buildScheduleAmounts({
+    const scheduleDates = generateScheduleDates(startDate, maturityDate, frequency);
+    let schedulePlan = buildScheduleAmounts({
       principal,
       dates: scheduleDates,
       structure,
       interestPerPeriod,
     });
+    if (
+      data.liabilityType === "LEASE_LIABILITY" &&
+      typeFields.leasePaymentAmount != null
+    ) {
+      schedulePlan = scheduleDates.map(() => ({
+        amountDue: typeFields.leasePaymentAmount!,
+        installment: typeFields.leasePaymentAmount,
+      }));
+    }
     const installment =
       schedulePlan.length > 0 ? schedulePlan[0]!.installment : null;
 
@@ -728,8 +810,7 @@ export const liabilityRegisterService = {
           originalAmount: new Decimal(principal),
           outstandingPrincipal: new Decimal(principal),
           accruedInterest: new Decimal(0),
-          interestRate:
-            interestRate != null ? new Decimal(interestRate) : null,
+          interestRate: new Decimal(interestRate),
           interestRateType,
           interestCalcMethod,
           repaymentFrequency: frequency,
@@ -738,10 +819,32 @@ export const liabilityRegisterService = {
             installment != null ? new Decimal(installment) : null,
           startDate,
           maturityDate,
-          nextDueDate: scheduleDates[0] ?? maturityDate ?? null,
-          evidenceUrl: data.evidenceUrl?.trim() || null,
-          note: data.note?.trim() || null,
+          nextDueDate: scheduleDates[0] ?? maturityDate,
+          evidenceUrl,
+          note,
           paymentStatus: LIABILITY_PAYMENT_STATUSES[0],
+          bankName: typeFields.bankName,
+          loanPurpose: typeFields.loanPurpose,
+          collateral: typeFields.collateral,
+          propertyDescription: typeFields.propertyDescription,
+          propertyValue:
+            typeFields.propertyValue != null
+              ? new Decimal(typeFields.propertyValue)
+              : null,
+          equipmentName: typeFields.equipmentName,
+          equipmentValue:
+            typeFields.equipmentValue != null
+              ? new Decimal(typeFields.equipmentValue)
+              : null,
+          serialNumber: typeFields.serialNumber,
+          assetDescription: typeFields.assetDescription,
+          leasePaymentAmount:
+            typeFields.leasePaymentAmount != null
+              ? new Decimal(typeFields.leasePaymentAmount)
+              : null,
+          conversionTrigger: typeFields.conversionTrigger,
+          conversionPrice: typeFields.conversionPrice,
+          conversionDate: typeFields.conversionDate,
         },
       });
 
@@ -858,8 +961,11 @@ export const liabilityRegisterService = {
       map.set(label, 0);
     }
     for (const r of rows) {
-      const label =
-        LIABILITY_TYPE_LABELS[r.liabilityType as LiabilityType] ?? null;
+      const type =
+        r.liabilityType === "OTHER_LONG_TERM_BORROWING"
+          ? "OTHER_LONG_TERM_BORROWINGS"
+          : r.liabilityType;
+      const label = LIABILITY_TYPE_LABELS[type as LiabilityType] ?? null;
       if (!label) continue;
       map.set(
         label,
@@ -870,25 +976,67 @@ export const liabilityRegisterService = {
   },
 };
 
+function mapHistoryType(stored: string): string {
+  if (stored === "FULL" || stored === "FULL_REPAYMENT") return "FULL_REPAYMENT";
+  return "PARTIAL_REPAYMENT";
+}
+
+function mapHistoryStatus(stored: string): string {
+  if ((LIABILITY_REPAYMENT_STATUSES as readonly string[]).includes(stored)) {
+    return stored;
+  }
+  if (stored === "PARTIALLY_PAID" || stored === "FULLY_PAID") return "COMPLETED";
+  return "COMPLETED";
+}
+
+function historyItem(row: {
+  repaymentCode: string;
+  repaymentType: string;
+  repaymentAmount: Decimal;
+  principalAmount: Decimal;
+  interestAmount: Decimal;
+  paymentDate: Date;
+  paymentSource: string;
+  balanceBeforeRepayment: Decimal;
+  balanceAfterRepayment: Decimal;
+  paymentStatus: string;
+  liability: { liabilityCode: string; name: string; liabilityType: string };
+}) {
+  return {
+    id: row.repaymentCode,
+    liabilityId: row.liability.liabilityCode,
+    liabilityName: row.liability.name,
+    liabilityType: row.liability.liabilityType,
+    amount: d(row.repaymentAmount),
+    principal: d(row.principalAmount),
+    interest: d(row.interestAmount),
+    paymentDate: formatYmd(row.paymentDate),
+    paymentSource: row.paymentSource,
+    balanceBeforePayment: d(row.balanceBeforeRepayment),
+    balanceAfterPayment: d(row.balanceAfterRepayment),
+    status: mapHistoryStatus(row.paymentStatus),
+    type: mapHistoryType(row.repaymentType),
+  };
+}
+
 export const liabilityRepaymentService = {
   async create(
     userId: string,
     data: {
       liabilityId: string;
-      repaymentAmount: number;
+      amount: number;
       paymentDate: string;
       paymentSource: string;
       evidenceUrl?: string;
-      note?: string;
     },
   ) {
     const liabilityIdOrCode = data.liabilityId?.trim();
     if (!liabilityIdOrCode) {
       throw new HttpReplyError(400, "liabilityId is required");
     }
-    const repaymentAmount = normalizeMoneyAmount(data.repaymentAmount);
-    if (!(repaymentAmount > 0)) {
-      throw new HttpReplyError(400, "repaymentAmount must be greater than 0");
+    const amount = normalizeMoneyAmount(data.amount);
+    if (!(amount > 0)) {
+      throw new HttpReplyError(400, "amount must be greater than 0");
     }
     if (!isValidLiabilityPaymentSource(data.paymentSource)) {
       throw new HttpReplyError(400, "paymentSource must be CASH or BANK");
@@ -917,48 +1065,46 @@ export const liabilityRepaymentService = {
       interestRate: liability.interestRate != null ? d(liability.interestRate) : null,
       interestRateType: liability.interestRateType,
       interestCalcMethod: liability.interestCalcMethod,
-      repaymentFrequency:
-        liability.repaymentFrequency === "CUSTOM"
-          ? "ANNUALLY"
-          : liability.repaymentFrequency,
+      repaymentFrequency: liability.repaymentFrequency,
     });
     const accrued = Math.max(d(liability.accruedInterest), calculatedInterest);
 
-    const outstanding = normalizeMoneyAmount(
-      d(liability.outstandingPrincipal) + accrued,
-    );
-    if (repaymentAmount > outstanding + 0.001) {
+    const outstandingPrincipal = d(liability.outstandingPrincipal);
+    const outstandingBalance = outstandingPrincipal;
+    const maxSettlement = normalizeMoneyAmount(outstandingPrincipal + accrued);
+    if (amount > maxSettlement + 0.001) {
       throw new HttpReplyError(
         400,
         "Repayment amount exceeds the outstanding liability balance.",
         {
-          outstandingAmount: outstanding,
-          repaymentAmount,
-          excessAmount: normalizeMoneyAmount(repaymentAmount - outstanding),
+          requestedAmount: amount,
+          outstandingBalance,
         },
+        REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE,
       );
     }
 
-    const interestAmount = normalizeMoneyAmount(
-      Math.min(accrued, repaymentAmount),
+    const interestAmount = normalizeMoneyAmount(Math.min(accrued, amount));
+    const principalAmount = normalizeMoneyAmount(amount - interestAmount);
+    /** History spec: balance is principal; interest does not reduce it. */
+    const balanceBeforePayment = outstandingPrincipal;
+    const balanceAfterPayment = normalizeMoneyAmount(
+      Math.max(0, outstandingPrincipal - principalAmount),
     );
-    const principalAmount = normalizeMoneyAmount(
-      repaymentAmount - interestAmount,
-    );
-    const balanceBefore = outstanding;
-    const balanceAfter = normalizeMoneyAmount(outstanding - repaymentAmount);
     const repaymentType =
-      balanceAfter <= 0.001 ? "FULL" : ("PARTIAL" as const);
-    const paymentStatus =
-      balanceAfter <= 0.001 ? "FULLY_PAID" : "PARTIALLY_PAID";
+      balanceAfterPayment <= 0.001
+        ? "FULL_REPAYMENT"
+        : ("PARTIAL_REPAYMENT" as const);
+    const liabilityStatus =
+      balanceAfterPayment <= 0.001 ? "FULLY_PAID" : "PARTIALLY_PAID";
 
     const scheduleAlloc = allocateToSchedule(
       liability.schedule,
-      repaymentAmount,
+      amount,
       paymentDate,
     );
 
-    const repaymentCode = await nextCode(REPAY_COUNTER, "REPAY");
+    const repaymentCode = await nextCode(REPAY_COUNTER, "REP");
     const expensePaymentType = paymentTypeFromSource(paymentSource);
 
     const result = await prisma.$transaction(async (tx) => {
@@ -1048,9 +1194,9 @@ export const liabilityRepaymentService = {
             normalizeMoneyAmount(d(liability.totalInterestPaid) + interestAmount),
           ),
           totalAmountRepaid: new Decimal(
-            normalizeMoneyAmount(d(liability.totalAmountRepaid) + repaymentAmount),
+            normalizeMoneyAmount(d(liability.totalAmountRepaid) + amount),
           ),
-          paymentStatus,
+          paymentStatus: liabilityStatus,
           repaymentCount: { increment: 1 },
           lastRepaymentDate: paymentDate,
           nextDueDate: nextOpen?.dueDate ?? liability.maturityDate,
@@ -1063,18 +1209,17 @@ export const liabilityRepaymentService = {
           liabilityId: liability.id,
           repaymentCode,
           repaymentType,
-          repaymentAmount: new Decimal(repaymentAmount),
+          repaymentAmount: new Decimal(amount),
           principalAmount: new Decimal(principalAmount),
           interestAmount: new Decimal(interestAmount),
           paymentDate,
           paymentSource,
-          balanceBeforeRepayment: new Decimal(balanceBefore),
-          balanceAfterRepayment: new Decimal(balanceAfter),
-          paymentStatus,
+          balanceBeforeRepayment: new Decimal(balanceBeforePayment),
+          balanceAfterRepayment: new Decimal(balanceAfterPayment),
+          paymentStatus: "COMPLETED",
           isOverdue: scheduleAlloc.isOverdue,
           daysOverdue: scheduleAlloc.daysOverdue,
           evidenceUrl: data.evidenceUrl?.trim() || null,
-          note: data.note?.trim() || null,
           interestExpenseId,
           principalExpenseId,
         },
@@ -1083,81 +1228,111 @@ export const liabilityRepaymentService = {
       return repayment;
     });
 
-    const taxGPT = {
-      accountingTreatment:
-        interestAmount > 0
-          ? TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_AND_INTEREST_EXPENSE
-          : TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_ONLY,
-      principalTreatment: "LIABILITY_REDUCTION",
-      interestTreatment: interestAmount > 0 ? "EXPENSE" : "NONE",
-      warning: null as string | null,
-    };
+    const updatedSchedule = liability.schedule.map((s) => {
+      const u = scheduleAlloc.updates.find((x) => x.id === s.id);
+      return u
+        ? { ...s, amountPaid: new Decimal(u.amountPaid), status: u.status }
+        : s;
+    });
+    const overdue = overdueFromSchedule(updatedSchedule, liabilityStatus);
 
     return {
-      id: result.repaymentCode,
-      uuid: result.id,
-      liability: {
-        id: liability.liabilityCode,
-        name: liability.name,
-        liabilityType: liability.liabilityType,
-      },
-      repaymentType: result.repaymentType,
-      repaymentAmount: d(result.repaymentAmount),
-      principalAmount: d(result.principalAmount),
-      interestAmount: d(result.interestAmount),
-      paymentDate: formatYmd(result.paymentDate),
-      paymentSource: result.paymentSource,
-      balanceBeforeRepayment: d(result.balanceBeforeRepayment),
-      balanceAfterRepayment: d(result.balanceAfterRepayment),
-      paymentStatus: result.paymentStatus,
-      isOverdue: result.isOverdue,
-      daysOverdue: result.daysOverdue,
-      evidenceUrl: result.evidenceUrl,
-      note: result.note,
-      createdAt: result.createdAt.toISOString(),
-      taxGPT,
+      ...historyItem({
+        ...result,
+        liability: {
+          liabilityCode: liability.liabilityCode,
+          name: liability.name,
+          liabilityType: liability.liabilityType,
+        },
+      }),
+      liabilityStatus,
+      ...(overdue.isOverdue
+        ? {
+            overdue: {
+              isOverdue: true,
+              daysOverdue: overdue.daysOverdue,
+              overdueAmount: overdue.overdueAmount,
+            },
+          }
+        : {}),
     };
   },
 
-  async list(
+  async listForLiability(
     userId: string,
-    opts?: { page?: number; limit?: number },
+    liabilityIdOrCode: string,
+    opts?: {
+      page?: number;
+      limit?: number;
+      dateFrom?: string;
+      dateTo?: string;
+      status?: string;
+      paymentSource?: string;
+      type?: string;
+    },
   ) {
+    const liability = await prisma.registeredLiability.findFirst({
+      where: {
+        userId,
+        OR: [{ id: liabilityIdOrCode }, { liabilityCode: liabilityIdOrCode }],
+      },
+      include: { schedule: true },
+    });
+    if (!liability) throw new HttpReplyError(404, "Registered liability not found");
+
     const page = Math.max(1, opts?.page ?? 1);
     const limit = Math.min(100, Math.max(1, opts?.limit ?? 20));
-    const { start, end } = monthBounds();
-    const asOf = startOfUtcDay(new Date());
 
-    const [dueAgg, paidAgg, overdueItems, total, rows] = await Promise.all([
-      prisma.liabilityScheduleItem.aggregate({
-        where: {
-          liability: { userId },
-          dueDate: { gte: start, lt: end },
-        },
-        _sum: { amountDue: true },
-      }),
-      prisma.liabilityRepayment.aggregate({
-        where: {
-          userId,
-          paymentDate: { gte: start, lt: end },
-        },
-        _sum: { repaymentAmount: true },
-      }),
-      prisma.liabilityScheduleItem.findMany({
-        where: {
-          liability: { userId },
-          dueDate: { lt: asOf },
-          status: { in: ["PENDING", "PARTIAL"] },
-        },
-        select: {
-          amountDue: true,
-          amountPaid: true,
-          liabilityId: true,
-        },
-      }),
-      prisma.liabilityRepayment.count({ where: { userId } }),
+    const where: Prisma.LiabilityRepaymentWhereInput = {
+      userId,
+      liabilityId: liability.id,
+    };
+    if (opts?.dateFrom || opts?.dateTo) {
+      where.paymentDate = {};
+      if (opts.dateFrom) {
+        where.paymentDate.gte = parseDateOnly(opts.dateFrom, "dateFrom");
+      }
+      if (opts.dateTo) {
+        where.paymentDate.lte = parseDateOnly(opts.dateTo, "dateTo");
+      }
+    }
+    if (opts?.paymentSource) {
+      if (!isValidLiabilityPaymentSource(opts.paymentSource)) {
+        throw new HttpReplyError(400, "paymentSource must be CASH or BANK");
+      }
+      where.paymentSource = opts.paymentSource;
+    }
+    if (opts?.status) {
+      const status = opts.status.trim();
+      if (!(LIABILITY_REPAYMENT_STATUSES as readonly string[]).includes(status)) {
+        throw new HttpReplyError(
+          400,
+          `status must be one of: ${LIABILITY_REPAYMENT_STATUSES.join(", ")}`,
+        );
+      }
+      where.paymentStatus = status;
+    }
+    if (opts?.type) {
+      const type = mapHistoryType(opts.type.trim());
+      if (!(LIABILITY_REPAYMENT_TYPES as readonly string[]).includes(type)) {
+        throw new HttpReplyError(
+          400,
+          `type must be one of: ${LIABILITY_REPAYMENT_TYPES.join(", ")}`,
+        );
+      }
+      where.repaymentType = { in: [type, type === "FULL_REPAYMENT" ? "FULL" : "PARTIAL"] };
+    }
+
+    const completedWhere: Prisma.LiabilityRepaymentWhereInput = {
+      userId,
+      liabilityId: liability.id,
+      paymentStatus: { in: ["COMPLETED", "PARTIALLY_PAID", "FULLY_PAID"] },
+    };
+
+    const [total, rows, completedAgg, lastCompleted] = await Promise.all([
+      prisma.liabilityRepayment.count({ where }),
       prisma.liabilityRepayment.findMany({
-        where: { userId },
+        where,
         include: {
           liability: {
             select: {
@@ -1171,119 +1346,54 @@ export const liabilityRepaymentService = {
         skip: (page - 1) * limit,
         take: limit,
       }),
+      prisma.liabilityRepayment.aggregate({
+        where: completedWhere,
+        _count: { _all: true },
+        _sum: {
+          repaymentAmount: true,
+          principalAmount: true,
+          interestAmount: true,
+        },
+      }),
+      prisma.liabilityRepayment.findFirst({
+        where: completedWhere,
+        orderBy: [{ paymentDate: "desc" }, { createdAt: "desc" }],
+        select: { paymentDate: true },
+      }),
     ]);
 
-    let overdue = 0;
-    const overdueLiabilityIds = new Set<string>();
-    for (const s of overdueItems) {
-      const open = Math.max(0, d(s.amountDue) - d(s.amountPaid));
-      if (open > 0) {
-        overdue += open;
-        overdueLiabilityIds.add(s.liabilityId);
-      }
-    }
+    const overdue = overdueFromSchedule(liability.schedule, liability.paymentStatus);
 
     return {
-      summary: {
-        dueThisMonth: normalizeMoneyAmount(d(dueAgg._sum.amountDue)),
-        paidThisMonth: normalizeMoneyAmount(d(paidAgg._sum.repaymentAmount)),
-        overdue: normalizeMoneyAmount(overdue),
-        overdueCount: overdueLiabilityIds.size,
+      liability: {
+        id: liability.liabilityCode,
+        name: liability.name,
+        type: liability.liabilityType,
+        outstandingBalance: d(liability.outstandingPrincipal),
       },
-      repayments: rows.map((r) => ({
-        id: r.repaymentCode,
-        liability: {
-          id: r.liability.liabilityCode,
-          name: r.liability.name,
-          liabilityType: r.liability.liabilityType,
-        },
-        repaymentType: r.repaymentType,
-        repaymentAmount: d(r.repaymentAmount),
-        principalAmount: d(r.principalAmount),
-        interestAmount: d(r.interestAmount),
-        paymentDate: formatYmd(r.paymentDate),
-        paymentSource: r.paymentSource,
-        balanceBeforeRepayment: d(r.balanceBeforeRepayment),
-        balanceAfterRepayment: d(r.balanceAfterRepayment),
-        paymentStatus: r.paymentStatus,
-        isOverdue: r.isOverdue,
-        daysOverdue: r.daysOverdue,
-        evidenceUrl: r.evidenceUrl,
-        createdAt: r.createdAt.toISOString(),
-      })),
+      summary: {
+        totalRepayments: completedAgg._count._all,
+        totalAmountPaid: normalizeMoneyAmount(d(completedAgg._sum.repaymentAmount)),
+        totalPrincipalPaid: normalizeMoneyAmount(d(completedAgg._sum.principalAmount)),
+        totalInterestPaid: normalizeMoneyAmount(d(completedAgg._sum.interestAmount)),
+        lastPaymentDate: formatYmd(lastCompleted?.paymentDate ?? liability.lastRepaymentDate),
+      },
+      repayments: rows.map(historyItem),
       pagination: {
         page,
         limit,
         total,
         totalPages: Math.max(1, Math.ceil(total / limit)),
       },
-    };
-  },
-
-  async getById(userId: string, repaymentIdOrCode: string) {
-    const row = await prisma.liabilityRepayment.findFirst({
-      where: {
-        userId,
-        OR: [{ id: repaymentIdOrCode }, { repaymentCode: repaymentIdOrCode }],
-      },
-      include: { liability: true },
-    });
-    if (!row) throw new HttpReplyError(404, "Repayment not found");
-
-    const l = row.liability;
-    return {
-      id: row.repaymentCode,
-      uuid: row.id,
-      liability: {
-        id: l.liabilityCode,
-        name: l.name,
-        liabilityType: l.liabilityType,
-        originalAmount: d(l.originalAmount),
-        outstandingBalance: settlementBalance(l),
-      },
-      repayment: {
-        repaymentType: row.repaymentType,
-        repaymentAmount: d(row.repaymentAmount),
-        principalAmount: d(row.principalAmount),
-        interestAmount: d(row.interestAmount),
-        paymentDate: formatYmd(row.paymentDate),
-        paymentSource: row.paymentSource,
-      },
-      balance: {
-        balanceBeforeRepayment: d(row.balanceBeforeRepayment),
-        principalReduced: d(row.principalAmount),
-        interestCharged: d(row.interestAmount),
-        balanceAfterRepayment: d(row.balanceAfterRepayment),
-      },
-      cumulative: {
-        totalPrincipalPaid: d(l.totalPrincipalPaid),
-        totalInterestPaid: d(l.totalInterestPaid),
-        totalAmountPaid: d(l.totalAmountRepaid),
-      },
-      status: {
-        paymentStatus: row.paymentStatus,
-        isOverdue: row.isOverdue,
-        daysOverdue: row.daysOverdue,
-      },
-      accounting: {
-        liabilityReduction: d(row.principalAmount),
-        interestExpense: d(row.interestAmount),
-        cashBankReduction: d(row.repaymentAmount),
-      },
-      evidence: {
-        url: row.evidenceUrl,
-      },
-      note: row.note,
-      createdAt: row.createdAt.toISOString(),
-      taxGPT: {
-        accountingTreatment:
-          d(row.interestAmount) > 0
-            ? TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_AND_INTEREST_EXPENSE
-            : TAX_GPT_TREATMENT.PRINCIPAL_REDUCTION_ONLY,
-        principalTreatment: "LIABILITY_REDUCTION",
-        interestTreatment: d(row.interestAmount) > 0 ? "EXPENSE" : "NONE",
-        warning: null,
-      },
+      ...(overdue.isOverdue
+        ? {
+            overdue: {
+              isOverdue: true,
+              daysOverdue: overdue.daysOverdue,
+              overdueAmount: overdue.overdueAmount,
+            },
+          }
+        : {}),
     };
   },
 };

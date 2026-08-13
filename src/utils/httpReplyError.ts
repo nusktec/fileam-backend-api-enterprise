@@ -4,6 +4,7 @@ export class HttpReplyError extends Error {
     public readonly statusCode: number,
     message: string,
     public readonly data: unknown = null,
+    public readonly errorCode?: string,
   ) {
     super(message);
     this.name = "HttpReplyError";

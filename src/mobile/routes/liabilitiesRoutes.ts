@@ -5,7 +5,6 @@ import {
   getRegisteredLiability,
   createLiabilityRepayment,
   listLiabilityRepayments,
-  getLiabilityRepayment,
 } from "../controllers/liabilityRepaymentController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
@@ -18,17 +17,16 @@ const router = express.Router();
 
 router.use(authenticate(), requireOnboardingComplete);
 
-/** Repayment routes first (static paths before :liabilityId). */
+/** Nested repayment history (before GET /:liabilityId). */
 router.post(
-  "/repayments",
+  "/:liabilityId/repayments",
   express.json(),
   createLiabilityRepaymentValidation,
   createLiabilityRepayment,
 );
-router.get("/repayments", listLiabilityRepayments);
-router.get("/repayments/:repaymentId", getLiabilityRepayment);
+router.get("/:liabilityId/repayments", listLiabilityRepayments);
 
-/** Liability register (source of truth for repayments). */
+/** Liability register. */
 router.post(
   "/",
   express.json(),

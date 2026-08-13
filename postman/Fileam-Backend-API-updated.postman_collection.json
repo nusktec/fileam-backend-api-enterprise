@@ -2675,7 +2675,7 @@
         },
         {
           "name": "Liabilities Register & Repayments **",
-          "description": "Liability Register (Latest v2) + Detailed Repayment History.\n\nRegister:\n- POST /mobile/liabilities\n- GET /mobile/liabilities (summary + paginated list)\n- GET /mobile/liabilities/:liabilityId\n\nRepayments:\n- POST /mobile/liabilities/repayments\n- GET /mobile/liabilities/repayments\n- GET /mobile/liabilities/repayments/:repaymentId\n\nliabilityType: BANK_LOAN | DIRECTOR_LOAN | SHAREHOLDER_LOAN | MORTGAGE | EQUIPMENT_FINANCING | LEASE_LIABILITY | CONVERTIBLE_LOAN | OTHER_LONG_TERM_BORROWING\ninterestRateType: ANNUAL | MONTHLY | QUARTERLY | WEEKLY | DAILY | CUSTOM\ninterestCalculationMethod: FLAT | REDUCING_BALANCE | COMPOUNDING | CUSTOM\nrepaymentFrequency: WEEKLY | BIWEEKLY | MONTHLY | QUARTERLY | SEMI_ANNUALLY | ANNUALLY | CUSTOM\nrepaymentStructure: AMORTIZED | INTEREST_ONLY | BULLET | CUSTOM\npaymentSource: CASH | BANK\n\nBackend owns outstandingBalance, schedule, overdue, current/non-current classification, and repayment allocation.",
+          "description": "Liability Register POST spec + Repayment History spec.\n\nRegister: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}\nHistory: POST/GET /mobile/liabilities/{liabilityId}/repayments\n\nCreate repayment body: amount (>0), paymentDate, paymentSource (CASH|BANK), evidenceUrl optional. Backend sets type FULL_REPAYMENT|PARTIAL_REPAYMENT, status COMPLETED, id REP-xxx. balanceAfterPayment = balanceBeforePayment - principal (interest does not reduce principal). Overpayment: errorCode REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE.\nHistory item: id, liabilityId, liabilityName, liabilityType, amount, principal, interest, paymentDate, paymentSource, balanceBeforePayment, balanceAfterPayment, status, type.\nFilters: page, limit, dateFrom, dateTo, status, paymentSource, type.",
           "item": [
             {
               "name": "Register liability **",
@@ -2689,10 +2689,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"GTBank Business Loan\",\n  \"liabilityType\": \"BANK_LOAN\",\n  \"creditor\": \"GTBank\",\n  \"principalAmount\": 10000000,\n  \"interestRate\": 8,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-01-01\",\n  \"maturityDate\": \"2027-01-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"evidenceUrl\": \"https://example.com/loan-agreement.pdf\",\n  \"note\": \"Business expansion loan\"\n}"
+                  "raw": "{\n  \"name\": \"Business Expansion Loan\",\n  \"liabilityType\": \"BANK_LOAN\",\n  \"creditor\": \"Access Bank\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Loan for business expansion\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"bankName\": \"Access Bank\",\n  \"loanPurpose\": \"Business expansion\",\n  \"collateral\": \"Commercial property\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "Creates LIAB-xxx. Required: name, liabilityType, creditor, principalAmount, startDate, repaymentFrequency, repaymentStructure. Interest fields required when interestRate > 0. Response: terms, financialSummary, status, repaymentSummary."
+                "description": "POST /mobile/liabilities \u2014 all shared fields required. BANK_LOAN also requires bankName, loanPurpose, collateral. outstandingBalance = principalAmount; schedule generated; repayment history empty."
               }
             },
             {
@@ -2744,18 +2744,18 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"liabilityId\": \"{{liabilityId}}\",\n  \"repaymentAmount\": 500000,\n  \"paymentDate\": \"2026-08-12\",\n  \"paymentSource\": \"BANK\",\n  \"evidenceUrl\": \"https://example.com/receipt.pdf\",\n  \"note\": \"August installment\"\n}"
+                  "raw": "{\n  \"amount\": 500000,\n  \"paymentDate\": \"2026-08-01\",\n  \"paymentSource\": \"BANK\",\n  \"evidenceUrl\": \"https://example.com/payment-proof.pdf\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments",
-                "description": "Records immutable REPAY-xxx. liabilityId accepts uuid or LIAB-xxx. Allocates interest then principal using registered interest terms; FULL/PARTIAL server-side."
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments",
+                "description": "POST /mobile/liabilities/{liabilityId}/repayments. User sends amount, paymentDate, paymentSource, optional evidenceUrl. Backend returns history item fields + liabilityStatus. Overpayment: errorCode REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE with requestedAmount and outstandingBalance."
               }
             },
             {
-              "name": "List liability repayments **",
+              "name": "Get liability repayment history **",
               "request": {
                 "method": "GET",
                 "url": {
-                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments?page=1&limit=20",
+                  "raw": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments?page=1&limit=20",
                   "host": [
                     "{{baseUrl}}"
                   ],
@@ -2764,6 +2764,7 @@
                     "v{{apiVersion}}",
                     "mobile",
                     "liabilities",
+                    "{{liabilityId}}",
                     "repayments"
                   ],
                   "query": [
@@ -2774,18 +2775,35 @@
                     {
                       "key": "limit",
                       "value": "20"
+                    },
+                    {
+                      "key": "dateFrom",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "dateTo",
+                      "value": "",
+                      "disabled": true
+                    },
+                    {
+                      "key": "status",
+                      "value": "COMPLETED",
+                      "disabled": true
+                    },
+                    {
+                      "key": "paymentSource",
+                      "value": "BANK",
+                      "disabled": true
+                    },
+                    {
+                      "key": "type",
+                      "value": "PARTIAL_REPAYMENT",
+                      "disabled": true
                     }
                   ]
                 },
-                "description": "summary: dueThisMonth, paidThisMonth, overdue, overdueCount + paginated repayments[]."
-              }
-            },
-            {
-              "name": "Get liability repayment detail **",
-              "request": {
-                "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments/{{repaymentId}}",
-                "description": "Full allocation, cumulative balances, accounting, taxGPT. Accepts uuid or REPAY-xxx."
+                "description": "GET /mobile/liabilities/{liabilityId}/repayments. Newest first. data.liability + summary (totalRepayments, totalAmountPaid, totalPrincipalPaid, totalInterestPaid, lastPaymentDate) + repayments[] history items + pagination. Optional overdue { isOverdue, daysOverdue, overdueAmount }."
               }
             }
           ]
