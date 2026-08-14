@@ -1000,6 +1000,73 @@ function mapHistoryStatus(stored: string): string {
   return "COMPLETED";
 }
 
+/** Detailed Repayment dashboard list item (global GET /repayments). */
+function mapDashboardRepaymentType(stored: string): string {
+  if (stored === "FULL" || stored === "FULL_REPAYMENT") return "FULL";
+  if (stored === "PARTIAL" || stored === "PARTIAL_REPAYMENT") return "PARTIAL";
+  return stored;
+}
+
+function mapDashboardPaymentStatus(
+  stored: string,
+  repaymentType: string,
+): string {
+  if (stored === "PARTIALLY_PAID" || stored === "FULLY_PAID") return stored;
+  const type = mapDashboardRepaymentType(repaymentType);
+  return type === "FULL" ? "FULLY_PAID" : "PARTIALLY_PAID";
+}
+
+function repaymentLookupVariants(repaymentIdOrCode: string): string[] {
+  const trimmed = repaymentIdOrCode.trim();
+  const variants = new Set<string>([trimmed]);
+  if (trimmed.startsWith("REPAY-")) {
+    variants.add(trimmed.replace(/^REPAY-/, "REP-"));
+  } else if (trimmed.startsWith("REP-")) {
+    variants.add(trimmed.replace(/^REP-/, "REPAY-"));
+  }
+  return [...variants];
+}
+
+function dashboardListItem(row: {
+  repaymentCode: string;
+  repaymentType: string;
+  repaymentAmount: Decimal;
+  principalAmount: Decimal;
+  interestAmount: Decimal;
+  paymentDate: Date;
+  paymentSource: string;
+  balanceBeforeRepayment: Decimal;
+  balanceAfterRepayment: Decimal;
+  paymentStatus: string;
+  isOverdue: boolean;
+  daysOverdue: number;
+  evidenceUrl: string | null;
+  createdAt: Date;
+  liability: { liabilityCode: string; name: string; liabilityType: string };
+}) {
+  return {
+    id: row.repaymentCode,
+    liability: {
+      id: row.liability.liabilityCode,
+      name: row.liability.name,
+      liabilityType: row.liability.liabilityType,
+    },
+    repaymentType: mapDashboardRepaymentType(row.repaymentType),
+    repaymentAmount: d(row.repaymentAmount),
+    principalAmount: d(row.principalAmount),
+    interestAmount: d(row.interestAmount),
+    paymentDate: formatYmd(row.paymentDate),
+    paymentSource: row.paymentSource,
+    balanceBeforeRepayment: d(row.balanceBeforeRepayment),
+    balanceAfterRepayment: d(row.balanceAfterRepayment),
+    paymentStatus: mapDashboardPaymentStatus(row.paymentStatus, row.repaymentType),
+    isOverdue: row.isOverdue,
+    daysOverdue: row.daysOverdue,
+    evidenceUrl: row.evidenceUrl,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 function historyItem(row: {
   repaymentCode: string;
   repaymentType: string;
@@ -1480,7 +1547,7 @@ export const liabilityRepaymentService = {
         overdue: normalizeMoneyAmount(overdue),
         overdueCount: overdueLiabilityIds.size,
       },
-      repayments: rows.map(historyItem),
+      repayments: rows.map(dashboardListItem),
       pagination: {
         page,
         limit,
@@ -1492,45 +1559,53 @@ export const liabilityRepaymentService = {
 
   /** GET /mobile/liabilities/repayments/{repaymentId} */
   async getById(userId: string, repaymentIdOrCode: string) {
+    const lookupCodes = repaymentLookupVariants(repaymentIdOrCode);
     const row = await prisma.liabilityRepayment.findFirst({
       where: {
         userId,
-        OR: [{ id: repaymentIdOrCode }, { repaymentCode: repaymentIdOrCode }],
+        OR: [
+          { id: repaymentIdOrCode },
+          ...lookupCodes.map((repaymentCode) => ({ repaymentCode })),
+        ],
       },
       include: { liability: true },
     });
     if (!row) throw new HttpReplyError(404, "Repayment not found");
 
     const l = row.liability;
-    const item = historyItem({
-      ...row,
-      liability: {
-        liabilityCode: l.liabilityCode,
-        name: l.name,
-        liabilityType: l.liabilityType,
-      },
-    });
-
     return {
-      ...item,
+      id: row.repaymentCode,
       uuid: row.id,
       liability: {
         id: l.liabilityCode,
         name: l.name,
-        type: l.liabilityType,
+        liabilityType: l.liabilityType,
         originalAmount: d(l.originalAmount),
-        outstandingBalance: d(l.outstandingPrincipal),
+        outstandingBalance: settlementBalance(l),
+      },
+      repayment: {
+        repaymentType: mapDashboardRepaymentType(row.repaymentType),
+        repaymentAmount: d(row.repaymentAmount),
+        principalAmount: d(row.principalAmount),
+        interestAmount: d(row.interestAmount),
+        paymentDate: formatYmd(row.paymentDate),
+        paymentSource: row.paymentSource,
       },
       balance: {
-        balanceBeforePayment: d(row.balanceBeforeRepayment),
+        balanceBeforeRepayment: d(row.balanceBeforeRepayment),
         principalReduced: d(row.principalAmount),
         interestCharged: d(row.interestAmount),
-        balanceAfterPayment: d(row.balanceAfterRepayment),
+        balanceAfterRepayment: d(row.balanceAfterRepayment),
       },
       cumulative: {
         totalPrincipalPaid: d(l.totalPrincipalPaid),
         totalInterestPaid: d(l.totalInterestPaid),
         totalAmountPaid: d(l.totalAmountRepaid),
+      },
+      status: {
+        paymentStatus: mapDashboardPaymentStatus(row.paymentStatus, row.repaymentType),
+        isOverdue: row.isOverdue,
+        daysOverdue: row.daysOverdue,
       },
       accounting: {
         liabilityReduction: d(row.principalAmount),
@@ -1542,10 +1617,6 @@ export const liabilityRepaymentService = {
       },
       note: row.note,
       createdAt: row.createdAt.toISOString(),
-      overdue: {
-        isOverdue: row.isOverdue,
-        daysOverdue: row.daysOverdue,
-      },
       taxGPT: {
         accountingTreatment:
           d(row.interestAmount) > 0

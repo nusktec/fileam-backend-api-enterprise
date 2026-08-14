@@ -23,22 +23,22 @@
     <div class="container">
         <div class="header">
             <img src="https://usc1.contabostorage.com/385b0054b385440e928060e34f0e5b18:fileam-assets/fileam-logo.png" alt="Fileam" class="logo" width="140" height="48">
-        </div>
+                                                            </div>
         <div class="content">
             <div class="message">
                 <p>Hi <strong>{{name}}</strong>,</p>
-                <!--DUMPING-->
-                {{body}}
-                <!--BODY-->
-            </div>
+                                                                <!--DUMPING-->
+                                                                {{body}}
+                                                                <!--BODY-->
+                                                            </div>
             <div class="message">
                 <p>Best regards,<br>The Fileam Team</p>
-            </div>
-        </div>
+                                                                </div>
+                                                            </div>
         <div class="footer">
             <p>&copy; Fileam. All rights reserved.</p>
             <p><a href="https://fileam.app">fileam.app</a> | <a href="https://fileam.app/privacy">Privacy Policy</a> | <a href="https://fileam.app/terms">Terms of Service</a></p>
-        </div>
     </div>
+</div>
 </body>
 </html>

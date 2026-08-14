@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayment history: POST/GET /mobile/liabilities/{liabilityId}/repayments. AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nEnterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nEnterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -2685,359 +2685,376 @@
         },
         {
           "name": "Liabilities Register & Repayments **",
-          "description": "Liability Register + Repayment History.\n\nRegister:\n- POST /api/v1/mobile/liabilities\n- GET /api/v1/mobile/liabilities?page&limit\n- GET /api/v1/mobile/liabilities/{liabilityId}\n\nRepayments (nested):\n- POST /api/v1/mobile/liabilities/{liabilityId}/repayments\n- GET /api/v1/mobile/liabilities/{liabilityId}/repayments?page&limit&dateFrom&dateTo&status&paymentSource&type\n\nAuth: Bearer {{accessToken}} (collection prerequest). Run a Register request first to set {{liabilityId}}.\nliabilityType: BANK_LOAN | DIRECTOR_LOAN | SHAREHOLDER_LOAN | MORTGAGE | EQUIPMENT_FINANCING | LEASE_LIABILITY | CONVERTIBLE_LOAN | OTHER_LONG_TERM_BORROWINGS",
+          "description": "Liability Register + Repayment History (matches live routes).\n\nRegister:\n• POST /mobile/liabilities\n• GET /mobile/liabilities?page&limit\n• GET /mobile/liabilities/{liabilityId}\n\nRepayments — global (register /repayments before /:liabilityId in router):\n• GET /mobile/liabilities/repayments?page&limit\n• GET /mobile/liabilities/repayments/{repaymentId}\n\nRepayments — per liability:\n• POST /mobile/liabilities/{liabilityId}/repayments\n• GET /mobile/liabilities/{liabilityId}/repayments?page&limit&dateFrom&dateTo&status&paymentSource&type\n\nVariables: {{liabilityId}} (LIAB-xxx), {{repaymentId}} (REP-xxx). Auth: Bearer {{accessToken}}.\nSuggested flow: Register (BANK_LOAN) → Create repayment → List all repayments → Get repayment by id → Get per-liability history.",
           "item": [
             {
-              "name": "Register liability (BANK_LOAN) **",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "POST /mobile/liabilities. All shared fields required. BANK_LOAN also requires bankName, loanPurpose, collateral. Saves {{liabilityId}} from data.id (LIAB-xxx).",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"creditor\": \"Access Bank\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Loan for business expansion\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Business Expansion Loan\",\n  \"liabilityType\": \"BANK_LOAN\",\n  \"bankName\": \"Access Bank\",\n  \"loanPurpose\": \"Business expansion\",\n  \"collateral\": \"Commercial property\"\n}"
-                }
-              },
-              "event": [
+              "name": "Register",
+              "description": "POST/GET /mobile/liabilities. liabilityType enum includes OTHER_LONG_TERM_BORROWINGS (plural).",
+              "item": [
                 {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "if(j.status&&d){",
-                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
-                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
-                      "}"
-                    ]
+                  "name": "Register liability (BANK_LOAN) **",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                    "description": "POST /mobile/liabilities — all shared fields required. BANK_LOAN also requires bankName, loanPurpose, collateral. Sets {{liabilityId}} from data.id (LIAB-xxx).",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"creditor\": \"Access Bank\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Loan for business expansion\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Business Expansion Loan\",\n  \"liabilityType\": \"BANK_LOAN\",\n  \"bankName\": \"Access Bank\",\n  \"loanPurpose\": \"Business expansion\",\n  \"collateral\": \"Commercial property\"\n}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "if(j.status&&d){",
+                          "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Register liability (DIRECTOR_LOAN) **",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                    "description": "DIRECTOR_LOAN: name = Director Name. No extra fields.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"creditor\": \"Adebayo Okonkwo\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Director loan for working capital\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Adebayo Okonkwo\",\n  \"liabilityType\": \"DIRECTOR_LOAN\"\n}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "if(j.status&&d){",
+                          "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Register liability (SHAREHOLDER_LOAN) **",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                    "description": "SHAREHOLDER_LOAN: name = Shareholder Name.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"creditor\": \"Chioma Holdings\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Shareholder loan\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Chioma Holdings\",\n  \"liabilityType\": \"SHAREHOLDER_LOAN\"\n}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "if(j.status&&d){",
+                          "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Register liability (MORTGAGE) **",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                    "description": "MORTGAGE requires propertyDescription, propertyValue.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"creditor\": \"GTBank\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Property financing\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Head Office Mortgage\",\n  \"liabilityType\": \"MORTGAGE\",\n  \"propertyDescription\": \"Commercial building, Victoria Island\",\n  \"propertyValue\": 80000000\n}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "if(j.status&&d){",
+                          "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Register liability (EQUIPMENT_FINANCING) **",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                    "description": "EQUIPMENT_FINANCING requires equipmentName, equipmentValue; serialNumber optional.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"creditor\": \"Stanbic IBTC\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Equipment financing\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"CNC Machine Facility\",\n  \"liabilityType\": \"EQUIPMENT_FINANCING\",\n  \"equipmentName\": \"CNC Lathe\",\n  \"equipmentValue\": 12000000,\n  \"serialNumber\": \"CNC-2026-014\"\n}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "if(j.status&&d){",
+                          "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Register liability (LEASE_LIABILITY) **",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                    "description": "LEASE_LIABILITY requires assetDescription, leasePaymentAmount.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"creditor\": \"Ikeja Properties Ltd\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Registered lease\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Office Lease\",\n  \"liabilityType\": \"LEASE_LIABILITY\",\n  \"assetDescription\": \"3rd floor office suite\",\n  \"leasePaymentAmount\": 250000\n}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "if(j.status&&d){",
+                          "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Register liability (CONVERTIBLE_LOAN) **",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                    "description": "CONVERTIBLE_LOAN requires conversionTrigger, conversionPrice, conversionDate.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"creditor\": \"Future Capital\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Convertible loan\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Seed Convertible Note\",\n  \"liabilityType\": \"CONVERTIBLE_LOAN\",\n  \"conversionTrigger\": \"Qualified financing round\",\n  \"conversionPrice\": \"20% discount to next round\",\n  \"conversionDate\": \"2027-08-01\"\n}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "if(j.status&&d){",
+                          "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Register liability (OTHER_LONG_TERM_BORROWINGS) **",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
+                    "description": "OTHER_LONG_TERM_BORROWINGS (plural enum).",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"creditor\": \"Sister Company Ltd\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Other long-term borrowing\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Related-party facility\",\n  \"liabilityType\": \"OTHER_LONG_TERM_BORROWINGS\"\n}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "if(j.status&&d){",
+                          "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
+                          "}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "List registered liabilities **",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities?page=1&limit=20",
+                    "description": "GET /mobile/liabilities. summary + paginated liabilities[]. Sets {{liabilityId}} from first row."
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "var rows=d&&d.liabilities?d.liabilities:[];",
+                          "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('liabilityId', rows[0].id);}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Get registered liability **",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}",
+                    "description": "GET /mobile/liabilities/{liabilityId}. uuid or LIAB-xxx. terms, financialSummary, classification, schedule, evidence."
                   }
                 }
               ]
             },
             {
-              "name": "Register liability (DIRECTOR_LOAN) **",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "DIRECTOR_LOAN: name is Director Name. No extra type-specific fields.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"creditor\": \"Adebayo Okonkwo\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Director loan for working capital\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Adebayo Okonkwo\",\n  \"liabilityType\": \"DIRECTOR_LOAN\"\n}"
-                }
-              },
-              "event": [
+              "name": "Repayments",
+              "description": "Global list/detail + nested create/history under {liabilityId}.",
+              "item": [
                 {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "if(j.status&&d){",
-                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
-                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
-                      "}"
-                    ]
+                  "name": "List all liability repayments **",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments?page=1&limit=20",
+                    "description": "GET /mobile/liabilities/repayments — repayment dashboard across all liabilities. summary: dueThisMonth, paidThisMonth, overdue, overdueCount. repayments[] dashboard items (id, liability{id,name,liabilityType}, repaymentType, repaymentAmount, principalAmount, interestAmount, balanceBeforeRepayment, balanceAfterRepayment, paymentStatus). Sets {{repaymentId}} from first row."
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "var rows=d&&d.repayments?d.repayments:[];",
+                          "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('repaymentId', rows[0].id);}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Get liability repayment by id **",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments/{{repaymentId}}",
+                    "description": "GET /mobile/liabilities/repayments/{repaymentId}. uuid, REP-xxx, or legacy REPAY-xxx. Returns dashboard detail: liability, repayment, balance, cumulative, status, accounting, evidence, taxGPT."
+                  }
+                },
+                {
+                  "name": "Create liability repayment **",
+                  "request": {
+                    "method": "POST",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments",
+                    "description": "POST /mobile/liabilities/{liabilityId}/repayments. Body: amount, paymentDate, paymentSource (CASH|BANK), evidenceUrl optional. Sets {{repaymentId}}. Overpayment → errorCode REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE.",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"amount\": 500000,\n  \"paymentDate\": \"2026-08-01\",\n  \"paymentSource\": \"BANK\",\n  \"evidenceUrl\": \"https://example.com/payment-proof.pdf\"\n}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json(); var d=j.data;",
+                          "if(j.status&&d&&d.id){pm.collectionVariables.set('repaymentId', d.id);}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Get liability repayment history **",
+                  "request": {
+                    "method": "GET",
+                    "header": [],
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments?page=1&limit=20",
+                    "description": "GET /mobile/liabilities/{liabilityId}/repayments. Per-liability history + summary (totalRepayments, totalAmountPaid, totalPrincipalPaid, totalInterestPaid, lastPaymentDate). Filters: dateFrom, dateTo, status (COMPLETED|…), paymentSource, type (FULL_REPAYMENT|PARTIAL_REPAYMENT). Optional overdue block."
                   }
                 }
               ]
-            },
-            {
-              "name": "Register liability (SHAREHOLDER_LOAN) **",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "SHAREHOLDER_LOAN: name is Shareholder Name. No extra type-specific fields.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"creditor\": \"Chioma Holdings\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Shareholder loan\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Chioma Holdings\",\n  \"liabilityType\": \"SHAREHOLDER_LOAN\"\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "if(j.status&&d){",
-                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
-                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
-                      "}"
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Register liability (MORTGAGE) **",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "MORTGAGE requires propertyDescription and propertyValue.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"creditor\": \"GTBank\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Property financing\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Head Office Mortgage\",\n  \"liabilityType\": \"MORTGAGE\",\n  \"propertyDescription\": \"Commercial building, Victoria Island\",\n  \"propertyValue\": 80000000\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "if(j.status&&d){",
-                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
-                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
-                      "}"
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Register liability (EQUIPMENT_FINANCING) **",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "EQUIPMENT_FINANCING requires equipmentName and equipmentValue; serialNumber optional.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"creditor\": \"Stanbic IBTC\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Equipment financing\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"CNC Machine Facility\",\n  \"liabilityType\": \"EQUIPMENT_FINANCING\",\n  \"equipmentName\": \"CNC Lathe\",\n  \"equipmentValue\": 12000000,\n  \"serialNumber\": \"CNC-2026-014\"\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "if(j.status&&d){",
-                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
-                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
-                      "}"
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Register liability (LEASE_LIABILITY) **",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "LEASE_LIABILITY requires assetDescription and leasePaymentAmount (used as schedule installment).",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"creditor\": \"Ikeja Properties Ltd\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Registered lease\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Office Lease\",\n  \"liabilityType\": \"LEASE_LIABILITY\",\n  \"assetDescription\": \"3rd floor office suite\",\n  \"leasePaymentAmount\": 250000\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "if(j.status&&d){",
-                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
-                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
-                      "}"
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Register liability (CONVERTIBLE_LOAN) **",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "CONVERTIBLE_LOAN requires conversionTrigger, conversionPrice, conversionDate (YYYY-MM-DD).",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"creditor\": \"Future Capital\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Convertible loan\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Seed Convertible Note\",\n  \"liabilityType\": \"CONVERTIBLE_LOAN\",\n  \"conversionTrigger\": \"Qualified financing round\",\n  \"conversionPrice\": \"20% discount to next round\",\n  \"conversionDate\": \"2027-08-01\"\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "if(j.status&&d){",
-                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
-                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
-                      "}"
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Register liability (OTHER_LONG_TERM_BORROWINGS) **",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                "description": "OTHER_LONG_TERM_BORROWINGS (plural). name is Liability Name.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"creditor\": \"Sister Company Ltd\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Other long-term borrowing\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Related-party facility\",\n  \"liabilityType\": \"OTHER_LONG_TERM_BORROWINGS\"\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "if(j.status&&d){",
-                      "  if(d.id) pm.collectionVariables.set('liabilityId', d.id);",
-                      "  if(d.uuid) pm.collectionVariables.set('liabilityId', d.id || d.uuid);",
-                      "}"
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "name": "List registered liabilities **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities?page=1&limit=20",
-                "description": "GET /mobile/liabilities. summary: totalLiabilities, currentLiabilities, nonCurrentLiabilities, totalOutstanding, totalOverdue + paginated liabilities[]. Saves first item id to {{liabilityId}}."
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "var rows=d&&d.liabilities?d.liabilities:[];",
-                      "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('liabilityId', rows[0].id);}"
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "name": "Get registered liability **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}",
-                "description": "GET /mobile/liabilities/{liabilityId}. Accepts uuid or LIAB-xxx. Returns terms, type-specific fields, financialSummary, classification, status, schedule, repaymentSummary, evidence."
-              }
-            },
-            {
-              "name": "Create liability repayment **",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments",
-                "description": "POST /mobile/liabilities/{liabilityId}/repayments. Body: amount (>0), paymentDate, paymentSource (CASH|BANK), evidenceUrl optional. Backend returns history item + liabilityStatus. Overpayment: errorCode REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"amount\": 500000,\n  \"paymentDate\": \"2026-08-01\",\n  \"paymentSource\": \"BANK\",\n  \"evidenceUrl\": \"https://example.com/payment-proof.pdf\"\n}"
-                }
-              },
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "type": "text/javascript",
-                    "exec": [
-                      "var j=pm.response.json(); var d=j.data;",
-                      "if(j.status&&d&&d.id){pm.collectionVariables.set('repaymentId', d.id);}"
-                    ]
-                  }
-                }
-              ]
-            },
-            {
-              "name": "List all liability repayments **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments?page=1&limit=20",
-                "description": "GET /mobile/liabilities/repayments — all repayments for the business (newest first). summary: dueThisMonth, paidThisMonth, overdue, overdueCount + paginated repayments[] history items. Must be this exact path; /repayments is registered before /:liabilityId so it is not treated as a liability id."
-              }
-            },
-            {
-              "name": "Get liability repayment by id **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments/{{repaymentId}}",
-                "description": "GET /mobile/liabilities/repayments/{repaymentId}. Accepts uuid or REP-xxx. Returns history item fields plus liability, balance, cumulative, accounting, evidence, overdue, taxGPT."
-              }
-            },
-            {
-              "name": "Get liability repayment history **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments?page=1&limit=20",
-                "description": "GET /mobile/liabilities/{liabilityId}/repayments. Newest first. data.liability + summary (totalRepayments, totalAmountPaid, totalPrincipalPaid, totalInterestPaid, lastPaymentDate) + repayments[] + pagination. Optional query: dateFrom, dateTo, status, paymentSource, type."
-              }
             }
           ]
         },
