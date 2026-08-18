@@ -1,0 +1,41 @@
+model Customer {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  /** Display code e.g. CUS-001 */
+  customerCode String   @map("customer_code")
+  name         String
+  phone        String
+  address      String
+  businessName String?  @map("business_name")
+  email        String?
+  tin          String?
+  /** ACTIVE | INACTIVE */
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents CustomerDocument[]
+
+  @@unique([userId, customerCode])
+  @@index([userId, status])
+  @@map("customers")
+}
+
+model CustomerDocument {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  customerId String   @map("customer_id")
+  /** Sale invoice number or uuid */
+  saleId     String   @map("sale_id")
+  type       String
+  url        String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([userId, saleId])
+  @@map("customer_documents")
+}

@@ -34,6 +34,7 @@ import {
 } from "../../constants/salePaymentRules";
 import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
 import { appendAssetHistory } from "./assetHistoryHelper";
+import { prepaymentsService } from "./prepaymentsService";
 
 export { computeAssetDepreciation, computeStraightLineDepreciation };
 
@@ -192,6 +193,11 @@ async function buildCurrentAssetsSnapshot(userId: string) {
     bankNet = 0;
   }
 
+  const prepayments = await prepaymentsService.activeBalances(userId);
+  if (prepayments.total > 0) {
+    bankNet = normalizeMoneyAmount(Math.max(0, bankNet - prepayments.total));
+  }
+
   const cash = {
     total: cashNet,
     items:
@@ -230,7 +236,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
   };
 
   const totalCurrentAssets = normalizeMoneyAmount(
-    cash.total + bankBalances.total + inventoryTotal + arTotal,
+    cash.total + bankBalances.total + inventoryTotal + arTotal + prepayments.total,
   );
 
   return {
@@ -274,6 +280,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
         return row;
       }),
     },
+    prepayments,
     /** Diagnostic totals used to derive cash/bank (not required by UI spec). */
     methodology: {
       cashReceipts,
@@ -973,6 +980,7 @@ export const assetsService = {
       bankBalances: snapshot.bankBalances,
       inventory: snapshot.inventory,
       accountsReceivable: snapshot.accountsReceivable,
+      prepayments: snapshot.prepayments,
     };
   },
 

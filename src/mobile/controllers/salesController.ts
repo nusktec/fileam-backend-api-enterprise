@@ -6,6 +6,7 @@ import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { salesService } from "../services/salesService";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { resolveCustomerFields } from "../../utils/directoryResolver";
 import { monetaryAmountLimitMessage } from "../../utils/monetaryAmount";
 
 function replySaleError(res: Response, error: unknown): boolean {
@@ -131,20 +132,13 @@ export const createSale = async (
       itemName,
       receiptUrl,
     } = b;
-    const customerName = b.customerName ?? b.Customer_name;
-    const customerId = b.customerId ?? b.Customer_id;
+    const customerFields = await resolveCustomerFields(userId, b);
     const sale = await salesService.create(userId, {
       amount: Number(amount),
       description,
       category,
-      customerName:
-        customerName != null && String(customerName).trim() !== ""
-          ? String(customerName).trim()
-          : undefined,
-      customerId:
-        customerId != null && String(customerId).trim() !== ""
-          ? String(customerId).trim()
-          : undefined,
+      customerName: customerFields.customerName ?? undefined,
+      customerId: customerFields.customerId ?? undefined,
       itemName:
         itemName != null && String(itemName).trim() !== ""
           ? String(itemName).trim()
@@ -195,47 +189,42 @@ export const bulkCreateSales = async (
         .json(outJson(false, "Body must include items (array of sales)", null));
       return;
     }
-    const normalized = items.map((raw: Record<string, unknown>) => {
-      const customerName = raw.customerName ?? raw.Customer_name;
-      const customerId = raw.customerId ?? raw.Customer_id;
-      return {
-        amount: Number(raw.amount),
-        description: String(raw.description ?? ""),
-        category:
-          raw.category != null ? String(raw.category) : undefined,
-        paymentType:
-          raw.paymentType != null && String(raw.paymentType).trim() !== ""
-            ? String(raw.paymentType).trim()
-            : undefined,
-        date: String(raw.date ?? ""),
-        invoiceDueDate:
-          raw.invoiceDueDate != null && String(raw.invoiceDueDate).trim() !== ""
-            ? String(raw.invoiceDueDate)
-            : raw.invoiceDueDate === null
-              ? null
+    const normalized = await Promise.all(
+      items.map(async (raw: Record<string, unknown>) => {
+        const customerFields = await resolveCustomerFields(userId, raw);
+        return {
+          amount: Number(raw.amount),
+          description: String(raw.description ?? ""),
+          category:
+            raw.category != null ? String(raw.category) : undefined,
+          paymentType:
+            raw.paymentType != null && String(raw.paymentType).trim() !== ""
+              ? String(raw.paymentType).trim()
               : undefined,
-        invoiceAmountPaid: raw.invoiceAmountPaid,
-        vatableIncome: Boolean(raw.vatableIncome),
-        vatInclusive: Boolean(raw.vatInclusive),
-        serviceIncome: raw.serviceIncome !== false,
-        customerName:
-          customerName != null && String(customerName).trim() !== ""
-            ? String(customerName).trim()
-            : undefined,
-        customerId:
-          customerId != null && String(customerId).trim() !== ""
-            ? String(customerId).trim()
-            : undefined,
-        itemName:
-          raw.itemName != null && String(raw.itemName).trim() !== ""
-            ? String(raw.itemName).trim()
-            : undefined,
-        receiptUrl:
-          raw.receiptUrl != null && String(raw.receiptUrl).trim() !== ""
-            ? String(raw.receiptUrl).trim()
-            : undefined,
-      };
-    });
+          date: String(raw.date ?? ""),
+          invoiceDueDate:
+            raw.invoiceDueDate != null && String(raw.invoiceDueDate).trim() !== ""
+              ? String(raw.invoiceDueDate)
+              : raw.invoiceDueDate === null
+                ? null
+                : undefined,
+          invoiceAmountPaid: raw.invoiceAmountPaid,
+          vatableIncome: Boolean(raw.vatableIncome),
+          vatInclusive: Boolean(raw.vatInclusive),
+          serviceIncome: raw.serviceIncome !== false,
+          customerName: customerFields.customerName ?? undefined,
+          customerId: customerFields.customerId ?? undefined,
+          itemName:
+            raw.itemName != null && String(raw.itemName).trim() !== ""
+              ? String(raw.itemName).trim()
+              : undefined,
+          receiptUrl:
+            raw.receiptUrl != null && String(raw.receiptUrl).trim() !== ""
+              ? String(raw.receiptUrl).trim()
+              : undefined,
+        };
+      }),
+    );
     const result = await salesService.bulkCreate(userId, normalized);
     if (!result) {
       res

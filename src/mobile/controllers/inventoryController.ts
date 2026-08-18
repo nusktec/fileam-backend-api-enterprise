@@ -7,6 +7,7 @@ import { getAuthUserId } from "../../utils/authHelpers";
 import { PaginationRequest } from "../../middlewares/paginationMiddleware";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { inventoryService } from "../services/inventoryService";
+import { resolveCustomerFields } from "../../utils/directoryResolver";
 
 export const getInventoryOverview = async (
   req: IRequest,
@@ -108,13 +109,14 @@ export const sellFromInventory = async (
       serviceIncome?: boolean;
       saleCategory?: string;
     };
+    const customerFields = await resolveCustomerFields(userId, req.body ?? {});
     const sale = await inventoryService.sellFromInventory(userId, {
       lines: data.lines.map((l) => ({
         inventoryItemId: l.inventoryItemId,
         quantity: Number(l.quantity),
       })),
-      customerName: data.customerName,
-      customerId: data.customerId,
+      customerName: customerFields.customerName ?? undefined,
+      customerId: customerFields.customerId ?? undefined,
       createSalesInvoice: data.createSalesInvoice,
       paymentType: data.paymentType,
       saleDate: data.saleDate,
@@ -128,6 +130,10 @@ export const sellFromInventory = async (
       .status(HttpStatusCode.CREATED)
       .json(outJson(true, "Sale recorded", sale));
   } catch (e: unknown) {
+    if (e instanceof HttpReplyError) {
+      res.status(e.statusCode).json(outJson(false, e.message, null));
+      return;
+    }
     const msg = e instanceof Error ? e.message : "Failed to record sale";
     if (
       msg.includes("not found") ||

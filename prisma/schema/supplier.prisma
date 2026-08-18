@@ -1,0 +1,42 @@
+model Supplier {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  /** Display code e.g. SUP-001 */
+  supplierCode  String   @map("supplier_code")
+  name          String
+  phone         String
+  address       String
+  businessName  String?  @map("business_name")
+  email         String?
+  contactPerson String?  @map("contact_person")
+  tin           String?
+  /** ACTIVE | INACTIVE */
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents SupplierDocument[]
+
+  @@unique([userId, supplierCode])
+  @@index([userId, status])
+  @@map("suppliers")
+}
+
+model SupplierDocument {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  supplierId String   @map("supplier_id")
+  /** Expense number or uuid */
+  expenseId  String   @map("expense_id")
+  type       String
+  url        String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@index([supplierId])
+  @@index([userId, expenseId])
+  @@map("supplier_documents")
+}

@@ -34,6 +34,8 @@ export const validateInventorySell = [
     .withMessage("each line quantity must be positive"),
   check("customerName").optional().trim().isString(),
   check("customerId").optional().trim().isString(),
+  check("customer.id").optional().trim().isString(),
+  check("customer.name").optional().trim().isString(),
   check("createSalesInvoice").optional().isBoolean().toBoolean(),
   check("paymentType").optional().trim().isString(),
   check("saleDate")

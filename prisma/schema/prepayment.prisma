@@ -1,0 +1,62 @@
+model Prepayment {
+  id                   String    @id @default(uuid())
+  userId               String    @map("user_id")
+  /** Display code e.g. PRE-001 */
+  prepaymentCode       String    @map("prepayment_code")
+  category             String
+  description          String
+  supplierId           String    @map("supplier_id")
+  supplierName         String    @map("supplier_name")
+  originalAmount       Decimal   @map("original_amount") @db.Decimal(14, 2)
+  amountRecognized     Decimal   @default(0) @map("amount_recognized") @db.Decimal(14, 2)
+  remainingBalance     Decimal   @map("remaining_balance") @db.Decimal(14, 2)
+  paymentDate          DateTime  @map("payment_date") @db.Date
+  serviceStartDate     DateTime  @map("service_start_date") @db.Date
+  serviceEndDate       DateTime  @map("service_end_date") @db.Date
+  /** MONTHLY | QUARTERLY | ANNUALLY | CUSTOM */
+  recognitionFrequency String    @map("recognition_frequency")
+  expenseType          String    @map("expense_type")
+  /** ACTIVE | FULLY_RECOGNIZED | CANCELLED */
+  status               String    @default("ACTIVE")
+  nextRecognitionDate  DateTime? @map("next_recognition_date") @db.Date
+  consultantId         String?   @map("consultant_id")
+  consultantName       String?   @map("consultant_name")
+  evidenceUrls         Json      @default("[]") @map("evidence_urls")
+  cancelReason         String?   @map("cancel_reason")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  user     User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schedule PrepaymentScheduleItem[]
+
+  @@unique([userId, prepaymentCode])
+  @@index([userId, status])
+  @@map("prepayments")
+}
+
+model PrepaymentScheduleItem {
+  id                           String    @id @default(uuid())
+  prepaymentId                 String    @map("prepayment_id")
+  /** Display code e.g. PRS-001 */
+  scheduleCode                 String    @map("schedule_code")
+  recognitionDate              DateTime  @map("recognition_date") @db.Date
+  recognitionPeriod            String    @map("recognition_period")
+  amountDeductedFromPrepayment Decimal   @map("amount_deducted") @db.Decimal(14, 2)
+  amountAddedToExpense         Decimal   @map("amount_added_to_expense") @db.Decimal(14, 2)
+  prepaymentBalanceBefore      Decimal   @map("balance_before") @db.Decimal(14, 2)
+  prepaymentBalanceAfter       Decimal   @map("balance_after") @db.Decimal(14, 2)
+  expenseType                  String    @map("expense_type")
+  category                     String
+  /** SCHEDULED | RECOGNIZED | CANCELLED */
+  status                       String    @default("SCHEDULED")
+  expenseId                    String?   @map("expense_id")
+  recognizedAt                 DateTime? @map("recognized_at")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @updatedAt @map("updated_at")
+
+  prepayment Prepayment @relation(fields: [prepaymentId], references: [id], onDelete: Cascade)
+
+  @@unique([prepaymentId, scheduleCode])
+  @@index([prepaymentId, recognitionDate])
+  @@map("prepayment_schedule_items")
+}

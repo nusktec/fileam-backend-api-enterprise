@@ -29,6 +29,8 @@ export const createExpenseValidation = [
   check("receiptUrl").optional().trim().isString(),
   check("supplierName").optional().trim().isString(),
   check("supplierId").optional().trim().isString(),
+  check("supplier.id").optional().trim().isString(),
+  check("supplier.name").optional().trim().isString(),
   check("Supplier_name").optional().trim().isString(),
   check("Supplier_Id").optional().trim().isString(),
   check("expenseType")

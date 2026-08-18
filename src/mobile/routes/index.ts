@@ -26,6 +26,9 @@ import pensionRoutes from "./pensionRoutes";
 import financialPositionRoutes from "./financialPositionRoutes";
 import liabilityRoutes from "./liabilityRoutes";
 import liabilitiesRoutes from "./liabilitiesRoutes";
+import customersRoutes from "./customersRoutes";
+import suppliersRoutes from "./suppliersRoutes";
+import prepaymentsRoutes from "./prepaymentsRoutes";
 
 const router = express.Router();
 
@@ -56,6 +59,9 @@ router.use("/assets", assetsRoutes);
 router.use("/financial-position", financialPositionRoutes);
 router.use("/liability", liabilityRoutes);
 router.use("/liabilities", liabilitiesRoutes);
+router.use("/customers", customersRoutes);
+router.use("/suppliers", suppliersRoutes);
+router.use("/prepayments", prepaymentsRoutes);
 
 export default router;
 

@@ -77,4 +77,9 @@ model User {
   evidenceVaultDocuments EvidenceVaultDocument[]
   registeredLiabilities  RegisteredLiability[]
   liabilityRepayments    LiabilityRepayment[]
+  customers              Customer[]
+  customerDocuments      CustomerDocument[]
+  suppliers              Supplier[]
+  supplierDocuments      SupplierDocument[]
+  prepayments            Prepayment[]
 }

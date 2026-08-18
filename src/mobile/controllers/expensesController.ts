@@ -6,6 +6,7 @@ import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { expensesService } from "../services/expensesService";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { resolveSupplierFields } from "../../utils/directoryResolver";
 import { monetaryAmountLimitMessage } from "../../utils/monetaryAmount";
 
 function replyExpenseError(res: Response, error: unknown): boolean {
@@ -144,8 +145,7 @@ export const createExpense = async (
       paymentType,
       invoiceDueDate,
     } = b;
-    const supplierName = b.supplierName ?? b.Supplier_name;
-    const supplierId = b.supplierId ?? b.Supplier_Id;
+    const supplierFields = await resolveSupplierFields(userId, b);
     const expense = await expensesService.create(userId, {
       amount: Number(amount),
       description,
@@ -167,14 +167,8 @@ export const createExpense = async (
             : undefined,
       invoiceAmountPaid:
         b.invoiceAmountPaid != null ? b.invoiceAmountPaid : undefined,
-      supplierName:
-        supplierName != null && String(supplierName).trim() !== ""
-          ? String(supplierName).trim()
-          : undefined,
-      supplierId:
-        supplierId != null && String(supplierId).trim() !== ""
-          ? String(supplierId).trim()
-          : undefined,
+      supplierName: supplierFields.supplierName ?? undefined,
+      supplierId: supplierFields.supplierId ?? undefined,
     });
     res
       .status(HttpStatusCode.CREATED)
@@ -202,42 +196,37 @@ export const bulkCreateExpenses = async (
         );
       return;
     }
-    const normalized = items.map((raw: Record<string, unknown>) => {
-      const supplierName = raw.supplierName ?? raw.Supplier_name;
-      const supplierId = raw.supplierId ?? raw.Supplier_Id;
-      return {
-        amount: Number(raw.amount),
-        description: String(raw.description ?? ""),
-        category: String(raw.category ?? ""),
-        expenseType:
-          raw.expenseType != null ? String(raw.expenseType) : undefined,
-        date: String(raw.date ?? ""),
-        vatInclusive: Boolean(raw.vatInclusive),
-        vatAmount:
-          raw.vatAmount != null ? Number(raw.vatAmount) : undefined,
-        receiptUrl:
-          raw.receiptUrl != null ? String(raw.receiptUrl) : undefined,
-        paymentType:
-          raw.paymentType != null && String(raw.paymentType).trim() !== ""
-            ? String(raw.paymentType).trim()
-            : undefined,
-        invoiceDueDate:
-          raw.invoiceDueDate != null && String(raw.invoiceDueDate).trim() !== ""
-            ? String(raw.invoiceDueDate)
-            : raw.invoiceDueDate === null
-              ? null
+    const normalized = await Promise.all(
+      items.map(async (raw: Record<string, unknown>) => {
+        const supplierFields = await resolveSupplierFields(userId, raw);
+        return {
+          amount: Number(raw.amount),
+          description: String(raw.description ?? ""),
+          category: String(raw.category ?? ""),
+          expenseType:
+            raw.expenseType != null ? String(raw.expenseType) : undefined,
+          date: String(raw.date ?? ""),
+          vatInclusive: Boolean(raw.vatInclusive),
+          vatAmount:
+            raw.vatAmount != null ? Number(raw.vatAmount) : undefined,
+          receiptUrl:
+            raw.receiptUrl != null ? String(raw.receiptUrl) : undefined,
+          paymentType:
+            raw.paymentType != null && String(raw.paymentType).trim() !== ""
+              ? String(raw.paymentType).trim()
               : undefined,
-        invoiceAmountPaid: raw.invoiceAmountPaid,
-        supplierName:
-          supplierName != null && String(supplierName).trim() !== ""
-            ? String(supplierName).trim()
-            : undefined,
-        supplierId:
-          supplierId != null && String(supplierId).trim() !== ""
-            ? String(supplierId).trim()
-            : undefined,
-      };
-    });
+          invoiceDueDate:
+            raw.invoiceDueDate != null && String(raw.invoiceDueDate).trim() !== ""
+              ? String(raw.invoiceDueDate)
+              : raw.invoiceDueDate === null
+                ? null
+                : undefined,
+          invoiceAmountPaid: raw.invoiceAmountPaid,
+          supplierName: supplierFields.supplierName ?? undefined,
+          supplierId: supplierFields.supplierId ?? undefined,
+        };
+      }),
+    );
     const result = await expensesService.bulkCreate(userId, normalized);
     res
       .status(HttpStatusCode.CREATED)
