@@ -15,6 +15,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy --schema=prisma/schema",
     "prisma:migrate:recover:cash-bank": "prisma db execute --file prisma/schema/migrations/20260820153000_cash_bank_ledger_unit_attribution_receivables/recovery.sql --schema=prisma/schema",
+    "prisma:migrate:bootstrap:cash-bank": "prisma db execute --file prisma/schema/migrations/20260820153000_cash_bank_ledger_unit_attribution_receivables/bootstrap.sql --schema=prisma/schema",
     "prisma:migrate:resolve:cash-bank": "prisma migrate resolve --applied 20260820153000_cash_bank_ledger_unit_attribution_receivables --schema=prisma/schema",
     "prisma:migrate:rollback": "prisma migrate resolve --rolled-back 20260312105438_add_invitation_and_connection_status_enums --schema=prisma/schema",
     "prisma:migrate:checksum": "node scripts/print-migration-checksum.cjs",
