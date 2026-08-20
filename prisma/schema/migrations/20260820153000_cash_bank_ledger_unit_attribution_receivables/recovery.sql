@@ -1,6 +1,7 @@
 -- Recovery for failed 20260820153000_cash_bank_ledger_unit_attribution_receivables
--- Run only if migrate deploy failed on duplicate index (42P07).
+-- Use when migrate deploy failed (e.g. 42P07 duplicate index, 42P01 wrong FK table name).
 -- Safe to re-run: uses IF NOT EXISTS / DO blocks where supported.
+-- Note: user FKs must reference "User" (capital U), not "users".
 
 -- Drop truncated duplicate index if the failed CREATE INDEX left nothing,
 -- or rename if the unique index was created under the truncated name.
@@ -18,19 +19,19 @@ CREATE INDEX IF NOT EXISTS "receivables_user_id_status_idx"
 
 DO $$ BEGIN
   ALTER TABLE "cash_balances" ADD CONSTRAINT "cash_balances_user_id_fkey"
-    FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
   ALTER TABLE "bank_accounts" ADD CONSTRAINT "bank_accounts_user_id_fkey"
-    FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
   ALTER TABLE "ledger_transactions" ADD CONSTRAINT "ledger_transactions_user_id_fkey"
-    FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -42,7 +43,7 @@ END $$;
 
 DO $$ BEGIN
   ALTER TABLE "unit_attributions" ADD CONSTRAINT "unit_attributions_user_id_fkey"
-    FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -60,6 +61,6 @@ END $$;
 
 DO $$ BEGIN
   ALTER TABLE "receivables" ADD CONSTRAINT "receivables_user_id_fkey"
-    FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
