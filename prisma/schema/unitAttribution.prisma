@@ -42,7 +42,6 @@ model UnitAttributionProductionRecord {
 
   unitAttribution UnitAttribution @relation(fields: [unitAttributionId], references: [id], onDelete: Cascade)
 
-  @@unique([unitAttributionId, periodStart])
-  @@index([unitAttributionId, periodStart])
+  @@unique([unitAttributionId, periodStart], map: "uap_records_attribution_period_uniq")
   @@map("unit_attribution_production_records")
 }

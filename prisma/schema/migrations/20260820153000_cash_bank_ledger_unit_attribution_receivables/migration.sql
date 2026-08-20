@@ -131,8 +131,7 @@ CREATE INDEX "ledger_entries_account_code_idx" ON "ledger_entries"("account_code
 CREATE UNIQUE INDEX "unit_attributions_asset_id_key" ON "unit_attributions"("asset_id");
 CREATE INDEX "unit_attributions_user_id_idx" ON "unit_attributions"("user_id");
 
-CREATE UNIQUE INDEX "unit_attribution_production_records_unit_attribution_id_period_start_key" ON "unit_attribution_production_records"("unit_attribution_id", "period_start");
-CREATE INDEX "unit_attribution_production_records_unit_attribution_id_period_start_idx" ON "unit_attribution_production_records"("unit_attribution_id", "period_start");
+CREATE UNIQUE INDEX "uap_records_attribution_period_uniq" ON "unit_attribution_production_records"("unit_attribution_id", "period_start");
 
 CREATE UNIQUE INDEX "receivables_user_id_receivable_code_key" ON "receivables"("user_id", "receivable_code");
 CREATE INDEX "receivables_user_id_type_idx" ON "receivables"("user_id", "type");
