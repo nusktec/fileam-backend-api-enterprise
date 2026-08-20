@@ -1,0 +1,26 @@
+model Receivable {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  receivableCode    String   @map("receivable_code")
+  type              String
+  status            String
+  partyName         String?  @map("party_name")
+  supplierId        String?  @map("supplier_id")
+  supplierName      String?  @map("supplier_name")
+  assetId           String?  @map("asset_id")
+  employeeId        String?  @map("employee_id")
+  grossAmount       Decimal  @map("gross_amount") @db.Decimal(14, 2)
+  amountReceived    Decimal  @default(0) @map("amount_received") @db.Decimal(14, 2)
+  outstandingAmount Decimal  @map("outstanding_amount") @db.Decimal(14, 2)
+  dueDate           DateTime? @map("due_date") @db.Date
+  payload           Json     @default("{}")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, receivableCode])
+  @@index([userId, type])
+  @@index([userId, status])
+  @@map("receivables")
+}

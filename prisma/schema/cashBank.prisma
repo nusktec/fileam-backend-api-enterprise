@@ -1,0 +1,38 @@
+model CashBalance {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  cashCode   String   @map("cash_code")
+  cashType   String   @map("cash_type")
+  amount     Decimal  @db.Decimal(14, 2)
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cashCode])
+  @@index([userId])
+  @@map("cash_balances")
+}
+
+model BankAccount {
+  id                     String   @id @default(uuid())
+  userId                 String   @map("user_id")
+  bankCode               String   @map("bank_code")
+  bankName               String   @map("bank_name")
+  accountName            String   @map("account_name")
+  accountNumber          String   @map("account_number")
+  accountType            String   @map("account_type")
+  accountPurpose         String   @map("account_purpose")
+  sourceOfOpeningBalance String?  @map("source_of_opening_balance")
+  openingBalance         Decimal  @map("opening_balance") @db.Decimal(14, 2)
+  balanceDate            DateTime @map("balance_date") @db.Date
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bankCode])
+  @@index([userId])
+  @@map("bank_accounts")
+}

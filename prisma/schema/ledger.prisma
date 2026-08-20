@@ -1,0 +1,35 @@
+/** Double-entry ledger — every financial effect posts balanced debit/credit lines. */
+model LedgerTransaction {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  referenceType   String   @map("reference_type")
+  referenceId     String?  @map("reference_id")
+  description     String
+  transactionDate DateTime @map("transaction_date") @db.Date
+  /** POSTED | REVERSED */
+  status          String   @default("POSTED")
+  reversalOfId    String?  @map("reversal_of_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entries LedgerEntry[]
+
+  @@index([userId, transactionDate])
+  @@index([userId, referenceType, referenceId])
+  @@map("ledger_transactions")
+}
+
+model LedgerEntry {
+  id            String  @id @default(uuid())
+  transactionId String  @map("transaction_id")
+  accountCode   String  @map("account_code")
+  accountName   String  @map("account_name")
+  debit         Decimal @default(0) @db.Decimal(14, 2)
+  credit        Decimal @default(0) @db.Decimal(14, 2)
+
+  transaction LedgerTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([accountCode])
+  @@map("ledger_entries")
+}

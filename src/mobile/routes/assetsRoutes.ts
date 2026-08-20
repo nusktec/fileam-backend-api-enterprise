@@ -48,6 +48,15 @@ import {
   uploadMultiple,
   handleUploadError,
 } from "../../middlewares/uploadMiddleware";
+import {
+  createCashBalance,
+  createBankAccount,
+} from "../controllers/cashBankController";
+import { listUnitsOfProductionEligible } from "../controllers/unitAttributionController";
+import {
+  createCashValidation,
+  createBankAccountValidation,
+} from "../../middlewares/validations/cashBankValidation";
 
 const router = express.Router();
 
@@ -58,6 +67,20 @@ router.get("/dashboard", getAssetsDashboard);
 router.get("/current-assets", getCurrentAssets);
 router.get("/non-current-assets", getNonCurrentAssets);
 router.get("/depreciation-amortization", getDepreciationAmortization);
+router.get("/units-of-production-eligible", listUnitsOfProductionEligible);
+
+router.post(
+  "/cash",
+  express.json(),
+  createCashValidation,
+  createCashBalance,
+);
+router.post(
+  "/bank-accounts",
+  express.json(),
+  createBankAccountValidation,
+  createBankAccount,
+);
 
 /** Asset Reviews & reports (static paths before /:id) */
 router.get("/reviews", withPagination(), listAssetReviews);

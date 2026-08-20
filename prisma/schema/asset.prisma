@@ -37,6 +37,7 @@ model Asset {
   sales              AssetSale[]
   disposals          AssetDisposal[]
   history            AssetHistory[]
+  unitAttribution    UnitAttribution?
 
   @@index([userId])
   @@index([userId, status])

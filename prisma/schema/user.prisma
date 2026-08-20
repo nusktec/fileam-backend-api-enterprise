@@ -82,4 +82,9 @@ model User {
   suppliers              Supplier[]
   supplierDocuments      SupplierDocument[]
   prepayments            Prepayment[]
+  cashBalances           CashBalance[]
+  bankAccounts           BankAccount[]
+  ledgerTransactions     LedgerTransaction[]
+  unitAttributions       UnitAttribution[]
+  receivables            Receivable[]
 }

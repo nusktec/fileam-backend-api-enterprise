@@ -29,6 +29,8 @@ import liabilitiesRoutes from "./liabilitiesRoutes";
 import customersRoutes from "./customersRoutes";
 import suppliersRoutes from "./suppliersRoutes";
 import prepaymentsRoutes from "./prepaymentsRoutes";
+import unitAttributionsRoutes from "./unitAttributionsRoutes";
+import receivablesRoutes from "./receivablesRoutes";
 
 const router = express.Router();
 
@@ -62,6 +64,8 @@ router.use("/liabilities", liabilitiesRoutes);
 router.use("/customers", customersRoutes);
 router.use("/suppliers", suppliersRoutes);
 router.use("/prepayments", prepaymentsRoutes);
+router.use("/unit-attributions", unitAttributionsRoutes);
+router.use("/receivables", receivablesRoutes);
 
 export default router;
 

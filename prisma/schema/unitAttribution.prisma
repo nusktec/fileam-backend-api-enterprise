@@ -1,0 +1,48 @@
+model UnitAttribution {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  assetId           String   @unique @map("asset_id")
+  productName       String   @map("product_name")
+  brandName         String?  @map("brand_name")
+  skuCode           String?  @map("sku_code")
+  description       String?
+  unitOfMeasurement String   @map("unit_of_measurement")
+  periodType        String   @map("period_type")
+  administratorName String?  @map("administrator_name")
+  factoryPlantName  String?  @map("factory_plant_name")
+  department        String?
+  branchLocation    String?  @map("branch_location")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user    User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset   Asset                       @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  records UnitAttributionProductionRecord[]
+
+  @@index([userId])
+  @@map("unit_attributions")
+}
+
+model UnitAttributionProductionRecord {
+  id                String   @id @default(uuid())
+  unitAttributionId String   @map("unit_attribution_id")
+  periodStart       DateTime @map("period_start") @db.Date
+  periodEnd         DateTime @map("period_end") @db.Date
+  periodLabel       String   @map("period_label")
+  unitsAttributed   Int      @map("units_attributed")
+  /** RECORDED | OPEN (OPEN only when generated, not persisted until recorded) */
+  status            String   @default("RECORDED")
+  unitCost          Decimal? @map("unit_cost") @db.Decimal(14, 2)
+  batchLotNumber    String?  @map("batch_lot_number")
+  productionLine    String?  @map("production_line")
+  shift             String?
+  locationWarehouse String?  @map("location_warehouse")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  unitAttribution UnitAttribution @relation(fields: [unitAttributionId], references: [id], onDelete: Cascade)
+
+  @@unique([unitAttributionId, periodStart])
+  @@index([unitAttributionId, periodStart])
+  @@map("unit_attribution_production_records")
+}

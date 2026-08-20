@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nEnterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -230,6 +230,31 @@
       "key": "repaymentId",
       "value": "",
       "description": "Repayment code e.g. REP-001 from POST .../repayments (also accepts uuid)"
+    },
+    {
+      "key": "customerId",
+      "value": "",
+      "description": "Customer code e.g. CUS-001 from POST /mobile/customers"
+    },
+    {
+      "key": "supplierId",
+      "value": "",
+      "description": "Supplier code e.g. SUP-001 from POST /mobile/suppliers"
+    },
+    {
+      "key": "prepaymentId",
+      "value": "",
+      "description": "Prepayment code e.g. PRE-001 from POST /mobile/prepayments"
+    },
+    {
+      "key": "unitAttributionId",
+      "value": "",
+      "description": "Unit attribution uuid from POST /mobile/unit-attributions"
+    },
+    {
+      "key": "receivableId",
+      "value": "",
+      "description": "Receivable code e.g. REC-001 from POST /mobile/receivables/*"
     }
   ],
   "event": [
@@ -1112,10 +1137,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Cash → invoiceAmountPaid.total = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top.",
+                "description": "Cash → invoiceAmountPaid.total = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top. Prefer customer:{id,name} from Customer Directory when {{customerId}} is set.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"Walk-in\"\n}"
+                  "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customer\": {\n    \"id\": \"{{customerId}}\",\n    \"name\": \"John Doe\"\n  }\n}"
                 }
               },
               "event": [
@@ -1375,10 +1400,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false\n}"
+                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false,\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Supplies\"\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Single create. Transfer/Card -> IN_PROGRESS (unpaid). Cash -> PAID. Invoice -> calculated from invoiceAmountPaid + invoiceDueDate (Pending when unpaid). paymentType defaults to Transfer."
+                "description": "Single create. Transfer/Card -> IN_PROGRESS (unpaid). Cash -> PAID. Invoice -> calculated from invoiceAmountPaid + invoiceDueDate (Pending when unpaid). paymentType defaults to Transfer. Prefer supplier:{id,name} from Supplier Directory."
               }
             },
             {
@@ -1566,10 +1591,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"lines\": [\n    {\n      \"inventoryItemId\": \"{{inventoryItemId}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"customerName\": \"Walk-in\",\n  \"customerId\": \"cust-walk-1\",\n  \"createSalesInvoice\": true,\n  \"paymentType\": \"Invoice\",\n  \"saleDate\": \"2026-07-24\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": false,\n  \"saleCategory\": \"Product Sales\"\n}"
+                  "raw": "{\n  \"lines\": [\n    {\n      \"inventoryItemId\": \"{{inventoryItemId}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"customer\": {\n    \"id\": \"{{customerId}}\",\n    \"name\": \"John Doe\"\n  },\n  \"createSalesInvoice\": true,\n  \"paymentType\": \"Invoice\",\n  \"saleDate\": \"2026-07-24\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": false,\n  \"saleCategory\": \"Product Sales\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Creates linked Sale with invoiceDueDate. VAT-inclusive uses Base = Total/1.075. paymentType Invoice → unpaid until paid amount updated."
+                "description": "Creates linked Sale with invoiceDueDate. Use customer:{id,name} from Customer Directory. VAT-inclusive uses Base = Total/1.075."
               }
             },
             {
@@ -1798,7 +1823,40 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/current-assets",
-                "description": "Aggregates from books: cash (PAID Cash sales, net of expense shortfall), bankBalances (PAID Card/Transfer/Invoice sales − expenses; account number from Business.bankAccount when set), inventory (qty×cost), accountsReceivable { total, current { totalAmount, invoiceCount }, overdue { totalAmount, invoiceCount }, items[] with status CURRENT|OVERDUE and daysOverdue on overdue rows; amount = outstanding }. totalCurrentAssets = sum of the four."
+                "description": "cash, bankBalances (systemDerived + userAdded + items with source: system|user), inventory, accountsReceivable, prepayments. POST /assets/cash and /assets/bank-accounts appear under userAdded."
+              }
+            },
+            {
+              "name": "Add cash balance **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/cash",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"cashType\": \"cash_on_hand\",\n  \"amount\": 500000,\n  \"note\": \"Opening cash balance\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Add bank account **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/bank-accounts",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"bankName\": \"GTBank\",\n  \"accountName\": \"FileAm Technologies Ltd\",\n  \"accountNumber\": \"0123456789\",\n  \"accountType\": \"current\",\n  \"accountPurpose\": \"business_operations\",\n  \"sourceOfOpeningBalance\": \"owner_capital_introduced\",\n  \"openingBalance\": 2000000,\n  \"balanceDate\": \"2026-08-19\"\n}"
+                }
+              }
+            },
+            {
+              "name": "List units-of-production eligible assets **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/units-of-production-eligible",
+                "description": "Assets with depreciationMethod UNIT_OF_PRODUCTION, not SOLD/DISPOSED."
               }
             },
             {
@@ -2680,6 +2738,603 @@
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/cash-flow-impact",
                 "description": "Liability settlement cash impact for current calendar month: netCashOutflow (incl. debt principal+interest repayments), overdueSettlement, scheduledDebtRepayment, interestExpense, interestDue (open accrued on register)."
               }
+            }
+          ]
+        },
+        {
+          "name": "Customer Directory **",
+          "description": "Customer Directory (PDF spec).\n\n• POST /mobile/customers\n• PATCH /mobile/customers/{customerId}\n• GET /mobile/customers/{customerId}\n• GET /mobile/customers/dashboard\n• POST /mobile/customers/{customerId}/documents\n\nVariables: {{customerId}} (CUS-xxx), {{saleId}} for document upload.\nDocument types: SIGNED_QUOTATION, PURCHASE_ORDER, CONTRACT, DELIVERY_CONFIRMATION, CORRESPONDENCE, PAYMENT_CONFIRMATION.",
+          "item": [
+            {
+              "name": "Create customer **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/customers",
+                "description": "Required: name, phone, address. Optional: businessName, email, tin. Sets {{customerId}}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"John Doe\",\n  \"phone\": \"08012345678\",\n  \"address\": \"12 Lagos Street\",\n  \"businessName\": \"John Doe Enterprises\",\n  \"email\": \"john@example.com\",\n  \"tin\": \"123456789\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('customerId', d.id);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get customer dashboard **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/customers/dashboard",
+                "description": "KPIs + full customers[] array (id, name, businessName, phone, email, status, totalSalesAmount, outstandingBalance, lastTransactionDate). Sets {{customerId}} from first row."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "var rows=d&&d.customers?d.customers:[];",
+                      "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('customerId', rows[0].id);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get customer by id **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/customers/{{customerId}}",
+                "description": "Profile + receivableSummary (paid/inProgress/pending/partial/overdue buckets) + sales[] + documents[]."
+              }
+            },
+            {
+              "name": "Update customer **",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/customers/{{customerId}}",
+                "description": "Editable: name, phone, address, businessName, email, tin.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phone\": \"08012345679\",\n  \"email\": \"john.doe@example.com\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Upload customer document **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/customers/{{customerId}}/documents",
+                "description": "Body: saleId (invoice number or uuid), type, url. Links document to existing sale.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"saleId\": \"{{saleId}}\",\n  \"type\": \"SIGNED_QUOTATION\",\n  \"url\": \"https://example.com/quotation.pdf\"\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Supplier Directory **",
+          "description": "Supplier Directory (PDF spec).\n\n• POST /mobile/suppliers\n• PATCH /mobile/suppliers/{supplierId}\n• GET /mobile/suppliers/{supplierId}\n• GET /mobile/suppliers/dashboard\n• POST /mobile/suppliers/{supplierId}/documents\n\nVariables: {{supplierId}} (SUP-xxx), {{expenseId}} for document upload.\nDocument types: SUPPLIER_INVOICE, PAYMENT_RECEIPT, PURCHASE_ORDER, DELIVERY_NOTE, CONTRACT, WARRANTY_DOCUMENT.",
+          "item": [
+            {
+              "name": "Create supplier **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/suppliers",
+                "description": "Required: name, phone, address. Optional: businessName, email, contactPerson, tin. Sets {{supplierId}}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"ABC Supplies\",\n  \"phone\": \"08098765432\",\n  \"address\": \"45 Industrial Ave\",\n  \"businessName\": \"ABC Supplies Ltd\",\n  \"email\": \"info@abcsupplies.com\",\n  \"contactPerson\": \"James Ade\",\n  \"tin\": \"987654321\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('supplierId', d.id);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get supplier dashboard **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/suppliers/dashboard",
+                "description": "KPIs + full suppliers[] array. Sets {{supplierId}} from first row."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "var rows=d&&d.suppliers?d.suppliers:[];",
+                      "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('supplierId', rows[0].id);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get supplier by id **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/suppliers/{{supplierId}}",
+                "description": "Profile + payableSummary + expenses[] + documents[]."
+              }
+            },
+            {
+              "name": "Update supplier **",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/suppliers/{{supplierId}}",
+                "description": "Editable: name, phone, address, businessName, email, contactPerson, tin.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"contactPerson\": \"James Adebayo\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Upload supplier document **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/suppliers/{{supplierId}}/documents",
+                "description": "Body: expenseId, type, url.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"expenseId\": \"{{expenseId}}\",\n  \"type\": \"SUPPLIER_INVOICE\",\n  \"url\": \"https://example.com/invoice.pdf\"\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Prepayments **",
+          "description": "Prepayments module (PDF spec).\n\n• POST /mobile/prepayments\n• GET /mobile/prepayments\n• GET /mobile/prepayments/{prepaymentId}\n• PATCH /mobile/prepayments/{prepaymentId}\n• POST .../assign-consultant\n• POST .../evidence\n• POST .../cancel\n\nRequires {{supplierId}} from Supplier Directory. Recognition auto-runs on list/get when due.\nGET /mobile/assets/current-assets includes prepayments { total, numberOfPrepayments, items[] }.",
+          "item": [
+            {
+              "name": "Create prepayment **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/prepayments",
+                "description": "Creates Current Asset + schedule. supplier.id must exist in Supplier Directory. Sets {{prepaymentId}}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"category\": \"INSURANCE\",\n  \"description\": \"Annual Business Insurance\",\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Insurance Ltd\"\n  },\n  \"totalAmount\": 1200000,\n  \"paymentDate\": \"2026-08-14\",\n  \"serviceStartDate\": \"2026-09-01\",\n  \"serviceEndDate\": \"2027-08-31\",\n  \"recognitionFrequency\": \"MONTHLY\",\n  \"expenseType\": \"OPEX\",\n  \"evidenceUrl\": \"https://example.com/evidence/prepayment.pdf\"\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('prepaymentId', d.id);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List prepayments **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/prepayments",
+                "description": "summary + prepayments[]. Sets {{prepaymentId}} from first row."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "var rows=d&&d.prepayments?d.prepayments:[];",
+                      "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('prepaymentId', rows[0].id);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get prepayment by id **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/prepayments/{{prepaymentId}}",
+                "description": "Detail + recognitionSummary + schedule[] + evidence[] + consultant."
+              }
+            },
+            {
+              "name": "Update prepayment **",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/prepayments/{{prepaymentId}}",
+                "description": "Edit fields; recalculates future SCHEDULED entries only.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"description\": \"Updated insurance description\",\n  \"recognitionFrequency\": \"MONTHLY\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Assign consultant **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/prepayments/{{prepaymentId}}/assign-consultant",
+                "description": "Body: consultantId, consultantName.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"consultantId\": \"{{consultantId}}\",\n  \"consultantName\": \"John Doe\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Add evidence **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/prepayments/{{prepaymentId}}/evidence",
+                "description": "Appends URL to evidence array.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"url\": \"https://example.com/documents/contract.pdf\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Cancel prepayment **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/prepayments/{{prepaymentId}}/cancel",
+                "description": "Cancels future schedule; preserves recognized expenses.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Service contract was cancelled\"\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unit Attributions **",
+          "description": "PDF 3 — Unit attribution for UNIT_OF_PRODUCTION assets.\n\n• POST /mobile/unit-attributions\n• GET /mobile/unit-attributions\n• GET /mobile/unit-attributions/{id}\n• POST .../{id}/records\n• GET .../{id}/schedule\n\nRequires ACTIVE UNIT_OF_PRODUCTION asset (see GET /assets/units-of-production-eligible).",
+          "item": [
+            {
+              "name": "Create unit attribution **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/unit-attributions",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"productName\": \"Premium Widget\",\n  \"brandName\": \"FileAm\",\n  \"skuCode\": \"WDG-001\",\n  \"unitOfMeasurement\": \"units\",\n  \"periodType\": \"MONTHLY\"\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "if(j.status&&d&&d.id){pm.collectionVariables.set('unitAttributionId', d.id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "List unit attributions **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/unit-attributions?page=1&limit=20"
+              }
+            },
+            {
+              "name": "Get unit attribution **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/unit-attributions/{{unitAttributionId}}"
+              }
+            },
+            {
+              "name": "Record production units **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/unit-attributions/{{unitAttributionId}}/records",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"periodStart\": \"2026-08-01\",\n  \"unitsAttributed\": 500\n}"
+                }
+              }
+            },
+            {
+              "name": "Get production schedule **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/unit-attributions/{{unitAttributionId}}/schedule"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Receivables **",
+          "description": "PDF 4 — Accounts Receivable module.\n\nFive POST types + GET list/detail. Backend calculates outstanding balances.",
+          "item": [
+            {
+              "name": "Fixed asset sale on credit **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/fixed-asset-sale",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"partyName\": \"ABC Limited\",\n  \"phone\": \"08012345678\",\n  \"address\": \"12 Marina Road, Lagos\",\n  \"salePrice\": 2500000,\n  \"paymentDueDate\": \"2026-09-30\",\n  \"amountReceived\": 500000\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "if(j.status&&d&&d.id){pm.collectionVariables.set('receivableId', d.id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "Supplier refund overpayment **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/supplier-refund-overpayment",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"supplierId\": \"{{supplierId}}\",\n  \"reason\": \"OVERPAYMENT\",\n  \"originalInvoiceAmount\": 1000000,\n  \"amountPaid\": 1200000,\n  \"refundAmountExpected\": 200000,\n  \"expectedRefundDate\": \"2026-09-15\",\n  \"refundMethod\": \"BANK_TRANSFER\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Employee/director advance **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/employee-director-advance",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"recipientType\": \"DIRECTOR\",\n  \"recipientName\": \"Jane Smith\",\n  \"advanceType\": \"DIRECTOR_LOAN\",\n  \"amountAdvanced\": 1000000,\n  \"dateAdvanced\": \"2026-08-19\",\n  \"expectedSettlementDate\": \"2027-08-19\",\n  \"repaymentMethod\": \"BANK_TRANSFER\",\n  \"repaymentSchedule\": \"ONE_TIME\",\n  \"purpose\": \"Director advance\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Tax refund / VAT credit **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/tax-refund-vat-credit",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"taxAuthority\": \"Nigerian Revenue Service (NRS)\",\n  \"taxType\": \"VAT\",\n  \"taxPeriod\": \"Jan-Dec 2025\",\n  \"filingReference\": \"VAT-2025-Q1\",\n  \"reason\": \"VAT_INPUT_CREDIT\",\n  \"refundCreditAmount\": 750000,\n  \"expectedRefundDate\": \"2026-10-15\",\n  \"status\": \"UNDER_REVIEW\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Investment income owed **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/investment-income-owed",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"investmentName\": \"ABC Bank Fixed Deposit\",\n  \"investmentType\": \"FIXED_DEPOSIT\",\n  \"investmentAccountReference\": \"FD-2026-00125\",\n  \"incomeType\": \"INTEREST\",\n  \"principalAmount\": 5000000,\n  \"incomeAmount\": 400000,\n  \"incomeAccrualDate\": \"2026-08-01\",\n  \"paymentDueDate\": \"2026-08-31\",\n  \"payerEntity\": \"ABC Bank\",\n  \"referenceNumber\": \"INT-2026-08-001\",\n  \"whtCreditNoteAvailable\": true,\n  \"whtDeducted\": 40000\n}"
+                }
+              }
+            },
+            {
+              "name": "List receivables **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables?page=1&limit=20"
+              }
+            },
+            {
+              "name": "Get receivable by id **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/{{receivableId}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Directory linking examples **",
+          "description": "POST bodies using Customer/Supplier Directory references (PDF 3).\nLegacy flat customerId/customerName and supplierId/supplierName still accepted.\nRun Create customer + Create supplier first to set {{customerId}} / {{supplierId}}.",
+          "item": [
+            {
+              "name": "Create sale (Directory customer) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
+                "description": "Uses customer:{id,name} validated against Customer Directory. Rejects if customer.id not found.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"description\": \"Directory-linked sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-08-18\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customer\": {\n    \"id\": \"{{customerId}}\",\n    \"name\": \"John Doe\"\n  }\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('saleId',d.id);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Create expense (Directory supplier) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
+                "description": "Uses supplier:{id,name} validated against Supplier Directory.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"description\": \"Directory-linked expense\",\n  \"amount\": 15000,\n  \"category\": \"Tools & Software\",\n  \"date\": \"2026-08-18\",\n  \"vatInclusive\": false,\n  \"paymentType\": \"Transfer\",\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Supplies\"\n  }\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.expenseNumber){pm.collectionVariables.set('expenseId', d.expenseNumber);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Inventory sell (Directory customer) **",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
+                "description": "Inventory sell with customer:{id,name}. Same Customer Directory ID carried to linked Sale when createSalesInvoice is true.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"lines\": [{\"inventoryItemId\": \"{{inventoryItemId}}\", \"quantity\": 1}],\n  \"customer\": {\"id\": \"{{customerId}}\", \"name\": \"John Doe\"},\n  \"createSalesInvoice\": true,\n  \"paymentType\": \"Cash\",\n  \"saleDate\": \"2026-08-18\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.linkedSale&&d.linkedSale.id){pm.collectionVariables.set('saleId', d.linkedSale.id);}"
+                    ]
+                  }
+                }
+              ]
             }
           ]
         },

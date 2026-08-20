@@ -35,6 +35,11 @@ import {
 import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
 import { appendAssetHistory } from "./assetHistoryHelper";
 import { prepaymentsService } from "./prepaymentsService";
+import {
+  BANK_ACCOUNT_TYPE_LABELS,
+  CASH_TYPE_LABELS,
+} from "../../constants/cashBank";
+import { cashBankService } from "./cashBankService";
 
 export { computeAssetDepreciation, computeStraightLineDepreciation };
 
@@ -59,7 +64,7 @@ function startOfUtcDayMs(d: Date): number {
  * - Inventory: qty × purchaseCost
  */
 async function buildCurrentAssetsSnapshot(userId: string) {
-  const [inventoryItems, unpaidSales, paidSales, expenses, business] =
+  const [inventoryItems, unpaidSales, paidSales, expenses, business, userCash, userBanks] =
     await Promise.all([
       prisma.inventoryItem.findMany({ where: { userId } }),
       prisma.sale.findMany({
@@ -83,6 +88,8 @@ async function buildCurrentAssetsSnapshot(userId: string) {
         where: { userId },
         select: { bankAccount: true, name: true },
       }),
+      cashBankService.listUserCash(userId),
+      cashBankService.listUserBanks(userId),
     ]);
 
   const inventoryRows = inventoryItems
@@ -198,41 +205,101 @@ async function buildCurrentAssetsSnapshot(userId: string) {
     bankNet = normalizeMoneyAmount(Math.max(0, bankNet - prepayments.total));
   }
 
-  const cash = {
-    total: cashNet,
-    items:
-      cashNet > 0
-        ? [
-            {
-              title: "Cash on hand",
-              subtitle: "PAID Cash sales, net of expense drawdowns",
-              amount: cashNet,
-            },
-          ]
-        : ([] as Array<{ title: string; subtitle: string; amount: number }>),
-  };
+  const userCashItems = userCash.map((c) => ({
+    id: c.cashCode,
+    cashType: c.cashType,
+    title: CASH_TYPE_LABELS[c.cashType as keyof typeof CASH_TYPE_LABELS] ?? c.cashType,
+    subtitle: c.note ?? "User-added cash balance",
+    amount: normalizeMoneyAmount(Number(c.amount)),
+    source: "user" as const,
+  }));
+
+  const userBankItems = userBanks.map((b) => ({
+    id: b.bankCode,
+    bankName: b.bankName,
+    accountType:
+      BANK_ACCOUNT_TYPE_LABELS[
+        b.accountType as keyof typeof BANK_ACCOUNT_TYPE_LABELS
+      ] ?? b.accountType,
+    accountNumber: b.accountNumber,
+    amount: normalizeMoneyAmount(Number(b.openingBalance)),
+    source: "user" as const,
+  }));
+
+  const userCashTotal = normalizeMoneyAmount(
+    userCashItems.reduce((s, r) => s + r.amount, 0),
+  );
+  const userBankTotal = normalizeMoneyAmount(
+    userBankItems.reduce((s, r) => s + r.amount, 0),
+  );
+
+  const systemCashItems =
+    cashNet > 0
+      ? [
+          {
+            id: "system-cash",
+            title: "Cash on hand",
+            subtitle: "PAID Cash sales, net of expense drawdowns",
+            amount: cashNet,
+            source: "system" as const,
+          },
+        ]
+      : ([] as Array<{
+          id: string;
+          title: string;
+          subtitle: string;
+          amount: number;
+          source: "system";
+        }>);
 
   const accountNumber = business?.bankAccount?.trim() || "Not set";
+  const systemBankItems =
+    bankNet > 0
+      ? [
+          {
+            id: "system-bank",
+            bankName: business?.name?.trim()
+              ? `${business.name.trim()} — primary`
+              : "Primary bank account",
+            accountType: "Current",
+            accountNumber,
+            amount: bankNet,
+            source: "system" as const,
+          },
+        ]
+      : ([] as Array<{
+          id: string;
+          bankName: string;
+          accountType: string;
+          accountNumber: string;
+          amount: number;
+          source: "system";
+        }>);
+
+  const cash = {
+    total: normalizeMoneyAmount(cashNet + userCashTotal),
+    systemDerived: {
+      total: cashNet,
+      items: systemCashItems,
+    },
+    userAdded: {
+      total: userCashTotal,
+      items: userCashItems,
+    },
+    items: [...systemCashItems, ...userCashItems],
+  };
+
   const bankBalances = {
-    total: bankNet,
-    items:
-      bankNet > 0
-        ? [
-            {
-              bankName: business?.name?.trim()
-                ? `${business.name.trim()} — primary`
-                : "Primary bank account",
-              accountType: "Current",
-              accountNumber,
-              amount: bankNet,
-            },
-          ]
-        : ([] as Array<{
-            bankName: string;
-            accountType: string;
-            accountNumber: string;
-            amount: number;
-          }>),
+    total: normalizeMoneyAmount(bankNet + userBankTotal),
+    systemDerived: {
+      total: bankNet,
+      items: systemBankItems,
+    },
+    userAdded: {
+      total: userBankTotal,
+      items: userBankItems,
+    },
+    items: [...systemBankItems, ...userBankItems],
   };
 
   const totalCurrentAssets = normalizeMoneyAmount(
