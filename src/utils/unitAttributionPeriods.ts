@@ -249,13 +249,13 @@ export type SchedulePeriod = {
   rate: number | null;
 };
 
-export function generateOpenPeriods(
+export function generateOpenPeriodsFrom(
   periodType: UnitAttributionPeriodType,
-  afterDate: Date,
+  firstPeriodStart: Date,
   count: number,
   depreciationPerUnit: number | null,
 ): SchedulePeriod[] {
-  let start = alignPeriodStart(periodType, addDays(afterDate, 1));
+  let start = alignPeriodStart(periodType, firstPeriodStart);
   const open: SchedulePeriod[] = [];
   for (let i = 0; i < count; i += 1) {
     const end = derivePeriodEnd(periodType, start);
@@ -272,6 +272,45 @@ export function generateOpenPeriods(
     start = nextPeriodStart(periodType, start);
   }
   return open;
+}
+
+/** First OPEN period when no production has been recorded yet. */
+export function resolveInitialOpenPeriodStart(
+  periodType: UnitAttributionPeriodType,
+  attributionCreatedAt: Date,
+  now: Date = new Date(),
+): Date {
+  const anchorMs = Math.max(attributionCreatedAt.getTime(), now.getTime());
+  return alignPeriodStart(periodType, new Date(anchorMs));
+}
+
+export function generateOpenPeriodsAfter(
+  periodType: UnitAttributionPeriodType,
+  afterDate: Date,
+  count: number,
+  depreciationPerUnit: number | null,
+): SchedulePeriod[] {
+  return generateOpenPeriodsFrom(
+    periodType,
+    addDays(afterDate, 1),
+    count,
+    depreciationPerUnit,
+  );
+}
+
+/** @deprecated Use generateOpenPeriodsFrom or generateOpenPeriodsAfter */
+export function generateOpenPeriods(
+  periodType: UnitAttributionPeriodType,
+  afterDate: Date,
+  count: number,
+  depreciationPerUnit: number | null,
+): SchedulePeriod[] {
+  return generateOpenPeriodsAfter(
+    periodType,
+    afterDate,
+    count,
+    depreciationPerUnit,
+  );
 }
 
 export function parsePeriodStartInput(value: string): Date {

@@ -31,6 +31,8 @@ import suppliersRoutes from "./suppliersRoutes";
 import prepaymentsRoutes from "./prepaymentsRoutes";
 import unitAttributionsRoutes from "./unitAttributionsRoutes";
 import receivablesRoutes from "./receivablesRoutes";
+import payersRoutes from "./payersRoutes";
+import employersRoutes from "./employersRoutes";
 
 const router = express.Router();
 
@@ -66,6 +68,8 @@ router.use("/suppliers", suppliersRoutes);
 router.use("/prepayments", prepaymentsRoutes);
 router.use("/unit-attributions", unitAttributionsRoutes);
 router.use("/receivables", receivablesRoutes);
+router.use("/payers", payersRoutes);
+router.use("/employers", employersRoutes);
 
 export default router;
 

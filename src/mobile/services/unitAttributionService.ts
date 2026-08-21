@@ -12,8 +12,10 @@ import {
   buildPeriodLabel,
   derivePeriodEnd,
   formatPeriodYmd,
-  generateOpenPeriods,
+  generateOpenPeriodsAfter,
+  generateOpenPeriodsFrom,
   parsePeriodStartInput,
+  resolveInitialOpenPeriodStart,
   validatePeriodStart,
   type SchedulePeriod,
 } from "../../utils/unitAttributionPeriods";
@@ -124,6 +126,7 @@ async function buildSchedule(
   periodType: UnitAttributionPeriodType,
   attributionId: string,
   depreciationPerUnit: number,
+  attributionCreatedAt: Date,
 ): Promise<SchedulePeriod[]> {
   const records = await prisma.unitAttributionProductionRecord.findMany({
     where: { unitAttributionId: attributionId, status: PRODUCTION_RECORD_STATUS.RECORDED },
@@ -143,17 +146,20 @@ async function buildSchedule(
     rate: depreciationPerUnit,
   }));
 
-  const lastEnd =
+  const open =
     records.length > 0
-      ? records[records.length - 1]!.periodEnd
-      : new Date(Date.UTC(1970, 0, 1));
-
-  const open = generateOpenPeriods(
-    periodType,
-    lastEnd,
-    4,
-    depreciationPerUnit,
-  );
+      ? generateOpenPeriodsAfter(
+          periodType,
+          records[records.length - 1]!.periodEnd,
+          4,
+          depreciationPerUnit,
+        )
+      : generateOpenPeriodsFrom(
+          periodType,
+          resolveInitialOpenPeriodStart(periodType, attributionCreatedAt),
+          4,
+          depreciationPerUnit,
+        );
 
   return [...recorded, ...open];
 }
@@ -204,6 +210,7 @@ async function buildDetail(userId: string, id: string) {
     row.periodType as UnitAttributionPeriodType,
     row.id,
     totals.depreciationPerUnit,
+    row.createdAt,
   );
 
   return {
@@ -336,6 +343,7 @@ export const unitAttributionService = {
       row.periodType as UnitAttributionPeriodType,
       row.id,
       totals.depreciationPerUnit,
+      row.createdAt,
     );
 
     return { schedule, totals: { depreciationPerUnit: totals.depreciationPerUnit } };

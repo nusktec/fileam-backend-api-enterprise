@@ -39,6 +39,7 @@ import {
   BANK_ACCOUNT_TYPE_LABELS,
   CASH_TYPE_LABELS,
 } from "../../constants/cashBank";
+import { RECEIVABLE_TYPES } from "../../constants/receivables";
 import { cashBankService } from "./cashBankService";
 
 export { computeAssetDepreciation, computeStraightLineDepreciation };
@@ -64,7 +65,7 @@ function startOfUtcDayMs(d: Date): number {
  * - Inventory: qty × purchaseCost
  */
 async function buildCurrentAssetsSnapshot(userId: string) {
-  const [inventoryItems, unpaidSales, paidSales, expenses, business, userCash, userBanks] =
+  const [inventoryItems, unpaidSales, paidSales, expenses, business, userCash, userBanks, receivableRows] =
     await Promise.all([
       prisma.inventoryItem.findMany({ where: { userId } }),
       prisma.sale.findMany({
@@ -90,6 +91,10 @@ async function buildCurrentAssetsSnapshot(userId: string) {
       }),
       cashBankService.listUserCash(userId),
       cashBankService.listUserBanks(userId),
+      prisma.receivable.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+      }),
     ]);
 
   const inventoryRows = inventoryItems
@@ -174,6 +179,66 @@ async function buildCurrentAssetsSnapshot(userId: string) {
   );
   const arOverdueTotal = normalizeMoneyAmount(
     overdueAr.reduce((s, r) => s + r.amount, 0),
+  );
+
+  const systemDerivedArItems = arItems.map((item) => ({
+    ...item,
+    source: "system" as const,
+  }));
+  const systemDerivedArTotal = arTotal;
+
+  const userAddedArItems = receivableRows.map((r) => {
+    const outstanding = normalizeMoneyAmount(d(r.outstandingAmount));
+    const amount = normalizeMoneyAmount(d(r.grossAmount));
+    const amountReceived = normalizeMoneyAmount(d(r.amountReceived));
+    const dueDate = r.dueDate ? dateToIsoDate(r.dueDate) : null;
+    const item: Record<string, unknown> = {
+      id: r.receivableCode,
+      type: r.type,
+      amount,
+      amountReceived,
+      outstandingAmount: outstanding,
+      dueDate,
+      status: r.status,
+      source: "user" as const,
+    };
+    if (r.partyName) item.partyName = r.partyName;
+    if (r.supplierId) item.supplierId = r.supplierId;
+    if (r.supplierName) item.supplierName = r.supplierName;
+    return item;
+  });
+
+  const sumOutstandingByType = (type: string) =>
+    normalizeMoneyAmount(
+      receivableRows
+        .filter((r) => r.type === type)
+        .reduce((s, r) => s + d(r.outstandingAmount), 0),
+    );
+
+  const fixedAssetSaleReceivables = sumOutstandingByType(
+    RECEIVABLE_TYPES.FIXED_ASSET_SALE_ON_CREDIT,
+  );
+  const supplierRefundReceivables = sumOutstandingByType(
+    RECEIVABLE_TYPES.SUPPLIER_REFUND_OVERPAYMENT,
+  );
+  const employeeAdvanceReceivables = sumOutstandingByType(
+    RECEIVABLE_TYPES.EMPLOYEE_DIRECTOR_ADVANCE,
+  );
+  const taxReceivables = sumOutstandingByType(
+    RECEIVABLE_TYPES.TAX_REFUND_VAT_CREDIT,
+  );
+  const investmentIncomeReceivables = sumOutstandingByType(
+    RECEIVABLE_TYPES.INVESTMENT_INCOME_OWED,
+  );
+
+  const userAddedArTotal = normalizeMoneyAmount(
+    userAddedArItems.reduce(
+      (s, r) => s + (r.outstandingAmount as number),
+      0,
+    ),
+  );
+  const accountsReceivableTotal = normalizeMoneyAmount(
+    systemDerivedArTotal + userAddedArTotal,
   );
 
   let cashReceipts = 0;
@@ -303,7 +368,11 @@ async function buildCurrentAssetsSnapshot(userId: string) {
   };
 
   const totalCurrentAssets = normalizeMoneyAmount(
-    cash.total + bankBalances.total + inventoryTotal + arTotal + prepayments.total,
+    cash.total +
+      bankBalances.total +
+      inventoryTotal +
+      accountsReceivableTotal +
+      prepayments.total,
   );
 
   return {
@@ -319,7 +388,20 @@ async function buildCurrentAssetsSnapshot(userId: string) {
       })),
     },
     accountsReceivable: {
-      total: arTotal,
+      total: accountsReceivableTotal,
+      fixedAssetSaleReceivables,
+      supplierRefundReceivables,
+      employeeAdvanceReceivables,
+      taxReceivables,
+      investmentIncomeReceivables,
+      systemDerived: {
+        total: systemDerivedArTotal,
+        items: systemDerivedArItems,
+      },
+      userAdded: {
+        total: userAddedArTotal,
+        items: userAddedArItems,
+      },
       current: {
         totalAmount: arCurrentTotal,
         invoiceCount: currentAr.length,
@@ -328,24 +410,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
         totalAmount: arOverdueTotal,
         invoiceCount: overdueAr.length,
       },
-      items: arItems.map((item) => {
-        const row: {
-          invoiceNumber: string;
-          customerName: string | null;
-          status: "CURRENT" | "OVERDUE";
-          amount: number;
-          daysOverdue?: number;
-        } = {
-          invoiceNumber: item.invoiceNumber,
-          customerName: item.customerName,
-          status: item.status,
-          amount: item.amount,
-        };
-        if (item.daysOverdue != null) {
-          row.daysOverdue = item.daysOverdue;
-        }
-        return row;
-      }),
+      items: [...systemDerivedArItems, ...userAddedArItems],
     },
     prepayments,
     /** Diagnostic totals used to derive cash/bank (not required by UI spec). */
@@ -353,7 +418,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
       cashReceipts,
       bankReceipts,
       expenseOutflows,
-      note: "Cash = PAID Cash sales (less expense shortfall). Bank = PAID Card/Transfer/Invoice sales − all expense totals. AR = outstanding unpaid invoices (total − invoiceAmountPaid.total), split CURRENT vs OVERDUE by due date. Inventory = qty × purchase cost.",
+      note: "Cash = PAID Cash sales (less expense shortfall). Bank = PAID Card/Transfer/Invoice sales − expense totals. AR systemDerived = unpaid invoice sales; userAdded = /mobile/receivables records. totalCurrentAssets uses full accountsReceivable.total (system + user). Inventory = qty × purchase cost.",
     },
   };
 }

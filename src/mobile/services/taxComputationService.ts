@@ -201,7 +201,7 @@ export const taxComputationService = {
         summaryAnnualEstimate: payeAnnualEstimate,
         methodology:
           flags.paye && salaryMonthlyCaptured > 0
-            ? "Estimated PAYE using simplified Nigerian PAYE brackets (consolidated relief + employee pension allowance). Employers withhold differently — reconcile with payslips. Freelance/side income remains under WHT / PIT."
+            ? "Estimated PAYE using Nigeria NRS progressive bands (first ₦800,000 tax-free on chargeable income, then 15%/18%/21%/23%/25%) after consolidated relief, employee pension, and optional statutory reliefs. Employers withhold differently — reconcile with payslips. Freelance/side income remains under WHT / PIT."
             : flags.paye && salaryMonthlyCaptured <= 0
               ? "PAYE applies to salary — set employmentGrossSalaryMonthly on your mobile profile to populate estimates."
               : "PAYE mainly applies when your tax persona is PAYEE (employee + side income).",

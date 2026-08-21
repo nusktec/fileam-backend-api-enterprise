@@ -1,0 +1,73 @@
+model Payer {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  name          String
+  entityType    String   @map("entity_type")
+  category      String
+  beneficiary   String?
+  contactPerson String   @map("contact_person")
+  tin           String?
+  phone         String?
+  email         String?
+  address       String?
+  bankName      String?  @map("bank_name")
+  bankAccount   String?  @map("bank_account")
+  vatApplicable Boolean  @default(false) @map("vat_applicable")
+  vatRate       Decimal  @default(0) @map("vat_rate") @db.Decimal(5, 2)
+  whtApplicable Boolean  @default(false) @map("wht_applicable")
+  whtRate       Decimal  @default(0) @map("wht_rate") @db.Decimal(5, 2)
+  whtNote       String?  @map("wht_note")
+  since         String
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions PayerTransaction[]
+  documents    PayerDocument[]
+
+  @@index([userId])
+  @@map("payers")
+}
+
+model PayerTransaction {
+  id                String    @id @default(uuid())
+  payerId           String    @map("payer_id")
+  title             String
+  date              String
+  invoiceNumber     String    @map("invoice_number")
+  amount            Decimal   @db.Decimal(14, 2)
+  status            String
+  paymentType       String    @map("payment_type")
+  purpose           String
+  paymentReference  String?   @map("payment_reference")
+  notes             String?
+  invoiceDueDate    String?   @map("invoice_due_date")
+  invoiceAmountPaid Json      @default("{\"total\":0,\"items\":[]}") @map("invoice_amount_paid")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  payer Payer @relation(fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([payerId, date])
+  @@index([payerId, status])
+  @@map("payer_transactions")
+}
+
+model PayerDocument {
+  id            String   @id @default(uuid())
+  payerId       String   @map("payer_id")
+  title         String
+  kind          String   @default("OTHER")
+  categoryLabel String   @map("category_label")
+  date          String?
+  url           String?
+  linked        Boolean  @default(true)
+  required      Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  payer Payer @relation(fields: [payerId], references: [id], onDelete: Cascade)
+
+  @@index([payerId])
+  @@map("payer_documents")
+}

@@ -224,11 +224,31 @@ export const assetReportsService = {
             Detail: i.stockName,
             Amount: fmt(i.amount),
           })),
-          ...snap.accountsReceivable.items.map((i) => ({
-            Component: "Receivable",
-            Detail: `${i.invoiceNumber} — ${i.customerName ?? "—"} (${i.status})`,
-            Amount: fmt(i.amount),
-          })),
+          ...snap.accountsReceivable.items.map((i) => {
+            const row = i as {
+              source?: string;
+              invoiceNumber?: string;
+              customerName?: string | null;
+              type?: string;
+              partyName?: string;
+              status?: string;
+              amount?: number;
+              outstandingAmount?: number;
+            };
+            const detail =
+              row.source === "user"
+                ? `${row.type ?? "Receivable"} — ${row.partyName ?? row.customerName ?? "—"} (${row.status ?? "—"})`
+                : `${row.invoiceNumber ?? "—"} — ${row.customerName ?? "—"} (${row.status ?? "—"})`;
+            const amount =
+              row.source === "user"
+                ? (row.outstandingAmount ?? row.amount ?? 0)
+                : (row.amount ?? 0);
+            return {
+              Component: "Receivable",
+              Detail: detail,
+              Amount: fmt(amount),
+            };
+          }),
         ],
       });
       return { buffer, filename };

@@ -87,4 +87,6 @@ model User {
   ledgerTransactions     LedgerTransaction[]
   unitAttributions       UnitAttribution[]
   receivables            Receivable[]
+  payers                 Payer[]
+  employers              Employer[]
 }

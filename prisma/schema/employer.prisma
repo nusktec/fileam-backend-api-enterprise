@@ -1,0 +1,75 @@
+model Employer {
+  id                 String    @id @default(uuid())
+  userId             String    @map("user_id")
+  employerType       String    @map("employer_type")
+  name               String
+  address            String
+  relationship       String
+  stateOfEmployment  String    @map("state_of_employment")
+  startDate          String    @map("start_date")
+  endDate            String?   @map("end_date")
+  paymentMethod      String    @map("payment_method")
+  paymentFrequency   String    @map("payment_frequency")
+  basicSalary        Decimal   @default(0) @map("basic_salary") @db.Decimal(14, 2)
+  housingAllowance   Decimal   @default(0) @map("housing_allowance") @db.Decimal(14, 2)
+  transportAllowance Decimal   @default(0) @map("transport_allowance") @db.Decimal(14, 2)
+  otherAllowances    Decimal   @default(0) @map("other_allowances") @db.Decimal(14, 2)
+  bonuses            Decimal   @default(0) @db.Decimal(14, 2)
+  commissions        Decimal   @default(0) @db.Decimal(14, 2)
+  hasPension         Boolean   @default(false) @map("has_pension")
+  pensionStatus      String?   @map("pension_status")
+  rsaPin             String?   @map("rsa_pin")
+  pfa                String?   @map("pfa")
+  employeeRate       Decimal?  @map("employee_rate") @db.Decimal(5, 2)
+  employerRate       Decimal?  @map("employer_rate") @db.Decimal(5, 2)
+  cacNumber          String?   @map("cac_number")
+  tin                String?
+  email              String?
+  phone              String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  incomeHistory  EmployerIncomeHistory[]
+  documents      EmployerDocument[]
+
+  @@index([userId])
+  @@map("employers")
+}
+
+model EmployerIncomeHistory {
+  id             String   @id @default(uuid())
+  employerId     String   @map("employer_id")
+  period         String
+  gross          Decimal  @db.Decimal(14, 2)
+  taxDeducted    Decimal  @default(0) @map("tax_deducted") @db.Decimal(14, 2)
+  pension        Decimal  @default(0) @db.Decimal(14, 2)
+  includesBonus  Boolean  @default(false) @map("includes_bonus")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  employer Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@unique([employerId, period])
+  @@index([employerId])
+  @@map("employer_income_history")
+}
+
+model EmployerDocument {
+  id            String   @id @default(uuid())
+  employerId    String   @map("employer_id")
+  title         String
+  kind          String   @default("OTHER")
+  categoryLabel String   @map("category_label")
+  date          String?
+  url           String?
+  status        String   @default("MISSING")
+  required      Boolean  @default(false)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  employer Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@index([employerId])
+  @@map("employer_documents")
+}
