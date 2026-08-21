@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, income-history, documents — taxComputation with NRS bands (no CRA). Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -255,6 +255,36 @@
       "key": "receivableId",
       "value": "",
       "description": "Receivable code e.g. REC-001 from POST /mobile/receivables/*"
+    },
+    {
+      "key": "payerId",
+      "value": "",
+      "description": "Payer uuid from POST /mobile/payers"
+    },
+    {
+      "key": "payerTransactionId",
+      "value": "",
+      "description": "Payer transaction uuid from POST .../payers/{id}/transactions"
+    },
+    {
+      "key": "payerDocumentId",
+      "value": "",
+      "description": "Payer document uuid from POST .../payers/{id}/documents"
+    },
+    {
+      "key": "employerId",
+      "value": "",
+      "description": "Employer uuid from POST /mobile/employers"
+    },
+    {
+      "key": "employerDocumentId",
+      "value": "",
+      "description": "Employer document uuid from GET/POST .../employers/{id}/documents"
+    },
+    {
+      "key": "employerIncomeHistoryId",
+      "value": "",
+      "description": "Employer income history uuid from POST .../employers/{id}/income-history"
     }
   ],
   "event": [
@@ -3238,6 +3268,354 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/{{receivableId}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Payers **",
+          "description": "Customers & Payers module (PDF spec). Response envelope: { data: ... }.\n\n• POST /mobile/payers\n• GET /mobile/payers\n• GET /mobile/payers/{id}\n• PATCH /mobile/payers/{id}\n• POST .../transactions\n• GET .../transactions\n• GET .../receivables\n• POST .../transactions/{transactionId}/payments\n• POST/GET .../documents\n\nBackend-computed: totalAmount, arBalance, overdueAmount, status, lastTransactionDate. Invoice settlement: Cash | Transfer | Card only.",
+          "item": [
+            {
+              "name": "Create payer **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers",
+                "description": "Required: entityType (COMPANY|INDIVIDUAL), fullName, category. Sets {{payerId}}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"entityType\": \"COMPANY\",\n  \"fullName\": \"Chidi Okonkwo\",\n  \"companyName\": \"ABC Corp Ltd\",\n  \"tin\": \"TIN-0098765432\",\n  \"category\": \"PROFESSIONAL_CONSULTANCY\",\n  \"vatApplicable\": true,\n  \"whtApplicable\": true,\n  \"phone\": \"+234 803 456 7890\",\n  \"email\": \"chidi@abccorp.ng\",\n  \"address\": \"12 Broad Street, Lagos Island, Lagos\",\n  \"bankName\": \"First Bank\",\n  \"bankAccount\": \"3012345678\",\n  \"beneficiary\": \"BUSINESS_CLIENT\"\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "if(d&&d.id){pm.collectionVariables.set('payerId', d.id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "List payers **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers?status=ALL&page=1&limit=50",
+                "description": "Query: status=ALL|AR_BALANCE|OVERDUE, search, page, limit. Summary totals cover all payers regardless of tab filter."
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "var rows=d&&d.payers?d.payers:[];",
+                    "if(rows.length&&rows[0].id){pm.collectionVariables.set('payerId', rows[0].id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "Get payer by id **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}",
+                "description": "Profile + nested transactions[] + documents[] + computed AR totals."
+              }
+            },
+            {
+              "name": "Update payer **",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phone\": \"+234 803 456 7891\",\n  \"vatApplicable\": true,\n  \"whtApplicable\": false\n}"
+                }
+              }
+            },
+            {
+              "name": "Record payer transaction (Invoice) **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/transactions",
+                "description": "Invoice creates AR (OUTSTANDING/OVERDUE). Sets {{payerTransactionId}}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"date\": \"2026-08-20\",\n  \"amount\": 1800000,\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-09-20\",\n  \"purpose\": \"SALES\",\n  \"paymentReference\": \"INV-061\",\n  \"notes\": \"Q2 Consulting Services\"\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "if(d&&d.id){pm.collectionVariables.set('payerTransactionId', d.id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "Record payer transaction (Transfer) **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/transactions",
+                "description": "Immediate payment → status PAID.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"date\": \"2026-08-20\",\n  \"amount\": 250000,\n  \"paymentType\": \"Transfer\",\n  \"invoiceDueDate\": null,\n  \"purpose\": \"SALES\",\n  \"paymentReference\": \"TRX-1042\",\n  \"notes\": \"Retainer top-up\"\n}"
+                }
+              }
+            },
+            {
+              "name": "List payer transactions **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/transactions?status=OUTSTANDING",
+                "description": "Optional query: search, status=PAID|OUTSTANDING|OVERDUE|VOID."
+              }
+            },
+            {
+              "name": "List payer receivables **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/receivables",
+                "description": "Open invoice AR only (OUTSTANDING + OVERDUE) with arBalance and overdueAmount."
+              }
+            },
+            {
+              "name": "Record invoice payment **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/transactions/{{payerTransactionId}}/payments",
+                "description": "Partial/full settlement. paymentType: Cash | Transfer | Card (not Invoice). Returns updated payer totals.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": 500000,\n  \"paymentType\": \"Transfer\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Upload payer document **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/documents",
+                "description": "Link pre-uploaded media URL. kind: CONTRACT | PURCHASE_ORDER | WHT | OTHER.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Service Contract 2026.pdf\",\n  \"kind\": \"CONTRACT\",\n  \"url\": \"https://cdn.fileam.app/payers/abc-contract.pdf\",\n  \"date\": \"2026-08-20\"\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "if(d&&d.id){pm.collectionVariables.set('payerDocumentId', d.id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "List payer documents **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/documents?search=contract",
+                "description": "Linked/uploaded docs only. Optional ?search= on title and categoryLabel."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Employers **",
+          "description": "Employer module for user PIT profile (PDF spec). Standard envelope { status, message, data }.\n\n• POST/GET/PATCH/DELETE /mobile/employers\n• GET/POST .../income-history\n• GET/POST/PATCH/DELETE .../documents\n\nBackend-computed: taxTreatment, incomeKind, monthlyIncome, annualIncome, payeCredit, whtRate, taxComputation (NRS bands, no CRA). Document slots seeded on create.",
+          "item": [
+            {
+              "name": "Create employer (PAYE employee) **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers",
+                "description": "LIMITED_COMPANY + FULL_TIME → PAYE. Seeds document slots. Sets {{employerId}}.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"employerType\": \"LIMITED_COMPANY\",\n  \"name\": \"NovaTech Systems Ltd\",\n  \"address\": \"12 Kofo Abayomi Street, Victoria Island, Lagos\",\n  \"relationship\": \"FULL_TIME\",\n  \"stateOfEmployment\": \"Lagos\",\n  \"startDate\": \"2022-01-01\",\n  \"paymentMethod\": \"BASIC_MONTHLY\",\n  \"paymentFrequency\": \"MONTHLY\",\n  \"basicSalary\": 900000,\n  \"hasPension\": true,\n  \"cacNumber\": \"RC-1234567\",\n  \"tin\": \"10234567-0001\",\n  \"email\": \"payroll@novatech.ng\",\n  \"phone\": \"08031234567\",\n  \"housingAllowance\": 350000,\n  \"transportAllowance\": 150000,\n  \"otherAllowances\": 100000,\n  \"bonuses\": 0,\n  \"commissions\": 0,\n  \"pensionStatus\": \"ACTIVE\",\n  \"rsaPin\": \"PEN123456789012\",\n  \"pfa\": \"Access ARM Pensions Limited\",\n  \"employeeRate\": 8,\n  \"employerRate\": 10\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "if(j.status&&d&&d.id){pm.collectionVariables.set('employerId', d.id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "Create employer (WHT contractor) **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers",
+                "description": "LIMITED_COMPANY + CONTRACTOR → WHT 5%.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"employerType\": \"LIMITED_COMPANY\",\n  \"name\": \"Helios Partners Ltd\",\n  \"address\": \"18 Aguiyi Ironsi Street, Abuja\",\n  \"relationship\": \"CONTRACTOR\",\n  \"stateOfEmployment\": \"Abuja (FCT)\",\n  \"startDate\": \"2025-02-01\",\n  \"paymentMethod\": \"CUSTOM\",\n  \"paymentFrequency\": \"MONTHLY\",\n  \"basicSalary\": 800000,\n  \"hasPension\": false\n}"
+                }
+              }
+            },
+            {
+              "name": "List employers **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers?year=2026",
+                "description": "Optional: status=ACTIVE|ENDED, taxTreatment=PAYE|WHT|SELF_ASSESSMENT, year (for payeCredit)."
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "var rows=d&&d.employers?d.employers:[];",
+                    "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('employerId', rows[0].id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "Get employer by id **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}",
+                "description": "Full profile + nested taxComputation (NRS progressive bands, chargeable income after pension, no CRA)."
+              }
+            },
+            {
+              "name": "Update employer **",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"basicSalary\": 950000,\n  \"housingAllowance\": 360000\n}"
+                }
+              }
+            },
+            {
+              "name": "Get income history **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/income-history?year=2026",
+                "description": "Returns recorded entries or estimated schedule rows when no payslips logged yet."
+              }
+            },
+            {
+              "name": "Record income history **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/income-history",
+                "description": "Unique period YYYY-MM per employer. Recalculates payeCredit.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"period\": \"2026-08\",\n  \"gross\": 1500000,\n  \"taxDeducted\": 243980,\n  \"pension\": 112000,\n  \"includesBonus\": false\n}"
+                }
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "if(j.status&&d&&d.id){pm.collectionVariables.set('employerIncomeHistoryId', d.id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "List employer documents **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/documents",
+                "description": "Required slots (MISSING/LINKED) + optional uploads. Sets {{employerDocumentId}} from first missing PAYE evidence slot."
+              },
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); var d=j.data;",
+                    "var rows=d&&d.documents?d.documents:[];",
+                    "var slot=rows.find(function(x){return x.status==='MISSING'&&x.required;})||rows[0];",
+                    "if(j.status&&slot&&slot.id){pm.collectionVariables.set('employerDocumentId', slot.id);}"
+                  ]
+                }
+              }]
+            },
+            {
+              "name": "Link employer document **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/documents",
+                "description": "Link required slot via documentId, or omit documentId for additional supporting file.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"documentId\": \"{{employerDocumentId}}\",\n  \"title\": \"PAYE Evidence (2026)\",\n  \"kind\": \"PAYE_EVIDENCE\",\n  \"url\": \"https://cdn.fileam.app/vault/paye-evidence-2026.pdf\",\n  \"date\": \"2026-08-20\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Patch employer document **",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/documents/{{employerDocumentId}}",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"url\": \"https://cdn.fileam.app/vault/paye-evidence-revised.pdf\",\n  \"date\": \"2026-08-21\",\n  \"title\": \"PAYE Evidence (2026)\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete employer document **",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/documents/{{employerDocumentId}}",
+                "description": "Required doc → clears url, status MISSING. Optional doc → row deleted."
+              }
+            },
+            {
+              "name": "Delete employer **",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}",
+                "description": "Hard-deletes employer, documents, and income history."
               }
             }
           ]

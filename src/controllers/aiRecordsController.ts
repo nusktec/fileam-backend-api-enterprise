@@ -5,10 +5,15 @@ import { IRequest } from "../interfaces/CustomRequest";
 import { salesService } from "../mobile/services/salesService";
 import { expensesService } from "../mobile/services/expensesService";
 import { filingsService } from "../mobile/services/filingsService";
+import { inventoryService } from "../mobile/services/inventoryService";
 import { prisma } from "../config/database";
 import { parseDateRangeQuery } from "../utils/dateRangeQuery";
+import {
+  normalizeExpenseClass,
+  type ExpenseClass,
+} from "../constants/expenseClass";
 
-const RECORD_TYPES = ["sales", "expenses", "filings"] as const;
+const RECORD_TYPES = ["sales", "expenses", "filings", "inventory"] as const;
 type RecordType = (typeof RECORD_TYPES)[number];
 
 function isValidRecordType(t: string): t is RecordType {
@@ -68,12 +73,37 @@ export async function getRecords(
         dateTo: dr.range.dateTo,
       });
     } else if (type === "expenses") {
+      let expenseClass: ExpenseClass | undefined;
+      const classQuery = req.query.class as string | undefined;
+      if (classQuery?.trim()) {
+        expenseClass = normalizeExpenseClass(classQuery.trim()) ?? undefined;
+        if (!expenseClass) {
+          res.status(HttpStatusCode.BAD_REQUEST).json(
+            outJson(
+              false,
+              "Invalid class filter. Use business, personal, or uncategorized",
+              null,
+            ),
+          );
+          return;
+        }
+      }
       data = await expensesService.list(clientId, {
         page,
         limit,
         sortOrder,
         dateFrom: dr.range.dateFrom,
         dateTo: dr.range.dateTo,
+        class: expenseClass,
+      });
+    } else if (type === "inventory") {
+      const category = (req.query.category as string | undefined)?.trim();
+      const lowStockOnly = req.query.lowStockOnly === "true";
+      data = await inventoryService.listItems(clientId, {
+        page,
+        limit,
+        category: category || undefined,
+        lowStockOnly,
       });
     } else {
       data = await filingsService.list(

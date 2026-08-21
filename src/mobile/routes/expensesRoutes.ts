@@ -16,6 +16,7 @@ import {
   createExpenseValidation,
   bulkCreateExpensesValidation,
 } from "../../middlewares/validations/expensesValidation";
+import { listExpensesValidation } from "../../middlewares/validations/listExpensesValidation";
 import { updateExpenseValidation } from "../../middlewares/validations/updateExpenseValidation";
 import { updateExpensePaymentStatusValidation } from "../../middlewares/validations/expensePaymentStatusValidation";
 import { validateIdParam } from "../../middlewares/validations/mobileValidation";
@@ -25,7 +26,7 @@ const router = express.Router();
 
 router.use(authenticate(), requireOnboardingComplete);
 
-router.get("/", withPagination("expenseDate"), listExpenses);
+router.get("/", withPagination("expenseDate"), listExpensesValidation, listExpenses);
 router.post(
   "/bulk",
   (

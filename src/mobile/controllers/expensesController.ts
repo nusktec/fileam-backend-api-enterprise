@@ -8,6 +8,7 @@ import { expensesService } from "../services/expensesService";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { resolveSupplierFields } from "../../utils/directoryResolver";
 import { monetaryAmountLimitMessage } from "../../utils/monetaryAmount";
+import { normalizeExpenseClass, type ExpenseClass } from "../../constants/expenseClass";
 
 function replyExpenseError(res: Response, error: unknown): boolean {
   if (error instanceof HttpReplyError) {
@@ -35,12 +36,30 @@ export const listExpenses = async (
   try {
     const userId = getAuthUserId(req);
     const pagination = req.pagination;
+    const classFilter = req.query.class as string | undefined;
+    let expenseClass: ExpenseClass | undefined;
+    if (classFilter?.trim()) {
+      expenseClass = normalizeExpenseClass(classFilter.trim()) ?? undefined;
+      if (!expenseClass) {
+        res
+          .status(HttpStatusCode.BAD_REQUEST)
+          .json(
+            outJson(
+              false,
+              "class filter must be business, personal, or uncategorized",
+              null,
+            ),
+          );
+        return;
+      }
+    }
     const data = await expensesService.list(userId, {
       page: pagination?.page,
       limit: pagination?.limit,
       sortOrder: pagination?.sortOrder,
       dateFrom: pagination?.dateFrom,
       dateTo: pagination?.dateTo,
+      class: expenseClass,
     });
     res
       .status(HttpStatusCode.OK)
@@ -167,6 +186,9 @@ export const createExpense = async (
             : undefined,
       invoiceAmountPaid:
         b.invoiceAmountPaid != null ? b.invoiceAmountPaid : undefined,
+      class: normalizeExpenseClass(b.class),
+      isDeductible:
+        b.isDeductible !== undefined ? Boolean(b.isDeductible) : undefined,
       supplierName: supplierFields.supplierName ?? undefined,
       supplierId: supplierFields.supplierId ?? undefined,
     });
@@ -222,6 +244,11 @@ export const bulkCreateExpenses = async (
                 ? null
                 : undefined,
           invoiceAmountPaid: raw.invoiceAmountPaid,
+          class: normalizeExpenseClass(raw.class),
+          isDeductible:
+            raw.isDeductible !== undefined
+              ? Boolean(raw.isDeductible)
+              : undefined,
           supplierName: supplierFields.supplierName ?? undefined,
           supplierId: supplierFields.supplierId ?? undefined,
         };
@@ -296,6 +323,11 @@ export const updateExpense = async (
           ? supplierId === null || String(supplierId).trim() === ""
             ? null
             : String(supplierId).trim()
+          : undefined,
+      class: normalizeExpenseClass(body.class),
+      isDeductible:
+        body.isDeductible !== undefined
+          ? Boolean(body.isDeductible)
           : undefined,
     });
     if (!updated) {

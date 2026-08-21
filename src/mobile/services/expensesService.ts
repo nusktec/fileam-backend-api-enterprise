@@ -7,6 +7,11 @@ import {
 import { EXPENSE_CATEGORIES } from "../../constants/expenseCategories";
 import { EXPENSE_TYPES } from "../../constants/expenseTypes";
 import {
+  expenseClassForResponse,
+  resolveExpenseClassForStorage,
+  type ExpenseClass,
+} from "../../constants/expenseClass";
+import {
   initialSaleStatusForPaymentType,
   isAsyncPaymentType,
   isCashPaymentType,
@@ -120,6 +125,12 @@ async function nextExpenseNumber(): Promise<string> {
   return `EXP-${String(counter.lastNumber).padStart(3, "0")}`;
 }
 
+function mapExpenseClassField(
+  expenseClass: string | null | undefined,
+): ExpenseClass {
+  return expenseClassForResponse(expenseClass);
+}
+
 function mapExpenseListItem(e: {
   id: string;
   expenseNumber: string;
@@ -137,6 +148,8 @@ function mapExpenseListItem(e: {
   status?: string | null;
   supplierName: string | null;
   supplierId: string | null;
+  expenseClass?: string | null;
+  isDeductible?: boolean;
 }) {
   const invoiceAmountPaid = coerceInvoiceAmountPaid(e.invoiceAmountPaid);
   const amount = decimalToNumber(e.totalAmount);
@@ -167,7 +180,23 @@ function mapExpenseListItem(e: {
     status,
     supplierName: e.supplierName ?? null,
     supplierId: e.supplierId ?? null,
+    class: mapExpenseClassField(e.expenseClass),
+    isDeductible: Boolean(e.isDeductible),
   };
+}
+
+function resolveExpenseClassInput(
+  value: unknown,
+  field = "class",
+): ExpenseClass {
+  try {
+    return resolveExpenseClassForStorage(value, field);
+  } catch {
+    throw new HttpReplyError(
+      400,
+      `${field} must be one of: business, personal, uncategorized`,
+    );
+  }
 }
 
 export { EXPENSE_CATEGORIES, EXPENSE_TYPES };
@@ -180,6 +209,7 @@ export const expensesService = {
       sortOrder?: "ASC" | "DESC";
       dateFrom?: Date;
       dateTo?: Date;
+      class?: ExpenseClass;
     },
   ) {
     const page = opts?.page ?? 1;
@@ -188,11 +218,15 @@ export const expensesService = {
     const where: {
       userId: string;
       expenseDate?: { gte?: Date; lte?: Date };
+      expenseClass?: string;
     } = { userId };
     if (opts?.dateFrom || opts?.dateTo) {
       where.expenseDate = {};
       if (opts.dateFrom) where.expenseDate.gte = opts.dateFrom;
       if (opts.dateTo) where.expenseDate.lte = opts.dateTo;
+    }
+    if (opts?.class) {
+      where.expenseClass = opts.class;
     }
 
     const [expenses, total, summary, byCategory] = await Promise.all([
@@ -279,6 +313,8 @@ export const expensesService = {
       status,
       supplierName: expense.supplierName ?? null,
       supplierId: expense.supplierId ?? null,
+      class: mapExpenseClassField(expense.expenseClass),
+      isDeductible: expense.isDeductible,
     };
   },
 
@@ -299,6 +335,8 @@ export const expensesService = {
       invoiceDueDate?: string | null;
       invoiceAmountPaid?: unknown;
       createdById?: string;
+      class?: ExpenseClass | null;
+      isDeductible?: boolean;
     },
   ) {
     const { base, vatAmount, totalAmount } = resolveExpenseAmounts({
@@ -329,6 +367,8 @@ export const expensesService = {
       data.expenseType != null && String(data.expenseType).trim() !== ""
         ? String(data.expenseType).trim()
         : "OPEX";
+    const expenseClass = resolveExpenseClassInput(data.class);
+    const isDeductible = Boolean(data.isDeductible);
 
     const expense = await prisma.expense.create({
       data: {
@@ -350,6 +390,8 @@ export const expensesService = {
         invoiceDueDate,
         invoiceAmountPaid: invoiceAmountPaidToJson(invoiceAmountPaid),
         status,
+        expenseClass,
+        isDeductible,
       },
     });
 
@@ -376,6 +418,8 @@ export const expensesService = {
       status: expense.status,
       supplierName: expense.supplierName ?? null,
       supplierId: expense.supplierId ?? null,
+      class: mapExpenseClassField(expense.expenseClass),
+      isDeductible: expense.isDeductible,
     };
   },
 
@@ -395,6 +439,8 @@ export const expensesService = {
       paymentType?: string;
       invoiceDueDate?: string | null;
       invoiceAmountPaid?: unknown;
+      class?: ExpenseClass | null;
+      isDeductible?: boolean;
     }>,
     createdById?: string,
   ) {
@@ -467,6 +513,11 @@ export const expensesService = {
           raw.expenseType != null && String(raw.expenseType).trim() !== ""
             ? String(raw.expenseType).trim()
             : "OPEX",
+        expenseClass: resolveExpenseClassInput(
+          raw.class,
+          `items[${index}].class`,
+        ),
+        isDeductible: Boolean(raw.isDeductible),
         expenseDate: toCalendarDate(raw.date),
         vatInclusive: Boolean(raw.vatInclusive),
         receiptUrl: raw.receiptUrl ?? null,
@@ -512,6 +563,8 @@ export const expensesService = {
               invoiceDueDate: row.invoiceDueDate,
               invoiceAmountPaid: invoiceAmountPaidToJson(row.invoiceAmountPaid),
               status: row.status,
+              expenseClass: row.expenseClass,
+              isDeductible: row.isDeductible,
             },
           }),
         );
@@ -547,6 +600,8 @@ export const expensesService = {
         status: expense.status,
         supplierName: expense.supplierName ?? null,
         supplierId: expense.supplierId ?? null,
+        class: mapExpenseClassField(expense.expenseClass),
+        isDeductible: expense.isDeductible,
       })),
     };
   },
@@ -568,6 +623,8 @@ export const expensesService = {
       paymentType: string;
       invoiceDueDate: string | null;
       invoiceAmountPaid?: unknown;
+      class: ExpenseClass | null;
+      isDeductible: boolean;
     }>,
   ) {
     const expense = await prisma.expense.findFirst({
@@ -610,6 +667,12 @@ export const expensesService = {
         data.supplierId === null || data.supplierId === ""
           ? null
           : data.supplierId.trim();
+    }
+    if (data.class !== undefined) {
+      updateData.expenseClass = resolveExpenseClassInput(data.class);
+    }
+    if (data.isDeductible !== undefined) {
+      updateData.isDeductible = Boolean(data.isDeductible);
     }
 
     const touchesFinancial =
@@ -733,6 +796,8 @@ export const expensesService = {
       status: updated.status,
       supplierName: updated.supplierName ?? null,
       supplierId: updated.supplierId ?? null,
+      class: mapExpenseClassField(updated.expenseClass),
+      isDeductible: updated.isDeductible,
     };
   },
 

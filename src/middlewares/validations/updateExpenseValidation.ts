@@ -1,5 +1,6 @@
 import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
+import { EXPENSE_CLASSES } from "../../constants/expenseClass";
 import { optionalMonetaryAmount } from "./monetaryAmountValidation";
 import { optionalInvoiceAmountPaidValidation } from "./invoiceAmountPaidValidation";
 
@@ -38,5 +39,12 @@ export const updateExpenseValidation = [
     .isISO8601()
     .withMessage("invoiceDueDate must be a valid ISO date"),
   optionalInvoiceAmountPaidValidation("invoiceAmountPaid"),
+  check("class")
+    .optional({ nullable: true })
+    .isIn(EXPENSE_CLASSES)
+    .withMessage(
+      `class must be one of: ${EXPENSE_CLASSES.join(", ")} when provided`,
+    ),
+  check("isDeductible").optional().isBoolean(),
   handleValidation,
 ];

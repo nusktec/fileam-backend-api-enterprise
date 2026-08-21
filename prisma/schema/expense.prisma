@@ -29,6 +29,10 @@ model Expense {
    * invoiceAmountPaid.total, totalAmount and invoiceDueDate.
    */
   status        String   @default("IN_PROGRESS")
+  /** Spend classification: business | personal | uncategorized (default) */
+  expenseClass  String   @default("uncategorized") @map("expense_class")
+  /** AI-populated: whether the expense is tax-deductible */
+  isDeductible  Boolean  @default(false) @map("is_deductible")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
