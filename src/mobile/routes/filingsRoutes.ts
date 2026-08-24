@@ -15,6 +15,14 @@ import {
   createOrUpdateWhtDraft,
   submitWhtFiling,
 } from "../controllers/whtFilingController";
+import {
+  getPitCalculation,
+  submitPitFiling,
+} from "../controllers/pitFilingController";
+import {
+  getCitCalculation,
+  submitCitFiling,
+} from "../controllers/citFilingController";
 import { getMobileTaxFilingConstants } from "../controllers/taxFilingConstantsController";
 import {
   getUnifiedTaxFilingPreview,
@@ -29,6 +37,14 @@ import {
 } from "../../middlewares/validations/mobileValidation";
 import { submitConsultantTaxFilingForClient } from "../controllers/consultantTaxFilingController";
 import { withPagination } from "../../middlewares/paginationMiddleware";
+import {
+  validatePitCalculationQuery,
+  validatePitSubmitBody,
+} from "../../middlewares/validations/pitFilingValidation";
+import {
+  validateCitCalculationQuery,
+  validateCitSubmitBody,
+} from "../../middlewares/validations/citFilingValidation";
 
 const router = express.Router();
 
@@ -58,6 +74,14 @@ router.post("/vat/submit", express.json(), submitVatFiling);
 router.get("/wht/schedule", getWhtSchedule);
 router.post("/wht/draft", express.json(), createOrUpdateWhtDraft);
 router.post("/wht/submit", express.json(), submitWhtFiling);
+
+// PIT (must be before /:id)
+router.get("/pit/calculation", validatePitCalculationQuery, getPitCalculation);
+router.post("/pit/submit", express.json(), validatePitSubmitBody, submitPitFiling);
+
+// CIT (must be before /:id)
+router.get("/cit/calculation", validateCitCalculationQuery, getCitCalculation);
+router.post("/cit/submit", express.json(), validateCitSubmitBody, submitCitFiling);
 
 // Filings list and detail
 router.get("/", withPagination(), listFilings);

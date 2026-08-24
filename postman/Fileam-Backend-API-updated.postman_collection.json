@@ -285,6 +285,21 @@
       "key": "employerIncomeHistoryId",
       "value": "",
       "description": "Employer income history uuid from POST .../employers/{id}/income-history"
+    },
+    {
+      "key": "beneficiaryId",
+      "value": "",
+      "description": "Beneficiary uuid from POST /mobile/beneficiaries"
+    },
+    {
+      "key": "beneficiaryInvoiceId",
+      "value": "",
+      "description": "Beneficiary invoice transaction uuid"
+    },
+    {
+      "key": "beneficiaryTransactionId",
+      "value": "",
+      "description": "Beneficiary payment transaction uuid for WHT remit"
     }
   ],
   "event": [
@@ -2639,11 +2654,97 @@
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/submit"
               }
+            },
+            {
+              "name": "PIT - Get calculation",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/calculation?year=2025"
+              }
+            },
+            {
+              "name": "PIT - Submit (worked example §13)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var j = pm.response.json();",
+                      "if (j.data && j.data.id) { pm.collectionVariables.set('filingId', j.data.id); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 150000,\n  \"dueDate\": \"2026-03-31\",\n  \"paymentStatus\": \"unpaid\",\n  \"receiptUrl\": null,\n  \"documentUrl\": null,\n  \"evidenceVaultId\": null,\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"tradingProfit\": 2400000,\n    \"otherBusinessIncome\": 0,\n    \"otherPersonalIncome\": 3600000,\n    \"payerFees\": 0,\n    \"payerFeesIncludedInSales\": true,\n    \"grossIncome\": 6000000,\n    \"pensionContribution\": 288000,\n    \"nhfContribution\": 0,\n    \"nhisContribution\": 120000,\n    \"annualRent\": 1800000,\n    \"rentRelief\": 360000,\n    \"rentPeriodStart\": \"Jan 2025\",\n    \"rentPeriodEnd\": \"Dec 2025\",\n    \"landlordName\": \"Adewale Johnson\",\n    \"landlordContact\": \"08031234567\",\n    \"propertyAddress\": \"12 Allen Avenue, Ikeja, Lagos\",\n    \"lifeAssurance\": 80000,\n    \"mortgageInterest\": 0,\n    \"totalReliefs\": 848000,\n    \"chargeableIncome\": 5152000,\n    \"pitLiability\": 717360,\n    \"payeCredits\": 420000,\n    \"whtCredits\": 147360,\n    \"remainingPayable\": 150000,\n    \"minimumWageExempt\": false\n  }\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/submit"
+              }
+            },
+            {
+              "name": "PIT - List filings",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?taxType=PIT&status=all&page=1&limit=20"
+              }
+            },
+            {
+              "name": "CIT - Get calculation",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/calculation?year=2025"
+              }
+            },
+            {
+              "name": "CIT - Submit (worked example §13.1)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var j = pm.response.json();",
+                      "if (j.data && j.data.id) { pm.collectionVariables.set('filingId', j.data.id); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 5252000,\n  \"dueDate\": \"2026-06-30\",\n  \"paymentStatus\": \"unpaid\",\n  \"receiptUrl\": null,\n  \"documentUrl\": null,\n  \"evidenceVaultId\": null,\n  \"rcNumber\": \"RC123456\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"year\": 2025,\n    \"turnover\": 150000000,\n    \"fixedAssets\": 80000000,\n    \"taxClassCode\": \"C08A\",\n    \"taxClassLabel\": \"Large Company\",\n    \"isSmallCompany\": false,\n    \"accountingProfit\": 20000000,\n    \"depreciation\": 2000000,\n    \"fines\": 100000,\n    \"directorsPersonal\": 500000,\n    \"otherNonAllowable\": 200000,\n    \"totalAddBacks\": 2800000,\n    \"frankedDividends\": 1000000,\n    \"assessableProfit\": 21800000,\n    \"chargeableGains\": 300000,\n    \"capitalAllowancesAvailable\": 3000000,\n    \"capitalAllowancesClaimed\": 3000000,\n    \"unutilizedCapitalAllowances\": 0,\n    \"lossCarryForward\": 500000,\n    \"chargeableProfit\": 18600000,\n    \"citRate\": 30,\n    \"levyRate\": 4,\n    \"citAmount\": 5580000,\n    \"developmentLevy\": 872000,\n    \"grossCit\": 6452000,\n    \"whtCredits\": 1200000,\n    \"whtApplied\": 1200000,\n    \"unutilizedWhtCredits\": 0,\n    \"citPayable\": 5252000,\n    \"rcNumber\": \"RC123456\",\n    \"tin\": \"12345678-0001\",\n    \"companyName\": \"FileAm Limited\",\n    \"allowances\": [\n      {\n        \"id\": \"asset-uuid-1\",\n        \"name\": \"Toyota Hilux\",\n        \"category\": \"Motor Vehicles\",\n        \"cost\": 12000000,\n        \"annualRate\": 0.25,\n        \"claimedThisYear\": 3000000\n      }\n    ]\n  }\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/submit"
+              }
+            },
+            {
+              "name": "CIT - List filings",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?taxType=CIT&status=all&page=1&limit=20"
+              }
             }
           ]
         },
         {
-          "name": "Reports",
+          "name": "Reports *",
           "item": [
             {
               "name": "Get types",
@@ -3616,6 +3717,110 @@
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}",
                 "description": "Hard-deletes employer, documents, and income history."
+              }
+            }
+          ]
+        },
+        {
+          "name": "Beneficiaries **",
+          "description": "Outbound payees (vendors / receiving parties) with WHT ledger. Envelope { data }. PDF spec: statutory WHT on payment only, remit to FIRS via POST .../remit.",
+          "item": [
+            {
+              "name": "List beneficiaries **",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries?type=ALL&page=1&limit=50"
+              }
+            },
+            {
+              "name": "Create vendor beneficiary **",
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); if(j.data&&j.data.id){pm.collectionVariables.set('beneficiaryId', j.data.id);}"
+                  ]
+                }
+              }],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Kano Steel Supplies Ltd\",\n  \"beneficiaryType\": \"VENDOR\",\n  \"vendorCategory\": \"PURCHASES\",\n  \"entityType\": \"CORPORATE\",\n  \"residency\": \"RESIDENT\",\n  \"whtApplicable\": true,\n  \"tin\": \"12345678-0001\",\n  \"phone\": \"+2348034567890\",\n  \"email\": \"accounts@kanosteel.ng\",\n  \"address\": \"12 Challawa Rd, Kano\",\n  \"bankName\": \"Access Bank\",\n  \"accountNumber\": \"0123456789\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries"
+              }
+            },
+            {
+              "name": "Get beneficiary detail **",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries/{{beneficiaryId}}"
+              }
+            },
+            {
+              "name": "Record invoice **",
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); if(j.data&&j.data.transaction&&j.data.transaction.id){pm.collectionVariables.set('beneficiaryInvoiceId', j.data.transaction.id);}"
+                  ]
+                }
+              }],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"entryType\": \"INVOICE\",\n  \"description\": \"Q3 steel delivery\",\n  \"date\": \"2026-08-01\",\n  \"grossAmount\": 600000,\n  \"whtClass\": \"GOODS_SUPPLY\",\n  \"invoiceNumber\": \"INV-1042\",\n  \"reference\": \"EXP-002\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries/{{beneficiaryId}}/transactions"
+              }
+            },
+            {
+              "name": "Pay invoice **",
+              "event": [{
+                "listen": "test",
+                "script": {
+                  "type": "text/javascript",
+                  "exec": [
+                    "var j=pm.response.json(); if(j.data&&j.data.transaction&&j.data.transaction.id){pm.collectionVariables.set('beneficiaryTransactionId', j.data.transaction.id);}"
+                  ]
+                }
+              }],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"entryType\": \"PAYMENT\",\n  \"description\": \"Q3 steel delivery\",\n  \"date\": \"2026-08-12\",\n  \"grossAmount\": 600000,\n  \"whtClass\": \"GOODS_SUPPLY\",\n  \"invoiceId\": \"{{beneficiaryInvoiceId}}\",\n  \"invoiceNumber\": \"INV-1042\",\n  \"reference\": \"EXP-003\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries/{{beneficiaryId}}/transactions"
+              }
+            },
+            {
+              "name": "Remit WHT **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": { "mode": "raw", "raw": "{}" },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries/{{beneficiaryId}}/transactions/{{beneficiaryTransactionId}}/remit"
+              }
+            },
+            {
+              "name": "Attach document **",
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Supply contract 2026.pdf\",\n  \"kind\": \"CONTRACT\",\n  \"url\": \"https://cdn.fileam.app/media/example.pdf\",\n  \"date\": \"2026-08-24\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries/{{beneficiaryId}}/documents"
               }
             }
           ]

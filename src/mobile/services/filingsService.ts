@@ -7,7 +7,9 @@ function decimalToNumber(d: Decimal | null | undefined): number {
   return Number(d);
 }
 
-function periodLabel(year: number, month: number): string {
+function periodLabel(taxType: string, year: number, month: number): string {
+  const tt = taxType.trim().toUpperCase();
+  if (tt === "PIT" || tt === "CIT") return String(year);
   return `${new Date(year, month - 1).toLocaleString("default", { month: "long" })} ${year}`;
 }
 
@@ -508,7 +510,7 @@ export const filingsService = {
         taxType: p.taxType,
         periodYear: p.periodYear,
         periodMonth: p.periodMonth,
-        periodLabel: periodLabel(p.periodYear, p.periodMonth),
+        periodLabel: periodLabel(p.taxType, p.periodYear, p.periodMonth),
         amount: totalPayable,
         status: displayStatus,
         dueDate: p.filingDueDate,
@@ -517,15 +519,24 @@ export const filingsService = {
         completionPercent,
         completion,
         periodRecordCompliance,
-        periodAttachmentGaps: {
-          salesMissingEvidence: periodRecordCompliance.salesMissingEvidence,
-          expensesMissingReceipt: periodRecordCompliance.expensesMissingReceipt,
-        },
-        missingEvidenceBreakdown: buildMissingEvidenceBreakdown(
-          periodRecordCompliance,
-          missingSalesByPeriodKey.get(pk) ?? [],
-          missingExpensesByPeriodKey.get(pk) ?? [],
-        ),
+        periodAttachmentGaps:
+          p.taxType.trim().toUpperCase() === "PIT" ||
+          p.taxType.trim().toUpperCase() === "CIT"
+            ? null
+            : {
+                salesMissingEvidence: periodRecordCompliance.salesMissingEvidence,
+                expensesMissingReceipt:
+                  periodRecordCompliance.expensesMissingReceipt,
+              },
+        missingEvidenceBreakdown:
+          p.taxType.trim().toUpperCase() === "PIT" ||
+          p.taxType.trim().toUpperCase() === "CIT"
+            ? null
+            : buildMissingEvidenceBreakdown(
+                periodRecordCompliance,
+                missingSalesByPeriodKey.get(pk) ?? [],
+                missingExpensesByPeriodKey.get(pk) ?? [],
+              ),
       };
     });
 
@@ -615,33 +626,52 @@ export const filingsService = {
       whtLineCount,
     );
 
+    const isPit = p.taxType.trim().toUpperCase() === "PIT";
+    const isCit = p.taxType.trim().toUpperCase() === "CIT";
+    const isAnnualFiling = isPit || isCit;
+    const computation =
+      isAnnualFiling && p.computation != null
+        ? (p.computation as Record<string, unknown>)
+        : undefined;
+
     return {
       id: p.id,
       taxType: p.taxType,
       periodYear: p.periodYear,
       periodMonth: p.periodMonth,
-      periodLabel: periodLabel(p.periodYear, p.periodMonth),
+      periodLabel: periodLabel(p.taxType, p.periodYear, p.periodMonth),
       amount: totalPayable,
       status: displayStatus,
       dueDate: p.filingDueDate,
       submittedAt: p.submittedAt ?? undefined,
+      submittedDate: p.submittedAt ?? undefined,
       documentUrl: p.documentUrl ?? undefined,
       evidenceVaultId: p.evidenceVaultId ?? undefined,
       stateOfOperation: p.stateOfOperation ?? undefined,
       vatRegistrationNumber: p.vatRegistrationNumber ?? undefined,
+      stateOfResidence: isPit ? (p.stateOfResidence ?? undefined) : undefined,
+      tin: isAnnualFiling ? (p.tin ?? undefined) : undefined,
+      rcNumber: isCit ? (p.rcNumber ?? undefined) : undefined,
+      companyName: isCit ? (p.companyName ?? undefined) : undefined,
+      computation,
       receiptUrl: p.receiptUrl ?? undefined,
       completionPercent,
       completion,
       periodRecordCompliance,
-      periodAttachmentGaps: {
-        salesMissingEvidence: periodRecordCompliance.salesMissingEvidence,
-        expensesMissingReceipt: periodRecordCompliance.expensesMissingReceipt,
-      },
-      missingEvidenceBreakdown: buildMissingEvidenceBreakdown(
-        periodRecordCompliance,
-        evidenceState.missingSalesWithoutInvoiceOrVault,
-        evidenceState.missingExpensesWithoutReceipt,
-      ),
+      periodAttachmentGaps: isAnnualFiling
+        ? null
+        : {
+            salesMissingEvidence: periodRecordCompliance.salesMissingEvidence,
+            expensesMissingReceipt:
+              periodRecordCompliance.expensesMissingReceipt,
+          },
+      missingEvidenceBreakdown: isAnnualFiling
+        ? null
+        : buildMissingEvidenceBreakdown(
+            periodRecordCompliance,
+            evidenceState.missingSalesWithoutInvoiceOrVault,
+            evidenceState.missingExpensesWithoutReceipt,
+          ),
       totalPaid,
       currency: p.currency,
       timeline: p.timeline.map((e) => ({

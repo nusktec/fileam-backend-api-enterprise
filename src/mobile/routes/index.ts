@@ -33,6 +33,7 @@ import unitAttributionsRoutes from "./unitAttributionsRoutes";
 import receivablesRoutes from "./receivablesRoutes";
 import payersRoutes from "./payersRoutes";
 import employersRoutes from "./employersRoutes";
+import beneficiariesRoutes from "./beneficiariesRoutes";
 import whtRoutes from "./whtRoutes";
 
 const router = express.Router();
@@ -71,6 +72,7 @@ router.use("/unit-attributions", unitAttributionsRoutes);
 router.use("/receivables", receivablesRoutes);
 router.use("/payers", payersRoutes);
 router.use("/employers", employersRoutes);
+router.use("/beneficiaries", beneficiariesRoutes);
 router.use("/wht", whtRoutes);
 
 export default router;

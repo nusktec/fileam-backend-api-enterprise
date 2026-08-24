@@ -14,17 +14,23 @@ export const VAT_RATE_PERCENT = 7.5;
 /** WHT on services — mobile tax preview and enterprise fallbacks. */
 export const WHT_RATE_SERVICES_PERCENT = 5;
 
-/** Small company CIT — mobile tax computation preview. */
-export const CIT_RATE_SMALL_COMPANY_PERCENT = 20;
+/** NTA 2025 s.56 — small company CIT rate (percent). */
+export const CIT_RATE_SMALL_COMPANY_PERCENT = 0;
 
-/** Standard / large company CIT (percentage points) — enterprise fallbacks when no linked client. */
+/** NTA 2025 s.56 — standard company CIT rate (percent). */
 export const CIT_RATE_STANDARD_PERCENT = 30;
 
 /** VAT registration turnover threshold (NGN) — mobile tax preview “% of threshold”. */
 export const VAT_TURNOVER_THRESHOLD_NGN = 100_000_000;
 
-/** CIT threshold (NGN) — mobile tax preview “% of threshold”. */
-export const CIT_PROFIT_THRESHOLD_NGN = 50_000_000;
+/** NTA 2025 s.201 — small-company turnover cap (NGN). */
+export const CIT_TURNOVER_THRESHOLD_NGN = 100_000_000;
+
+/** NTA 2025 s.201 — small-company fixed-assets cap (NGN). */
+export const CIT_FIXED_ASSETS_THRESHOLD_NGN = 250_000_000;
+
+/** @deprecated Use CIT_TURNOVER_THRESHOLD_NGN — kept for legacy imports. */
+export const CIT_PROFIT_THRESHOLD_NGN = CIT_TURNOVER_THRESHOLD_NGN;
 
 /** Inventory: flag “moving low” when 60d sales are below this share of on-hand quantity (percentage points). */
 export const INVENTORY_MOVING_LOW_STOCK_SHARE_PERCENT = 5;

@@ -37,6 +37,26 @@ function derivePayableStatus(
   return "partially_paid";
 }
 
+function payablePeriodLabel(taxType: string, year: number, month: number): string {
+  const tt = taxType.trim().toUpperCase();
+  if (tt === "PIT" || tt === "CIT") return String(year);
+  return `${new Date(year, month - 1).toLocaleString("default", { month: "long" })} ${year}`;
+}
+
+function payableDisplayStatus(
+  taxType: string,
+  status: string,
+  paymentStatus: string | null,
+): string {
+  if (taxType.trim().toUpperCase() === "PIT" && paymentStatus) {
+    return paymentStatus;
+  }
+  if (taxType.trim().toUpperCase() === "PIT" && status === "pending") {
+    return "unpaid";
+  }
+  return status;
+}
+
 function periodKey(year: number, month: number): string {
   return `${year}-${month}`;
 }
@@ -112,6 +132,9 @@ export const taxPayablesService = {
           )
         : 0;
       const hasSubmission = existing?.submittedAt != null;
+      if (hasSubmission && (taxType === "PIT" || taxType === "CIT")) {
+        continue;
+      }
 
       if (amountDue <= 0) {
         if (
@@ -244,12 +267,12 @@ export const taxPayablesService = {
       taxType: p.taxType,
       periodYear: p.periodYear,
       periodMonth: p.periodMonth,
-      periodLabel: `${new Date(p.periodYear, p.periodMonth - 1).toLocaleString("default", { month: "long" })} ${p.periodYear}`,
+      periodLabel: payablePeriodLabel(p.taxType, p.periodYear, p.periodMonth),
       amountDue: decimalToNumber(p.amountDue),
       penalties: decimalToNumber(p.penalties),
       totalPayable: decimalToNumber(p.totalPayable),
       filingDueDate: p.filingDueDate,
-      status: p.status,
+      status: payableDisplayStatus(p.taxType, p.status, p.paymentStatus),
       currency: p.currency,
       totalPaid: p.payments.reduce(
         (s, r) => s + decimalToNumber(r.amountPaid),
@@ -288,12 +311,12 @@ export const taxPayablesService = {
       taxType: p.taxType,
       periodYear: p.periodYear,
       periodMonth: p.periodMonth,
-      periodLabel: `${new Date(p.periodYear, p.periodMonth - 1).toLocaleString("default", { month: "long" })} ${p.periodYear}`,
+      periodLabel: payablePeriodLabel(p.taxType, p.periodYear, p.periodMonth),
       amountDue: decimalToNumber(p.amountDue),
       penalties: decimalToNumber(p.penalties),
       totalPayable: decimalToNumber(p.totalPayable),
       filingDueDate: p.filingDueDate,
-      status: p.status,
+      status: payableDisplayStatus(p.taxType, p.status, p.paymentStatus),
       currency: p.currency,
       totalPaid,
       paymentLink: getPaymentLink(p.id, p.paymentLink),

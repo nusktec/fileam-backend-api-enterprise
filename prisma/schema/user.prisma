@@ -89,4 +89,5 @@ model User {
   receivables            Receivable[]
   payers                 Payer[]
   employers              Employer[]
+  beneficiaries          Beneficiary[]
 }

@@ -212,7 +212,7 @@ function mapPayerBase(
     id: payer.id,
     name: payer.name,
     entityType: payer.entityType,
-    category: payer.category,
+    category: payer.category.trim().toLowerCase(),
     beneficiary: payer.beneficiary,
     contactPerson: payer.contactPerson,
     tin: payer.tin,

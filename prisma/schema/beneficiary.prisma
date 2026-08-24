@@ -1,0 +1,81 @@
+model Beneficiary {
+  id                  String   @id @default(uuid())
+  userId              String   @map("user_id")
+  name                String
+  beneficiaryType     String   @map("beneficiary_type")
+  vendorCategory      String?  @map("vendor_category")
+  partyType           String?  @map("party_type")
+  entityType          String   @map("entity_type")
+  residency           String
+  tin                 String?
+  phone               String?
+  email               String?
+  address             String?
+  bankName            String?  @map("bank_name")
+  accountName         String?  @map("account_name")
+  accountNumber       String?  @map("account_number")
+  vatApplicable       Boolean  @default(false) @map("vat_applicable")
+  whtApplicable       Boolean  @default(false) @map("wht_applicable")
+  totalWht            Decimal  @default(0) @map("total_wht") @db.Decimal(14, 2)
+  outstanding         Decimal  @default(0) @db.Decimal(14, 2)
+  remitted            Decimal  @default(0) @map("remitted") @db.Decimal(14, 2)
+  lastTransactionDate String?  @map("last_transaction_date")
+  whtDueDate          String?  @map("wht_due_date")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user         User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions BeneficiaryTransaction[]
+  documents    BeneficiaryDocument[]
+
+  @@index([userId])
+  @@map("beneficiaries")
+}
+
+model BeneficiaryTransaction {
+  id                String   @id @default(uuid())
+  beneficiaryId     String   @map("beneficiary_id")
+  description       String
+  date              String
+  reference         String
+  entryType         String   @map("entry_type")
+  invoiceNumber     String?  @map("invoice_number")
+  invoiceId         String?  @map("invoice_id")
+  invoiceStatus     String?  @map("invoice_status")
+  whtClass          String   @map("wht_class")
+  statutoryWhtRate  Decimal  @map("statutory_wht_rate") @db.Decimal(5, 2)
+  whtRateOverride   Boolean  @default(false) @map("wht_rate_override")
+  whtOverrideReason String?  @map("wht_override_reason")
+  grossAmount       Decimal  @map("gross_amount") @db.Decimal(14, 2)
+  whtRate           Decimal  @map("wht_rate") @db.Decimal(5, 2)
+  whtAmount         Decimal  @map("wht_amount") @db.Decimal(14, 2)
+  netPayable        Decimal  @map("net_payable") @db.Decimal(14, 2)
+  status            String
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  beneficiary Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+
+  @@unique([beneficiaryId, reference])
+  @@index([beneficiaryId, date])
+  @@index([beneficiaryId, entryType])
+  @@map("beneficiary_transactions")
+}
+
+model BeneficiaryDocument {
+  id            String   @id @default(uuid())
+  beneficiaryId String   @map("beneficiary_id")
+  title         String
+  kind          String
+  categoryLabel String   @map("category_label")
+  date          String
+  url           String
+  linked        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  beneficiary Beneficiary @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+
+  @@index([beneficiaryId])
+  @@map("beneficiary_documents")
+}

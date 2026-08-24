@@ -4,8 +4,9 @@ import {
   PERCENT,
   WHT_RATE_SERVICES_PERCENT,
   CIT_RATE_SMALL_COMPANY_PERCENT,
+  CIT_RATE_STANDARD_PERCENT,
   VAT_TURNOVER_THRESHOLD_NGN,
-  CIT_PROFIT_THRESHOLD_NGN,
+  CIT_TURNOVER_THRESHOLD_NGN,
 } from "../../constants/percentages";
 import { resolveTaxpayerComputationContext } from "../../constants/taxpayerComputationProfile";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
@@ -112,8 +113,17 @@ export const taxComputationService = {
       (serviceIncome * WHT_RATE_SERVICES_PERCENT) / PERCENT;
     const monthlyProfit = netProfit;
     const annualizedProfit = monthlyProfit * 12;
-    const estimatedAnnualCit =
-      (annualizedProfit * CIT_RATE_SMALL_COMPANY_PERCENT) / PERCENT;
+    const annualizedTurnover = totalIncome * 12;
+    const citSmallCompanyProxy =
+      annualizedTurnover <= CIT_TURNOVER_THRESHOLD_NGN;
+    const citRateDisplay = citSmallCompanyProxy
+      ? CIT_RATE_SMALL_COMPANY_PERCENT
+      : CIT_RATE_STANDARD_PERCENT;
+    const estimatedAnnualCit = citSmallCompanyProxy
+      ? 0
+      : Math.round(
+          (Math.max(0, annualizedProfit) * CIT_RATE_STANDARD_PERCENT) / PERCENT,
+        );
 
     const pitFromBooks = estimateAnnualPersonalIncomeTaxNg(
       Math.max(0, annualizedProfit),
@@ -135,7 +145,7 @@ export const taxComputationService = {
       VAT_TURNOVER_THRESHOLD_NGN - totalIncome,
     );
     const percentOfCitThreshold =
-      (annualizedProfit / CIT_PROFIT_THRESHOLD_NGN) * PERCENT;
+      (annualizedTurnover / CIT_TURNOVER_THRESHOLD_NGN) * PERCENT;
 
     return {
       taxpayerContext,
@@ -168,13 +178,13 @@ export const taxComputationService = {
         estimatedWhtDeducted,
       },
       cit: {
-        summary: estimatedAnnualCit,
+        summary: normalizeMoneyAmount(estimatedAnnualCit),
         smallCompanyRate: CIT_RATE_SMALL_COMPANY_PERCENT,
-        citThreshold: CIT_PROFIT_THRESHOLD_NGN,
+        citThreshold: CIT_TURNOVER_THRESHOLD_NGN,
         percentOfThreshold: percentOfCitThreshold,
         monthlyProfit,
         annualizedProfit,
-        citRate: CIT_RATE_SMALL_COMPANY_PERCENT,
+        citRate: citRateDisplay,
         estimatedAnnualCit,
         /** Placeholder until book records track allowances; 0 means not supplied in-app. */
         capitalAllowances: 0,

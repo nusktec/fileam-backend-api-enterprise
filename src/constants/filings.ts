@@ -15,9 +15,9 @@ export type FilingPaymentStatus = (typeof FILING_PAYMENT_STATUSES)[number];
 export const TAX_FILING_PREVIEW_KIND = {
   VAT: "calculation",
   WHT: "schedule",
-  CIT: "manual",
+  CIT: "calculation",
   PAYE: "manual",
-  PIT: "manual",
+  PIT: "calculation",
 } as const;
 
 export type TaxFilingPreviewKind =

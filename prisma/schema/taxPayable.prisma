@@ -15,6 +15,12 @@ model TaxPayable {
   evidenceVaultId  String?   @map("evidence_vault_id")
   stateOfOperation String?  @map("state_of_operation")
   vatRegistrationNumber String? @map("vat_registration_number")
+  tin              String?
+  rcNumber         String?   @map("rc_number")
+  companyName      String?   @map("company_name")
+  stateOfResidence String?   @map("state_of_residence")
+  paymentStatus    String?   @map("payment_status")
+  computation      Json?     @db.JsonB
   receiptUrl       String?   @map("receipt_url")
   paymentLink      String?   @map("payment_link")
   createdAt        DateTime  @default(now()) @map("created_at")
