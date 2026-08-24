@@ -75,6 +75,6 @@ CREATE INDEX "beneficiary_transactions_beneficiary_id_entry_type_idx" ON "benefi
 CREATE UNIQUE INDEX "beneficiary_transactions_beneficiary_id_reference_key" ON "beneficiary_transactions"("beneficiary_id", "reference");
 CREATE INDEX "beneficiary_documents_beneficiary_id_idx" ON "beneficiary_documents"("beneficiary_id");
 
-ALTER TABLE "beneficiaries" ADD CONSTRAINT "beneficiaries_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "beneficiaries" ADD CONSTRAINT "beneficiaries_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "beneficiary_transactions" ADD CONSTRAINT "beneficiary_transactions_beneficiary_id_fkey" FOREIGN KEY ("beneficiary_id") REFERENCES "beneficiaries"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "beneficiary_documents" ADD CONSTRAINT "beneficiary_documents_beneficiary_id_fkey" FOREIGN KEY ("beneficiary_id") REFERENCES "beneficiaries"("id") ON DELETE CASCADE ON UPDATE CASCADE;
