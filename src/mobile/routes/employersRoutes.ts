@@ -3,7 +3,6 @@ import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
 import {
   createEmployer,
-  createEmployerIncomeHistory,
   deleteEmployer,
   deleteEmployerDocument,
   getEmployer,
@@ -16,7 +15,6 @@ import {
 } from "../controllers/employersController";
 import {
   createEmployerValidation,
-  createIncomeHistoryValidation,
   deleteEmployerDocumentValidation,
   employerIdParamValidation,
   linkEmployerDocumentValidation,
@@ -40,12 +38,6 @@ router.get(
   "/:id/income-history",
   listIncomeHistoryValidation,
   getEmployerIncomeHistory,
-);
-router.post(
-  "/:id/income-history",
-  express.json(),
-  createIncomeHistoryValidation,
-  createEmployerIncomeHistory,
 );
 router.get(
   "/:id/documents",

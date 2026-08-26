@@ -24,6 +24,7 @@ import {
 } from "../../constants/payrollObligations";
 import { isContractorEmployment } from "../../constants/employmentTypes";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
 import { computeEmployeeMonthlyNetPay } from "./employeesService";
 
 const PAYMENT_BASE_URL =
@@ -623,6 +624,13 @@ export const payrollService = {
         amount: new Decimal(amount),
       },
     });
+    await ledgerPostingService.postPayrollRemittance(
+      userId,
+      updated.id,
+      type,
+      amount,
+      updated.paidAt ?? new Date(),
+    );
     return {
       type,
       period: key,

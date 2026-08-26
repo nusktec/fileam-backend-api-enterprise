@@ -76,15 +76,6 @@ export const listEmployersValidation = [
 
 export const employerIdParamValidation = [param("id").notEmpty()];
 
-export const createIncomeHistoryValidation = [
-  param("id").notEmpty(),
-  check("period").matches(/^\d{4}-\d{2}$/),
-  check("gross").isFloat({ gt: 0 }),
-  check("taxDeducted").optional().isFloat({ min: 0 }),
-  check("pension").optional().isFloat({ min: 0 }),
-  check("includesBonus").optional().isBoolean(),
-];
-
 export const listIncomeHistoryValidation = [
   param("id").notEmpty(),
   query("year").optional().isInt({ min: 2000, max: 2100 }),

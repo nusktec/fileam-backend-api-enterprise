@@ -17,6 +17,7 @@ import {
 } from "../../constants/beneficiary";
 import { formatTodayYmd } from "../../constants/employer";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -474,6 +475,12 @@ export const beneficiariesService = {
             status: "PENDING",
           },
         });
+        await ledgerPostingService.postBeneficiaryInvoice(
+          userId,
+          txn.id,
+          grossAmount,
+          date,
+        );
         await recomputeAndPersistBalances(beneficiaryId);
         const updated = await prisma.beneficiary.findUniqueOrThrow({
           where: { id: beneficiaryId },
@@ -601,6 +608,15 @@ export const beneficiariesService = {
         return txn;
       });
 
+      await ledgerPostingService.postBeneficiaryPayment(userId, {
+        id: result.id,
+        grossAmount,
+        netPayable: amounts.netPayable,
+        whtAmount: amounts.whtAmount,
+        date,
+        invoiceId,
+      });
+
       await recomputeAndPersistBalances(beneficiaryId);
       const updated = await prisma.beneficiary.findUniqueOrThrow({
         where: { id: beneficiaryId },
@@ -666,6 +682,16 @@ export const beneficiariesService = {
       where: { id: transactionId },
       data: { status: "REMITTED" },
     });
+
+    const remittedAt = body?.remittedAt
+      ? new Date(`${body.remittedAt}T12:00:00.000Z`)
+      : new Date();
+    await ledgerPostingService.postWhtRemitted(
+      userId,
+      transactionId,
+      moved,
+      remittedAt,
+    );
 
     if (body?.receiptUrl?.trim()) {
       const docDate = body.remittedAt ?? todayYmd();

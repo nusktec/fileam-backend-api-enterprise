@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, income-history, documents — taxComputation with NRS bands (no CRA). Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): VAT/WHT monthly; PIT annual (GET/POST /mobile/filings/pit/calculation|submit, NRS Fourth Schedule, due 31 Mar); CIT annual NTA 2025 (GET/POST /mobile/filings/cit/calculation|submit, 0%/30% + 4% development levy on assessable profit, due 30 Jun, periodMonth=12); Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, income-history, documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -282,11 +282,6 @@
       "description": "Employer document uuid from GET/POST .../employers/{id}/documents"
     },
     {
-      "key": "employerIncomeHistoryId",
-      "value": "",
-      "description": "Employer income history uuid from POST .../employers/{id}/income-history"
-    },
-    {
       "key": "beneficiaryId",
       "value": "",
       "description": "Beneficiary uuid from POST /mobile/beneficiaries"
@@ -300,6 +295,11 @@
       "key": "beneficiaryTransactionId",
       "value": "",
       "description": "Beneficiary payment transaction uuid for WHT remit"
+    },
+    {
+      "key": "filingYear",
+      "value": "2025",
+      "description": "Calendar tax year for PIT/CIT annual filings (must be < current year to submit)"
     }
   ],
   "event": [
@@ -2342,7 +2342,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation?period=2026-02",
-                "description": "taxpayerContext respects saved taxPersona (when set). taxPersonaGuidance: taxes[] flip-card lines (label, subtitle, applicable). Blocks: vat, wht, cit, pit, paye (paye uses profile employmentGrossSalaryMonthly annualised when PAYE applicable — summaryMonthlyEstimate, summaryAnnualEstimate, employmentGrossSalaryMonthlyCaptured, methodology)."
+                "description": "taxpayerContext respects saved taxPersona (when set). taxPersonaGuidance: taxes[] flip-card lines (label, subtitle, applicable). Blocks: vat, wht, cit (NTA 2025 proxy: 0% small / 30% standard, threshold ₦100m turnover), pit, paye (paye uses profile employmentGrossSalaryMonthly annualised when PAYE applicable — summaryMonthlyEstimate, summaryAnnualEstimate, employmentGrossSalaryMonthlyCaptured, methodology). Official PIT/CIT numbers: GET /mobile/filings/pit|cit/calculation."
               }
             }
           ]
@@ -2428,6 +2428,7 @@
         },
         {
           "name": "Filings *",
+          "description": "Mobile tax filings. VAT/WHT: monthly. PIT: annual self-assessment (NRS Fourth Schedule, due 31 Mar). CIT: annual LTD return (NTA 2025 — 0% small company C08C / 30% + 4% levy C08A, due 30 Jun, periodMonth=12). Use dedicated PIT/CIT calculation routes for server-owned math; submit persists full computation snapshot. Envelope { data } on success; errors { message, error }.",
           "item": [
             {
               "name": "Tax filing constants *",
@@ -2453,7 +2454,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/tax/{{unifiedTaxType}}/preview?periodYear=2026&periodMonth=1",
-                "description": "VAT: calculation. WHT: schedule (optional &whtType=). CIT/PAYE/PIT/other: manual preview. Query period=YYYY-M also works."
+                "description": "VAT: calculation. WHT: schedule (optional &whtType=). CIT/PIT: calculation (annual). PAYE/other: manual preview. Query period=YYYY-M also works."
               }
             },
             {
@@ -2659,7 +2660,8 @@
               "name": "PIT - Get calculation",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/calculation?year=2025"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/calculation?year={{filingYear}}",
+                "description": "Server-owned PIT snapshot for the tax year. Returns computation, tin, stateOfResidence, yearOpenForFiling, alreadyFiled. Year must be a closed calendar year to submit."
               }
             },
             {
@@ -2688,21 +2690,24 @@
                   "mode": "raw",
                   "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 150000,\n  \"dueDate\": \"2026-03-31\",\n  \"paymentStatus\": \"unpaid\",\n  \"receiptUrl\": null,\n  \"documentUrl\": null,\n  \"evidenceVaultId\": null,\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"tradingProfit\": 2400000,\n    \"otherBusinessIncome\": 0,\n    \"otherPersonalIncome\": 3600000,\n    \"payerFees\": 0,\n    \"payerFeesIncludedInSales\": true,\n    \"grossIncome\": 6000000,\n    \"pensionContribution\": 288000,\n    \"nhfContribution\": 0,\n    \"nhisContribution\": 120000,\n    \"annualRent\": 1800000,\n    \"rentRelief\": 360000,\n    \"rentPeriodStart\": \"Jan 2025\",\n    \"rentPeriodEnd\": \"Dec 2025\",\n    \"landlordName\": \"Adewale Johnson\",\n    \"landlordContact\": \"08031234567\",\n    \"propertyAddress\": \"12 Allen Avenue, Ikeja, Lagos\",\n    \"lifeAssurance\": 80000,\n    \"mortgageInterest\": 0,\n    \"totalReliefs\": 848000,\n    \"chargeableIncome\": 5152000,\n    \"pitLiability\": 717360,\n    \"payeCredits\": 420000,\n    \"whtCredits\": 147360,\n    \"remainingPayable\": 150000,\n    \"minimumWageExempt\": false\n  }\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/submit"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/submit",
+                "description": "Record PIT annual return. periodMonth=12. amount must match computation.remainingPayable (±₦1). Returns { id, status: submitted, submissionDate }."
               }
             },
             {
               "name": "PIT - List filings",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?taxType=PIT&status=all&page=1&limit=20"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?taxType=PIT&status=all&page=1&limit=20",
+                "description": "periodLabel is year only (e.g. \"2025\"). periodAttachmentGaps null for PIT."
               }
             },
             {
               "name": "CIT - Get calculation",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/calculation?year=2025"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/calculation?year={{filingYear}}",
+                "description": "NTA 2025 CIT snapshot: turnover/fixed-assets classification (C08A/C08C), capital allowances from asset register, inbound WHT credits from payers. Returns computation, rcNumber, tin, companyName, inputs breakdown."
               }
             },
             {
@@ -2731,14 +2736,46 @@
                   "mode": "raw",
                   "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 5252000,\n  \"dueDate\": \"2026-06-30\",\n  \"paymentStatus\": \"unpaid\",\n  \"receiptUrl\": null,\n  \"documentUrl\": null,\n  \"evidenceVaultId\": null,\n  \"rcNumber\": \"RC123456\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"year\": 2025,\n    \"turnover\": 150000000,\n    \"fixedAssets\": 80000000,\n    \"taxClassCode\": \"C08A\",\n    \"taxClassLabel\": \"Large Company\",\n    \"isSmallCompany\": false,\n    \"accountingProfit\": 20000000,\n    \"depreciation\": 2000000,\n    \"fines\": 100000,\n    \"directorsPersonal\": 500000,\n    \"otherNonAllowable\": 200000,\n    \"totalAddBacks\": 2800000,\n    \"frankedDividends\": 1000000,\n    \"assessableProfit\": 21800000,\n    \"chargeableGains\": 300000,\n    \"capitalAllowancesAvailable\": 3000000,\n    \"capitalAllowancesClaimed\": 3000000,\n    \"unutilizedCapitalAllowances\": 0,\n    \"lossCarryForward\": 500000,\n    \"chargeableProfit\": 18600000,\n    \"citRate\": 30,\n    \"levyRate\": 4,\n    \"citAmount\": 5580000,\n    \"developmentLevy\": 872000,\n    \"grossCit\": 6452000,\n    \"whtCredits\": 1200000,\n    \"whtApplied\": 1200000,\n    \"unutilizedWhtCredits\": 0,\n    \"citPayable\": 5252000,\n    \"rcNumber\": \"RC123456\",\n    \"tin\": \"12345678-0001\",\n    \"companyName\": \"FileAm Limited\",\n    \"allowances\": [\n      {\n        \"id\": \"asset-uuid-1\",\n        \"name\": \"Toyota Hilux\",\n        \"category\": \"Motor Vehicles\",\n        \"cost\": 12000000,\n        \"annualRate\": 0.25,\n        \"claimedThisYear\": 3000000\n      }\n    ]\n  }\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/submit"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/submit",
+                "description": "NTA 2025 large company (C08A) worked example §13.1 — citPayable ₦5,252,000 (30% CIT + 4% levy on assessable profit, WHT credits offset CIT only). Requires rcNumber, tin, periodMonth=12, dueDate={year+1}-06-30."
+              }
+            },
+            {
+              "name": "CIT - Submit small company nil (§13.2)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var j = pm.response.json();",
+                      "if (j.data && j.data.id) { pm.collectionVariables.set('filingId', j.data.id); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 0,\n  \"dueDate\": \"2026-06-30\",\n  \"paymentStatus\": \"unpaid\",\n  \"receiptUrl\": null,\n  \"documentUrl\": null,\n  \"evidenceVaultId\": null,\n  \"rcNumber\": \"RC123456\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"year\": 2025,\n    \"turnover\": 80000000,\n    \"fixedAssets\": 50000000,\n    \"taxClassCode\": \"C08C\",\n    \"taxClassLabel\": \"Small Company\",\n    \"isSmallCompany\": true,\n    \"accountingProfit\": 20000000,\n    \"depreciation\": 2000000,\n    \"fines\": 100000,\n    \"directorsPersonal\": 500000,\n    \"otherNonAllowable\": 200000,\n    \"totalAddBacks\": 2800000,\n    \"frankedDividends\": 1000000,\n    \"assessableProfit\": 21800000,\n    \"chargeableGains\": 300000,\n    \"capitalAllowancesAvailable\": 3000000,\n    \"capitalAllowancesClaimed\": 3000000,\n    \"unutilizedCapitalAllowances\": 0,\n    \"lossCarryForward\": 500000,\n    \"chargeableProfit\": 18600000,\n    \"citRate\": 0,\n    \"levyRate\": 0,\n    \"citAmount\": 0,\n    \"developmentLevy\": 0,\n    \"grossCit\": 0,\n    \"whtCredits\": 1200000,\n    \"whtApplied\": 0,\n    \"unutilizedWhtCredits\": 1200000,\n    \"citPayable\": 0,\n    \"rcNumber\": \"RC123456\",\n    \"tin\": \"12345678-0001\",\n    \"companyName\": \"FileAm Limited\",\n    \"allowances\": []\n  }\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/submit",
+                "description": "Small company C08C — still file at citPayable 0. turnover ≤ ₦100m and fixed assets ≤ ₦250m."
               }
             },
             {
               "name": "CIT - List filings",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?taxType=CIT&status=all&page=1&limit=20"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?taxType=CIT&status=all&page=1&limit=20",
+                "description": "periodLabel is year only. amount = citPayable (CIT after WHT + levy). Detail includes rcNumber, companyName, computation."
               }
             }
           ]
@@ -3544,7 +3581,7 @@
         },
         {
           "name": "Employers **",
-          "description": "Employer module for user PIT profile (PDF spec). Standard envelope { status, message, data }.\n\n• POST/GET/PATCH/DELETE /mobile/employers\n• GET/POST .../income-history\n• GET/POST/PATCH/DELETE .../documents\n\nBackend-computed: taxTreatment, incomeKind, monthlyIncome, annualIncome, payeCredit, whtRate, taxComputation (NRS bands, no CRA). Document slots seeded on create.",
+          "description": "Employer module for user PIT profile (PDF spec). Standard envelope { status, message, data }.\n\n• POST/GET/PATCH/DELETE /mobile/employers\n• GET .../income-history (auto-generated from remuneration + dates)\n• GET/POST/PATCH/DELETE .../documents\n\nBackend-computed: taxTreatment, incomeKind, monthlyIncome, annualIncome, payeCredit, whtRate, taxComputation (NRS bands, no CRA). Document slots seeded on create.",
           "item": [
             {
               "name": "Create employer (PAYE employee) **",
@@ -3629,31 +3666,8 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/income-history?year=2026",
-                "description": "Returns recorded entries or estimated schedule rows when no payslips logged yet."
+                "description": "Auto-generated monthly schedule from employer remuneration, start/end dates, and payment frequency. Optional ?year= defaults to current year."
               }
-            },
-            {
-              "name": "Record income history **",
-              "request": {
-                "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/income-history",
-                "description": "Unique period YYYY-MM per employer. Recalculates payeCredit.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"period\": \"2026-08\",\n  \"gross\": 1500000,\n  \"taxDeducted\": 243980,\n  \"pension\": 112000,\n  \"includesBonus\": false\n}"
-                }
-              },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "if(j.status&&d&&d.id){pm.collectionVariables.set('employerIncomeHistoryId', d.id);}"
-                  ]
-                }
-              }]
             },
             {
               "name": "List employer documents **",
@@ -3758,6 +3772,19 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries/{{beneficiaryId}}"
+              }
+            },
+            {
+              "name": "Update beneficiary **",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Kano Steel Supplies Ltd\",\n  \"beneficiaryType\": \"VENDOR\",\n  \"vendorCategory\": \"PURCHASES\",\n  \"entityType\": \"CORPORATE\",\n  \"residency\": \"RESIDENT\",\n  \"whtApplicable\": true,\n  \"tin\": \"12345678-0001\",\n  \"phone\": \"+2348034567890\",\n  \"email\": \"accounts@kanosteel.ng\",\n  \"address\": \"12 Challawa Rd, Kano\",\n  \"bankName\": \"Access Bank\",\n  \"accountNumber\": \"0123456789\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries/{{beneficiaryId}}",
+                "description": "PATCH profile fields. WHT totals/outstanding are ledger-derived — not editable here."
               }
             },
             {
@@ -4896,6 +4923,37 @@
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/pension/2026-07/pay",
                 "description": "Returns placeholder payment URL for Pension."
+              }
+            }
+          ]
+        },
+        {
+          "name": "App",
+          "description": "Public mobile app config. No auth. Call on launch to enforce minimum version.\n\nGET /mobile/app/version?platform=ios|android&version=x.y.z\n\n• forceUpdate — client below MOBILE_*_MIN_VERSION\n• updateAvailable — client below MOBILE_*_LATEST_VERSION\n\nOmit platform to return both ios and android policies.",
+          "item": [
+            {
+              "name": "Check app version (iOS) **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?platform=ios&version=1.0.0",
+                "description": "Compare client version against env MOBILE_IOS_MIN_VERSION / MOBILE_IOS_LATEST_VERSION. Block app when forceUpdate is true."
+              }
+            },
+            {
+              "name": "Check app version (Android) **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?platform=android&version=1.0.0"
+              }
+            },
+            {
+              "name": "Get all platform version policies **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version"
               }
             }
           ]

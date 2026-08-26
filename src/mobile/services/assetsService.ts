@@ -21,6 +21,7 @@ import {
 } from "../../constants/assetDepreciation";
 import { PERCENT } from "../../constants/percentages";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
 import {
   assertMonetaryAmountInRange,
   normalizeMoneyAmount,
@@ -796,6 +797,12 @@ export const assetsService = {
       });
       return row;
     });
+    await ledgerPostingService.postAssetPurchase(
+      userId,
+      asset.id,
+      data.purchaseCost,
+      purchaseDate,
+    );
     return mapAssetRow(asset);
   },
 

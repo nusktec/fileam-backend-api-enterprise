@@ -211,7 +211,7 @@ async function postReceivableLedger(
         name: "Vendor Refund Receivable",
       };
       creditAccount = {
-        code: LEDGER_ACCOUNTS.OTHER_EQUITY,
+        code: LEDGER_ACCOUNTS.EXPENSE,
         name: "Expense / Inventory Offset",
       };
       break;
@@ -221,7 +221,7 @@ async function postReceivableLedger(
         name: "Employee/Director Advance Receivable",
       };
       creditAccount = {
-        code: LEDGER_ACCOUNTS.CASH_ON_HAND,
+        code: LEDGER_ACCOUNTS.BANK,
         name: "Bank/Cash",
       };
       break;

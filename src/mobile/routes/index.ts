@@ -35,9 +35,11 @@ import payersRoutes from "./payersRoutes";
 import employersRoutes from "./employersRoutes";
 import beneficiariesRoutes from "./beneficiariesRoutes";
 import whtRoutes from "./whtRoutes";
+import appVersionRoutes from "./appVersionRoutes";
 
 const router = express.Router();
 
+router.use("/app", appVersionRoutes);
 router.use("/auth", authRoutes);
 router.use("/user", userRoutes);
 router.use("/onboarding", onboardingRoutes);

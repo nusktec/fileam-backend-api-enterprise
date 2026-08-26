@@ -175,33 +175,6 @@ export const getEmployerIncomeHistory = async (
   }
 };
 
-export const createEmployerIncomeHistory = async (
-  req: IRequest,
-  res: Response,
-) => {
-  try {
-    ensureValid(req);
-    const userId = getAuthUserId(req);
-    const body = matchedData(req, {
-      locations: ["body"],
-      includeOptionals: true,
-    });
-    const data = await employersService.createIncomeHistoryEntry(
-      userId,
-      paramId(req, "id"),
-      body as never,
-    );
-    res
-      .status(HttpStatusCode.CREATED)
-      .json(outJson(true, "Income history recorded", data));
-  } catch (error) {
-    if (replyError(res, error)) return;
-    res
-      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-      .json(outJson(false, "Failed to record income history", null));
-  }
-};
-
 export const listEmployerDocuments = async (req: IRequest, res: Response) => {
   try {
     ensureValid(req);

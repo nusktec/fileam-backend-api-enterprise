@@ -28,6 +28,7 @@ import {
 } from "../../constants/invoiceAmountPaid";
 import { nextDisplayCode } from "../../utils/codeGenerator";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { formatTodayYmd } from "../../constants/employer";
 
@@ -574,6 +575,13 @@ export const payersService = {
       },
     });
 
+    await ledgerPostingService.postPayerRecognition(userId, {
+      id: txn.id,
+      paymentType: txn.paymentType,
+      amount: d(txn.amount),
+      date: txn.date,
+    });
+
     return mapTransactionRow(txn);
   },
 
@@ -687,6 +695,15 @@ export const payersService = {
         status: nextStatus,
       },
     });
+
+    await ledgerPostingService.postPayerCollection(
+      userId,
+      transactionId,
+      amount,
+      body.paymentType,
+      new Date(`${txn.date}T12:00:00.000Z`),
+      `pay:${nextPaid.total}`,
+    );
 
     await refreshOverdueStatuses(payerId);
     const transactions = await prisma.payerTransaction.findMany({

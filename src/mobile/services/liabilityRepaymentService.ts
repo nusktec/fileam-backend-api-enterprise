@@ -31,6 +31,7 @@ import {
 import { SALE_STATUS } from "../../constants/salePaymentRules";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const LIAB_COUNTER = "liability_code";
@@ -1305,6 +1306,23 @@ export const liabilityRepaymentService = {
 
       return repayment;
     });
+
+    if (principalAmount > 0) {
+      await ledgerPostingService.postLoanPrincipalPaid(
+        userId,
+        result.id,
+        principalAmount,
+        paymentDate,
+      );
+    }
+    if (interestAmount > 0) {
+      await ledgerPostingService.postLoanInterestPaid(
+        userId,
+        result.id,
+        interestAmount,
+        paymentDate,
+      );
+    }
 
     const updatedSchedule = liability.schedule.map((s) => {
       const u = scheduleAlloc.updates.find((x) => x.id === s.id);

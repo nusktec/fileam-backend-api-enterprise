@@ -5,6 +5,7 @@ import type {
   PaymentMethod,
   PaymentRecordStatus,
 } from "../../constants/taxPayable";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -73,6 +74,16 @@ export const paymentRecordsService = {
       where: { id: taxPayableId },
       data: { status },
     });
+
+    if (data.status === "completed" || data.status === undefined) {
+      await ledgerPostingService.postTaxPaid(
+        userId,
+        record.id,
+        taxPayable.taxType,
+        data.amountPaid,
+        record.paidAt ?? new Date(),
+      );
+    }
 
     return {
       id: record.id,

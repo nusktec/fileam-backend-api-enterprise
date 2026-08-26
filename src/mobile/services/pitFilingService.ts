@@ -32,6 +32,7 @@ import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { evidenceVaultService } from "./evidenceVaultService";
 import { taxComputationService } from "./taxComputationService";
+import { sumGeneratedPayeCreditForYear } from "./employersService";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -71,21 +72,6 @@ function employerProfileFromRow(row: {
     hasPension: row.hasPension,
     employeeRate: row.employeeRate != null ? d(row.employeeRate) : null,
   };
-}
-
-async function sumPayeCreditForYear(
-  employerId: string,
-  taxTreatment: EmployerTaxTreatment,
-  year: number,
-): Promise<number> {
-  if (taxTreatment !== "PAYE") return 0;
-  const prefix = String(year);
-  const entries = await prisma.employerIncomeHistory.findMany({
-    where: { employerId, period: { startsWith: prefix } },
-  });
-  return normalizeMoneyAmount(
-    entries.reduce((s, e) => s + d(e.taxDeducted), 0),
-  );
 }
 
 async function getTradingProfitForYear(
@@ -174,7 +160,7 @@ async function aggregatePitInputs(
       );
     }
 
-    const payeCredit = await sumPayeCreditForYear(row.id, taxTreatment, year);
+    const payeCredit = sumGeneratedPayeCreditForYear(row, taxTreatment, year);
     if (taxTreatment === "PAYE" && payeCredit > 0) {
       payeCredits = normalizeMoneyAmount(payeCredits + payeCredit);
     }

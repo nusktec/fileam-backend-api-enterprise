@@ -38,6 +38,7 @@ import {
 } from "../../utils/dateRangeQuery";
 import { taxPayablesService } from "./taxPayablesService";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 const BULK_CREATE_MAX = 100;
@@ -395,6 +396,8 @@ export const expensesService = {
       },
     });
 
+    await ledgerPostingService.postExpenseRecognition(userId, expense);
+
     await taxPayablesService.syncPayablesForPeriods(userId, [
       calendarPeriodFromDate(expenseDate),
     ]);
@@ -571,6 +574,10 @@ export const expensesService = {
       }
       return created;
     });
+
+    for (const expense of expenses) {
+      await ledgerPostingService.postExpenseRecognition(userId, expense);
+    }
 
     const periods = [
       ...new Set(
@@ -855,6 +862,15 @@ export const expensesService = {
         status: SALE_STATUS.PAID,
       },
     });
+
+    await ledgerPostingService.postExpensePayment(
+      userId,
+      expenseId,
+      decimalToNumber(updated.totalAmount),
+      updated.paymentType,
+      updated.expenseDate,
+      "confirm",
+    );
 
     return mapExpenseListItem(updated);
   },

@@ -29,6 +29,7 @@ import {
   toCalendarDate,
 } from "../../utils/dateRangeQuery";
 import { taxPayablesService } from "./taxPayablesService";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
 
 const BULK_CREATE_MAX = 100;
 
@@ -452,6 +453,8 @@ export const salesService = {
 
     if (!sale) return null;
 
+    await ledgerPostingService.postSaleRecognition(userId, sale);
+
     await taxPayablesService.syncPayablesForPeriods(userId, [
       calendarPeriodFromDate(saleDate),
     ]);
@@ -602,6 +605,10 @@ export const salesService = {
     });
 
     if (!sales) return null;
+
+    for (const sale of sales) {
+      await ledgerPostingService.postSaleRecognition(userId, sale);
+    }
 
     const periods = [
       ...new Set(
@@ -835,6 +842,15 @@ export const salesService = {
       },
     });
 
+    await ledgerPostingService.postSaleCollection(
+      userId,
+      saleId,
+      decimalToNumber(updated.totalAmount),
+      updated.paymentType,
+      updated.saleDate,
+      "confirm",
+    );
+
     return mapSaleSummary(updated);
   },
 
@@ -866,6 +882,15 @@ export const salesService = {
         paymentConfirmedAt: new Date(),
       },
     });
+
+    await ledgerPostingService.postSaleCollection(
+      userId,
+      saleId,
+      total,
+      PAYMENT_TYPE_TRANSFER,
+      updated.saleDate,
+      "mark-paid",
+    );
 
     return mapSaleSummary(updated);
   },
