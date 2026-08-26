@@ -12,8 +12,8 @@ export const PAYMENT_TYPE_INVOICE = "Invoice";
 
 /**
  * Sale / expense payment lifecycle.
- * - Cash → PAID on create.
- * - Transfer / Card → IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status.
+ * - Cash / Transfer → PAID on create (Cash → cash ledger, Transfer → bank ledger).
+ * - Card → IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status.
  * - Invoice → Pending / Partial / PAID / Overdue, always calculated from
  *   invoiceAmountPaid.total, totalAmount and invoiceDueDate.
  * - CANCELLED is manual and never recalculated.
@@ -37,18 +37,27 @@ export function isCashPaymentType(paymentType: string): boolean {
   return paymentType === PAYMENT_TYPE_CASH;
 }
 
-/** Card or bank transfer — payment confirmation is asynchronous. */
+export function isTransferPaymentType(paymentType: string): boolean {
+  return paymentType === PAYMENT_TYPE_TRANSFER;
+}
+
+/** Card or bank transfer — Card awaits confirmation; Transfer is bank-settled on create. */
 export function isAsyncPaymentType(paymentType: string): boolean {
   return (
     paymentType === PAYMENT_TYPE_CARD || paymentType === PAYMENT_TYPE_TRANSFER
   );
 }
 
+/** Card only — Transfer is treated as PAID / bank-settled when recorded. */
+export function isPendingAsyncPaymentType(paymentType: string): boolean {
+  return paymentType === PAYMENT_TYPE_CARD;
+}
+
 /**
  * Initial stored status on create:
  * - Invoice → calculated from invoiceAmountPaid.total / totalAmount / invoiceDueDate
- * - Cash (or `fullyPaid`, e.g. bulk sales) → PAID
- * - Card / Transfer → IN_PROGRESS
+ * - Cash / Transfer (or `fullyPaid`, e.g. bulk) → PAID
+ * - Card → IN_PROGRESS until PATCH .../payment-status
  */
 export function initialSaleStatusForPaymentType(
   paymentType: string,
@@ -69,6 +78,7 @@ export function initialSaleStatusForPaymentType(
   }
   if (opts?.fullyPaid) return SALE_STATUS.PAID;
   if (isCashPaymentType(paymentType)) return SALE_STATUS.PAID;
+  if (isTransferPaymentType(paymentType)) return SALE_STATUS.PAID;
   return SALE_STATUS.IN_PROGRESS;
 }
 

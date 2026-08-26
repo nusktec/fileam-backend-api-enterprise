@@ -27,7 +27,7 @@ import {
   normalizeMoneyAmount,
 } from "../../utils/monetaryAmount";
 import {
-  isCashPaymentType,
+  isPendingAsyncPaymentType,
   isSalePaidStatus,
   resolveSaleInvoiceStatus,
   SALE_RECEIVABLE_STATUSES,
@@ -42,6 +42,8 @@ import {
 } from "../../constants/cashBank";
 import { RECEIVABLE_TYPES } from "../../constants/receivables";
 import { cashBankService } from "./cashBankService";
+import { LEDGER_ACCOUNTS } from "../../constants/ledger";
+import { ledgerService } from "../../services/ledgerService";
 
 export { computeAssetDepreciation, computeStraightLineDepreciation };
 
@@ -58,15 +60,28 @@ function startOfUtcDayMs(d: Date): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
+function isBankLedgerCode(code: string): boolean {
+  return (
+    code === LEDGER_ACCOUNTS.BANK || code.startsWith(`${LEDGER_ACCOUNTS.BANK}:`)
+  );
+}
+
+function isCashLedgerCode(code: string): boolean {
+  return (
+    code === LEDGER_ACCOUNTS.CASH_ON_HAND ||
+    code === LEDGER_ACCOUNTS.PETTY_CASH ||
+    code === LEDGER_ACCOUNTS.OTHER_CASH
+  );
+}
+
 /**
- * Book-based current assets (no dedicated cash/bank ledger yet):
- * - Cash: PAID sales with paymentType Cash, net of expense shortfall after bank
- * - Bank: PAID Card/Transfer/Invoice sales − all expense outflows (expenses assumed bank-settled)
+ * Book-based current assets from the double-entry ledger:
+ * - Cash / Bank balances = posted ledger account balances
  * - AR: unpaid sales (Pending / Partial / Overdue / IN_PROGRESS) at outstanding amount
  * - Inventory: qty × purchaseCost
  */
 async function buildCurrentAssetsSnapshot(userId: string) {
-  const [inventoryItems, unpaidSales, paidSales, expenses, business, userCash, userBanks, receivableRows] =
+  const [inventoryItems, unpaidSales, business, userCash, userBanks, receivableRows, ledgerBalances] =
     await Promise.all([
       prisma.inventoryItem.findMany({ where: { userId } }),
       prisma.sale.findMany({
@@ -76,16 +91,6 @@ async function buildCurrentAssetsSnapshot(userId: string) {
         },
         orderBy: [{ saleDate: "desc" }, { createdAt: "desc" }],
       }),
-      prisma.sale.findMany({
-        where: {
-          userId,
-          OR: [
-            { status: SALE_STATUS.PAID },
-            { status: "Paid" },
-          ],
-        },
-      }),
-      prisma.expense.findMany({ where: { userId } }),
       prisma.business.findFirst({
         where: { userId },
         select: { bankAccount: true, name: true },
@@ -96,7 +101,12 @@ async function buildCurrentAssetsSnapshot(userId: string) {
         where: { userId },
         orderBy: { createdAt: "desc" },
       }),
+      ledgerService.getPostedBalances(userId),
     ]);
+
+  const balanceByCode = new Map(
+    ledgerBalances.map((row) => [row.accountCode, row.balance]),
+  );
 
   const inventoryRows = inventoryItems
     .map((it) => {
@@ -242,34 +252,21 @@ async function buildCurrentAssetsSnapshot(userId: string) {
     systemDerivedArTotal + userAddedArTotal,
   );
 
-  let cashReceipts = 0;
-  let bankReceipts = 0;
-  for (const s of paidSales) {
-    if (!isSalePaidStatus(s.status)) continue;
-    const amt = d(s.totalAmount);
-    if (isCashPaymentType(s.paymentType)) cashReceipts += amt;
-    else bankReceipts += amt;
-  }
-  cashReceipts = normalizeMoneyAmount(cashReceipts);
-  bankReceipts = normalizeMoneyAmount(bankReceipts);
-
-  const expenseOutflows = normalizeMoneyAmount(
-    expenses.reduce((s, e) => s + d(e.totalAmount), 0),
+  const ledgerCashTotal = normalizeMoneyAmount(
+    ledgerBalances
+      .filter((row) => isCashLedgerCode(row.accountCode))
+      .reduce((sum, row) => sum + row.balance, 0),
+  );
+  const ledgerBankTotal = normalizeMoneyAmount(
+    ledgerBalances
+      .filter((row) => isBankLedgerCode(row.accountCode))
+      .reduce((sum, row) => sum + row.balance, 0),
+  );
+  const systemBankBalance = normalizeMoneyAmount(
+    balanceByCode.get(LEDGER_ACCOUNTS.BANK) ?? 0,
   );
 
-  // Expenses assumed paid via bank/transfer; if bank is insufficient, draw from cash.
-  let bankNet = normalizeMoneyAmount(bankReceipts - expenseOutflows);
-  let cashNet = cashReceipts;
-  if (bankNet < 0) {
-    const shortfall = -bankNet;
-    cashNet = normalizeMoneyAmount(Math.max(0, cashNet - shortfall));
-    bankNet = 0;
-  }
-
   const prepayments = await prepaymentsService.activeBalances(userId);
-  if (prepayments.total > 0) {
-    bankNet = normalizeMoneyAmount(Math.max(0, bankNet - prepayments.total));
-  }
 
   const userCashItems = userCash.map((c) => ({
     id: c.cashCode,
@@ -288,25 +285,32 @@ async function buildCurrentAssetsSnapshot(userId: string) {
         b.accountType as keyof typeof BANK_ACCOUNT_TYPE_LABELS
       ] ?? b.accountType,
     accountNumber: b.accountNumber,
-    amount: normalizeMoneyAmount(Number(b.openingBalance)),
+    amount: normalizeMoneyAmount(
+      balanceByCode.get(`${LEDGER_ACCOUNTS.BANK}:${b.bankCode}`) ??
+        Number(b.openingBalance),
+    ),
     source: "user" as const,
   }));
 
-  const userCashTotal = normalizeMoneyAmount(
+  const userCashFromRegisters = normalizeMoneyAmount(
     userCashItems.reduce((s, r) => s + r.amount, 0),
   );
-  const userBankTotal = normalizeMoneyAmount(
+  const userBankFromRegisters = normalizeMoneyAmount(
     userBankItems.reduce((s, r) => s + r.amount, 0),
   );
 
+  const systemCashBalance = normalizeMoneyAmount(
+    Math.max(0, ledgerCashTotal - userCashFromRegisters),
+  );
+
   const systemCashItems =
-    cashNet > 0
+    systemCashBalance > 0
       ? [
           {
             id: "system-cash",
             title: "Cash on hand",
-            subtitle: "PAID Cash sales, net of expense drawdowns",
-            amount: cashNet,
+            subtitle: "Ledger cash balance from sales, expenses, and openings",
+            amount: systemCashBalance,
             source: "system" as const,
           },
         ]
@@ -320,7 +324,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
 
   const accountNumber = business?.bankAccount?.trim() || "Not set";
   const systemBankItems =
-    bankNet > 0
+    systemBankBalance > 0
       ? [
           {
             id: "system-bank",
@@ -329,7 +333,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
               : "Primary bank account",
             accountType: "Current",
             accountNumber,
-            amount: bankNet,
+            amount: systemBankBalance,
             source: "system" as const,
           },
         ]
@@ -343,26 +347,26 @@ async function buildCurrentAssetsSnapshot(userId: string) {
         }>);
 
   const cash = {
-    total: normalizeMoneyAmount(cashNet + userCashTotal),
+    total: normalizeMoneyAmount(ledgerCashTotal),
     systemDerived: {
-      total: cashNet,
+      total: systemCashBalance,
       items: systemCashItems,
     },
     userAdded: {
-      total: userCashTotal,
+      total: userCashFromRegisters,
       items: userCashItems,
     },
     items: [...systemCashItems, ...userCashItems],
   };
 
   const bankBalances = {
-    total: normalizeMoneyAmount(bankNet + userBankTotal),
+    total: normalizeMoneyAmount(ledgerBankTotal),
     systemDerived: {
-      total: bankNet,
+      total: systemBankBalance,
       items: systemBankItems,
     },
     userAdded: {
-      total: userBankTotal,
+      total: userBankFromRegisters,
       items: userBankItems,
     },
     items: [...systemBankItems, ...userBankItems],
@@ -414,12 +418,11 @@ async function buildCurrentAssetsSnapshot(userId: string) {
       items: [...systemDerivedArItems, ...userAddedArItems],
     },
     prepayments,
-    /** Diagnostic totals used to derive cash/bank (not required by UI spec). */
+    /** Diagnostic totals from ledger (not required by UI spec). */
     methodology: {
-      cashReceipts,
-      bankReceipts,
-      expenseOutflows,
-      note: "Cash = PAID Cash sales (less expense shortfall). Bank = PAID Card/Transfer/Invoice sales − expense totals. AR systemDerived = unpaid invoice sales; userAdded = /mobile/receivables records. totalCurrentAssets uses full accountsReceivable.total (system + user). Inventory = qty × purchase cost.",
+      ledgerCashTotal,
+      ledgerBankTotal,
+      note: "Cash and bank totals are derived from posted double-entry ledger balances (BANK, BANK:*, CASH_ON_HAND, PETTY_CASH, OTHER_CASH). Transfer sales/expenses post to bank on create; Card awaits payment-status confirmation.",
     },
   };
 }

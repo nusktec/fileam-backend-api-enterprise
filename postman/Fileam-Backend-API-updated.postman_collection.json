@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): VAT/WHT monthly; PIT annual (GET/POST /mobile/filings/pit/calculation|submit, NRS Fourth Schedule, due 31 Mar); CIT annual NTA 2025 (GET/POST /mobile/filings/cit/calculation|submit, 0%/30% + 4% development levy on assessable profit, due 30 Jun, periodMonth=12); Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, income-history, documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): VAT/WHT monthly; PIT annual (GET/POST /mobile/filings/pit/calculation|submit, NRS Fourth Schedule, due 31 Mar); CIT annual NTA 2025 (GET/POST /mobile/filings/cit/calculation|submit, 0%/30% + 4% development levy on assessable profit, due 30 Jun, periodMonth=12); Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -300,6 +300,16 @@
       "key": "filingYear",
       "value": "2025",
       "description": "Calendar tax year for PIT/CIT annual filings (must be < current year to submit)"
+    },
+    {
+      "key": "appPlatform",
+      "value": "ios",
+      "description": "ios or android — query param for GET /mobile/app/version"
+    },
+    {
+      "key": "clientAppVersion",
+      "value": "1.0.0",
+      "description": "Client app semver for forced-update check (e.g. 1.0.0)"
     }
   ],
   "event": [
@@ -459,8 +469,74 @@
           ]
         },
         {
+          "name": "App",
+          "description": "Public mobile app config — no auth. Call on app launch before login.\n\nGET /mobile/app/version?platform=ios|android&version=x.y.z\n\n• forceUpdate — client below MOBILE_*_MIN_VERSION (block app)\n• updateAvailable — client below MOBILE_*_LATEST_VERSION (soft prompt)\n\nCollection vars: {{appPlatform}}, {{clientAppVersion}}. Omit platform to return both ios + android policies.",
+          "item": [
+            {
+              "name": "Check app version **",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&!Array.isArray(d)){",
+                      "  pm.test('forceUpdate present',function(){pm.expect(d.forceUpdate).to.be.a('boolean');});",
+                      "  pm.test('updateAvailable present',function(){pm.expect(d.updateAvailable).to.be.a('boolean');});",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?platform={{appPlatform}}&version={{clientAppVersion}}",
+                "description": "Compare {{clientAppVersion}} against env MOBILE_*_MIN_VERSION / MOBILE_*_LATEST_VERSION for {{appPlatform}}. Block app when forceUpdate is true."
+              }
+            },
+            {
+              "name": "Check app version (iOS) **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?platform=ios&version={{clientAppVersion}}",
+                "description": "iOS forced-update check. Uses MOBILE_IOS_MIN_VERSION, MOBILE_IOS_LATEST_VERSION, MOBILE_IOS_STORE_URL."
+              }
+            },
+            {
+              "name": "Check app version (Android) **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?platform=android&version={{clientAppVersion}}",
+                "description": "Android forced-update check. Uses MOBILE_ANDROID_MIN_VERSION, MOBILE_ANDROID_LATEST_VERSION, MOBILE_ANDROID_STORE_URL."
+              }
+            },
+            {
+              "name": "Get all platform version policies **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version",
+                "description": "Returns array of ios + android policies. Pass ?version= to evaluate forceUpdate for both."
+              }
+            },
+            {
+              "name": "Get all platform policies with version check **",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?version={{clientAppVersion}}",
+                "description": "Both platforms with forceUpdate/updateAvailable flags for {{clientAppVersion}}."
+              }
+            }
+          ]
+        },
+        {
           "name": "Lookups",
-          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help — use whichever folder fits your flow.",
+          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help, App — use whichever folder fits your flow.",
           "item": [
             {
               "name": "Tax filing constants *",
@@ -517,6 +593,14 @@
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/faqs",
                 "description": "categories + faqs. Optional query category. Duplicate of Help → Get FAQs."
+              }
+            },
+            {
+              "name": "App version check *",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?platform={{appPlatform}}&version={{clientAppVersion}}",
+                "description": "No auth. Duplicate of App → Check app version. forceUpdate=true means block app launch."
               }
             }
           ]
@@ -3665,8 +3749,8 @@
               "request": {
                 "method": "GET",
                 "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/income-history?year=2026",
-                "description": "Auto-generated monthly schedule from employer remuneration, start/end dates, and payment frequency. Optional ?year= defaults to current year."
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/income-history?year={{filingYear}}",
+                "description": "Read-only auto-generated monthly schedule from employer remuneration, start/end dates, and payment frequency. Entry ids are {employerId}:{YYYY-MM}. payeCredit on employer list/detail uses the same generated totals. Optional ?year= (defaults to current year)."
               }
             },
             {
@@ -4923,37 +5007,6 @@
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/pension/2026-07/pay",
                 "description": "Returns placeholder payment URL for Pension."
-              }
-            }
-          ]
-        },
-        {
-          "name": "App",
-          "description": "Public mobile app config. No auth. Call on launch to enforce minimum version.\n\nGET /mobile/app/version?platform=ios|android&version=x.y.z\n\n• forceUpdate — client below MOBILE_*_MIN_VERSION\n• updateAvailable — client below MOBILE_*_LATEST_VERSION\n\nOmit platform to return both ios and android policies.",
-          "item": [
-            {
-              "name": "Check app version (iOS) **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?platform=ios&version=1.0.0",
-                "description": "Compare client version against env MOBILE_IOS_MIN_VERSION / MOBILE_IOS_LATEST_VERSION. Block app when forceUpdate is true."
-              }
-            },
-            {
-              "name": "Check app version (Android) **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?platform=android&version=1.0.0"
-              }
-            },
-            {
-              "name": "Get all platform version policies **",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version"
               }
             }
           ]

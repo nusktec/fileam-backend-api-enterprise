@@ -13,9 +13,9 @@ import {
   type LedgerEntryDraft,
 } from "../constants/ledger";
 import {
-  isAsyncPaymentType,
   isCashPaymentType,
   isInvoicePaymentType,
+  isPendingAsyncPaymentType,
   isSalePaidStatus,
 } from "../constants/salePaymentRules";
 import { coerceInvoiceAmountPaid } from "../constants/invoiceAmountPaid";
@@ -121,7 +121,7 @@ export const ledgerPostingService = {
 
     const isCredit =
       isInvoicePaymentType(sale.paymentType) ||
-      (isAsyncPaymentType(sale.paymentType) &&
+      (isPendingAsyncPaymentType(sale.paymentType) &&
         !isSalePaidStatus(sale.status));
 
     let collected = 0;
@@ -199,7 +199,7 @@ export const ledgerPostingService = {
 
     const onCredit =
       isInvoicePaymentType(expense.paymentType) ||
-      (isAsyncPaymentType(expense.paymentType) &&
+      (isPendingAsyncPaymentType(expense.paymentType) &&
         !isSalePaidStatus(expense.status));
 
     const entries = onCredit

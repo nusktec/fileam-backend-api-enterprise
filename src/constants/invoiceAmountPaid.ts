@@ -78,7 +78,7 @@ export function invoiceAmountPaidFromSingle(
 
 /**
  * Initial paid structure on create:
- * - Cash (or fullyPaid, e.g. bulk sales) → one line for the full total
+ * - Cash / Transfer (or fullyPaid, e.g. bulk) → one line for the full total
  * - otherwise empty
  */
 export function initialInvoiceAmountPaid(
@@ -86,7 +86,11 @@ export function initialInvoiceAmountPaid(
   totalAmount: number,
   opts?: { fullyPaid?: boolean },
 ): InvoiceAmountPaid {
-  if (opts?.fullyPaid || paymentType === "Cash") {
+  if (
+    opts?.fullyPaid ||
+    paymentType === "Cash" ||
+    paymentType === "Transfer"
+  ) {
     return invoiceAmountPaidFromSingle(totalAmount, paymentType);
   }
   return { total: 0, items: [] };

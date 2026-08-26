@@ -114,4 +114,37 @@ export const ledgerService = {
 
     return reversal;
   },
+
+  /** Net balance per account from posted ledger lines (debit − credit, asset-normal). */
+  async getPostedBalances(userId: string) {
+    const entries = await prisma.ledgerEntry.findMany({
+      where: {
+        transaction: { userId, status: LEDGER_STATUS.POSTED },
+      },
+      select: {
+        accountCode: true,
+        accountName: true,
+        debit: true,
+        credit: true,
+      },
+    });
+
+    const map = new Map<string, { accountName: string; debit: number; credit: number }>();
+    for (const entry of entries) {
+      const current = map.get(entry.accountCode) ?? {
+        accountName: entry.accountName,
+        debit: 0,
+        credit: 0,
+      };
+      current.debit += Number(entry.debit);
+      current.credit += Number(entry.credit);
+      map.set(entry.accountCode, current);
+    }
+
+    return [...map.entries()].map(([accountCode, totals]) => ({
+      accountCode,
+      accountName: totals.accountName,
+      balance: normalizeMoneyAmount(totals.debit - totals.credit),
+    }));
+  },
 };
