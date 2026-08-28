@@ -23,12 +23,33 @@ model TaxPayable {
   computation      Json?     @db.JsonB
   receiptUrl       String?   @map("receipt_url")
   paymentLink      String?   @map("payment_link")
+  currentStep            Int       @default(1) @map("current_step")
+  completedSteps         Json      @default("[]") @map("completed_steps")
+  frozen                 Boolean   @default(false)
+  frozenAt               DateTime? @map("frozen_at")
+  draftInputs            Json?     @map("draft_inputs")
+  validation             Json?     @db.JsonB
+  acknowledgedGaps       Boolean   @default(false) @map("acknowledged_gaps")
+  reviewedDocumentIds    Json      @default("[]") @map("reviewed_document_ids")
+  submissionReference    String?   @map("submission_reference")
+  rrr                    String?
+  submissionProofName    String?   @map("submission_proof_name")
+  submissionProofUrl     String?   @map("submission_proof_url")
+  paymentReceiptName     String?   @map("payment_receipt_name")
+  paymentReceiptUrl      String?   @map("payment_receipt_url")
+  formsGenerated         Boolean   @default(false) @map("forms_generated")
+  packageUrl             String?   @map("package_url")
+  packageExpiresAt       DateTime? @map("package_expires_at")
+  portalOpenedAt         DateTime? @map("portal_opened_at")
+  priorPeriodCarry       Json?     @map("prior_period_carry")
+  booksChangedSinceFreeze Boolean  @default(false) @map("books_changed_since_freeze")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   payments  PaymentRecord[]
   timeline  FilingTimelineEvent[]
+  documents FilingDocument[]
 
   @@unique([userId, taxType, periodYear, periodMonth])
   @@map("tax_payables")

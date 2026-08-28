@@ -61,3 +61,19 @@ export const submitCitFiling = async (req: IRequest, res: Response) => {
       .json({ message: "Failed to submit CIT filing", error: "SERVER_ERROR" });
   }
 };
+
+export const saveCitDraft = async (req: IRequest, res: Response) => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = await citFilingService.saveDraft(
+      userId,
+      req.body as Parameters<typeof citFilingService.saveDraft>[1],
+    );
+    res.status(200).json({ data });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res
+      .status(500)
+      .json({ message: "Failed to save CIT draft", error: "SERVER_ERROR" });
+  }
+};

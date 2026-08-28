@@ -26,6 +26,7 @@ import {
   type PitBandResult,
   type PitComputationSnapshot,
 } from "../../constants/pitFiling";
+import type { PitDraftInputs } from "../../constants/filingWorkspace";
 import { PERCENT } from "../../constants/percentages";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
@@ -33,6 +34,8 @@ import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { evidenceVaultService } from "./evidenceVaultService";
 import { taxComputationService } from "./taxComputationService";
 import { sumGeneratedPayeCreditForYear } from "./employersService";
+import { copyCarryForwardOnSubmit } from "./filingCarryForwardService";
+import { completionPercentFromStep } from "../../constants/filingWorkspace";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -234,6 +237,37 @@ async function aggregatePitInputs(
   };
 }
 
+function applyPitDraft(
+  inputs: AggregatedInputs,
+  draft: PitDraftInputs | null | undefined,
+): {
+  tradingProfit: number;
+  otherBusinessIncome: number;
+  otherPersonalIncome: number;
+  payerFeesIncludedInSales: boolean;
+  reliefs: NonNullable<PitDraftInputs["reliefs"]>;
+} {
+  const overrides = draft?.incomeOverrides ?? {};
+  const reliefs = draft?.reliefs ?? {};
+  return {
+    tradingProfit:
+      overrides.tradingProfit != null
+        ? normalizeMoneyAmount(overrides.tradingProfit)
+        : inputs.tradingProfit,
+    otherBusinessIncome:
+      overrides.otherBusinessIncome != null
+        ? normalizeMoneyAmount(overrides.otherBusinessIncome)
+        : inputs.otherBusinessIncome,
+    otherPersonalIncome:
+      overrides.otherPersonalIncome != null
+        ? normalizeMoneyAmount(overrides.otherPersonalIncome)
+        : inputs.otherPersonalIncome,
+    payerFeesIncludedInSales:
+      draft?.payerFeesIncludedInSales ?? inputs.payerFeesIncludedInSales,
+    reliefs,
+  };
+}
+
 async function loadProfileTinAndState(userId: string): Promise<{
   tin: string | null;
   stateOfResidence: string | null;
@@ -361,36 +395,82 @@ function validateSubmitBody(body: Record<string, unknown>): void {
 
 export const pitFilingService = {
   async getCalculation(userId: string, year: number) {
-    const inputs = await aggregatePitInputs(userId, year);
-    const profile = await loadProfileTinAndState(userId);
-    const existing = await prisma.taxPayable.findUnique({
-      where: {
-        userId_taxType_periodYear_periodMonth: {
-          userId,
-          taxType: "PIT",
-          periodYear: year,
-          periodMonth: PIT_PERIOD_MONTH,
+    const [inputs, profile, existing] = await Promise.all([
+      aggregatePitInputs(userId, year),
+      loadProfileTinAndState(userId),
+      prisma.taxPayable.findUnique({
+        where: {
+          userId_taxType_periodYear_periodMonth: {
+            userId,
+            taxType: "PIT",
+            periodYear: year,
+            periodMonth: PIT_PERIOD_MONTH,
+          },
         },
-      },
-    });
+      }),
+    ]);
+
+    const draftInputs =
+      existing?.draftInputs && typeof existing.draftInputs === "object"
+        ? (existing.draftInputs as PitDraftInputs)
+        : null;
+
+    if (existing?.frozen && existing.computation) {
+      const frozen = existing.computation as Record<string, unknown>;
+      const storedBands = frozen.bands as PitBandResult[] | undefined;
+      const { bands: _b, ...computation } = frozen;
+      return {
+        year,
+        dueDate: pitDueDateForYear(year),
+        yearOpenForFiling: isPitYearOpenForFiling(year),
+        alreadyFiled: existing.submittedAt != null,
+        filingId: existing.submittedAt != null ? existing.id : null,
+        tin: profile.tin,
+        stateOfResidence: profile.stateOfResidence,
+        computation,
+        bands: storedBands ?? [],
+        frozen: true,
+        warning: existing.booksChangedSinceFreeze
+          ? "Books changed since computation was confirmed. Re-confirm step 1 to update figures."
+          : undefined,
+        inputs: {
+          tradingProfit: inputs.tradingProfit,
+          employmentTaxable: inputs.employmentTaxable,
+          employmentExempt: inputs.employmentExempt,
+          payerFeesRecorded: inputs.payerFeesRecorded,
+          payerFeesIncludedInSales: inputs.payerFeesIncludedInSales,
+          payeCredits: inputs.payeCredits,
+          employerWhtCredits: inputs.employerWhtCredits,
+          payerWhtCredits: inputs.payerWhtCredits,
+        },
+      };
+    }
+
+    const merged = applyPitDraft(inputs, draftInputs);
+    const extraPension = merged.reliefs.extraPension ?? 0;
+    const pensionOverride = merged.reliefs.pensionOverride;
+    const pensionContribution =
+      pensionOverride != null
+        ? normalizeMoneyAmount(pensionOverride)
+        : normalizeMoneyAmount(inputs.pensionContribution + extraPension);
 
     const snapshot = computePitFromSnapshot({
-      tradingProfit: inputs.tradingProfit,
-      otherBusinessIncome: inputs.otherBusinessIncome,
-      otherPersonalIncome: inputs.otherPersonalIncome,
-      payerFees: inputs.payerFeesIncludedInSales ? 0 : inputs.payerFees,
-      payerFeesIncludedInSales: inputs.payerFeesIncludedInSales,
-      pensionContribution: inputs.pensionContribution,
-      nhfContribution: 0,
-      nhisContribution: 0,
-      annualRent: 0,
-      rentPeriodStart: null,
-      rentPeriodEnd: null,
-      landlordName: null,
-      landlordContact: null,
-      propertyAddress: null,
-      lifeAssurance: 0,
-      mortgageInterest: 0,
+      tradingProfit: merged.tradingProfit,
+      otherBusinessIncome: merged.otherBusinessIncome,
+      otherPersonalIncome: merged.otherPersonalIncome,
+      payerFees: merged.payerFeesIncludedInSales ? 0 : inputs.payerFees,
+      payerFeesIncludedInSales: merged.payerFeesIncludedInSales,
+      pensionContribution,
+      nhfContribution: merged.reliefs.nhfOverride ?? merged.reliefs.nhfContribution ?? 0,
+      nhisContribution: merged.reliefs.nhisContribution ?? 0,
+      annualRent: merged.reliefs.annualRent ?? 0,
+      rentPeriodStart: merged.reliefs.rentPeriodStart ?? null,
+      rentPeriodEnd: merged.reliefs.rentPeriodEnd ?? null,
+      landlordName: merged.reliefs.landlordName ?? null,
+      landlordContact: merged.reliefs.landlordContact ?? null,
+      propertyAddress: merged.reliefs.propertyAddress ?? null,
+      lifeAssurance: merged.reliefs.lifeAssurance ?? 0,
+      mortgageInterest: merged.reliefs.mortgageInterest ?? 0,
       payeCredits: inputs.payeCredits,
       whtCredits: inputs.whtCredits,
       minimumWageExempt: inputs.minimumWageExempt,
@@ -408,12 +488,13 @@ export const pitFilingService = {
       stateOfResidence: profile.stateOfResidence,
       computation,
       bands: bands as PitBandResult[],
+      draftApplied: draftInputs != null,
       inputs: {
         tradingProfit: inputs.tradingProfit,
         employmentTaxable: inputs.employmentTaxable,
         employmentExempt: inputs.employmentExempt,
         payerFeesRecorded: inputs.payerFeesRecorded,
-        payerFeesIncludedInSales: inputs.payerFeesIncludedInSales,
+        payerFeesIncludedInSales: merged.payerFeesIncludedInSales,
         payeCredits: inputs.payeCredits,
         employerWhtCredits: inputs.employerWhtCredits,
         payerWhtCredits: inputs.payerWhtCredits,
@@ -424,7 +505,7 @@ export const pitFilingService = {
   async submit(
     userId: string,
     body: Record<string, unknown>,
-  ): Promise<{ id: string; status: string; submissionDate: Date }> {
+  ): Promise<{ id: string; status: string; submissionDate: Date; completionPercent?: number }> {
     validateSubmitBody(body);
 
     const periodYear = Number(body.periodYear);
@@ -480,6 +561,12 @@ export const pitFilingService = {
     const storedPaymentStatus =
       amount <= 0 || paymentStatus === "paid" ? "paid" : "unpaid";
 
+    const submissionReference =
+      body.submissionReference != null
+        ? String(body.submissionReference).trim()
+        : "";
+    const completedSteps = Array.from({ length: 8 }, (_, i) => i + 1);
+
     const taxPayable = await prisma.taxPayable.upsert({
       where: {
         userId_taxType_periodYear_periodMonth: {
@@ -508,6 +595,11 @@ export const pitFilingService = {
           body.documentUrl != null ? String(body.documentUrl) : null,
         evidenceVaultId,
         receiptUrl: body.receiptUrl != null ? String(body.receiptUrl) : null,
+        submissionReference: submissionReference || null,
+        currentStep: 8,
+        completedSteps,
+        frozen: true,
+        frozenAt: submittedAt,
       },
       update: {
         amountDue: new Decimal(amount),
@@ -523,8 +615,21 @@ export const pitFilingService = {
           body.documentUrl != null ? String(body.documentUrl) : null,
         evidenceVaultId,
         receiptUrl: body.receiptUrl != null ? String(body.receiptUrl) : null,
+        submissionReference: submissionReference || null,
+        currentStep: 8,
+        completedSteps,
+        frozen: true,
+        frozenAt: submittedAt,
       },
     });
+
+    await copyCarryForwardOnSubmit(
+      userId,
+      "PIT",
+      periodYear,
+      PIT_PERIOD_MONTH,
+      computation as unknown as Record<string, unknown>,
+    );
 
     await prisma.filingTimelineEvent.create({
       data: {
@@ -539,6 +644,12 @@ export const pitFilingService = {
       id: taxPayable.id,
       status: "submitted",
       submissionDate: submittedAt,
+      completionPercent: completionPercentFromStep(8),
     };
+  },
+
+  async saveDraft(userId: string, body: PitDraftInputs & { periodYear: number }) {
+    const { filingWorkspaceService } = await import("./filingWorkspaceService");
+    return filingWorkspaceService.savePitDraft(userId, body);
   },
 };

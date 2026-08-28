@@ -2659,6 +2659,54 @@
               }
             },
             {
+              "name": "Complete filing (step 12)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"rrr\":\"2508-1234-5678\",\"paymentReceiptUrl\":\"https://example.com/remita.pdf\",\"submissionProofUrl\":\"https://example.com/ack.pdf\"}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{filingId}}/complete",
+                "description": "Step 12 — marks filing paid when amount is 0 or RRR + receipt present."
+              }
+            },
+            {
+              "name": "Workspace - Get or create (VAT)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/workspace?periodYear=2026&periodMonth=7",
+                "description": "12-step workspace. Returns currentStep, completionPercent, draftInputs, frozen computation, documents."
+              }
+            },
+            {
+              "name": "Workspace - Confirm computation (VAT)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":7}"},
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/workspace/confirm-computation"
+              }
+            },
+            {
+              "name": "Workspace - Validate TaxGPT (VAT)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":7}"},
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/workspace/validate"
+              }
+            },
+            {
+              "name": "Workspace - Generate documents (VAT)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":7}"},
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/workspace/generate-documents"
+              }
+            },
+            {
               "name": "VAT - Get calculation",
               "request": {
                 "method": "GET",
@@ -2745,7 +2793,20 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/calculation?year={{filingYear}}",
-                "description": "Server-owned PIT snapshot for the tax year. Returns computation, tin, stateOfResidence, yearOpenForFiling, alreadyFiled. Year must be a closed calendar year to submit."
+                "description": "Honours saved draft (POST /pit/draft) and frozen workspace snapshot. Returns computation, tin, stateOfResidence, frozen, draftApplied."
+              }
+            },
+            {
+              "name": "PIT - Save draft (reliefs / income)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"periodYear\":2025,\"payerFeesIncludedInSales\":true,\"reliefs\":{\"annualRent\":1800000,\"landlordName\":\"Adewale Johnson\",\"landlordContact\":\"08031234567\",\"propertyAddress\":\"12 Allen Avenue\",\"rentPeriodStart\":\"Jan 2025\",\"rentPeriodEnd\":\"Dec 2025\"},\"reliefsReviewed\":true}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/draft",
+                "description": "Persists NTA s.30 reliefs and income overrides. Does not freeze — use workspace confirm-computation for step 1."
               }
             },
             {
@@ -2791,7 +2852,19 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/calculation?year={{filingYear}}",
-                "description": "NTA 2025 CIT snapshot: turnover/fixed-assets classification (C08A/C08C), capital allowances from asset register, inbound WHT credits from payers. Returns computation, rcNumber, tin, companyName, inputs breakdown."
+                "description": "Honours draft adjustments and prior-year carry (CA b/f, loss b/f, unused WHT). Returns priorYearCarry, frozen when workspace confirmed."
+              }
+            },
+            {
+              "name": "CIT - Save draft (adjustments)",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"periodYear\":2025,\"adjustments\":{\"depreciation\":2000000,\"fines\":100000,\"lossCarryForward\":500000,\"whtCredits\":1200000}}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/draft"
               }
             },
             {

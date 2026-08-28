@@ -1,0 +1,22 @@
+model FilingDocument {
+  id           String    @id @default(uuid())
+  taxPayableId String    @map("tax_payable_id")
+  documentId   String    @map("document_id")
+  title        String
+  subtitle     String?
+  status       String    @default("ready")
+  contentType  String    @default("application/pdf") @map("content_type")
+  fileUrl      String?   @map("file_url")
+  fileKey      String?   @map("file_key")
+  fileName     String?   @map("file_name")
+  bytes        Int?
+  source       String    @default("generated")
+  generatedAt  DateTime  @default(now()) @map("generated_at")
+  expiresAt    DateTime? @map("expires_at")
+
+  taxPayable TaxPayable @relation(fields: [taxPayableId], references: [id], onDelete: Cascade)
+
+  @@unique([taxPayableId, documentId])
+  @@index([taxPayableId])
+  @@map("filing_documents")
+}

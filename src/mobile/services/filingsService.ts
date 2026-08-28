@@ -1,6 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
+import { completionPercentFromStep } from "../../constants/filingWorkspace";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -179,6 +180,7 @@ function buildFilingCompletion(
     stateOfOperation: string | null;
     vatRegistrationNumber: string | null;
     submittedAt: Date | null;
+    currentStep?: number;
   },
   period: PeriodRecordCompliance,
   whtLineCount: number | null,
@@ -190,6 +192,17 @@ function buildFilingCompletion(
     items: FilingCompletionItem[];
   };
 } {
+  if (p.currentStep != null && p.currentStep >= 1) {
+    const stepPercent = completionPercentFromStep(p.currentStep);
+    return {
+      completionPercent: stepPercent,
+      completion: {
+        met: Math.max(0, p.currentStep - 1),
+        total: 12,
+        items: [],
+      },
+    };
+  }
   const tt = (p.taxType || "").trim().toUpperCase();
   const items: FilingCompletionItem[] = [];
 
@@ -501,6 +514,7 @@ export const filingsService = {
           stateOfOperation,
           vatRegistrationNumber,
           submittedAt: p.submittedAt,
+          currentStep: p.currentStep,
         },
         periodRecordCompliance,
         whtLineCount,
@@ -544,6 +558,24 @@ export const filingsService = {
     if (displayStatusFilter && displayStatusFilter !== "all") {
       items = items.filter((i) => i.status === displayStatusFilter);
     }
+
+    const statusRank: Record<FilingDisplayStatus, number> = {
+      overdue: 0,
+      pending: 1,
+      submitted: 2,
+      paid: 3,
+    };
+    items.sort((a, b) => {
+      const rankDiff = statusRank[a.status] - statusRank[b.status];
+      if (rankDiff !== 0) return rankDiff;
+      if (a.status === "pending" || a.status === "overdue") {
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }
+      const aSub = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+      const bSub = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+      return bSub - aSub;
+    });
+
     return {
       data: items,
       total,
@@ -562,6 +594,7 @@ export const filingsService = {
           orderBy: { paidAt: "desc" },
         },
         timeline: { orderBy: { eventDate: "asc" } },
+        documents: { orderBy: { documentId: "asc" } },
       },
     });
     if (!p) return null;
@@ -621,6 +654,7 @@ export const filingsService = {
         stateOfOperation,
         vatRegistrationNumber,
         submittedAt: p.submittedAt,
+        currentStep: p.currentStep,
       },
       periodRecordCompliance,
       whtLineCount,
@@ -657,6 +691,28 @@ export const filingsService = {
       receiptUrl: p.receiptUrl ?? undefined,
       completionPercent,
       completion,
+      currentStep: p.currentStep,
+      completedSteps: Array.isArray(p.completedSteps)
+        ? (p.completedSteps as number[])
+        : [],
+      submissionReference: p.submissionReference ?? undefined,
+      rrr: p.rrr ?? undefined,
+      submissionProofUrl: p.submissionProofUrl ?? undefined,
+      paymentReceiptUrl: p.paymentReceiptUrl ?? undefined,
+      packageUrl: p.packageUrl ?? undefined,
+      documents: p.documents.map((d) => ({
+        id: d.documentId,
+        title: d.title,
+        subtitle: d.subtitle ?? undefined,
+        status: d.status,
+        contentType: d.contentType,
+        fileUrl: d.fileUrl ?? undefined,
+        fileName: d.fileName ?? undefined,
+        bytes: d.bytes ?? undefined,
+        source: d.source,
+      })),
+      frozen: p.frozen,
+      validation: p.validation ?? undefined,
       periodRecordCompliance,
       periodAttachmentGaps: isAnnualFiling
         ? null

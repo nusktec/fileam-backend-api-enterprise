@@ -33,6 +33,8 @@ export const FILING_TIMELINE_EVENTS = {
 export const REPORT_TYPES = [
   "VAT Return Summary",
   "WHT Schedule Report",
+  "PIT Return Summary",
+  "CIT Return Summary",
   "Filing History",
   "Compliance Summary",
 ] as const;

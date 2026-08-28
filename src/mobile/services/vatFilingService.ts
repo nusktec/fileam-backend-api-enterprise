@@ -2,10 +2,14 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { taxComputationService } from "./taxComputationService";
 import { FILING_TIMELINE_EVENTS } from "../../constants/filings";
+import { WORKSPACE_TIMELINE_EVENTS } from "../../constants/filingWorkspace";
+import { completionPercentFromStep } from "../../constants/filingWorkspace";
+import { getVatInputBroughtForward, copyCarryForwardOnSubmit } from "./filingCarryForwardService";
+import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 export const vatFilingService = {
   async getCalculation(userId: string, year: number, month: number) {
-    const [computation, draft] = await Promise.all([
+    const [computation, draft, existing, priorCredit] = await Promise.all([
       taxComputationService.getForPeriod(userId, year, month),
       prisma.filingDraft.findUnique({
         where: {
@@ -17,18 +21,71 @@ export const vatFilingService = {
           },
         },
       }),
+      prisma.taxPayable.findUnique({
+        where: {
+          userId_taxType_periodYear_periodMonth: {
+            userId,
+            taxType: "VAT",
+            periodYear: year,
+            periodMonth: month,
+          },
+        },
+      }),
+      getVatInputBroughtForward(userId, year, month),
     ]);
+
+    if (existing?.frozen && existing.computation) {
+      const frozen = existing.computation as {
+        outputVat?: number;
+        inputVatClaimable?: number;
+        netVatPayable?: number;
+        inputVatBroughtForward?: number;
+      };
+      return {
+        period: computation.period,
+        stateOfOperation:
+          existing.stateOfOperation ?? draft?.stateOfOperation ?? null,
+        vatRegistrationNumber:
+          existing.vatRegistrationNumber ?? draft?.vatRegistrationNumber ?? null,
+        outputVat: frozen.outputVat ?? 0,
+        inputVatClaimable: frozen.inputVatClaimable ?? 0,
+        netVatPayable: frozen.netVatPayable ?? Number(existing.totalPayable),
+        inputVatBroughtForward: frozen.inputVatBroughtForward ?? 0,
+        frozen: true,
+        alreadyFiled: existing.submittedAt != null,
+        filingId: existing.submittedAt != null ? existing.id : null,
+        nilReturn: (frozen.netVatPayable ?? 0) === 0,
+        breakdown: {
+          outputVat: frozen.outputVat ?? 0,
+          inputVatClaimable: frozen.inputVatClaimable ?? 0,
+          netVatPayable: frozen.netVatPayable ?? Number(existing.totalPayable),
+        },
+      };
+    }
+
+    const inputVatBroughtForward = priorCredit.inputVatBroughtForward;
+    const inputVatClaimable = normalizeMoneyAmount(
+      computation.vat.inputVatClaimable + inputVatBroughtForward,
+    );
+    const netVatPayable = normalizeMoneyAmount(
+      computation.vat.outputVat - inputVatClaimable,
+    );
+
     return {
       period: computation.period,
       stateOfOperation: draft?.stateOfOperation ?? null,
       vatRegistrationNumber: draft?.vatRegistrationNumber ?? null,
       outputVat: computation.vat.outputVat,
-      inputVatClaimable: computation.vat.inputVatClaimable,
-      netVatPayable: computation.vat.netVatPayable,
+      inputVatClaimable,
+      netVatPayable,
+      inputVatBroughtForward,
+      alreadyFiled: existing?.submittedAt != null,
+      filingId: existing?.submittedAt != null ? existing.id : null,
+      nilReturn: netVatPayable === 0,
       breakdown: {
         outputVat: computation.vat.outputVat,
-        inputVatClaimable: computation.vat.inputVatClaimable,
-        netVatPayable: computation.vat.netVatPayable,
+        inputVatClaimable,
+        netVatPayable,
       },
     };
   },
@@ -65,6 +122,30 @@ export const vatFilingService = {
         vatRegistrationNumber: params.vatRegistrationNumber ?? undefined,
       },
     });
+
+    const { filingWorkspaceService } = await import("./filingWorkspaceService");
+    await filingWorkspaceService.ensureDraftWorkspace(
+      userId,
+      "VAT",
+      params.periodYear,
+      params.periodMonth,
+    );
+
+    if (params.stateOfOperation || params.vatRegistrationNumber) {
+      await prisma.taxPayable.updateMany({
+        where: {
+          userId,
+          taxType: "VAT",
+          periodYear: params.periodYear,
+          periodMonth: params.periodMonth,
+        },
+        data: {
+          stateOfOperation: params.stateOfOperation ?? undefined,
+          vatRegistrationNumber: params.vatRegistrationNumber ?? undefined,
+        },
+      });
+    }
+
     return draft;
   },
 
@@ -81,6 +162,8 @@ export const vatFilingService = {
       evidenceVaultId?: string;
       stateOfOperation?: string;
       vatRegistrationNumber?: string;
+      submissionReference?: string;
+      computation?: Record<string, unknown>;
     },
   ) {
     const filingDueDate =
@@ -89,6 +172,20 @@ export const vatFilingService = {
         : new Date(params.dueDate);
     const submittedAt = new Date();
     const status = params.paymentStatus === "paid" ? "paid" : "pending";
+    const completedSteps = Array.from({ length: 8 }, (_, i) => i + 1);
+    const calc = await this.getCalculation(userId, params.periodYear, params.periodMonth);
+    const comp = calc as {
+      outputVat?: number;
+      inputVatClaimable?: number;
+      netVatPayable?: number;
+      inputVatBroughtForward?: number;
+      breakdown?: {
+        outputVat?: number;
+        inputVatClaimable?: number;
+        netVatPayable?: number;
+      };
+    };
+    const computationPayload = (params.computation ?? comp) as typeof comp;
 
     const taxPayable = await prisma.taxPayable.upsert({
       where: {
@@ -115,6 +212,22 @@ export const vatFilingService = {
         stateOfOperation: params.stateOfOperation ?? null,
         vatRegistrationNumber: params.vatRegistrationNumber ?? null,
         receiptUrl: params.receiptUrl ?? null,
+        submissionReference: params.submissionReference ?? null,
+        computation: {
+          outputVat:
+            computationPayload.outputVat ?? computationPayload.breakdown?.outputVat,
+          inputVatClaimable:
+            computationPayload.inputVatClaimable ??
+            computationPayload.breakdown?.inputVatClaimable,
+          netVatPayable:
+            computationPayload.netVatPayable ??
+            computationPayload.breakdown?.netVatPayable,
+          inputVatBroughtForward: computationPayload.inputVatBroughtForward ?? 0,
+        },
+        currentStep: 8,
+        completedSteps,
+        frozen: true,
+        frozenAt: submittedAt,
       },
       update: {
         amountDue: new Decimal(params.amount),
@@ -126,50 +239,49 @@ export const vatFilingService = {
         vatRegistrationNumber: params.vatRegistrationNumber ?? undefined,
         receiptUrl: params.receiptUrl ?? undefined,
         status,
+        submissionReference: params.submissionReference ?? undefined,
+        computation: {
+          outputVat:
+            computationPayload.outputVat ?? computationPayload.breakdown?.outputVat,
+          inputVatClaimable:
+            computationPayload.inputVatClaimable ??
+            computationPayload.breakdown?.inputVatClaimable,
+          netVatPayable:
+            computationPayload.netVatPayable ??
+            computationPayload.breakdown?.netVatPayable,
+          inputVatBroughtForward: computationPayload.inputVatBroughtForward ?? 0,
+        },
+        currentStep: 8,
+        completedSteps,
+        frozen: true,
+        frozenAt: submittedAt,
       },
     });
 
-    const timelineData: Array<{
-      taxPayableId: string;
-      event: string;
-      description: string;
-      eventDate: Date;
-    }> = [
-      {
+    await copyCarryForwardOnSubmit(
+      userId,
+      "VAT",
+      params.periodYear,
+      params.periodMonth,
+      taxPayable.computation as Record<string, unknown>,
+    );
+
+    await prisma.filingTimelineEvent.create({
+      data: {
         taxPayableId: taxPayable.id,
-        event: FILING_TIMELINE_EVENTS.DRAFT_CREATED,
-        description: "Draft created",
+        event: WORKSPACE_TIMELINE_EVENTS.SUBMITTED,
+        description: "VAT return recorded",
         eventDate: submittedAt,
       },
-      {
-        taxPayableId: taxPayable.id,
-        event: FILING_TIMELINE_EVENTS.REVIEWED_VALIDATED,
-        description: "Reviewed & validated",
-        eventDate: submittedAt,
-      },
-      {
-        taxPayableId: taxPayable.id,
-        event: FILING_TIMELINE_EVENTS.SUBMITTED_TO_FIRS,
-        description: "Submitted to FIRS",
-        eventDate: submittedAt,
-      },
-    ];
-    if (params.paymentStatus === "paid") {
-      timelineData.push({
-        taxPayableId: taxPayable.id,
-        event: FILING_TIMELINE_EVENTS.PAYMENT_CONFIRMED,
-        description: "Payment confirmed",
-        eventDate: submittedAt,
-      });
-    }
-    await prisma.filingTimelineEvent.createMany({ data: timelineData });
+    });
 
     return {
       id: taxPayable.id,
       submissionDate: submittedAt,
       period: `${params.periodYear}-${String(params.periodMonth).padStart(2, "0")}`,
       amount: params.amount,
-      status,
+      status: "submitted",
+      completionPercent: completionPercentFromStep(8),
     };
   },
 };

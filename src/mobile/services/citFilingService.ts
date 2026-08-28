@@ -19,6 +19,12 @@ import { assetsService } from "./assetsService";
 import { evidenceVaultService } from "./evidenceVaultService";
 import { taxComputationService } from "./taxComputationService";
 import { userService } from "./userService";
+import type { CitDraftInputs } from "../../constants/filingWorkspace";
+import { completionPercentFromStep } from "../../constants/filingWorkspace";
+import {
+  copyCarryForwardOnSubmit,
+  getCitPriorYearCarry,
+} from "./filingCarryForwardService";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -221,6 +227,7 @@ export const citFilingService = {
       profile,
       business,
       existing,
+      priorCarry,
     ] = await Promise.all([
       sumAnnualTurnoverAndProfit(userId, year),
       assetsService.nonCurrentAssets(userId),
@@ -239,7 +246,44 @@ export const citFilingService = {
           },
         },
       }),
+      getCitPriorYearCarry(userId, year),
     ]);
+
+    if (existing?.frozen && existing.computation) {
+      const computation = existing.computation as CitComputationSnapshot;
+      return {
+        year,
+        dueDate: citDueDateForYear(year),
+        yearEnd: citYearEndForYear(year),
+        yearOpenForFiling: isCitYearOpenForFiling(year),
+        alreadyFiled: existing.submittedAt != null,
+        filingId: existing.submittedAt != null ? existing.id : null,
+        tin: profile?.tin ?? null,
+        rcNumber: profile?.rcNumber ?? null,
+        companyName: profile?.businessName ?? null,
+        computation,
+        frozen: true,
+        warning: existing.booksChangedSinceFreeze
+          ? "Books changed since computation was confirmed. Re-confirm step 1 to update figures."
+          : undefined,
+        priorYearCarry: priorCarry,
+      };
+    }
+
+    const draftInputs =
+      existing?.draftInputs && typeof existing.draftInputs === "object"
+        ? (existing.draftInputs as CitDraftInputs)
+        : null;
+    const adjustments = draftInputs?.adjustments ?? {};
+    const storedCarry =
+      existing?.priorPeriodCarry && typeof existing.priorPeriodCarry === "object"
+        ? (existing.priorPeriodCarry as {
+            unutilizedCapitalAllowances?: number;
+            unrelievedLoss?: number;
+            unutilizedWhtCredits?: number;
+          })
+        : null;
+    const carry = storedCarry ?? priorCarry;
 
     const month =
       year === new Date().getFullYear() ? new Date().getMonth() + 1 : 12;
@@ -261,15 +305,20 @@ export const citFilingService = {
         : normalizeMoneyAmount((taxComp.overview.totalIncome / month) * 12);
     const fixedAssets = nonCurrent.purchaseCost;
     const depreciation =
-      dashboard.plImpact.annualDepreciationCharge ||
-      dashboard.summary.annualDepreciation ||
-      0;
+      adjustments.depreciation ??
+      (dashboard.plImpact.annualDepreciationCharge ||
+        dashboard.summary.annualDepreciation ||
+        0);
+    const caFromSchedule = caSchedule.available > 0
+      ? caSchedule.available
+      : taxComp.cit.capitalAllowances ||
+        dashboard.plImpact.capitalAllowance ||
+        0;
     const capitalAllowancesAvailable =
-      caSchedule.available > 0
-        ? caSchedule.available
-        : taxComp.cit.capitalAllowances ||
-          dashboard.plImpact.capitalAllowance ||
-          0;
+      caFromSchedule + (carry?.unutilizedCapitalAllowances ?? 0);
+    const defaultLoss = carry?.unrelievedLoss ?? taxComp.cit.lossCarryForward ?? 0;
+    const defaultWht =
+      Math.max(booksWht, payerWht) + (carry?.unutilizedWhtCredits ?? 0);
 
     const computation = computeCitFromSnapshot({
       year,
@@ -277,14 +326,14 @@ export const citFilingService = {
       fixedAssets,
       accountingProfit,
       depreciation,
-      fines: 0,
-      directorsPersonal: 0,
-      otherNonAllowable: 0,
-      frankedDividends: 0,
-      chargeableGains: 0,
-      lossCarryForward: taxComp.cit.lossCarryForward ?? 0,
+      fines: adjustments.fines ?? 0,
+      directorsPersonal: adjustments.directorsPersonal ?? 0,
+      otherNonAllowable: adjustments.otherNonAllowable ?? 0,
+      frankedDividends: adjustments.frankedDividends ?? 0,
+      chargeableGains: adjustments.chargeableGains ?? 0,
+      lossCarryForward: adjustments.lossCarryForward ?? defaultLoss,
       capitalAllowancesAvailable,
-      whtCredits: Math.max(booksWht, payerWht),
+      whtCredits: adjustments.whtCredits ?? defaultWht,
       rcNumber: profile?.rcNumber?.trim() ?? "",
       tin: profile?.tin?.trim() ?? "",
       companyName: profile?.businessName?.trim() ?? "",
@@ -304,6 +353,8 @@ export const citFilingService = {
       rcNumber: profile?.rcNumber ?? null,
       companyName: profile?.businessName ?? null,
       computation,
+      draftApplied: draftInputs != null,
+      priorYearCarry: carry,
       inputs: {
         turnover,
         fixedAssets,
@@ -320,7 +371,7 @@ export const citFilingService = {
   async submit(
     userId: string,
     body: Record<string, unknown>,
-  ): Promise<{ id: string; status: string; submissionDate: Date }> {
+  ): Promise<{ id: string; status: string; submissionDate: Date; completionPercent?: number }> {
     const periodYear = Number(body.periodYear);
     const amount = Number(body.amount);
     const rcNumber = String(body.rcNumber).trim();
@@ -387,6 +438,12 @@ export const citFilingService = {
     const storedPaymentStatus =
       amount <= 0 || paymentStatus === "paid" ? "paid" : "unpaid";
 
+    const submissionReference =
+      body.submissionReference != null
+        ? String(body.submissionReference).trim()
+        : "";
+    const completedSteps = Array.from({ length: 8 }, (_, i) => i + 1);
+
     const taxPayable = await prisma.taxPayable.upsert({
       where: {
         userId_taxType_periodYear_periodMonth: {
@@ -416,6 +473,11 @@ export const citFilingService = {
           body.documentUrl != null ? String(body.documentUrl) : null,
         evidenceVaultId,
         receiptUrl: body.receiptUrl != null ? String(body.receiptUrl) : null,
+        submissionReference: submissionReference || null,
+        currentStep: 8,
+        completedSteps,
+        frozen: true,
+        frozenAt: submittedAt,
       },
       update: {
         amountDue: new Decimal(amount),
@@ -432,8 +494,21 @@ export const citFilingService = {
           body.documentUrl != null ? String(body.documentUrl) : null,
         evidenceVaultId,
         receiptUrl: body.receiptUrl != null ? String(body.receiptUrl) : null,
+        submissionReference: submissionReference || null,
+        currentStep: 8,
+        completedSteps,
+        frozen: true,
+        frozenAt: submittedAt,
       },
     });
+
+    await copyCarryForwardOnSubmit(
+      userId,
+      "CIT",
+      periodYear,
+      CIT_PERIOD_MONTH,
+      computation as unknown as Record<string, unknown>,
+    );
 
     await prisma.filingTimelineEvent.create({
       data: {
@@ -448,6 +523,12 @@ export const citFilingService = {
       id: taxPayable.id,
       status: "submitted",
       submissionDate: submittedAt,
+      completionPercent: completionPercentFromStep(8),
     };
+  },
+
+  async saveDraft(userId: string, body: CitDraftInputs & { periodYear: number }) {
+    const { filingWorkspaceService } = await import("./filingWorkspaceService");
+    return filingWorkspaceService.saveCitDraft(userId, body);
   },
 };

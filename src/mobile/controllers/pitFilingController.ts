@@ -49,3 +49,17 @@ export const submitPitFiling = async (req: IRequest, res: Response) => {
     res.status(500).json({ message: "Failed to submit PIT filing", error: "SERVER_ERROR" });
   }
 };
+
+export const savePitDraft = async (req: IRequest, res: Response) => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = await pitFilingService.saveDraft(
+      userId,
+      req.body as Parameters<typeof pitFilingService.saveDraft>[1],
+    );
+    res.status(200).json({ data });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res.status(500).json({ message: "Failed to save PIT draft", error: "SERVER_ERROR" });
+  }
+};
