@@ -16,6 +16,14 @@ export function bankLedgerAccount(bankCode: string, accountName: string) {
   };
 }
 
+/** Aggregate bank ledger when no specific account is selected. */
+export function defaultBankLedgerAccount(): { code: string; name: string } {
+  return {
+    code: LEDGER_ACCOUNTS.BANK,
+    name: LEDGER_ACCOUNT_NAMES[LEDGER_ACCOUNTS.BANK] ?? "Bank",
+  };
+}
+
 /** Resolve a user-owned bank account to its ledger account (BANK:{bankCode}). */
 export async function resolveUserBankLedgerAccount(
   userId: string,
@@ -26,7 +34,7 @@ export async function resolveUserBankLedgerAccount(
   if (!code) {
     throw new HttpReplyError(
       400,
-      "bankCode is required for Transfer payments",
+      "bankCode cannot be empty when provided",
       null,
       "VALIDATION_ERROR",
     );
@@ -49,6 +57,21 @@ export async function resolveUserBankLedgerAccount(
     row.bankCode,
     `${row.bankName} — ${row.accountName}`,
   );
+}
+
+/**
+ * Transfer / bank settlement: BANK:{bankCode} when bankCode is set, else aggregate BANK.
+ */
+export async function resolveBankLedgerAccount(
+  userId: string,
+  bankCode: string | null | undefined,
+  db: DbClient = prisma,
+): Promise<{ code: string; name: string }> {
+  const code = bankCode?.trim();
+  if (!code) {
+    return defaultBankLedgerAccount();
+  }
+  return resolveUserBankLedgerAccount(userId, code, db);
 }
 
 /** Card settlement: mapped business bank when bankCode provided, else CARD_SETTLEMENT. */

@@ -148,14 +148,18 @@ export function parseAndValidateInvoiceAmountPaid(
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i]!;
-    if (isTransferPaymentType(item.paymentType) && !item.bankCode?.trim()) {
+    if (
+      item.paymentType === PAYMENT_TYPE_CARD &&
+      item.bankCode != null &&
+      item.bankCode.trim() === ""
+    ) {
       throw new HttpReplyError(
         400,
-        `${label}.items[${i}].bankCode is required when paymentType is Transfer`,
+        `${label}.items[${i}].bankCode cannot be empty when provided`,
       );
     }
     if (
-      item.paymentType === PAYMENT_TYPE_CARD &&
+      isTransferPaymentType(item.paymentType) &&
       item.bankCode != null &&
       item.bankCode.trim() === ""
     ) {

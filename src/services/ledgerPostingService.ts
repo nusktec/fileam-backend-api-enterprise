@@ -24,8 +24,8 @@ import { coerceInvoiceAmountPaid } from "../constants/invoiceAmountPaid";
 import { ledgerService } from "./ledgerService";
 import { normalizeMoneyAmount } from "../utils/monetaryAmount";
 import {
+  resolveBankLedgerAccount,
   resolveCardSettlementLedgerAccount,
-  resolveUserBankLedgerAccount,
 } from "../utils/bankLedgerAccount";
 import { isTransferPaymentType } from "../constants/salePaymentRules";
 import { HttpReplyError } from "../utils/httpReplyError";
@@ -49,7 +49,7 @@ function line(
   };
 }
 
-/** Payment destination: Cash → Cash; Transfer → BANK:{bankCode}; Card → mapped bank or CARD_SETTLEMENT. */
+/** Payment destination: Cash → Cash; Transfer → BANK:{bankCode} or BANK; Card → mapped bank or CARD_SETTLEMENT. */
 async function resolvePaymentAssetAccount(
   userId: string,
   paymentType: string,
@@ -63,7 +63,7 @@ async function resolvePaymentAssetAccount(
     return resolveCardSettlementLedgerAccount(userId, bankCode, db);
   }
   if (isTransferPaymentType(paymentType)) {
-    return resolveUserBankLedgerAccount(userId, bankCode ?? "", db);
+    return resolveBankLedgerAccount(userId, bankCode, db);
   }
   throw new HttpReplyError(
     400,

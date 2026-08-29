@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): 12-step workspace on tax_payables — GET/PUT /filings/{vat|wht|pit|cit}/workspace, confirm-computation, validate (TaxGPT), generate-documents, package; POST /filings/{id}/complete (step 12). Pending workspaces appear in GET /filings with completionPercent from currentStep/12. PIT/CIT: POST /pit|cit/draft for reliefs/adjustments; calculation honours draft + frozen snapshot. VAT: inputVatBroughtForward from prior month credit; WHT schedule from beneficiary PAYMENT rows. Submit all types accepts submissionReference. Reports: PIT Return Summary, CIT Return Summary added. VAT/WHT monthly; PIT annual (due 31 Mar); CIT annual NTA 2025 (due 30 Jun, periodMonth=12). Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment & ledger (payment_and_account_movement_logic.pdf): Cash -> PAID on create, posts to Cash; Transfer/Card -> IN_PROGRESS on create (AR/AP only, no bank movement); confirm via PATCH .../payment-status with {\"status\":\"PAID\",\"bankCode\":\"...\"} (bankCode optional — omit to post to aggregate BANK ledger; when provided must be a registered bank account). Card without bankCode -> CARD_SETTLEMENT. Transfer without bankCode -> BANK. settlementBankCode returned on sales/expenses when set. invoiceAmountPaid = { total, items:[{amount,paymentType,bankCode?}] } — bankCode optional on all line types. Bulk sales/expenses: default Transfer -> IN_PROGRESS; only bulk Cash -> PAID. PATCH update syncs ledger (reverses confirm/collections when needed). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): 12-step workspace on tax_payables — GET/PUT /filings/{vat|wht|pit|cit}/workspace, confirm-computation, validate (TaxGPT), generate-documents, package; POST /filings/{id}/complete (step 12). Pending workspaces appear in GET /filings with completionPercent from currentStep/12. PIT/CIT: POST /pit|cit/draft for reliefs/adjustments; calculation honours draft + frozen snapshot. VAT: inputVatBroughtForward from prior month credit; WHT schedule from beneficiary PAYMENT rows. Submit all types accepts submissionReference. Reports: PIT Return Summary, CIT Return Summary added. VAT/WHT monthly; PIT annual (due 31 Mar); CIT annual NTA 2025 (due 30 Jun, periodMonth=12). Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -97,6 +97,11 @@
     {
       "key": "saleId",
       "value": ""
+    },
+    {
+      "key": "bankCode",
+      "value": "BANK001",
+      "description": "Optional. User bank account code from Cash & Bank (POST /mobile/cash-bank/banks). When set, Transfer/Card confirm and invoice payment lines post to BANK:{bankCode}; when omitted, Transfer uses aggregate BANK and Card uses CARD_SETTLEMENT."
     },
     {
       "key": "expenseId",
@@ -1254,7 +1259,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Includes status, paymentType, paymentConfirmedAt (ISO or null)."
+                "description": "Includes status, paymentType, settlementBankCode, paymentConfirmedAt (ISO or null)."
               }
             },
             {
@@ -1316,10 +1321,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Card -> status IN_PROGRESS. vatInclusive 3000 -> base 2790.70, VAT 209.30, total 3000. Confirm collection with PATCH /sales/:id/payment-status {\"status\":\"PAID\"}.",
+                "description": "Card -> status IN_PROGRESS (AR only until confirm). Optional bankCode on create presets settlement account for confirm. Confirm: PATCH /sales/:id/payment-status with status PAID and optional bankCode (Card falls back to CARD_SETTLEMENT ledger if omitted).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Consulting fee\",\n  \"amount\": 3000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Card\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": true,\n  \"customerName\": \"Acme Ltd\",\n  \"itemName\": \"Advisory package\"\n}"
+                  "raw": "{\n  \"description\": \"Consulting fee\",\n  \"amount\": 3000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Card\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": true,\n  \"customerName\": \"Acme Ltd\",\n  \"itemName\": \"Advisory package\"\n}"
                 }
               },
               "event": [
@@ -1346,10 +1351,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Transfer -> status IN_PROGRESS until confirmed with PATCH /sales/:id/payment-status. invoiceDueDate is stored for the invoice PDF but does not drive status for Transfer.",
+                "description": "Transfer -> IN_PROGRESS (full amount in AR until confirm). Optional bankCode — posts to BANK:{bankCode} when set, else aggregate BANK on confirm.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Bank transfer sale\",\n  \"amount\": 50000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Transfer\",\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"XYZ Ventures\"\n}"
+                  "raw": "{\n  \"description\": \"Bank transfer sale\",\n  \"amount\": 50000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Transfer\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"XYZ Ventures\"\n}"
                 }
               },
               "event": [
@@ -1406,10 +1411,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
-                "description": "paymentType defaults to Transfer. Cash/Transfer/Card bulk rows are created already settled: invoiceAmountPaid.total = total -> status PAID (unlike single sales, where Transfer starts IN_PROGRESS). Invoice rows keep the calculated status from invoiceAmountPaid. Max 100 items.",
+                "description": "paymentType defaults to Transfer -> IN_PROGRESS (same as single create). Only explicit Cash items are PAID on create. Invoice rows keep calculated status. Optional bankCode per item. Max 100 items.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive)\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk transfer sale 2\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive) — IN_PROGRESS\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk cash sale — PAID on create\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
                 }
               }
             },
@@ -1424,10 +1429,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/payment-status",
-                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid.total = totalAmount and paymentConfirmedAt). Body {\"status\":\"PAID\"}. Rejects Invoice sales, whose status is calculated — use PATCH /sales/:id with invoiceAmountPaid, or POST /sales/:id/mark-paid.",
+                "description": "Card / Transfer only: IN_PROGRESS -> PAID atomically. Body: {\"status\":\"PAID\"}; optional bankCode (Transfer -> BANK or BANK:{code}; Card -> CARD_SETTLEMENT or mapped bank). Idempotent if already PAID.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"status\": \"PAID\"}"
+                  "raw": "{\n  \"status\": \"PAID\"\n}"
                 }
               }
             },
@@ -1437,7 +1442,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/mark-paid",
-                "description": "Invoice only: sets invoiceAmountPaid.total = totalAmount → Paid. Sets paymentConfirmedAt."
+                "description": "Invoice only: settles full invoice via Transfer collection. Requires settlement bank — sale must have settlementBankCode or pass bankCode query/body support via PATCH first. Sets paymentConfirmedAt."
               }
             },
             {
@@ -1451,10 +1456,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Partial update. Status is re-applied for the payment type on every update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (invoiceAmountPaid cleared unless sent; paymentConfirmedAt cleared); Invoice -> Pending when unpaid, or calculated when invoiceAmountPaid is provided. status CANCELLED is preserved unless changed.",
+                "description": "Partial update; ledger sync in same transaction. Transfer invoice lines: bankCode optional (defaults to aggregate BANK or sale settlementBankCode).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"invoiceAmountPaid\": {\n    \"total\": 20000,\n    \"items\": [\n      {\n        \"amount\": 20000,\n        \"paymentType\": \"Transfer\"\n      }\n    ]\n  },\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
+                  "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"invoiceAmountPaid\": {\n    \"total\": 20000,\n    \"items\": [\n      {\n        \"amount\": 20000,\n        \"paymentType\": \"Transfer\",\n        \"bankCode\": \"{{bankCode}}\"\n      }\n    ]\n  },\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
                 }
               }
             },
@@ -1483,15 +1488,15 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Replace invoiceAmountPaid with payment lines. Validation: total must equal sum(items[].amount). Item paymentType: Cash, Transfer, Card. For Invoice sales, status becomes Partial/Overdue/PAID from invoiceAmountPaid.total + invoiceDueDate. Note: a general PATCH also resets Card/Transfer to IN_PROGRESS unless this field is sent.",
+                "description": "Append-only invoiceAmountPaid lines. bankCode optional on Transfer/Card (Transfer -> BANK or BANK:{code}).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Transfer\"\n      },\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Cash\"\n      }\n    ]\n  },\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
+                  "raw": "{\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Transfer\",\n        \"bankCode\": \"{{bankCode}}\"\n      },\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Cash\"\n      }\n    ]\n  },\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
                 }
               }
             }
           ],
-          "description": "Mobile sales / income. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total / 1.075. vatableIncome: net + 7.5% VAT. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated)."
+          "description": "Mobile sales / income. bankCode optional everywhere: Transfer confirm -> BANK or BANK:{bankCode}; Card -> CARD_SETTLEMENT or mapped bank. settlementBankCode stored when bankCode provided."
         },
         {
           "name": "Expenses *",
@@ -1520,7 +1525,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Includes expenseType, baseAmount, vatAmount, total, supplier fields."
+                "description": "Includes expenseType, baseAmount, vatAmount, total, supplier fields, settlementBankCode, paymentConfirmedAt."
               }
             },
             {
@@ -1549,10 +1554,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false,\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Supplies\"\n  }\n}"
+                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false,\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Supplies\"\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Single create. Transfer/Card -> IN_PROGRESS (unpaid). Cash -> PAID. Invoice -> calculated from invoiceAmountPaid + invoiceDueDate (Pending when unpaid). paymentType defaults to Transfer. Prefer supplier:{id,name} from Supplier Directory."
+                "description": "Transfer -> IN_PROGRESS (AP until confirm). Optional bankCode — confirm posts to BANK or BANK:{bankCode}."
               }
             },
             {
@@ -1602,10 +1607,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/bulk",
-                "description": "Mirrors bulk sales. paymentType defaults to Transfer. Cash/Transfer/Card bulk rows are created already settled: invoiceAmountPaid.total = total -> status PAID (unlike single expenses, where Transfer starts IN_PROGRESS). Invoice rows keep the calculated status. Max 100 items.",
+                "description": "Bulk create. Default Transfer -> IN_PROGRESS; only Cash -> PAID on create. Invoice rows keep calculated status. Transfer invoiceAmountPaid lines need bankCode. Max 100 items.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer expense (VAT inclusive) \\u2014 created PAID\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"vatInclusive\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Ads\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    },\n    {\n      \"description\": \"Vendor invoice (calculated status)\",\n      \"amount\": 30000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-15\",\n      \"invoiceAmountPaid\": {\n        \"total\": 5000,\n        \"items\": [\n          {\n            \"amount\": 5000,\n            \"paymentType\": \"Transfer\"\n          }\n        ]\n      },\n      \"vatInclusive\": false\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer expense (VAT inclusive) — IN_PROGRESS\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatInclusive\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Ads — Cash PAID\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    },\n    {\n      \"description\": \"Vendor invoice (calculated status)\",\n      \"amount\": 30000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-15\",\n      \"invoiceAmountPaid\": {\n        \"total\": 5000,\n        \"items\": [\n          {\n            \"amount\": 5000,\n            \"paymentType\": \"Transfer\",\n            \"bankCode\": \"{{bankCode}}\"\n          }\n        ]\n      },\n      \"vatInclusive\": false\n    }\n  ]\n}"
                 }
               }
             },
@@ -1621,10 +1626,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 6000,\n        \"paymentType\": \"Transfer\"\n      },\n      {\n        \"amount\": 4000,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"vatInclusive\": false\n}"
+                  "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 6000,\n        \"paymentType\": \"Transfer\",\n        \"bankCode\": \"{{bankCode}}\"\n      },\n      {\n        \"amount\": 4000,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"vatInclusive\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Partial update. Status is re-applied for the payment type on every update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (invoiceAmountPaid cleared unless sent); Invoice -> Pending when unpaid, or calculated when invoiceAmountPaid is provided."
+                "description": "Partial update with ledger sync. bankCode optional on Transfer/Card invoice lines."
               }
             },
             {
@@ -1643,10 +1648,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}/payment-status",
-                "description": "Card / Transfer only: IN_PROGRESS -> PAID (sets invoiceAmountPaid to a full-settlement line). Body {\"status\":\"PAID\"}. Rejects Invoice expenses (status is calculated) and Cash expenses (already PAID on create).",
+                "description": "Card / Transfer only: IN_PROGRESS -> PAID atomically. Body: {\"status\":\"PAID\"}; optional bankCode.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"status\": \"PAID\"}"
+                  "raw": "{\n  \"status\": \"PAID\"\n}"
                 }
               }
             },
@@ -1674,15 +1679,15 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Replace invoiceAmountPaid with multiple payment lines. Validation: total must equal sum(items[].amount). For Invoice expenses, status becomes Partial or Overdue from invoiceAmountPaid.total + invoiceDueDate.",
+                "description": "Append-only invoiceAmountPaid. bankCode optional on Transfer/Card lines.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"invoiceAmountPaid\": {\n    \"total\": 7500,\n    \"items\": [\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Transfer\"\n      },\n      {\n        \"amount\": 2500,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
+                  "raw": "{\n  \"invoiceAmountPaid\": {\n    \"total\": 7500,\n    \"items\": [\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Transfer\",\n        \"bankCode\": \"{{bankCode}}\"\n      },\n      {\n        \"amount\": 2500,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
                 }
               }
             }
           ],
-          "description": "Expenses. Optional paymentType (default Transfer), invoiceDueDate, invoiceAmountPaid. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). vatInclusive expenses extract VAT (Base = Total / 1.075)."
+          "description": "Expenses. bankCode optional: Transfer -> BANK or BANK:{bankCode}; Card -> CARD_SETTLEMENT or mapped bank."
         },
         {
           "name": "Inventory *",

@@ -1,19 +1,17 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import {
-  isAsyncPaymentType,
   isCashPaymentType,
   isInvoicePaymentType,
-  isTransferPaymentType,
+  isAsyncPaymentType,
 } from "../constants/salePaymentRules";
-import { HttpReplyError } from "./httpReplyError";
 import { resolveUserBankLedgerAccount } from "./bankLedgerAccount";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
 /**
- * Resolve the business bank account for Transfer (required) or Card (optional).
- * Validates ownership against the user's registered bank accounts.
+ * Optional business bank account for Transfer or Card.
+ * Validates ownership when bankCode is provided.
  */
 export async function resolveSettlementBankCode(
   userId: string,
@@ -30,15 +28,6 @@ export async function resolveSettlementBankCode(
   }
 
   const code = (provided ?? stored)?.trim() || null;
-
-  if (isTransferPaymentType(paymentType) && !code) {
-    throw new HttpReplyError(
-      400,
-      "bankCode is required for Transfer payments (provide on create or payment-status confirm)",
-      null,
-      "VALIDATION_ERROR",
-    );
-  }
 
   if (code) {
     await resolveUserBankLedgerAccount(userId, code, db);
