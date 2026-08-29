@@ -137,6 +137,7 @@ export const ledgerPostingService = {
       settlementBankCode?: string | null;
     },
     db: DbClient = prisma,
+    opts?: { postInvoiceCollections?: boolean },
   ) {
     const netRevenue = Number(sale.amount);
     const vatAmount = sale.vatAmount != null ? Number(sale.vatAmount) : 0;
@@ -186,7 +187,9 @@ export const ledgerPostingService = {
       db,
     );
 
-    if (isInvoice && paid.items.length > 0) {
+    const postInvoiceCollections = opts?.postInvoiceCollections !== false;
+
+    if (isInvoice && paid.items.length > 0 && postInvoiceCollections) {
       for (let i = 0; i < paid.items.length; i++) {
         const item = paid.items[i]!;
         if (item.amount <= 0) continue;
@@ -269,6 +272,7 @@ export const ledgerPostingService = {
       settlementBankCode?: string | null;
     },
     db: DbClient = prisma,
+    opts?: { postInvoiceCollections?: boolean },
   ) {
     const total = normalizeMoneyAmount(Number(expense.totalAmount));
     if (total <= 0) return null;
@@ -312,7 +316,9 @@ export const ledgerPostingService = {
       db,
     );
 
-    if (isInvoice && paid.items.length > 0) {
+    const postInvoiceCollections = opts?.postInvoiceCollections !== false;
+
+    if (isInvoice && paid.items.length > 0 && postInvoiceCollections) {
       for (let i = 0; i < paid.items.length; i++) {
         const item = paid.items[i]!;
         if (item.amount <= 0) continue;

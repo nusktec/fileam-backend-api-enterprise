@@ -792,25 +792,26 @@ export const expensesService = {
     const nextPaymentType =
       data.paymentType != null ? data.paymentType.trim() : expense.paymentType;
 
-    // On update, re-apply payment defaults unless invoiceAmountPaid is explicitly sent:
-    // Cash → PAID; Card/Transfer → IN_PROGRESS (unpaid); Invoice → Pending (unpaid / calculated).
+    // Re-apply payment defaults only when paymentType changes (not on every PATCH).
     if (data.invoiceAmountPaid != null) {
       const previousPaid = coerceInvoiceAmountPaid(expense.invoiceAmountPaid);
       const nextPaid = parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid);
       assertInvoicePaymentsAppendOnly(previousPaid, nextPaid);
       assertInvoiceNotOverpaid(nextPaid.total, nextTotal);
       updateData.invoiceAmountPaid = invoiceAmountPaidToJson(nextPaid);
-    } else if (isCashPaymentType(nextPaymentType)) {
-      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
-        invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
-      );
-    } else if (
-      isAsyncPaymentType(nextPaymentType) ||
-      isInvoicePaymentType(nextPaymentType)
-    ) {
-      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
-        initialInvoiceAmountPaid(nextPaymentType, nextTotal),
-      );
+    } else if (data.paymentType != null) {
+      if (isCashPaymentType(nextPaymentType)) {
+        updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+          invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
+        );
+      } else if (
+        isAsyncPaymentType(nextPaymentType) ||
+        isInvoicePaymentType(nextPaymentType)
+      ) {
+        updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+          initialInvoiceAmountPaid(nextPaymentType, nextTotal),
+        );
+      }
     }
 
     const nextPaidStruct =

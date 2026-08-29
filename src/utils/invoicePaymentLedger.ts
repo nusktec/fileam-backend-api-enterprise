@@ -49,6 +49,7 @@ export async function postIncrementalSaleCollections(
   next: InvoiceAmountPaid,
   transactionDate: Date,
   defaultBankCode?: string | null,
+  db?: Parameters<typeof ledgerPostingService.postSaleCollection>[7],
 ): Promise<void> {
   assertInvoicePaymentsAppendOnly(previous, next);
   for (let i = previous.items.length; i < next.items.length; i++) {
@@ -62,6 +63,7 @@ export async function postIncrementalSaleCollections(
       transactionDate,
       `inv:${i}`,
       item.bankCode ?? defaultBankCode,
+      db,
     );
   }
 }
@@ -73,6 +75,7 @@ export async function postIncrementalExpensePayments(
   next: InvoiceAmountPaid,
   transactionDate: Date,
   defaultBankCode?: string | null,
+  db?: Parameters<typeof ledgerPostingService.postExpensePayment>[7],
 ): Promise<void> {
   assertInvoicePaymentsAppendOnly(previous, next);
   for (let i = previous.items.length; i < next.items.length; i++) {
@@ -86,6 +89,7 @@ export async function postIncrementalExpensePayments(
       transactionDate,
       `inv:${i}`,
       item.bankCode ?? defaultBankCode,
+      db,
     );
   }
 }

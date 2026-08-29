@@ -788,25 +788,26 @@ export const salesService = {
 
     const nextPaymentType = data.paymentType ?? sale.paymentType;
 
-    // On update, re-apply payment defaults unless invoiceAmountPaid is explicitly sent:
-    // Cash → fully paid; Card/Transfer → unpaid (IN_PROGRESS); Invoice → unpaid (Pending).
+    // Re-apply payment defaults only when paymentType changes (not on every PATCH).
     if (data.invoiceAmountPaid != null) {
       const previousPaid = coerceInvoiceAmountPaid(sale.invoiceAmountPaid);
       const nextPaid = parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid);
       assertInvoicePaymentsAppendOnly(previousPaid, nextPaid);
       assertInvoiceNotOverpaid(nextPaid.total, nextTotal);
       updateData.invoiceAmountPaid = invoiceAmountPaidToJson(nextPaid);
-    } else if (isCashPaymentType(nextPaymentType)) {
-      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
-        invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
-      );
-    } else if (
-      isAsyncPaymentType(nextPaymentType) ||
-      isInvoicePaymentType(nextPaymentType)
-    ) {
-      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
-        initialInvoiceAmountPaid(nextPaymentType, nextTotal),
-      );
+    } else if (data.paymentType != null) {
+      if (isCashPaymentType(nextPaymentType)) {
+        updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+          invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
+        );
+      } else if (
+        isAsyncPaymentType(nextPaymentType) ||
+        isInvoicePaymentType(nextPaymentType)
+      ) {
+        updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+          initialInvoiceAmountPaid(nextPaymentType, nextTotal),
+        );
+      }
     }
 
     const patchPaid =
@@ -987,7 +988,21 @@ export const salesService = {
     const paid = invoiceAmountPaidFromSingle(total, PAYMENT_TYPE_TRANSFER);
 
     const updated = await prisma.$transaction(async (tx) => {
-      const row = await tx.sale.update({
+      const nextLedgerRow = {
+        ...toSaleLedgerRow(sale),
+        invoiceAmountPaid: invoiceAmountPaidToJson(paid),
+        status: SALE_STATUS.PAID,
+        settlementBankCode,
+      };
+
+      await syncSaleLedgerAfterUpdate(
+        userId,
+        toSaleLedgerRow(sale),
+        nextLedgerRow,
+        tx,
+      );
+
+      return tx.sale.update({
         where: { id: saleId },
         data: {
           invoiceAmountPaid: invoiceAmountPaidToJson(paid),
@@ -996,19 +1011,6 @@ export const salesService = {
           settlementBankCode,
         },
       });
-
-      await ledgerPostingService.postSaleCollection(
-        userId,
-        saleId,
-        total,
-        PAYMENT_TYPE_TRANSFER,
-        row.saleDate,
-        "mark-paid",
-        settlementBankCode,
-        tx,
-      );
-
-      return row;
     });
 
     return mapSaleSummary(updated);

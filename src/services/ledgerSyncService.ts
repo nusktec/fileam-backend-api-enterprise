@@ -14,6 +14,11 @@ import {
   type InvoiceAmountPaid,
 } from "../constants/invoiceAmountPaid";
 import {
+  assertInvoicePaymentsAppendOnly,
+  postIncrementalExpensePayments,
+  postIncrementalSaleCollections,
+} from "../utils/invoicePaymentLedger";
+import {
   isAsyncPaymentType,
   isInvoicePaymentType,
   isSalePaidStatus,
@@ -56,7 +61,6 @@ function recognitionChanged(
   next: SaleLedgerRow | ExpenseLedgerRow,
 ): boolean {
   if (previous.paymentType !== next.paymentType) return true;
-  if (previous.status !== next.status) return true;
   if (num(previous.totalAmount) !== num(next.totalAmount)) return true;
   if ("amount" in previous && "amount" in next) {
     if (num(previous.amount) !== num(next.amount)) return true;
@@ -64,7 +68,27 @@ function recognitionChanged(
     const nv = next.vatAmount != null ? num(next.vatAmount) : 0;
     if (pv !== nv) return true;
   }
+  // Invoice status (Pending/Partial/PAID) is derived from payments — not a recognition event.
+  const invoiceLifecycle =
+    isInvoicePaymentType(previous.paymentType) &&
+    isInvoicePaymentType(next.paymentType);
+  if (!invoiceLifecycle && previous.status !== next.status) {
+    return true;
+  }
   return false;
+}
+
+function isAppendOnlyInvoicePaymentChange(
+  previous: InvoiceAmountPaid,
+  next: InvoiceAmountPaid,
+): boolean {
+  if (next.items.length < previous.items.length) return false;
+  try {
+    assertInvoicePaymentsAppendOnly(previous, next);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function reverseByReference(
@@ -199,27 +223,60 @@ export async function syncSaleLedgerAfterUpdate(
       : false;
 
   if (recognitionChanged(previous, next)) {
-    await reverseByReference(
-      userId,
-      LEDGER_REFERENCE_TYPES.SALE_RECOGNITION,
-      previous.id,
-      `Reverse sale recognition ${previous.id}`,
-      txnDate,
-      db,
-    );
-    await ledgerPostingService.postSaleRecognition(userId, next, db);
-  }
-
-  if (invoicePaymentsChanged) {
-    await reverseByReferencePrefix(
-      userId,
-      LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
-      `${previous.id}:`,
-      `Reverse sale collections ${previous.id}`,
-      txnDate,
-      db,
-    );
     if (isInvoicePaymentType(next.paymentType)) {
+      await reverseByReferencePrefix(
+        userId,
+        LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
+        `${previous.id}:`,
+        `Reverse sale collections ${previous.id}`,
+        txnDate,
+        db,
+      );
+      await reverseByReference(
+        userId,
+        LEDGER_REFERENCE_TYPES.SALE_RECOGNITION,
+        previous.id,
+        `Reverse sale recognition ${previous.id}`,
+        txnDate,
+        db,
+      );
+      await ledgerPostingService.postSaleRecognition(userId, next, db, {
+        postInvoiceCollections: false,
+      });
+      if (nextPaid.items.length > 0) {
+        await repostInvoiceSaleCollections(userId, next, nextPaid, db);
+      }
+    } else {
+      await reverseByReference(
+        userId,
+        LEDGER_REFERENCE_TYPES.SALE_RECOGNITION,
+        previous.id,
+        `Reverse sale recognition ${previous.id}`,
+        txnDate,
+        db,
+      );
+      await ledgerPostingService.postSaleRecognition(userId, next, db);
+    }
+  } else if (invoicePaymentsChanged && isInvoicePaymentType(next.paymentType)) {
+    if (isAppendOnlyInvoicePaymentChange(prevPaid, nextPaid)) {
+      await postIncrementalSaleCollections(
+        userId,
+        next.id,
+        prevPaid,
+        nextPaid,
+        txnDate,
+        next.settlementBankCode,
+        db,
+      );
+    } else {
+      await reverseByReferencePrefix(
+        userId,
+        LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
+        `${previous.id}:`,
+        `Reverse sale collections ${previous.id}`,
+        txnDate,
+        db,
+      );
       await repostInvoiceSaleCollections(userId, next, nextPaid, db);
     }
   }
@@ -258,27 +315,60 @@ export async function syncExpenseLedgerAfterUpdate(
       : false;
 
   if (recognitionChanged(previous, next)) {
-    await reverseByReference(
-      userId,
-      LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
-      previous.id,
-      `Reverse expense recognition ${previous.id}`,
-      txnDate,
-      db,
-    );
-    await ledgerPostingService.postExpenseRecognition(userId, next, db);
-  }
-
-  if (invoicePaymentsChanged) {
-    await reverseByReferencePrefix(
-      userId,
-      LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
-      `${previous.id}:`,
-      `Reverse expense payments ${previous.id}`,
-      txnDate,
-      db,
-    );
     if (isInvoicePaymentType(next.paymentType)) {
+      await reverseByReferencePrefix(
+        userId,
+        LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
+        `${previous.id}:`,
+        `Reverse expense payments ${previous.id}`,
+        txnDate,
+        db,
+      );
+      await reverseByReference(
+        userId,
+        LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
+        previous.id,
+        `Reverse expense recognition ${previous.id}`,
+        txnDate,
+        db,
+      );
+      await ledgerPostingService.postExpenseRecognition(userId, next, db, {
+        postInvoiceCollections: false,
+      });
+      if (nextPaid.items.length > 0) {
+        await repostInvoiceExpensePayments(userId, next, nextPaid, db);
+      }
+    } else {
+      await reverseByReference(
+        userId,
+        LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
+        previous.id,
+        `Reverse expense recognition ${previous.id}`,
+        txnDate,
+        db,
+      );
+      await ledgerPostingService.postExpenseRecognition(userId, next, db);
+    }
+  } else if (invoicePaymentsChanged && isInvoicePaymentType(next.paymentType)) {
+    if (isAppendOnlyInvoicePaymentChange(prevPaid, nextPaid)) {
+      await postIncrementalExpensePayments(
+        userId,
+        next.id,
+        prevPaid,
+        nextPaid,
+        txnDate,
+        next.settlementBankCode,
+        db,
+      );
+    } else {
+      await reverseByReferencePrefix(
+        userId,
+        LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
+        `${previous.id}:`,
+        `Reverse expense payments ${previous.id}`,
+        txnDate,
+        db,
+      );
       await repostInvoiceExpensePayments(userId, next, nextPaid, db);
     }
   }
