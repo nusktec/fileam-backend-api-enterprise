@@ -30,6 +30,12 @@ import {
 } from "../../utils/dateRangeQuery";
 import { taxPayablesService } from "./taxPayablesService";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
+import { syncSaleLedgerAfterUpdate } from "../../services/ledgerSyncService";
+import {
+  assertInvoiceNotOverpaid,
+  assertInvoicePaymentsAppendOnly,
+} from "../../utils/invoicePaymentLedger";
+import { resolveSettlementBankCode } from "../../utils/settlementBank";
 
 const BULK_CREATE_MAX = 100;
 
@@ -146,6 +152,30 @@ function resolveSaleAmounts(input: {
   };
 }
 
+function toSaleLedgerRow(sale: {
+  id: string;
+  paymentType: string;
+  status: string;
+  amount: Decimal;
+  vatAmount: Decimal;
+  totalAmount: Decimal;
+  invoiceAmountPaid: unknown;
+  saleDate: Date;
+  settlementBankCode?: string | null;
+}) {
+  return {
+    id: sale.id,
+    paymentType: sale.paymentType,
+    status: sale.status,
+    amount: sale.amount,
+    vatAmount: sale.vatAmount,
+    totalAmount: sale.totalAmount,
+    invoiceAmountPaid: sale.invoiceAmountPaid,
+    saleDate: sale.saleDate,
+    settlementBankCode: sale.settlementBankCode ?? null,
+  };
+}
+
 function mapSaleSummary(sale: {
   id: string;
   invoiceNumber: string;
@@ -164,6 +194,7 @@ function mapSaleSummary(sale: {
   invoiceDueDate?: Date | null;
   invoiceAmountPaid?: unknown;
   category?: string | null;
+  settlementBankCode?: string | null;
 }) {
   const invoiceAmountPaid = coerceInvoiceAmountPaid(sale.invoiceAmountPaid);
   const totalAmount = decimalToNumber(sale.totalAmount);
@@ -194,6 +225,7 @@ function mapSaleSummary(sale: {
     paymentConfirmedAt: sale.paymentConfirmedAt
       ? sale.paymentConfirmedAt.toISOString()
       : null,
+    settlementBankCode: sale.settlementBankCode ?? null,
   };
 }
 
@@ -387,6 +419,7 @@ export const salesService = {
       date: string;
       invoiceDueDate?: string | null;
       invoiceAmountPaid?: unknown;
+      bankCode?: string | null;
       vatableIncome: boolean;
       vatInclusive?: boolean;
       serviceIncome: boolean;
@@ -412,6 +445,12 @@ export const salesService = {
       totalAmount: Number(totalAmount),
       invoiceDueDate,
     });
+    const settlementBankCode = await resolveSettlementBankCode(
+      userId,
+      data.paymentType,
+      null,
+      data.bankCode,
+    );
 
     const sale = await prisma.$transaction(async (tx) => {
       const userRow = await tx.user.findUnique({
@@ -446,6 +485,7 @@ export const salesService = {
           vatableIncome,
           serviceIncome: data.serviceIncome,
           status,
+          settlementBankCode,
           receiptUrl: nullableTrimmed(data.receiptUrl),
         },
       });
@@ -476,6 +516,7 @@ export const salesService = {
       date: string;
       invoiceDueDate?: string | null;
       invoiceAmountPaid?: unknown;
+      bankCode?: string | null;
       vatableIncome?: boolean;
       vatInclusive?: boolean;
       serviceIncome?: boolean;
@@ -523,12 +564,11 @@ export const salesService = {
       if (!raw.date) {
         throw new HttpReplyError(400, `items[${index}]: date is required`);
       }
-      // Bulk sales: default Transfer, already settled → PAID (unlike single sales,
-      // where Transfer starts IN_PROGRESS). Invoice items stay calculated.
+      // Bulk sales: default Transfer → IN_PROGRESS (same as single create). Cash → PAID.
       const paymentType = raw.paymentType?.trim() || PAYMENT_TYPE_TRANSFER;
       const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
       const totalNum = Number(resolved.totalAmount);
-      const fullyPaid = !isInvoicePaymentType(paymentType);
+      const fullyPaid = isCashPaymentType(paymentType);
       const invoiceAmountPaid =
         raw.invoiceAmountPaid != null
           ? parseAndValidateInvoiceAmountPaid(
@@ -558,6 +598,7 @@ export const salesService = {
         vatInclusive,
         serviceIncome: raw.serviceIncome !== false,
         status,
+        bankCode: raw.bankCode?.trim() || null,
       };
     });
 
@@ -568,6 +609,13 @@ export const salesService = {
         Number((userRow as { nextSaleNumber?: number }).nextSaleNumber) || 1;
       const created = [];
       for (const row of prepared) {
+        const settlementBankCode = await resolveSettlementBankCode(
+          userId,
+          row.paymentType,
+          null,
+          row.bankCode,
+          tx,
+        );
         const invoiceNumber = String(nextNum);
         nextNum += 1;
         created.push(
@@ -593,6 +641,7 @@ export const salesService = {
               vatableIncome: row.vatableIncome,
               serviceIncome: row.serviceIncome,
               status: row.status,
+              settlementBankCode,
               receiptUrl: row.receiptUrl,
             },
           }),
@@ -638,6 +687,7 @@ export const salesService = {
       date: string;
       invoiceDueDate: string | null;
       invoiceAmountPaid: unknown;
+      bankCode?: string | null;
       vatableIncome: boolean;
       vatInclusive: boolean;
       serviceIncome: boolean;
@@ -675,6 +725,16 @@ export const salesService = {
           : data.customerId.trim();
     }
     if (data.paymentType != null) updateData.paymentType = data.paymentType;
+    if (data.bankCode !== undefined) {
+      updateData.settlementBankCode = data.bankCode
+        ? await resolveSettlementBankCode(
+            userId,
+            data.paymentType ?? sale.paymentType,
+            sale.settlementBankCode,
+            data.bankCode,
+          )
+        : null;
+    }
     if (data.date != null) {
       const saleDate = toCalendarDate(data.date);
       updateData.saleDate = saleDate;
@@ -682,11 +742,6 @@ export const salesService = {
     }
     if (data.invoiceDueDate !== undefined) {
       updateData.invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate);
-    }
-    if (data.invoiceAmountPaid != null) {
-      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
-        parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid),
-      );
     }
     if (data.vatableIncome != null) updateData.vatableIncome = data.vatableIncome;
     if (data.vatInclusive != null) updateData.vatInclusive = data.vatInclusive;
@@ -736,9 +791,11 @@ export const salesService = {
     // On update, re-apply payment defaults unless invoiceAmountPaid is explicitly sent:
     // Cash → fully paid; Card/Transfer → unpaid (IN_PROGRESS); Invoice → unpaid (Pending).
     if (data.invoiceAmountPaid != null) {
-      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
-        parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid),
-      );
+      const previousPaid = coerceInvoiceAmountPaid(sale.invoiceAmountPaid);
+      const nextPaid = parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid);
+      assertInvoicePaymentsAppendOnly(previousPaid, nextPaid);
+      assertInvoiceNotOverpaid(nextPaid.total, nextTotal);
+      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(nextPaid);
     } else if (isCashPaymentType(nextPaymentType)) {
       updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
         invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
@@ -773,9 +830,36 @@ export const salesService = {
       updateData.paymentConfirmedAt = null;
     }
 
-    const updated = await prisma.sale.update({
-      where: { id: saleId },
-      data: updateData,
+    const nextStatus = updateData.status as string;
+
+    const nextLedgerRow = {
+      ...toSaleLedgerRow(sale),
+      paymentType: nextPaymentType,
+      status: nextStatus,
+      amount: (updateData.amount as Decimal | undefined) ?? sale.amount,
+      vatAmount: (updateData.vatAmount as Decimal | undefined) ?? sale.vatAmount,
+      totalAmount:
+        (updateData.totalAmount as Decimal | undefined) ?? sale.totalAmount,
+      invoiceAmountPaid:
+        updateData.invoiceAmountPaid ?? sale.invoiceAmountPaid,
+      saleDate: (updateData.saleDate as Date | undefined) ?? sale.saleDate,
+      settlementBankCode:
+        (updateData.settlementBankCode as string | null | undefined) ??
+        sale.settlementBankCode ??
+        null,
+    };
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await syncSaleLedgerAfterUpdate(
+        userId,
+        toSaleLedgerRow(sale),
+        nextLedgerRow,
+        tx,
+      );
+      return tx.sale.update({
+        where: { id: saleId },
+        data: updateData,
+      });
     });
 
     await taxPayablesService.syncPayablesForPeriods(userId, periodsToSync);
@@ -791,6 +875,7 @@ export const salesService = {
     userId: string,
     saleId: string,
     status: string,
+    bankCode?: string | null,
   ) {
     const sale = await prisma.sale.findFirst({
       where: { id: saleId, userId },
@@ -833,29 +918,49 @@ export const salesService = {
       decimalToNumber(sale.totalAmount),
       sale.paymentType,
     );
-    const updated = await prisma.sale.update({
-      where: { id: saleId },
-      data: {
-        invoiceAmountPaid: invoiceAmountPaidToJson(paid),
-        status: SALE_STATUS.PAID,
-        paymentConfirmedAt: new Date(),
-      },
-    });
 
-    await ledgerPostingService.postSaleCollection(
-      userId,
-      saleId,
-      decimalToNumber(updated.totalAmount),
-      updated.paymentType,
-      updated.saleDate,
-      "confirm",
-    );
+    const updated = await prisma.$transaction(async (tx) => {
+      const settlementBankCode = await resolveSettlementBankCode(
+        userId,
+        sale.paymentType,
+        sale.settlementBankCode,
+        bankCode,
+        tx,
+      );
+
+      const row = await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          invoiceAmountPaid: invoiceAmountPaidToJson(paid),
+          status: SALE_STATUS.PAID,
+          paymentConfirmedAt: new Date(),
+          settlementBankCode,
+        },
+      });
+
+      await ledgerPostingService.postSaleCollection(
+        userId,
+        saleId,
+        decimalToNumber(row.totalAmount),
+        row.paymentType,
+        row.saleDate,
+        "confirm",
+        settlementBankCode,
+        tx,
+      );
+
+      return row;
+    });
 
     return mapSaleSummary(updated);
   },
 
   /** Invoice sales: settle in full (invoiceAmountPaid.total = totalAmount → PAID). */
-  async markInvoicePaid(userId: string, saleId: string) {
+  async markInvoicePaid(
+    userId: string,
+    saleId: string,
+    bankCode?: string | null,
+  ) {
     const sale = await prisma.sale.findFirst({
       where: { id: saleId, userId },
     });
@@ -873,24 +978,38 @@ export const salesService = {
     }
 
     const total = decimalToNumber(sale.totalAmount);
-    const paid = invoiceAmountPaidFromSingle(total, PAYMENT_TYPE_TRANSFER);
-    const updated = await prisma.sale.update({
-      where: { id: saleId },
-      data: {
-        invoiceAmountPaid: invoiceAmountPaidToJson(paid),
-        status: SALE_STATUS.PAID,
-        paymentConfirmedAt: new Date(),
-      },
-    });
-
-    await ledgerPostingService.postSaleCollection(
+    const settlementBankCode = await resolveSettlementBankCode(
       userId,
-      saleId,
-      total,
       PAYMENT_TYPE_TRANSFER,
-      updated.saleDate,
-      "mark-paid",
+      sale.settlementBankCode,
+      bankCode ?? sale.settlementBankCode,
     );
+    const paid = invoiceAmountPaidFromSingle(total, PAYMENT_TYPE_TRANSFER);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.sale.update({
+        where: { id: saleId },
+        data: {
+          invoiceAmountPaid: invoiceAmountPaidToJson(paid),
+          status: SALE_STATUS.PAID,
+          paymentConfirmedAt: new Date(),
+          settlementBankCode,
+        },
+      });
+
+      await ledgerPostingService.postSaleCollection(
+        userId,
+        saleId,
+        total,
+        PAYMENT_TYPE_TRANSFER,
+        row.saleDate,
+        "mark-paid",
+        settlementBankCode,
+        tx,
+      );
+
+      return row;
+    });
 
     return mapSaleSummary(updated);
   },

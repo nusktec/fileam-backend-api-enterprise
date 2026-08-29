@@ -39,6 +39,12 @@ import {
 import { taxPayablesService } from "./taxPayablesService";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
+import { syncExpenseLedgerAfterUpdate } from "../../services/ledgerSyncService";
+import {
+  assertInvoiceNotOverpaid,
+  assertInvoicePaymentsAppendOnly,
+} from "../../utils/invoicePaymentLedger";
+import { resolveSettlementBankCode } from "../../utils/settlementBank";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 const BULK_CREATE_MAX = 100;
@@ -132,6 +138,26 @@ function mapExpenseClassField(
   return expenseClassForResponse(expenseClass);
 }
 
+function toExpenseLedgerRow(expense: {
+  id: string;
+  paymentType: string;
+  status: string;
+  totalAmount: Decimal;
+  invoiceAmountPaid: unknown;
+  expenseDate: Date;
+  settlementBankCode?: string | null;
+}) {
+  return {
+    id: expense.id,
+    paymentType: expense.paymentType,
+    status: expense.status,
+    totalAmount: expense.totalAmount,
+    invoiceAmountPaid: expense.invoiceAmountPaid,
+    expenseDate: expense.expenseDate,
+    settlementBankCode: expense.settlementBankCode ?? null,
+  };
+}
+
 function mapExpenseListItem(e: {
   id: string;
   expenseNumber: string;
@@ -151,6 +177,8 @@ function mapExpenseListItem(e: {
   supplierId: string | null;
   expenseClass?: string | null;
   isDeductible?: boolean;
+  settlementBankCode?: string | null;
+  paymentConfirmedAt?: Date | null;
 }) {
   const invoiceAmountPaid = coerceInvoiceAmountPaid(e.invoiceAmountPaid);
   const amount = decimalToNumber(e.totalAmount);
@@ -183,6 +211,10 @@ function mapExpenseListItem(e: {
     supplierId: e.supplierId ?? null,
     class: mapExpenseClassField(e.expenseClass),
     isDeductible: Boolean(e.isDeductible),
+    settlementBankCode: e.settlementBankCode ?? null,
+    paymentConfirmedAt: e.paymentConfirmedAt
+      ? e.paymentConfirmedAt.toISOString()
+      : null,
   };
 }
 
@@ -335,6 +367,7 @@ export const expensesService = {
       paymentType?: string;
       invoiceDueDate?: string | null;
       invoiceAmountPaid?: unknown;
+      bankCode?: string | null;
       createdById?: string;
       class?: ExpenseClass | null;
       isDeductible?: boolean;
@@ -363,6 +396,12 @@ export const expensesService = {
       totalAmount: totalNum,
       invoiceDueDate,
     });
+    const settlementBankCode = await resolveSettlementBankCode(
+      userId,
+      paymentType,
+      null,
+      data.bankCode,
+    );
 
     const expenseType =
       data.expenseType != null && String(data.expenseType).trim() !== ""
@@ -391,6 +430,7 @@ export const expensesService = {
         invoiceDueDate,
         invoiceAmountPaid: invoiceAmountPaidToJson(invoiceAmountPaid),
         status,
+        settlementBankCode,
         expenseClass,
         isDeductible,
       },
@@ -442,6 +482,7 @@ export const expensesService = {
       paymentType?: string;
       invoiceDueDate?: string | null;
       invoiceAmountPaid?: unknown;
+      bankCode?: string | null;
       class?: ExpenseClass | null;
       isDeductible?: boolean;
     }>,
@@ -486,15 +527,14 @@ export const expensesService = {
         }
         throw e;
       }
-      // Bulk expenses: default Transfer, already settled → PAID (unlike single
-      // expenses, where Transfer starts IN_PROGRESS). Invoice items stay calculated.
+      // Bulk expenses: default Transfer → IN_PROGRESS. Cash → PAID.
       const paymentType =
         raw.paymentType != null && String(raw.paymentType).trim() !== ""
           ? String(raw.paymentType).trim()
           : PAYMENT_TYPE_TRANSFER;
       const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
       const totalNum = Number(resolved.totalAmount);
-      const fullyPaid = !isInvoicePaymentType(paymentType);
+      const fullyPaid = isCashPaymentType(paymentType);
       const invoiceAmountPaid =
         raw.invoiceAmountPaid != null
           ? parseAndValidateInvoiceAmountPaid(
@@ -530,6 +570,7 @@ export const expensesService = {
         invoiceDueDate,
         invoiceAmountPaid,
         status,
+        bankCode: raw.bankCode?.trim() || null,
       };
     });
 
@@ -544,6 +585,13 @@ export const expensesService = {
       const created = [];
       for (let i = 0; i < prepared.length; i++) {
         const row = prepared[i]!;
+        const settlementBankCode = await resolveSettlementBankCode(
+          userId,
+          row.paymentType,
+          null,
+          row.bankCode,
+          tx,
+        );
         const expenseNumber = `EXP-${String(start + i).padStart(3, "0")}`;
         created.push(
           await tx.expense.create({
@@ -566,6 +614,7 @@ export const expensesService = {
               invoiceDueDate: row.invoiceDueDate,
               invoiceAmountPaid: invoiceAmountPaidToJson(row.invoiceAmountPaid),
               status: row.status,
+              settlementBankCode,
               expenseClass: row.expenseClass,
               isDeductible: row.isDeductible,
             },
@@ -630,6 +679,7 @@ export const expensesService = {
       paymentType: string;
       invoiceDueDate: string | null;
       invoiceAmountPaid?: unknown;
+      bankCode?: string | null;
       class: ExpenseClass | null;
       isDeductible: boolean;
     }>,
@@ -655,13 +705,18 @@ export const expensesService = {
     if (data.paymentType != null) {
       updateData.paymentType = data.paymentType.trim();
     }
+    if (data.bankCode !== undefined) {
+      updateData.settlementBankCode = data.bankCode
+        ? await resolveSettlementBankCode(
+            userId,
+            data.paymentType ?? expense.paymentType,
+            expense.settlementBankCode,
+            data.bankCode,
+          )
+        : null;
+    }
     if (data.invoiceDueDate !== undefined) {
       updateData.invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate);
-    }
-    if (data.invoiceAmountPaid != null) {
-      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
-        parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid),
-      );
     }
     if (data.supplierName !== undefined) {
       updateData.supplierName =
@@ -740,9 +795,11 @@ export const expensesService = {
     // On update, re-apply payment defaults unless invoiceAmountPaid is explicitly sent:
     // Cash → PAID; Card/Transfer → IN_PROGRESS (unpaid); Invoice → Pending (unpaid / calculated).
     if (data.invoiceAmountPaid != null) {
-      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
-        parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid),
-      );
+      const previousPaid = coerceInvoiceAmountPaid(expense.invoiceAmountPaid);
+      const nextPaid = parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid);
+      assertInvoicePaymentsAppendOnly(previousPaid, nextPaid);
+      assertInvoiceNotOverpaid(nextPaid.total, nextTotal);
+      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(nextPaid);
     } else if (isCashPaymentType(nextPaymentType)) {
       updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
         invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
@@ -777,35 +834,43 @@ export const expensesService = {
       updateData.status = initialSaleStatusForPaymentType(nextPaymentType);
     }
 
-    const updated = await prisma.expense.update({
-      where: { id: expenseId },
-      data: updateData,
+    if (isAsyncPaymentType(nextPaymentType)) {
+      updateData.paymentConfirmedAt = null;
+    }
+
+    const nextStatus = updateData.status as string;
+    const nextLedgerRow = {
+      ...toExpenseLedgerRow(expense),
+      paymentType: nextPaymentType,
+      status: nextStatus,
+      totalAmount:
+        (updateData.totalAmount as Decimal | undefined) ?? expense.totalAmount,
+      invoiceAmountPaid:
+        updateData.invoiceAmountPaid ?? expense.invoiceAmountPaid,
+      expenseDate:
+        (updateData.expenseDate as Date | undefined) ?? expense.expenseDate,
+      settlementBankCode:
+        (updateData.settlementBankCode as string | null | undefined) ??
+        expense.settlementBankCode ??
+        null,
+    };
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await syncExpenseLedgerAfterUpdate(
+        userId,
+        toExpenseLedgerRow(expense),
+        nextLedgerRow,
+        tx,
+      );
+      return tx.expense.update({
+        where: { id: expenseId },
+        data: updateData,
+      });
     });
 
     await taxPayablesService.syncPayablesForPeriods(userId, periodsToSync);
 
-    return {
-      id: updated.id,
-      expenseNumber: updated.expenseNumber,
-      description: updated.description,
-      date: updated.expenseDate,
-      category: updated.category,
-      expenseType: updated.expenseType,
-      baseAmount: decimalToNumber(updated.amount),
-      vatAmount:
-        updated.vatAmount != null ? decimalToNumber(updated.vatAmount) : null,
-      amount: decimalToNumber(updated.totalAmount),
-      vatTag: updated.vatInclusive,
-      vatInclusive: updated.vatInclusive,
-      paymentType: updated.paymentType,
-      invoiceDueDate: updated.invoiceDueDate,
-      invoiceAmountPaid: coerceInvoiceAmountPaid(updated.invoiceAmountPaid),
-      status: updated.status,
-      supplierName: updated.supplierName ?? null,
-      supplierId: updated.supplierId ?? null,
-      class: mapExpenseClassField(updated.expenseClass),
-      isDeductible: updated.isDeductible,
-    };
+    return mapExpenseListItem(updated);
   },
 
   /**
@@ -813,7 +878,12 @@ export const expensesService = {
    * Invoice expenses are excluded — their status is calculated from
    * invoiceAmountPaid, totalAmount and invoiceDueDate.
    */
-  async confirmPaymentStatus(userId: string, expenseId: string, status: string) {
+  async confirmPaymentStatus(
+    userId: string,
+    expenseId: string,
+    status: string,
+    bankCode?: string | null,
+  ) {
     const expense = await prisma.expense.findFirst({
       where: { id: expenseId, userId },
     });
@@ -855,22 +925,39 @@ export const expensesService = {
       decimalToNumber(expense.totalAmount),
       expense.paymentType,
     );
-    const updated = await prisma.expense.update({
-      where: { id: expenseId },
-      data: {
-        invoiceAmountPaid: invoiceAmountPaidToJson(paid),
-        status: SALE_STATUS.PAID,
-      },
-    });
 
-    await ledgerPostingService.postExpensePayment(
-      userId,
-      expenseId,
-      decimalToNumber(updated.totalAmount),
-      updated.paymentType,
-      updated.expenseDate,
-      "confirm",
-    );
+    const updated = await prisma.$transaction(async (tx) => {
+      const settlementBankCode = await resolveSettlementBankCode(
+        userId,
+        expense.paymentType,
+        expense.settlementBankCode,
+        bankCode,
+        tx,
+      );
+
+      const row = await tx.expense.update({
+        where: { id: expenseId },
+        data: {
+          invoiceAmountPaid: invoiceAmountPaidToJson(paid),
+          status: SALE_STATUS.PAID,
+          paymentConfirmedAt: new Date(),
+          settlementBankCode,
+        },
+      });
+
+      await ledgerPostingService.postExpensePayment(
+        userId,
+        expenseId,
+        decimalToNumber(row.totalAmount),
+        row.paymentType,
+        row.expenseDate,
+        "confirm",
+        settlementBankCode,
+        tx,
+      );
+
+      return row;
+    });
 
     return mapExpenseListItem(updated);
   },

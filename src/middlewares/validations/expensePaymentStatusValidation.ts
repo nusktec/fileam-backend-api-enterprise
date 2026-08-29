@@ -11,5 +11,10 @@ export const updateExpensePaymentStatusValidation = [
     .bail()
     .equals(SALE_STATUS.PAID)
     .withMessage('status must be "PAID"'),
+  check("bankCode")
+    .optional({ nullable: true })
+    .trim()
+    .isString()
+    .withMessage("bankCode must be a string"),
   handleValidation,
 ];

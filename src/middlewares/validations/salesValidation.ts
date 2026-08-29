@@ -40,6 +40,7 @@ export const createSaleValidation = [
   check("paymentType")
     .isIn(PAYMENT_TYPES)
     .withMessage(`paymentType must be one of: ${PAYMENT_TYPES.join(", ")}`),
+  check("bankCode").optional({ nullable: true }).trim().isString(),
   check("date").isISO8601().withMessage("Date must be a valid ISO date"),
   check("invoiceDueDate")
     .optional({ nullable: true })
@@ -79,6 +80,7 @@ export const bulkCreateSalesValidation = [
     .withMessage(
       `Each paymentType must be one of: ${PAYMENT_TYPES.join(", ")} (defaults to Transfer)`,
     ),
+  check("items.*.bankCode").optional({ nullable: true }).trim().isString(),
   check("items.*.date")
     .isISO8601()
     .withMessage("Each date must be a valid ISO date"),

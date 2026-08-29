@@ -34,6 +34,7 @@ export const updateExpenseValidation = [
     .optional()
     .isIn(PAYMENT_TYPES)
     .withMessage(`paymentType must be one of: ${PAYMENT_TYPES.join(", ")}`),
+  check("bankCode").optional({ nullable: true }).trim().isString(),
   check("invoiceDueDate")
     .optional({ nullable: true })
     .isISO8601()

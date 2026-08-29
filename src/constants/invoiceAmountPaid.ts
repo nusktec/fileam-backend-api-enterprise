@@ -1,3 +1,7 @@
+import {
+  isTransferPaymentType,
+  PAYMENT_TYPE_CARD,
+} from "./salePaymentRules";
 import { HttpReplyError } from "../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../utils/monetaryAmount";
 
@@ -14,6 +18,8 @@ export type InvoiceAmountPaidPaymentType =
 export type InvoiceAmountPaidItem = {
   amount: number;
   paymentType: InvoiceAmountPaidPaymentType;
+  /** Required for Transfer; optional for Card (falls back to CARD_SETTLEMENT ledger). */
+  bankCode?: string;
 };
 
 /**
@@ -78,19 +84,15 @@ export function invoiceAmountPaidFromSingle(
 
 /**
  * Initial paid structure on create:
- * - Cash / Transfer (or fullyPaid, e.g. bulk) → one line for the full total
- * - otherwise empty
+ * - Cash (or fullyPaid bulk cash) → one line for the full total
+ * - Transfer / Card / Invoice → empty until confirmed or invoice payment recorded
  */
 export function initialInvoiceAmountPaid(
   paymentType: string,
   totalAmount: number,
   opts?: { fullyPaid?: boolean },
 ): InvoiceAmountPaid {
-  if (
-    opts?.fullyPaid ||
-    paymentType === "Cash" ||
-    paymentType === "Transfer"
-  ) {
+  if (opts?.fullyPaid || paymentType === "Cash") {
     return invoiceAmountPaidFromSingle(totalAmount, paymentType);
   }
   return { total: 0, items: [] };
@@ -135,7 +137,33 @@ export function parseAndValidateInvoiceAmountPaid(
     items.push({
       amount: normalizeMoneyAmount(amount),
       paymentType,
+      ...((row as { bankCode?: unknown }).bankCode != null &&
+      String((row as { bankCode?: unknown }).bankCode).trim() !== ""
+        ? {
+            bankCode: String((row as { bankCode?: unknown }).bankCode).trim(),
+          }
+        : {}),
     });
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!;
+    if (isTransferPaymentType(item.paymentType) && !item.bankCode?.trim()) {
+      throw new HttpReplyError(
+        400,
+        `${label}.items[${i}].bankCode is required when paymentType is Transfer`,
+      );
+    }
+    if (
+      item.paymentType === PAYMENT_TYPE_CARD &&
+      item.bankCode != null &&
+      item.bankCode.trim() === ""
+    ) {
+      throw new HttpReplyError(
+        400,
+        `${label}.items[${i}].bankCode cannot be empty when provided`,
+      );
+    }
   }
 
   const itemsSum = sumInvoiceAmountPaidItems(items);
@@ -201,6 +229,7 @@ export function invoiceAmountPaidToJson(
     items: paid.items.map((i) => ({
       amount: i.amount,
       paymentType: i.paymentType,
+      ...(i.bankCode ? { bankCode: i.bankCode } : {}),
     })),
   };
 }

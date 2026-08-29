@@ -25,6 +25,7 @@ export const updateSaleValidation = [
     .optional()
     .isIn(PAYMENT_TYPES)
     .withMessage(`paymentType must be one of: ${PAYMENT_TYPES.join(", ")}`),
+  check("bankCode").optional({ nullable: true }).trim().isString(),
   check("date").optional().isISO8601(),
   check("invoiceDueDate")
     .optional({ nullable: true })

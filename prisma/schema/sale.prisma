@@ -37,6 +37,8 @@ model Sale {
   /** Optional URL to a payment receipt or supplementary proof (Media upload URL, etc.) */
   receiptUrl     String?  @map("receipt_url")
   evidenceVaultId String? @map("evidence_vault_id")
+  /** User bank account (bankCode) used when Transfer/Card payment is confirmed. */
+  settlementBankCode String? @map("settlement_bank_code")
   /** Set when Card/Transfer sale is confirmed PAID via payment-status endpoint */
   paymentConfirmedAt DateTime? @map("payment_confirmed_at")
   createdAt      DateTime @default(now()) @map("created_at")

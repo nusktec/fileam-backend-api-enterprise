@@ -29,6 +29,10 @@ model Expense {
    * invoiceAmountPaid.total, totalAmount and invoiceDueDate.
    */
   status        String   @default("IN_PROGRESS")
+  /** User bank account (bankCode) used when Transfer/Card payment is confirmed. */
+  settlementBankCode String? @map("settlement_bank_code")
+  /** Set when Card/Transfer expense is confirmed PAID via payment-status endpoint */
+  paymentConfirmedAt DateTime? @map("payment_confirmed_at")
   /** Spend classification: business | personal | uncategorized (default) */
   expenseClass  String   @default("uncategorized") @map("expense_class")
   /** AI-populated: whether the expense is tax-deductible */

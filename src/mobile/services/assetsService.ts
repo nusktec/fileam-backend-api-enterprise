@@ -62,7 +62,9 @@ function startOfUtcDayMs(d: Date): number {
 
 function isBankLedgerCode(code: string): boolean {
   return (
-    code === LEDGER_ACCOUNTS.BANK || code.startsWith(`${LEDGER_ACCOUNTS.BANK}:`)
+    code === LEDGER_ACCOUNTS.BANK ||
+    code.startsWith(`${LEDGER_ACCOUNTS.BANK}:`) ||
+    code === LEDGER_ACCOUNTS.CARD_SETTLEMENT
   );
 }
 
@@ -422,7 +424,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
     methodology: {
       ledgerCashTotal,
       ledgerBankTotal,
-      note: "Cash and bank totals are derived from posted double-entry ledger balances (BANK, BANK:*, CASH_ON_HAND, PETTY_CASH, OTHER_CASH). Transfer sales/expenses post to bank on create; Card awaits payment-status confirmation.",
+      note: "Cash and bank totals are derived from posted double-entry ledger balances (BANK:{bankCode}, CARD_SETTLEMENT, CASH_ON_HAND, PETTY_CASH, OTHER_CASH). Transfer posts to the selected business bank account; Card posts to a mapped bank account or CARD_SETTLEMENT — both only after payment-status confirmation (PAID).",
     },
   };
 }

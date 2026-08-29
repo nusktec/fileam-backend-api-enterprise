@@ -186,6 +186,8 @@ export const createExpense = async (
             : undefined,
       invoiceAmountPaid:
         b.invoiceAmountPaid != null ? b.invoiceAmountPaid : undefined,
+      bankCode:
+        b.bankCode != null ? String(b.bankCode).trim() || null : undefined,
       class: normalizeExpenseClass(b.class),
       isDeductible:
         b.isDeductible !== undefined ? Boolean(b.isDeductible) : undefined,
@@ -359,11 +361,12 @@ export const updateExpensePaymentStatus = async (
     const body = matchedData(req, {
       locations: ["body"],
       includeOptionals: true,
-    }) as { status: string };
+    }) as { status: string; bankCode?: string | null };
     const updated = await expensesService.confirmPaymentStatus(
       userId,
       expenseId!,
       body.status,
+      body.bankCode,
     );
     if (!updated) {
       res

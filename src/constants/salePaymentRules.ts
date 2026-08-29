@@ -11,11 +11,11 @@ export const PAYMENT_TYPE_TRANSFER = "Transfer";
 export const PAYMENT_TYPE_INVOICE = "Invoice";
 
 /**
- * Sale / expense payment lifecycle.
- * - Cash / Transfer → PAID on create (Cash → cash ledger, Transfer → bank ledger).
- * - Card → IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status.
- * - Invoice → Pending / Partial / PAID / Overdue, always calculated from
- *   invoiceAmountPaid.total, totalAmount and invoiceDueDate.
+ * Sale / expense payment lifecycle (payment_and_account_movement_logic.pdf).
+ * - Cash → PAID on create; sale/expense settles to Cash immediately (no AR/AP for that amount).
+ * - Transfer → IN_PROGRESS on create; AR/AP until PATCH .../payment-status confirms → Bank.
+ * - Card → IN_PROGRESS on create; AR/AP until confirm → Card Settlement account.
+ * - Invoice → Pending / Partial / PAID / Overdue from invoiceAmountPaid.total vs totalAmount.
  * - CANCELLED is manual and never recalculated.
  */
 export const SALE_STATUS = {
@@ -41,23 +41,23 @@ export function isTransferPaymentType(paymentType: string): boolean {
   return paymentType === PAYMENT_TYPE_TRANSFER;
 }
 
-/** Card or bank transfer — Card awaits confirmation; Transfer is bank-settled on create. */
+/** Card or bank transfer — both start IN_PROGRESS until PATCH .../payment-status. */
 export function isAsyncPaymentType(paymentType: string): boolean {
   return (
     paymentType === PAYMENT_TYPE_CARD || paymentType === PAYMENT_TYPE_TRANSFER
   );
 }
 
-/** Card only — Transfer is treated as PAID / bank-settled when recorded. */
+/** Transfer and Card — unsettled at create; AR/AP holds the amount until confirmation. */
 export function isPendingAsyncPaymentType(paymentType: string): boolean {
-  return paymentType === PAYMENT_TYPE_CARD;
+  return isAsyncPaymentType(paymentType);
 }
 
 /**
  * Initial stored status on create:
  * - Invoice → calculated from invoiceAmountPaid.total / totalAmount / invoiceDueDate
- * - Cash / Transfer (or `fullyPaid`, e.g. bulk) → PAID
- * - Card → IN_PROGRESS until PATCH .../payment-status
+ * - Cash (or `fullyPaid`, e.g. bulk cash) → PAID
+ * - Transfer / Card → IN_PROGRESS until PATCH .../payment-status
  */
 export function initialSaleStatusForPaymentType(
   paymentType: string,
@@ -65,6 +65,7 @@ export function initialSaleStatusForPaymentType(
     invoiceAmountPaid?: InvoiceAmountPaid | number;
     totalAmount?: number;
     invoiceDueDate?: Date | null;
+    /** Bulk cash-only shortcut — never use for Transfer/Card per movement rules. */
     fullyPaid?: boolean;
   },
 ): string {
@@ -78,7 +79,7 @@ export function initialSaleStatusForPaymentType(
   }
   if (opts?.fullyPaid) return SALE_STATUS.PAID;
   if (isCashPaymentType(paymentType)) return SALE_STATUS.PAID;
-  if (isTransferPaymentType(paymentType)) return SALE_STATUS.PAID;
+  if (isTransferPaymentType(paymentType)) return SALE_STATUS.IN_PROGRESS;
   return SALE_STATUS.IN_PROGRESS;
 }
 

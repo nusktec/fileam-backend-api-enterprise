@@ -3,7 +3,7 @@
  * derived from invoiceAmountPaid.total + invoiceDueDate.
  *
  * Cash / Transfer / Card keep the manual lifecycle in `salePaymentRules`
- * (Cash → PAID on create, Transfer & Card → IN_PROGRESS → PAID via payment-status).
+ * (Cash → PAID on create; Transfer & Card → IN_PROGRESS → PAID via payment-status).
  */
 export const INVOICE_PAYMENT_STATUS = {
   PAID: "PAID",

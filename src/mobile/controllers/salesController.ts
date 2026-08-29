@@ -149,6 +149,7 @@ export const createSale = async (
           : undefined,
       paymentType,
       date,
+      bankCode: b.bankCode != null ? String(b.bankCode).trim() || null : undefined,
       invoiceDueDate:
         invoiceDueDate != null && String(invoiceDueDate).trim() !== ""
           ? String(invoiceDueDate)
@@ -372,11 +373,12 @@ export const updateSalePaymentStatus = async (
     const body = matchedData(req, {
       locations: ["body"],
       includeOptionals: true,
-    }) as { status: string };
+    }) as { status: string; bankCode?: string | null };
     const updated = await salesService.confirmPaymentStatus(
       userId,
       saleId!,
       body.status,
+      body.bankCode,
     );
     if (!updated) {
       res

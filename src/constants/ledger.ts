@@ -45,6 +45,8 @@ export const LEDGER_ACCOUNTS = {
   PETTY_CASH: "PETTY_CASH",
   OTHER_CASH: "OTHER_CASH",
   BANK: "BANK",
+  /** Card processor settlement — mapped business account when card payments confirm. */
+  CARD_SETTLEMENT: "CARD_SETTLEMENT",
   CUSTOMER_AR: "CUSTOMER_AR",
   SALES_REVENUE: "SALES_REVENUE",
   VAT_PAYABLE: "VAT_PAYABLE",
@@ -79,6 +81,7 @@ export const LEDGER_ACCOUNTS = {
 export const LEDGER_ACCOUNT_NAMES: Record<string, string> = {
   [LEDGER_ACCOUNTS.CASH_ON_HAND]: "Cash",
   [LEDGER_ACCOUNTS.BANK]: "Bank",
+  [LEDGER_ACCOUNTS.CARD_SETTLEMENT]: "Card Settlement",
   [LEDGER_ACCOUNTS.CUSTOMER_AR]: "Customer Accounts Receivable",
   [LEDGER_ACCOUNTS.SALES_REVENUE]: "Sales Revenue",
   [LEDGER_ACCOUNTS.VAT_PAYABLE]: "VAT Payable",

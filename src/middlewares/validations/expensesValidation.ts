@@ -46,6 +46,7 @@ export const createExpenseValidation = [
     .withMessage(
       `paymentType must be one of: ${PAYMENT_TYPES.join(", ")} (defaults to Transfer)`,
     ),
+  check("bankCode").optional({ nullable: true }).trim().isString(),
   check("invoiceDueDate")
     .optional({ nullable: true })
     .isISO8601()
@@ -102,6 +103,7 @@ export const bulkCreateExpensesValidation = [
     .withMessage(
       `Each paymentType must be one of: ${PAYMENT_TYPES.join(", ")} (defaults to Transfer)`,
     ),
+  check("items.*.bankCode").optional({ nullable: true }).trim().isString(),
   check("items.*.invoiceDueDate")
     .optional({ nullable: true })
     .isISO8601()

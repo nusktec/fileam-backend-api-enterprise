@@ -17,10 +17,18 @@ import {
   isInvoicePaymentType,
   isPendingAsyncPaymentType,
   isSalePaidStatus,
+  PAYMENT_TYPE_CARD,
+  PAYMENT_TYPE_CASH,
 } from "../constants/salePaymentRules";
 import { coerceInvoiceAmountPaid } from "../constants/invoiceAmountPaid";
 import { ledgerService } from "./ledgerService";
 import { normalizeMoneyAmount } from "../utils/monetaryAmount";
+import {
+  resolveCardSettlementLedgerAccount,
+  resolveUserBankLedgerAccount,
+} from "../utils/bankLedgerAccount";
+import { isTransferPaymentType } from "../constants/salePaymentRules";
+import { HttpReplyError } from "../utils/httpReplyError";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -41,10 +49,28 @@ function line(
   };
 }
 
-function cashOrBank(paymentType: string): { code: string; name: string } {
-  return isCashPaymentType(paymentType)
-    ? account(LEDGER_ACCOUNTS.CASH_ON_HAND)
-    : account(LEDGER_ACCOUNTS.BANK);
+/** Payment destination: Cash → Cash; Transfer → BANK:{bankCode}; Card → mapped bank or CARD_SETTLEMENT. */
+async function resolvePaymentAssetAccount(
+  userId: string,
+  paymentType: string,
+  bankCode: string | null | undefined,
+  db: DbClient = prisma,
+): Promise<{ code: string; name: string }> {
+  if (isCashPaymentType(paymentType)) {
+    return account(LEDGER_ACCOUNTS.CASH_ON_HAND);
+  }
+  if (paymentType === PAYMENT_TYPE_CARD) {
+    return resolveCardSettlementLedgerAccount(userId, bankCode, db);
+  }
+  if (isTransferPaymentType(paymentType)) {
+    return resolveUserBankLedgerAccount(userId, bankCode ?? "", db);
+  }
+  throw new HttpReplyError(
+    400,
+    `Unsupported payment asset type: ${paymentType}`,
+    null,
+    "VALIDATION_ERROR",
+  );
 }
 
 async function postOnce(
@@ -68,22 +94,19 @@ async function postOnce(
 function saleRecognitionEntries(input: {
   netRevenue: number;
   vatAmount: number;
-  totalAmount: number;
   collectedAmount: number;
-  isCredit: boolean;
+  arAmount: number;
+  collectedAsset: { code: string; name: string };
 }): LedgerEntryDraft[] {
   const net = normalizeMoneyAmount(input.netRevenue);
   const vat = normalizeMoneyAmount(input.vatAmount);
-  const total = normalizeMoneyAmount(input.totalAmount);
   const collected = normalizeMoneyAmount(input.collectedAmount);
-  const ar = normalizeMoneyAmount(Math.max(0, total - collected));
+  const ar = normalizeMoneyAmount(input.arAmount);
 
   const entries: LedgerEntryDraft[] = [];
 
   if (collected > 0) {
-    entries.push(
-      line(cashOrBank("Cash"), collected, 0),
-    );
+    entries.push(line(input.collectedAsset, collected, 0));
   }
   if (ar > 0) {
     entries.push(line(account(LEDGER_ACCOUNTS.CUSTOMER_AR), ar, 0));
@@ -99,7 +122,7 @@ function saleRecognitionEntries(input: {
 }
 
 export const ledgerPostingService = {
-  /** Cash sale or credit sale (+ VAT split). Revenue excludes VAT. */
+  /** Cash sale, credit sale (Transfer/Card pending), or invoice (full AR). */
   async postSaleRecognition(
     userId: string,
     sale: {
@@ -111,6 +134,7 @@ export const ledgerPostingService = {
       totalAmount: number | { toNumber?: () => number };
       invoiceAmountPaid?: unknown;
       saleDate: Date;
+      settlementBankCode?: string | null;
     },
     db: DbClient = prisma,
   ) {
@@ -119,28 +143,38 @@ export const ledgerPostingService = {
     const totalAmount = Number(sale.totalAmount);
     const paid = coerceInvoiceAmountPaid(sale.invoiceAmountPaid ?? 0);
 
-    const isCredit =
-      isInvoicePaymentType(sale.paymentType) ||
-      (isPendingAsyncPaymentType(sale.paymentType) &&
-        !isSalePaidStatus(sale.status));
+    const isInvoice = isInvoicePaymentType(sale.paymentType);
+    const pendingAsync =
+      isPendingAsyncPaymentType(sale.paymentType) &&
+      !isSalePaidStatus(sale.status);
 
     let collected = 0;
-    if (!isCredit) {
+    let ar = 0;
+
+    if (isInvoice) {
+      ar = totalAmount;
+    } else if (pendingAsync) {
+      ar = totalAmount;
+    } else {
       collected = totalAmount;
-    } else if (paid.total > 0) {
-      collected = paid.total;
     }
 
+    const cashAsset = await resolvePaymentAssetAccount(
+      userId,
+      PAYMENT_TYPE_CASH,
+      null,
+      db,
+    );
     const entries = saleRecognitionEntries({
       netRevenue,
       vatAmount,
-      totalAmount,
       collectedAmount: collected,
-      isCredit,
+      arAmount: ar,
+      collectedAsset: cashAsset,
     });
     if (entries.length === 0 || totalAmount <= 0) return null;
 
-    return postOnce(
+    const tx = await postOnce(
       {
         userId,
         referenceType: LEDGER_REFERENCE_TYPES.SALE_RECOGNITION,
@@ -151,6 +185,38 @@ export const ledgerPostingService = {
       },
       db,
     );
+
+    if (isInvoice && paid.items.length > 0) {
+      for (let i = 0; i < paid.items.length; i++) {
+        const item = paid.items[i]!;
+        if (item.amount <= 0) continue;
+        await postOnce(
+          {
+            userId,
+            referenceType: LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
+            referenceId: `${sale.id}:inv:${i}`,
+            description: `Sale collection ${sale.id}`,
+            transactionDate: sale.saleDate,
+            entries: [
+              line(
+                await resolvePaymentAssetAccount(
+                  userId,
+                  item.paymentType,
+                  item.bankCode ?? sale.settlementBankCode,
+                  db,
+                ),
+                item.amount,
+                0,
+              ),
+              line(account(LEDGER_ACCOUNTS.CUSTOMER_AR), 0, item.amount),
+            ],
+          },
+          db,
+        );
+      }
+    }
+
+    return tx;
   },
 
   /** Customer payment clearing AR (invoice settlement or async confirm). */
@@ -161,10 +227,18 @@ export const ledgerPostingService = {
     paymentType: string,
     transactionDate: Date,
     suffix = "full",
+    bankCode?: string | null,
     db: DbClient = prisma,
   ) {
     const amt = normalizeMoneyAmount(amount);
     if (amt <= 0) return null;
+
+    const asset = await resolvePaymentAssetAccount(
+      userId,
+      paymentType,
+      bankCode,
+      db,
+    );
 
     return postOnce(
       {
@@ -174,7 +248,7 @@ export const ledgerPostingService = {
         description: `Sale collection ${saleId}`,
         transactionDate,
         entries: [
-          line(cashOrBank(paymentType), amt, 0),
+          line(asset, amt, 0),
           line(account(LEDGER_ACCOUNTS.CUSTOMER_AR), 0, amt),
         ],
       },
@@ -182,7 +256,7 @@ export const ledgerPostingService = {
     );
   },
 
-  /** Expense paid (Dr Expense, Cr Bank) or on credit (Dr Expense, Cr AP). */
+  /** Expense paid (Dr Expense, Cr Cash/Bank) or on credit (Dr Expense, Cr AP). */
   async postExpenseRecognition(
     userId: string,
     expense: {
@@ -190,17 +264,31 @@ export const ledgerPostingService = {
       paymentType: string;
       status: string;
       totalAmount: number | { toNumber?: () => number };
+      invoiceAmountPaid?: unknown;
       expenseDate: Date;
+      settlementBankCode?: string | null;
     },
     db: DbClient = prisma,
   ) {
     const total = normalizeMoneyAmount(Number(expense.totalAmount));
     if (total <= 0) return null;
 
-    const onCredit =
-      isInvoicePaymentType(expense.paymentType) ||
-      (isPendingAsyncPaymentType(expense.paymentType) &&
-        !isSalePaidStatus(expense.status));
+    const paid = coerceInvoiceAmountPaid(expense.invoiceAmountPaid ?? 0);
+    const isInvoice = isInvoicePaymentType(expense.paymentType);
+    const pendingAsync =
+      isPendingAsyncPaymentType(expense.paymentType) &&
+      !isSalePaidStatus(expense.status);
+
+    const onCredit = isInvoice || pendingAsync;
+
+    const paymentAsset = onCredit
+      ? null
+      : await resolvePaymentAssetAccount(
+          userId,
+          expense.paymentType,
+          expense.settlementBankCode,
+          db,
+        );
 
     const entries = onCredit
       ? [
@@ -209,10 +297,10 @@ export const ledgerPostingService = {
         ]
       : [
           line(account(LEDGER_ACCOUNTS.EXPENSE), total, 0),
-          line(cashOrBank(expense.paymentType), 0, total),
+          line(paymentAsset!, 0, total),
         ];
 
-    return postOnce(
+    const tx = await postOnce(
       {
         userId,
         referenceType: LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
@@ -223,6 +311,38 @@ export const ledgerPostingService = {
       },
       db,
     );
+
+    if (isInvoice && paid.items.length > 0) {
+      for (let i = 0; i < paid.items.length; i++) {
+        const item = paid.items[i]!;
+        if (item.amount <= 0) continue;
+        await postOnce(
+          {
+            userId,
+            referenceType: LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
+            referenceId: `${expense.id}:inv:${i}`,
+            description: `Expense payment ${expense.id}`,
+            transactionDate: expense.expenseDate,
+            entries: [
+              line(account(LEDGER_ACCOUNTS.ACCOUNTS_PAYABLE), item.amount, 0),
+              line(
+                await resolvePaymentAssetAccount(
+                  userId,
+                  item.paymentType,
+                  item.bankCode ?? expense.settlementBankCode,
+                  db,
+                ),
+                0,
+                item.amount,
+              ),
+            ],
+          },
+          db,
+        );
+      }
+    }
+
+    return tx;
   },
 
   /** Pay supplier — AP ↓, Bank ↓ */
@@ -233,10 +353,18 @@ export const ledgerPostingService = {
     paymentType: string,
     transactionDate: Date,
     suffix = "full",
+    bankCode?: string | null,
     db: DbClient = prisma,
   ) {
     const amt = normalizeMoneyAmount(amount);
     if (amt <= 0) return null;
+
+    const asset = await resolvePaymentAssetAccount(
+      userId,
+      paymentType,
+      bankCode,
+      db,
+    );
 
     return postOnce(
       {
@@ -247,7 +375,7 @@ export const ledgerPostingService = {
         transactionDate,
         entries: [
           line(account(LEDGER_ACCOUNTS.ACCOUNTS_PAYABLE), amt, 0),
-          line(cashOrBank(paymentType), 0, amt),
+          line(asset, 0, amt),
         ],
       },
       db,
@@ -275,7 +403,16 @@ export const ledgerPostingService = {
           line(account(LEDGER_ACCOUNTS.SALES_REVENUE), 0, amount),
         ]
       : [
-          line(cashOrBank(txn.paymentType), amount, 0),
+          line(
+            await resolvePaymentAssetAccount(
+              userId,
+              txn.paymentType,
+              null,
+              db,
+            ),
+            amount,
+            0,
+          ),
           line(account(LEDGER_ACCOUNTS.SALES_REVENUE), 0, amount),
         ];
 
@@ -302,10 +439,18 @@ export const ledgerPostingService = {
     paymentType: string,
     transactionDate: Date,
     suffix: string,
+    bankCode?: string | null,
     db: DbClient = prisma,
   ) {
     const amt = normalizeMoneyAmount(amount);
     if (amt <= 0) return null;
+
+    const asset = await resolvePaymentAssetAccount(
+      userId,
+      paymentType,
+      bankCode,
+      db,
+    );
 
     return postOnce(
       {
@@ -315,7 +460,7 @@ export const ledgerPostingService = {
         description: `Payer collection ${transactionId}`,
         transactionDate,
         entries: [
-          line(cashOrBank(paymentType), amt, 0),
+          line(asset, amt, 0),
           line(account(LEDGER_ACCOUNTS.CUSTOMER_AR), 0, amt),
         ],
       },

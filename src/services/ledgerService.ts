@@ -68,8 +68,9 @@ export const ledgerService = {
     originalTransactionId: string,
     description: string,
     transactionDate: Date,
+    db: DbClient = prisma,
   ) {
-    const original = await prisma.ledgerTransaction.findFirst({
+    const original = await db.ledgerTransaction.findFirst({
       where: { id: originalTransactionId, userId, status: LEDGER_STATUS.POSTED },
       include: { entries: true },
     });
@@ -84,7 +85,7 @@ export const ledgerService = {
       credit: Number(e.debit),
     }));
 
-    const reversal = await prisma.$transaction(async (tx) => {
+    const run = async (tx: DbClient) => {
       const created = await tx.ledgerTransaction.create({
         data: {
           userId,
@@ -110,9 +111,13 @@ export const ledgerService = {
         data: { status: LEDGER_STATUS.REVERSED },
       });
       return created;
-    });
+    };
 
-    return reversal;
+    if (db !== prisma && "ledgerTransaction" in db) {
+      return run(db);
+    }
+
+    return prisma.$transaction(async (tx) => run(tx));
   },
 
   /** Net balance per account from posted ledger lines (debit − credit, asset-normal). */

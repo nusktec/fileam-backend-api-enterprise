@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): VAT/WHT monthly; PIT annual (GET/POST /mobile/filings/pit/calculation|submit, NRS Fourth Schedule, due 31 Mar); CIT annual NTA 2025 (GET/POST /mobile/filings/cit/calculation|submit, 0%/30% + 4% development levy on assessable profit, due 30 Jun, periodMonth=12); Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment status: Cash -> PAID on create; Transfer/Card -> IN_PROGRESS on create, confirmed to PAID via PATCH .../payment-status; Invoice -> calculated from invoiceAmountPaid.total + invoiceDueDate (Pending|Partial|PAID|Overdue). CANCELLED remains manual. invoiceAmountPaid = { total, items:[{amount,paymentType:Cash|Transfer|Card}] } with total === sum(items). On PATCH update: Cash -> PAID; Card/Transfer -> IN_PROGRESS (payments reset unless invoiceAmountPaid sent); Invoice -> Pending when unpaid / calculated when invoiceAmountPaid sent. Bulk sales & bulk expenses: default Transfer, created PAID (Invoice rows stay calculated). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): 12-step workspace on tax_payables — GET/PUT /filings/{vat|wht|pit|cit}/workspace, confirm-computation, validate (TaxGPT), generate-documents, package; POST /filings/{id}/complete (step 12). Pending workspaces appear in GET /filings with completionPercent from currentStep/12. PIT/CIT: POST /pit|cit/draft for reliefs/adjustments; calculation honours draft + frozen snapshot. VAT: inputVatBroughtForward from prior month credit; WHT schedule from beneficiary PAYMENT rows. Submit all types accepts submissionReference. Reports: PIT Return Summary, CIT Return Summary added. VAT/WHT monthly; PIT annual (due 31 Mar); CIT annual NTA 2025 (due 30 Jun, periodMonth=12). Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents. Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -300,6 +300,26 @@
       "key": "filingYear",
       "value": "2025",
       "description": "Calendar tax year for PIT/CIT annual filings (must be < current year to submit)"
+    },
+    {
+      "key": "filingPeriodYear",
+      "value": "2026",
+      "description": "Workspace / VAT / WHT period year"
+    },
+    {
+      "key": "filingPeriodMonth",
+      "value": "7",
+      "description": "Workspace / VAT / WHT period month (1–12). PIT/CIT always use 12."
+    },
+    {
+      "key": "workspaceTaxType",
+      "value": "vat",
+      "description": "Lowercase tax path for workspace routes: vat | wht | pit | cit"
+    },
+    {
+      "key": "workspaceDocumentId",
+      "value": "form-002",
+      "description": "Document id from workspace generate-documents (e.g. form-002, self-assessment, wht-schedule)"
     },
     {
       "key": "appPlatform",
@@ -2512,7 +2532,7 @@
         },
         {
           "name": "Filings *",
-          "description": "Mobile tax filings. VAT/WHT: monthly. PIT: annual self-assessment (NRS Fourth Schedule, due 31 Mar). CIT: annual LTD return (NTA 2025 — 0% small company C08C / 30% + 4% levy C08A, due 30 Jun, periodMonth=12). Use dedicated PIT/CIT calculation routes for server-owned math; submit persists full computation snapshot. Envelope { data } on success; errors { message, error }.",
+          "description": "Mobile tax filings + 12-step workspace. VAT/WHT: monthly (due 21st next month). PIT: annual NRS Fourth Schedule (due 31 Mar). CIT: NTA 2025 LTD return (0% small C08C / 30%+4% levy C08A, due 30 Jun). Workspace persists steps, frozen computation, documents, submissionReference, rrr, proof URLs on tax_payables. List includes in-progress pending rows (replaces app dummy data). Envelope { data } on success; errors { message, error }.",
           "item": [
             {
               "name": "Tax filing constants *",
@@ -2632,8 +2652,8 @@
               ],
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?page=1&limit=20&period={{bookPeriod}}&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}&status=",
-                "description": "Optional status: pending | submitted | paid | overdue. Use period=YYYY-MM ({{bookPeriod}}) for book-month filter (overrides dateFrom/dateTo). Each row: completionPercent, completion.items[], periodRecordCompliance, periodAttachmentGaps, missingEvidenceBreakdown."
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?page=1&limit=20&status=all&period={{bookPeriod}}&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
+                "description": "Includes pending in-progress workspaces and submitted/paid returns. status: all | pending | submitted | paid | overdue. completionPercent = round(currentStep/12*100) when workspace exists. Sorted: overdue → pending (dueDate asc) → submitted/paid (submittedDate desc). Each row: periodAttachmentGaps, missingEvidenceBreakdown (VAT/WHT monthly only)."
               }
             },
             {
@@ -2641,7 +2661,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{filingId}}",
-                "description": "Same as list row plus timeline, totals. Includes missingEvidenceBreakdown (which sales/expenses lack proof). VAT merges draft state/TIN when payable fields empty."
+                "description": "Detail + workspace extras: currentStep, completedSteps, submissionReference, rrr, submissionProofUrl, paymentReceiptUrl, packageUrl, documents[], validation, frozen computation. Timeline events: WORKSPACE_STARTED, COMPUTATION_CONFIRMED, TAXGPT_VALIDATED, DOCUMENTS_GENERATED, SUBMITTED, COMPLIANT."
               }
             },
             {
@@ -2672,45 +2692,109 @@
               }
             },
             {
-              "name": "Workspace - Get or create (VAT)",
+              "name": "Workspace - Get or create",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data; if(d&&d.id){pm.collectionVariables.set('filingId',d.id);} if(d&&d.periodYear){pm.collectionVariables.set('filingPeriodYear',String(d.periodYear));} if(d&&d.periodMonth){pm.collectionVariables.set('filingPeriodMonth',String(d.periodMonth));}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/workspace?periodYear=2026&periodMonth=7",
-                "description": "12-step workspace. Returns currentStep, completionPercent, draftInputs, frozen computation, documents."
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{workspaceTaxType}}/workspace?periodYear={{filingPeriodYear}}&periodMonth={{filingPeriodMonth}}",
+                "description": "Get-or-create pending workspace for {{workspaceTaxType}}. PIT/CIT: periodMonth=12 (omit or send 12). Returns currentStep, completionPercent, draftInputs, frozen, computation, documents. Submitted returns read-only."
               }
             },
             {
-              "name": "Workspace - Confirm computation (VAT)",
+              "name": "Workspace - Update (PUT)",
               "request": {
-                "method": "POST",
+                "method": "PUT",
                 "header": [{"key": "Content-Type", "value": "application/json"}],
-                "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":7}"},
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/workspace/confirm-computation"
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"{{filingId}}\",\n  \"currentStep\": 5,\n  \"completedSteps\": [1, 2, 3, 4],\n  \"acknowledgedGaps\": true,\n  \"reviewedDocumentIds\": [\"form-002\", \"output-schedule\"],\n  \"submissionReference\": \"NRS-VAT-2026-0001\",\n  \"rrr\": \"2508-1234-5678\",\n  \"submissionProofUrl\": \"https://example.com/ack.pdf\",\n  \"paymentReceiptUrl\": \"https://example.com/remita.pdf\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{workspaceTaxType}}/workspace",
+                "description": "Partial update. Proof URLs from POST /media/upload. Period change clears freeze (only if step 8 not complete)."
               }
             },
             {
-              "name": "Workspace - Validate TaxGPT (VAT)",
+              "name": "Workspace - Confirm computation (step 1)",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Content-Type", "value": "application/json"}],
-                "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":7}"},
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/workspace/validate"
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}}}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{workspaceTaxType}}/workspace/confirm-computation",
+                "description": "Freezes computation + amount from draft+books. Marks step 1 complete, currentStep=2. Invalidates prior generated documents."
               }
             },
             {
-              "name": "Workspace - Generate documents (VAT)",
+              "name": "Workspace - Validate TaxGPT (step 2)",
               "request": {
                 "method": "POST",
                 "header": [{"key": "Content-Type", "value": "application/json"}],
-                "body": {"mode": "raw", "raw": "{\"periodYear\":2026,\"periodMonth\":7}"},
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/workspace/generate-documents"
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}}}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{workspaceTaxType}}/workspace/validate",
+                "description": "Step 2 — persists validation on workspace. Rule-based checks by default; set TAXGPT_API_URL env for external AI. Warnings do not block continue."
+              }
+            },
+            {
+              "name": "Workspace - Generate documents (step 4)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data; var docs=d&&d.documents; if(docs&&docs.length&&docs[0].id){pm.collectionVariables.set('workspaceDocumentId',docs[0].id);}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}}}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{workspaceTaxType}}/workspace/generate-documents",
+                "description": "Generates PDFs from frozen snapshot → R2 presigned URLs. Document ids match app (form-002, self-assessment, wht-schedule, c08a, etc.). payment-proof unavailable until receipt uploaded."
+              }
+            },
+            {
+              "name": "Workspace - Get document URL",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{workspaceTaxType}}/workspace/documents/{{workspaceDocumentId}}?periodYear={{filingPeriodYear}}&periodMonth={{filingPeriodMonth}}",
+                "description": "Re-issues fresh presigned URL for a generated document."
+              }
+            },
+            {
+              "name": "Workspace - Get package (step 6)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{workspaceTaxType}}/workspace/package?periodYear={{filingPeriodYear}}&periodMonth={{filingPeriodMonth}}",
+                "description": "Returns packageUrl + expiresAt (evidence-index PDF or combined package)."
               }
             },
             {
               "name": "VAT - Get calculation",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/calculation?periodYear=2026&periodMonth=1"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/calculation?period={{filingPeriodYear}}-{{filingPeriodMonth}}",
+                "description": "Live books or frozen workspace figures. Returns outputVat, inputVatClaimable, netVatPayable, inputVatBroughtForward (prior month credit), frozen, alreadyFiled, nilReturn. Also accepts ?periodYear=&periodMonth=."
               }
             },
             {
@@ -2725,13 +2809,25 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"salesAmount\":500000,\"purchaseAmount\":200000}"
+                  "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}},\"stateOfOperation\":\"Lagos\",\"vatRegistrationNumber\":\"12345678-0001\"}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/draft"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/draft",
+                "description": "Upserts VAT notes + creates pending workspace if none. Figures come from ledgers."
               }
             },
             {
-              "name": "VAT - Submit",
+              "name": "VAT - Submit (step 8)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data; if(d&&d.id){pm.collectionVariables.set('filingId',d.id);}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
                 "method": "POST",
                 "header": [
@@ -2742,16 +2838,18 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"amount\":50000,\"paymentStatus\":\"Not paid\",\"documentUrl\":\"https://example.com/doc.pdf\"}"
+                  "raw": "{\n  \"periodYear\": {{filingPeriodYear}},\n  \"periodMonth\": {{filingPeriodMonth}},\n  \"amount\": 284750,\n  \"dueDate\": \"2026-08-21\",\n  \"paymentStatus\": \"unpaid\",\n  \"stateOfOperation\": \"Lagos\",\n  \"vatRegistrationNumber\": \"12345678-0001\",\n  \"submissionReference\": \"NRS-VAT-2026-0001\",\n  \"computation\": {\n    \"outputVat\": 400000,\n    \"inputVatClaimable\": 115250,\n    \"netVatPayable\": 284750\n  }\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/submit"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/submit",
+                "description": "Step 8 — records return. amount must equal netVatPayable (±₦1). Nil: amount 0 still creates row. Sets status submitted, currentStep 8."
               }
             },
             {
               "name": "WHT - Get schedule",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/schedule?period=2026-01"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/schedule?period={{filingPeriodYear}}-{{filingPeriodMonth}}",
+                "description": "Built from beneficiary PAYMENT rows with whtAmount > 0 in period (falls back to legacy vendorPayment). Returns vendors[], totalWht, dueDate, frozen, alreadyFiled. Also ?periodYear=&periodMonth=."
               }
             },
             {
@@ -2766,13 +2864,25 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"lines\":[{\"vendorName\":\"Vendor A\",\"grossAmount\":100000,\"whtRate\":5,\"whtDeducted\":5000}]}"
+                  "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}},\"whtType\":\"MIXED\"}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/draft"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/draft",
+                "description": "Server recalculates schedule lines from beneficiary payments; client lines ignored for amounts."
               }
             },
             {
-              "name": "WHT - Submit",
+              "name": "WHT - Submit (step 8)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data; if(d&&d.id){pm.collectionVariables.set('filingId',d.id);}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
               "request": {
                 "method": "POST",
                 "header": [
@@ -2783,9 +2893,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"totalWht\":25000,\"paymentStatus\":\"Not paid\",\"documentUrl\":\"https://example.com/wht.pdf\"}"
+                  "raw": "{\n  \"periodYear\": {{filingPeriodYear}},\n  \"periodMonth\": {{filingPeriodMonth}},\n  \"totalWht\": 312200,\n  \"dueDate\": \"2026-08-21\",\n  \"paymentStatus\": \"unpaid\",\n  \"submissionReference\": \"NRS-WHT-2026-0001\"\n}"
                 },
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/submit"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/submit",
+                "description": "totalWht must match sum of schedule whtDeducted (±₦1). Empty schedule + totalWht 0 allowed (nil return)."
               }
             },
             {
@@ -2833,10 +2944,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 150000,\n  \"dueDate\": \"2026-03-31\",\n  \"paymentStatus\": \"unpaid\",\n  \"receiptUrl\": null,\n  \"documentUrl\": null,\n  \"evidenceVaultId\": null,\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"tradingProfit\": 2400000,\n    \"otherBusinessIncome\": 0,\n    \"otherPersonalIncome\": 3600000,\n    \"payerFees\": 0,\n    \"payerFeesIncludedInSales\": true,\n    \"grossIncome\": 6000000,\n    \"pensionContribution\": 288000,\n    \"nhfContribution\": 0,\n    \"nhisContribution\": 120000,\n    \"annualRent\": 1800000,\n    \"rentRelief\": 360000,\n    \"rentPeriodStart\": \"Jan 2025\",\n    \"rentPeriodEnd\": \"Dec 2025\",\n    \"landlordName\": \"Adewale Johnson\",\n    \"landlordContact\": \"08031234567\",\n    \"propertyAddress\": \"12 Allen Avenue, Ikeja, Lagos\",\n    \"lifeAssurance\": 80000,\n    \"mortgageInterest\": 0,\n    \"totalReliefs\": 848000,\n    \"chargeableIncome\": 5152000,\n    \"pitLiability\": 717360,\n    \"payeCredits\": 420000,\n    \"whtCredits\": 147360,\n    \"remainingPayable\": 150000,\n    \"minimumWageExempt\": false\n  }\n}"
+                  "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 150000,\n  \"dueDate\": \"2026-03-31\",\n  \"paymentStatus\": \"unpaid\",\n  \"submissionReference\": \"LAGOS-PIT-2025-0001\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"tradingProfit\": 2400000,\n    \"otherBusinessIncome\": 0,\n    \"otherPersonalIncome\": 3600000,\n    \"payerFees\": 0,\n    \"payerFeesIncludedInSales\": true,\n    \"grossIncome\": 6000000,\n    \"pensionContribution\": 288000,\n    \"nhfContribution\": 0,\n    \"nhisContribution\": 120000,\n    \"annualRent\": 1800000,\n    \"rentRelief\": 360000,\n    \"rentPeriodStart\": \"Jan 2025\",\n    \"rentPeriodEnd\": \"Dec 2025\",\n    \"landlordName\": \"Adewale Johnson\",\n    \"landlordContact\": \"08031234567\",\n    \"propertyAddress\": \"12 Allen Avenue, Ikeja, Lagos\",\n    \"lifeAssurance\": 80000,\n    \"mortgageInterest\": 0,\n    \"totalReliefs\": 848000,\n    \"chargeableIncome\": 5152000,\n    \"pitLiability\": 717360,\n    \"payeCredits\": 420000,\n    \"whtCredits\": 147360,\n    \"remainingPayable\": 150000,\n    \"minimumWageExempt\": false\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/submit",
-                "description": "Record PIT annual return. periodMonth=12. amount must match computation.remainingPayable (±₦1). Returns { id, status: submitted, submissionDate }."
+                "description": "Step 8 — submissionReference required at workspace step 8. amount must match computation.remainingPayable (±₦1). Returns { id, status: submitted, completionPercent }."
               }
             },
             {
@@ -2891,10 +3002,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 5252000,\n  \"dueDate\": \"2026-06-30\",\n  \"paymentStatus\": \"unpaid\",\n  \"receiptUrl\": null,\n  \"documentUrl\": null,\n  \"evidenceVaultId\": null,\n  \"rcNumber\": \"RC123456\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"year\": 2025,\n    \"turnover\": 150000000,\n    \"fixedAssets\": 80000000,\n    \"taxClassCode\": \"C08A\",\n    \"taxClassLabel\": \"Large Company\",\n    \"isSmallCompany\": false,\n    \"accountingProfit\": 20000000,\n    \"depreciation\": 2000000,\n    \"fines\": 100000,\n    \"directorsPersonal\": 500000,\n    \"otherNonAllowable\": 200000,\n    \"totalAddBacks\": 2800000,\n    \"frankedDividends\": 1000000,\n    \"assessableProfit\": 21800000,\n    \"chargeableGains\": 300000,\n    \"capitalAllowancesAvailable\": 3000000,\n    \"capitalAllowancesClaimed\": 3000000,\n    \"unutilizedCapitalAllowances\": 0,\n    \"lossCarryForward\": 500000,\n    \"chargeableProfit\": 18600000,\n    \"citRate\": 30,\n    \"levyRate\": 4,\n    \"citAmount\": 5580000,\n    \"developmentLevy\": 872000,\n    \"grossCit\": 6452000,\n    \"whtCredits\": 1200000,\n    \"whtApplied\": 1200000,\n    \"unutilizedWhtCredits\": 0,\n    \"citPayable\": 5252000,\n    \"rcNumber\": \"RC123456\",\n    \"tin\": \"12345678-0001\",\n    \"companyName\": \"FileAm Limited\",\n    \"allowances\": [\n      {\n        \"id\": \"asset-uuid-1\",\n        \"name\": \"Toyota Hilux\",\n        \"category\": \"Motor Vehicles\",\n        \"cost\": 12000000,\n        \"annualRate\": 0.25,\n        \"claimedThisYear\": 3000000\n      }\n    ]\n  }\n}"
+                  "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 5252000,\n  \"dueDate\": \"2026-06-30\",\n  \"paymentStatus\": \"unpaid\",\n  \"submissionReference\": \"FIRS-CIT-2025-0001\",\n  \"rcNumber\": \"RC123456\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"year\": 2025,\n    \"turnover\": 150000000,\n    \"fixedAssets\": 80000000,\n    \"taxClassCode\": \"C08A\",\n    \"taxClassLabel\": \"Large Company\",\n    \"isSmallCompany\": false,\n    \"accountingProfit\": 20000000,\n    \"depreciation\": 2000000,\n    \"fines\": 100000,\n    \"directorsPersonal\": 500000,\n    \"otherNonAllowable\": 200000,\n    \"totalAddBacks\": 2800000,\n    \"frankedDividends\": 1000000,\n    \"assessableProfit\": 21800000,\n    \"chargeableGains\": 300000,\n    \"capitalAllowancesAvailable\": 3000000,\n    \"capitalAllowancesClaimed\": 3000000,\n    \"unutilizedCapitalAllowances\": 0,\n    \"lossCarryForward\": 500000,\n    \"chargeableProfit\": 18600000,\n    \"citRate\": 30,\n    \"levyRate\": 4,\n    \"citAmount\": 5580000,\n    \"developmentLevy\": 872000,\n    \"grossCit\": 6452000,\n    \"whtCredits\": 1200000,\n    \"whtApplied\": 1200000,\n    \"unutilizedWhtCredits\": 0,\n    \"citPayable\": 5252000,\n    \"rcNumber\": \"RC123456\",\n    \"tin\": \"12345678-0001\",\n    \"companyName\": \"FileAm Limited\",\n    \"allowances\": [\n      {\n        \"id\": \"asset-uuid-1\",\n        \"name\": \"Toyota Hilux\",\n        \"category\": \"Motor Vehicles\",\n        \"cost\": 12000000,\n        \"annualRate\": 0.25,\n        \"claimedThisYear\": 3000000\n      }\n    ]\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/submit",
-                "description": "NTA 2025 large company (C08A) worked example §13.1 — citPayable ₦5,252,000 (30% CIT + 4% levy on assessable profit, WHT credits offset CIT only). Requires rcNumber, tin, periodMonth=12, dueDate={year+1}-06-30."
+                "description": "Step 8 large company C08A — citPayable ₦5,252,000. priorYearCarry feeds next year defaults on submit. submissionReference persisted on workspace."
               }
             },
             {
@@ -2939,12 +3050,14 @@
         },
         {
           "name": "Reports *",
+          "description": "Filing reports from filed/frozen snapshots. Types include VAT Return Summary, WHT Schedule Report, PIT Return Summary, CIT Return Summary, Filing History, Compliance Summary.",
           "item": [
             {
               "name": "Get types",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/types"
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/types",
+                "description": "Includes PIT Return Summary and CIT Return Summary (new)."
               }
             },
             {
@@ -2955,7 +3068,7 @@
               }
             },
             {
-              "name": "Generate report",
+              "name": "Generate report - VAT",
               "request": {
                 "method": "POST",
                 "header": [
@@ -2966,7 +3079,50 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\"reportType\":\"VAT Return Summary\",\"periodYear\":2026,\"periodMonth\":1,\"format\":\"PDF\"}"
+                  "raw": "{\"reportType\":\"VAT Return Summary\",\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}},\"format\":\"PDF\"}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/generate"
+              }
+            },
+            {
+              "name": "Generate report - PIT",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"reportType\":\"PIT Return Summary\",\"periodYear\":{{filingYear}},\"periodMonth\":12,\"format\":\"PDF\"}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/generate",
+                "description": "Uses filed/frozen PIT snapshot for periodYear when available."
+              }
+            },
+            {
+              "name": "Generate report - CIT",
+              "request": {
+                "method": "POST",
+                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"reportType\":\"CIT Return Summary\",\"periodYear\":{{filingYear}},\"periodMonth\":12,\"format\":\"PDF\"}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/generate",
+                "description": "Uses filed/frozen CIT snapshot for periodYear when available."
+              }
+            },
+            {
+              "name": "Generate report (generic)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"reportType\":\"Compliance Summary\",\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}},\"format\":\"PDF\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/reports/generate"
               }
