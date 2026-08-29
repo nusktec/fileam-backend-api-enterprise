@@ -264,9 +264,6 @@ async function buildCurrentAssetsSnapshot(userId: string) {
       .filter((row) => isBankLedgerCode(row.accountCode))
       .reduce((sum, row) => sum + row.balance, 0),
   );
-  const systemBankBalance = normalizeMoneyAmount(
-    balanceByCode.get(LEDGER_ACCOUNTS.BANK) ?? 0,
-  );
 
   const prepayments = await prepaymentsService.activeBalances(userId);
 
@@ -325,28 +322,51 @@ async function buildCurrentAssetsSnapshot(userId: string) {
         }>);
 
   const accountNumber = business?.bankAccount?.trim() || "Not set";
-  const systemBankItems =
-    systemBankBalance > 0
-      ? [
-          {
-            id: "system-bank",
-            bankName: business?.name?.trim()
-              ? `${business.name.trim()} — primary`
-              : "Primary bank account",
-            accountType: "Current",
-            accountNumber,
-            amount: systemBankBalance,
-            source: "system" as const,
-          },
-        ]
-      : ([] as Array<{
-          id: string;
-          bankName: string;
-          accountType: string;
-          accountNumber: string;
-          amount: number;
-          source: "system";
-        }>);
+  const aggregateBankBalance = normalizeMoneyAmount(
+    balanceByCode.get(LEDGER_ACCOUNTS.BANK) ?? 0,
+  );
+  const cardSettlementBalance = normalizeMoneyAmount(
+    balanceByCode.get(LEDGER_ACCOUNTS.CARD_SETTLEMENT) ?? 0,
+  );
+
+  type SystemBankItem = {
+    id: string;
+    bankName: string;
+    accountType: string;
+    accountNumber: string;
+    amount: number;
+    source: "system";
+  };
+
+  const systemBankItems: SystemBankItem[] = [];
+
+  if (aggregateBankBalance > 0) {
+    systemBankItems.push({
+      id: "system-bank",
+      bankName: business?.name?.trim()
+        ? `${business.name.trim()} — primary`
+        : "Primary bank account",
+      accountType: "Current",
+      accountNumber,
+      amount: aggregateBankBalance,
+      source: "system",
+    });
+  }
+
+  if (cardSettlementBalance > 0) {
+    systemBankItems.push({
+      id: "card-settlement",
+      bankName: "Card settlement",
+      accountType: "Current",
+      accountNumber: "Card processor balance",
+      amount: cardSettlementBalance,
+      source: "system",
+    });
+  }
+
+  const systemBankBalance = normalizeMoneyAmount(
+    systemBankItems.reduce((s, row) => s + row.amount, 0),
+  );
 
   const cash = {
     total: normalizeMoneyAmount(ledgerCashTotal),

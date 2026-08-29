@@ -3,6 +3,8 @@ import { prisma } from "../../config/database";
 import { PERCENT, PERCENT_TWO_DECIMAL_ROUND } from "../../constants/percentages";
 import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
 import {
+  isAsyncPaymentType,
+  isCashPaymentType,
   isSalePaidStatus,
   PAYMENT_TYPE_INVOICE,
   SALE_STATUS,
@@ -178,16 +180,15 @@ function toPayableItem(row: ApRow): ApPayableItem {
 }
 
 /**
- * Accounts Payable ← Pay Later / supplier invoices only.
- * Salary expenses are excluded (they belong under Salaries Payable).
- * Payable amount is included on items, upcomingPayables, and suppliers[].payables.
+ * Accounts Payable ← unpaid vendor obligations:
+ * - Invoice (Pay Later): outstanding = total − invoiceAmountPaid.total
+ * - Transfer / Card IN_PROGRESS: full amount until PATCH payment-status confirms
+ * Cash (PAID on create) and confirmed Transfer/Card are excluded.
+ * Salary expenses are excluded (Salaries Payable).
  */
 async function buildAccountsPayable(userId: string, asOfMs: number) {
   const expenses = await prisma.expense.findMany({
-    where: {
-      userId,
-      paymentType: PAYMENT_TYPE_INVOICE,
-    },
+    where: { userId },
     orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
   });
 
@@ -197,10 +198,21 @@ async function buildAccountsPayable(userId: string, asOfMs: number) {
   for (const e of expenses) {
     if (e.status === SALE_STATUS.CANCELLED) continue;
     if (isSalaryExpenseCategory(e.category)) continue;
+    if (isCashPaymentType(e.paymentType)) continue;
 
     const total = d(e.totalAmount);
     const paid = coerceInvoiceAmountPaid(e.invoiceAmountPaid).total;
-    const outstanding = Math.max(0, total - paid);
+
+    let outstanding = 0;
+    if (e.paymentType === PAYMENT_TYPE_INVOICE) {
+      outstanding = Math.max(0, total - paid);
+    } else if (isAsyncPaymentType(e.paymentType)) {
+      if (e.status !== SALE_STATUS.IN_PROGRESS) continue;
+      outstanding = total;
+    } else {
+      continue;
+    }
+
     if (outstanding <= 0) continue;
 
     const due = e.invoiceDueDate ?? e.expenseDate;
