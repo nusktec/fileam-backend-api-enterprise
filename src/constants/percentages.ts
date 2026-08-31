@@ -52,9 +52,6 @@ export const ENTERPRISE_POTENTIAL_TAX_SAVINGS_CAP_NGN = 500_000;
 export const ENTERPRISE_POTENTIAL_TAX_SAVINGS_WEEKLY_RATE = 0.2;
 export const ENTERPRISE_POTENTIAL_TAX_SAVINGS_WEEKLY_CAP_NGN = 100_000;
 
-/** PAYE: consolidated relief minimum as fraction of gross annual income. */
-export const PAYE_CONSOLIDATED_RELIEF_MIN_RATE = 0.01;
-
 /**
  * Enterprise `getBalanceSheet` mock splits (fractions of income / expenses — not tax rates).
  * Replace with real accounting when available.

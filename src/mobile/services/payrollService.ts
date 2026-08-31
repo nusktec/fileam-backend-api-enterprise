@@ -2,10 +2,12 @@ import { Decimal } from "@prisma/client/runtime/library";
 import PDFDocument from "pdfkit";
 import { prisma } from "../../config/database";
 import {
+  buildEmployeePayeOptions,
   computeNhf,
   computePayeMonthly,
   computePensionEmployee,
   computePensionEmployer,
+  computePensionableMonthly,
   NHF_RATE,
   PAYE_DUE_DAY,
   PENSION_EMPLOYEE_RATE,
@@ -163,15 +165,31 @@ function computePeriodTotals(
 
     if (contractor) continue;
 
-    const pensionEmp = computePensionEmployee(gross);
-    const pensionEr = computePensionEmployer(gross);
-    const paye = computePayeMonthly(gross * 12, {
-      annualHouseRent: decimalToNumber(e.annualHouseRent),
-      nhisHealthInsurance: decimalToNumber(e.nhisHealthInsurance),
-      lifeAssurancePremium: decimalToNumber(e.lifeAssurancePremium),
-      mortgageInterest: decimalToNumber(e.mortgageInterest),
-      qualifyingMedicalExpenses: decimalToNumber(e.qualifyingMedicalExpenses),
+    const pensionable = computePensionableMonthly({
+      basicMonthly: decimalToNumber(e.basicSalary),
+      housingAllowanceMonthly: decimalToNumber(e.housingAllowance),
+      transportAllowanceMonthly: decimalToNumber(e.transportAllowance),
     });
+    const pensionEmp = computePensionEmployee(pensionable);
+    const pensionEr = computePensionEmployer(pensionable);
+    const paye = computePayeMonthly(
+      gross * 12,
+      buildEmployeePayeOptions({
+        grossMonthly: gross,
+        basicMonthly: decimalToNumber(e.basicSalary),
+        housingAllowanceMonthly: decimalToNumber(e.housingAllowance),
+        transportAllowanceMonthly: decimalToNumber(e.transportAllowance),
+        nhfApplicable,
+        employeeContributesNhf: e.nhf !== false,
+        reliefs: {
+          annualHouseRent: decimalToNumber(e.annualHouseRent),
+          nhisHealthInsurance: decimalToNumber(e.nhisHealthInsurance),
+          lifeAssurancePremium: decimalToNumber(e.lifeAssurancePremium),
+          mortgageInterest: decimalToNumber(e.mortgageInterest),
+          qualifyingMedicalExpenses: decimalToNumber(e.qualifyingMedicalExpenses),
+        },
+      }),
+    );
     const employeeNhf = e.nhf !== false;
     const nhf =
       nhfApplicable && employeeNhf

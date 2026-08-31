@@ -3,15 +3,15 @@ import { Decimal } from "@prisma/client/runtime/library";
 import {
   PERCENT,
   WHT_RATE_SERVICES_PERCENT,
-  CIT_RATE_SMALL_COMPANY_PERCENT,
-  CIT_RATE_STANDARD_PERCENT,
   VAT_TURNOVER_THRESHOLD_NGN,
   CIT_TURNOVER_THRESHOLD_NGN,
 } from "../../constants/percentages";
+import { estimateCitFromBooks } from "../../constants/citFiling";
 import { resolveTaxpayerComputationContext } from "../../constants/taxpayerComputationProfile";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
 import { computePayeMonthly } from "../../constants/payroll";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
+import { ASSET_ON_BOOKS_STATUSES } from "../../constants/assets";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
@@ -67,7 +67,8 @@ export const taxComputationService = {
   async getForPeriod(userId: string, year: number, month: number) {
     const { start, end } = monthDateRangeUtc(year, month);
 
-    const [sales, expenses, personaPayload] = await Promise.all([
+    const [sales, expenses, personaPayload, business, fixedAssetRows] =
+      await Promise.all([
       prisma.sale.findMany({
         where: { userId, saleDate: { gte: start, lte: end } },
       }),
@@ -75,6 +76,15 @@ export const taxComputationService = {
         where: { userId, expenseDate: { gte: start, lte: end } },
       }),
       this.getPersonaPayloadForUser(userId),
+      prisma.business.findFirst({
+        where: { userId },
+        orderBy: { updatedAt: "desc" },
+        select: { businessType: true, sector: true },
+      }),
+      prisma.asset.findMany({
+        where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
+        select: { purchaseCost: true },
+      }),
     ]);
 
     const { taxpayerContext, taxPersonaGuidance, employmentGrossSalaryMonthly } =
@@ -114,16 +124,17 @@ export const taxComputationService = {
     const monthlyProfit = netProfit;
     const annualizedProfit = monthlyProfit * 12;
     const annualizedTurnover = totalIncome * 12;
-    const citSmallCompanyProxy =
-      annualizedTurnover <= CIT_TURNOVER_THRESHOLD_NGN;
-    const citRateDisplay = citSmallCompanyProxy
-      ? CIT_RATE_SMALL_COMPANY_PERCENT
-      : CIT_RATE_STANDARD_PERCENT;
-    const estimatedAnnualCit = citSmallCompanyProxy
-      ? 0
-      : Math.round(
-          (Math.max(0, annualizedProfit) * CIT_RATE_STANDARD_PERCENT) / PERCENT,
-        );
+    const fixedAssetsProxy = fixedAssetRows.reduce(
+      (s, a) => s + decimalToNumber(a.purchaseCost),
+      0,
+    );
+    const citEstimate = estimateCitFromBooks({
+      annualizedTurnover,
+      annualizedProfit,
+      fixedAssets: fixedAssetsProxy,
+      businessType: business?.businessType,
+      sector: business?.sector,
+    });
 
     const pitFromBooks = estimateAnnualPersonalIncomeTaxNg(
       Math.max(0, annualizedProfit),
@@ -178,14 +189,20 @@ export const taxComputationService = {
         estimatedWhtDeducted,
       },
       cit: {
-        summary: normalizeMoneyAmount(estimatedAnnualCit),
-        smallCompanyRate: CIT_RATE_SMALL_COMPANY_PERCENT,
+        summary: normalizeMoneyAmount(citEstimate.totalCitLiability),
+        isSmallCompany: citEstimate.isSmallCompany,
+        taxClassLabel: citEstimate.taxClassLabel,
         citThreshold: CIT_TURNOVER_THRESHOLD_NGN,
         percentOfThreshold: percentOfCitThreshold,
         monthlyProfit,
         annualizedProfit,
-        citRate: citRateDisplay,
-        estimatedAnnualCit,
+        annualizedTurnover,
+        fixedAssetsProxy,
+        citRate: citEstimate.citRate,
+        levyRate: citEstimate.levyRate,
+        estimatedAnnualCit: citEstimate.estimatedAnnualCit,
+        developmentLevy: citEstimate.developmentLevy,
+        totalCitLiability: citEstimate.totalCitLiability,
         /** Placeholder until book records track allowances; 0 means not supplied in-app. */
         capitalAllowances: 0,
         /** Loss brought forward applied before tax (not tracked in-app; 0 = none). */
@@ -211,7 +228,7 @@ export const taxComputationService = {
         summaryAnnualEstimate: payeAnnualEstimate,
         methodology:
           flags.paye && salaryMonthlyCaptured > 0
-            ? "Estimated PAYE using Nigeria NRS progressive bands (first ₦800,000 tax-free on chargeable income, then 15%/18%/21%/23%/25%) after consolidated relief, employee pension, and optional statutory reliefs. Employers withhold differently — reconcile with payslips. Freelance/side income remains under WHT / PIT."
+            ? "Estimated PAYE under NTA 2025 (effective 1 Jan 2026): progressive bands (first ₦800,000 tax-free on chargeable income, then 15%/18%/21%/23%/25%) after employee pension (8% of gross). Consolidated Relief Allowance (CRA) abolished — use employee rent relief (min(20% × annual rent, ₦500,000)) via payroll records. NHF not included here unless basic salary is captured separately on profile. Reconcile with employer payslips."
             : flags.paye && salaryMonthlyCaptured <= 0
               ? "PAYE applies to salary — set employmentGrossSalaryMonthly on your mobile profile to populate estimates."
               : "PAYE mainly applies when your tax persona is PAYEE (employee + side income).",

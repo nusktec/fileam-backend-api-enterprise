@@ -3,9 +3,11 @@ import { Decimal } from "@prisma/client/runtime/library";
 import {
   PERCENT,
   WHT_RATE_SERVICES_PERCENT,
-  CIT_RATE_SMALL_COMPANY_PERCENT,
   VAT_TURNOVER_THRESHOLD_NGN,
 } from "../../constants/percentages";
+import { WHT_RATE_TABLE } from "../../constants/beneficiary";
+import { estimateCitFromBooks } from "../../constants/citFiling";
+import { ASSET_ON_BOOKS_STATUSES } from "../../constants/assets";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
 import { computePayeMonthly } from "../../constants/payroll";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
@@ -251,7 +253,8 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
   const start = new Date(y, 0, 1, 0, 0, 0, 0);
   const end = new Date(y, 11, 31, 23, 59, 59, 999);
 
-  const [sales, expenses, user, payables] = await Promise.all([
+  const [sales, expenses, user, payables, business, fixedAssetRows] =
+    await Promise.all([
     prisma.sale.findMany({
       where: { userId: linkedUserId, saleDate: { gte: start, lte: end } },
     }),
@@ -268,6 +271,18 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
     }),
     prisma.taxPayable.findMany({
       where: { userId: linkedUserId, periodYear: y },
+    }),
+    prisma.business.findFirst({
+      where: { userId: linkedUserId },
+      orderBy: { updatedAt: "desc" },
+      select: { businessType: true, sector: true },
+    }),
+    prisma.asset.findMany({
+      where: {
+        userId: linkedUserId,
+        status: { in: [...ASSET_ON_BOOKS_STATUSES] },
+      },
+      select: { purchaseCost: true },
     }),
   ]);
 
@@ -309,9 +324,19 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
   );
   const netProfit = totalIncome - totalExpenses;
   const taxableProfit = Math.max(0, Math.round(netProfit));
-  const citLiability = Math.round(
-    (taxableProfit * CIT_RATE_SMALL_COMPANY_PERCENT) / PERCENT,
+  const fixedAssetsProxy = fixedAssetRows.reduce(
+    (s, x) => s + decimalToNumber(x.purchaseCost),
+    0,
   );
+  const citEstimate = estimateCitFromBooks({
+    annualizedTurnover: totalIncome,
+    annualizedProfit: taxableProfit,
+    fixedAssets: fixedAssetsProxy,
+    businessType: business?.businessType,
+    sector: business?.sector,
+  });
+  const citLiability = citEstimate.totalCitLiability;
+  const whtRentRate = WHT_RATE_TABLE.RENT.corporate;
 
   const whtServices = Math.round(
     (serviceIncome * WHT_RATE_SERVICES_PERCENT) / PERCENT,
@@ -322,7 +347,8 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
     const base = decimalToNumber(e.amount);
     const c = norm(e.category);
     const h = `${c} ${norm(e.description)}`;
-    if (/(rent|lease)/i.test(h)) whtRent += Math.round((base * 5) / PERCENT);
+    if (/(rent|lease)/i.test(h))
+      whtRent += Math.round((base * whtRentRate) / PERCENT);
     else if (/survey/i.test(h))
       whtSurvey += Math.round((base * 5) / PERCENT);
   }
@@ -404,7 +430,10 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
       amount: whtServices,
     });
   if (whtRent > 0)
-    whtItems.push({ label: "WHT on Rent (5%)", amount: whtRent });
+    whtItems.push({
+      label: `WHT on Rent (${whtRentRate}%)`,
+      amount: whtRent,
+    });
   if (whtSurvey > 0)
     whtItems.push({ label: "WHT on Surveys (5%)", amount: whtSurvey });
   if (whtItems.length === 0 && whtTotal > 0)
@@ -428,12 +457,27 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
     items: [
       { label: "Taxable Profit (books proxy)", amount: taxableProfit },
       {
-        label: "Tax Rate",
+        label: "Tax Class",
         amount: null,
         isRate: true,
-        rateValue: `${CIT_RATE_SMALL_COMPANY_PERCENT}%`,
+        rateValue: citEstimate.taxClassLabel,
       },
-      { label: "CIT Liability (estimated)", amount: citLiability },
+      {
+        label: "CIT Rate",
+        amount: null,
+        isRate: true,
+        rateValue: `${citEstimate.citRate}%`,
+      },
+      ...(citEstimate.developmentLevy > 0
+        ? [
+            {
+              label: "Development Levy (4%)",
+              amount: citEstimate.developmentLevy,
+            },
+          ]
+        : []),
+      { label: "CIT Liability (estimated)", amount: citEstimate.estimatedAnnualCit },
+      { label: "Total CIT + Levy", amount: citLiability },
     ],
     dueDate: citDue,
     dueDateStatus: dueDateStatus(citDue),

@@ -20,23 +20,52 @@ export const PIT_PROGRESSIVE_BRACKETS: ReadonlyArray<{
   { limit: Number.POSITIVE_INFINITY, ratePercent: 25 },
 ];
 
-/** Progressive PIT on annual chargeable income (NGN). */
-export function computeProgressivePitFromChargeableIncome(
+export type ProgressivePitBand = {
+  width: number;
+  ratePercent: number;
+  taxableAmount: number;
+  tax: number;
+};
+
+/** Shared NTA 2025 Fourth Schedule engine — used by PAYE and PIT filing. */
+export function computeProgressivePitWithBands(
   chargeableIncomeAnnualNgn: number,
-): number {
+): { pitLiability: number; bands: ProgressivePitBand[] } {
   const taxable = Math.max(0, chargeableIncomeAnnualNgn);
-  if (taxable <= 0) return 0;
+  if (taxable <= 0) return { pitLiability: 0, bands: [] };
 
   let tax = 0;
   let prevLimit = 0;
+  const bands: ProgressivePitBand[] = [];
 
   for (const bracket of PIT_PROGRESSIVE_BRACKETS) {
     if (taxable <= prevLimit) break;
-    const slice = Math.min(taxable - prevLimit, bracket.limit - prevLimit);
-    tax += (slice * bracket.ratePercent) / PERCENT;
+    const width =
+      bracket.limit === Number.POSITIVE_INFINITY
+        ? taxable - prevLimit
+        : bracket.limit - prevLimit;
+    const slice = Math.min(taxable - prevLimit, width);
+    const sliceTax = (slice * bracket.ratePercent) / PERCENT;
+    tax += sliceTax;
+    bands.push({
+      width: bracket.limit === Number.POSITIVE_INFINITY ? slice : width,
+      ratePercent: bracket.ratePercent,
+      taxableAmount: slice,
+      tax: sliceTax,
+    });
     prevLimit = bracket.limit;
     if (taxable <= bracket.limit) break;
   }
 
-  return Math.round(tax * 100) / 100;
+  return {
+    pitLiability: Math.round(tax * 100) / 100,
+    bands,
+  };
+}
+
+/** Progressive PIT on annual chargeable income (NGN). */
+export function computeProgressivePitFromChargeableIncome(
+  chargeableIncomeAnnualNgn: number,
+): number {
+  return computeProgressivePitWithBands(chargeableIncomeAnnualNgn).pitLiability;
 }

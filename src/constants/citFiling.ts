@@ -326,3 +326,43 @@ export function computeCitFromSnapshot(
 export function amountsMatch(a: number, b: number, tolerance = 1): boolean {
   return Math.abs(a - b) <= tolerance;
 }
+
+/** Lightweight CIT estimate from books (turnover, profit, fixed assets). */
+export function estimateCitFromBooks(input: {
+  annualizedTurnover: number;
+  annualizedProfit: number;
+  fixedAssets: number;
+  businessType?: string | null;
+  sector?: string | null;
+}): {
+  isSmallCompany: boolean;
+  taxClassCode: CitTaxClassCode;
+  taxClassLabel: string;
+  citRate: number;
+  levyRate: number;
+  assessableProfitProxy: number;
+  estimatedAnnualCit: number;
+  developmentLevy: number;
+  totalCitLiability: number;
+} {
+  const classification = classifySmallCompany({
+    turnover: input.annualizedTurnover,
+    fixedAssets: input.fixedAssets,
+    businessType: input.businessType,
+    sector: input.sector,
+  });
+  const assessableProfitProxy = Math.max(0, input.annualizedProfit);
+  const estimatedAnnualCit = roundCitNaira(
+    assessableProfitProxy * (classification.citRate / PERCENT),
+  );
+  const developmentLevy = classification.isSmallCompany
+    ? 0
+    : roundCitNaira(assessableProfitProxy * CIT_DEVELOPMENT_LEVY_RATE);
+  return {
+    ...classification,
+    assessableProfitProxy,
+    estimatedAnnualCit,
+    developmentLevy,
+    totalCitLiability: estimatedAnnualCit + developmentLevy,
+  };
+}

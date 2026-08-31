@@ -1,10 +1,12 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import {
+  buildEmployeePayeOptions,
   computeAnnualPayeReliefs,
   computePayeMonthly,
   computePensionEmployee,
   computePensionEmployer,
+  computePensionableMonthly,
   computeNhf,
   PAYE_DUE_DAY,
   type PayeReliefInputs,
@@ -77,6 +79,30 @@ function employeeNhfContributor(e: { nhf?: boolean | null }): boolean {
   return e.nhf !== false;
 }
 
+function pensionableMonthly(e: EmployeeCompensation): number {
+  return computePensionableMonthly({
+    basicMonthly: decimalToNumber(e.basicSalary),
+    housingAllowanceMonthly: decimalToNumber(e.housingAllowance),
+    transportAllowanceMonthly: decimalToNumber(e.transportAllowance),
+  });
+}
+
+function employeePayeOptions(
+  e: EmployeeCompensation,
+  opts?: { nhfApplicable?: boolean },
+) {
+  const gross = grossMonthly(e);
+  return buildEmployeePayeOptions({
+    grossMonthly: gross,
+    basicMonthly: decimalToNumber(e.basicSalary),
+    housingAllowanceMonthly: decimalToNumber(e.housingAllowance),
+    transportAllowanceMonthly: decimalToNumber(e.transportAllowance),
+    nhfApplicable: opts?.nhfApplicable,
+    employeeContributesNhf: employeeNhfContributor(e),
+    reliefs: payeReliefsFromEmployee(e),
+  });
+}
+
 /** Monthly net pay (gross − employee deductions / estimated contractor WHT). */
 export function computeEmployeeMonthlyNetPay(
   e: EmployeeCompensation,
@@ -84,7 +110,8 @@ export function computeEmployeeMonthlyNetPay(
 ): number {
   const gross = computeEmployeeMonthlyGrossPay(e);
   const contractor = isContractorEmployment(e.employmentType);
-  const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
+  const pensionable = pensionableMonthly(e);
+  const pensionEmp = contractor ? 0 : computePensionEmployee(pensionable);
   const businessNhf = opts?.nhfApplicable !== false;
   const nhf =
     contractor || !businessNhf || !employeeNhfContributor(e)
@@ -92,7 +119,7 @@ export function computeEmployeeMonthlyNetPay(
       : computeNhf(decimalToNumber(e.basicSalary));
   const paye = contractor
     ? 0
-    : computePayeMonthly(gross * 12, payeReliefsFromEmployee(e));
+    : computePayeMonthly(gross * 12, employeePayeOptions(e, opts));
   const whtEstimated = contractor
     ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
     : 0;
@@ -177,7 +204,7 @@ export const employeesService = {
       const contractor = isContractorEmployment(e.employmentType);
       const paye = contractor
         ? 0
-        : computePayeMonthly(gross * 12, payeReliefsFromEmployee(e));
+        : computePayeMonthly(gross * 12, employeePayeOptions(e, { nhfApplicable }));
       const whtEstimated = contractor
         ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
         : 0;
@@ -208,7 +235,10 @@ export const employeesService = {
   },
 
   async getObligations(userId: string) {
-    const employees = await prisma.employee.findMany({ where: { userId } });
+    const [employees, nhfApplicable] = await Promise.all([
+      prisma.employee.findMany({ where: { userId } }),
+      isNhfApplicableForUser(userId),
+    ]);
     let totalPaye = 0;
     let totalPension = 0;
     let totalContractorWht = 0;
@@ -218,9 +248,14 @@ export const employeesService = {
         totalContractorWht += (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT;
         continue;
       }
-      totalPaye += computePayeMonthly(gross * 12, payeReliefsFromEmployee(e));
+      const pensionable = pensionableMonthly(e);
+      totalPaye += computePayeMonthly(
+        gross * 12,
+        employeePayeOptions(e, { nhfApplicable }),
+      );
       totalPension +=
-        computePensionEmployee(gross) + computePensionEmployer(gross);
+        computePensionEmployee(pensionable) +
+        computePensionEmployer(pensionable);
     }
     const now = new Date();
     const dueDate = new Date(now.getFullYear(), now.getMonth(), PAYE_DUE_DAY);
@@ -230,7 +265,7 @@ export const employeesService = {
         amount: totalPaye,
         status: "Pending",
         dueDate,
-        note: "PAYE applies to Part time / Full time only; contractors are excluded (see contractorWht).",
+        note: "NTA 2025 PAYE on Part time / Full time (pension + NHF + declared reliefs); contractors excluded (see contractorWht).",
       },
       contractorWht: {
         amount: totalContractorWht,
@@ -254,18 +289,19 @@ export const employeesService = {
     const gross = grossMonthly(e);
     const contractor = isContractorEmployment(e.employmentType);
     const nhfApplicable = await isNhfApplicableForUser(userId);
-    const pensionEmp = contractor ? 0 : computePensionEmployee(gross);
+    const pensionable = pensionableMonthly(e);
+    const pensionEmp = contractor ? 0 : computePensionEmployee(pensionable);
     const nhf =
       contractor || !nhfApplicable || !employeeNhfContributor(e)
         ? 0
         : computeNhf(basic);
     const paye = contractor
       ? 0
-      : computePayeMonthly(gross * 12, payeReliefsFromEmployee(e));
+      : computePayeMonthly(gross * 12, employeePayeOptions(e, { nhfApplicable }));
     const whtEstimated = contractor
       ? (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT
       : 0;
-    const pensionEmployer = contractor ? 0 : computePensionEmployer(gross);
+    const pensionEmployer = contractor ? 0 : computePensionEmployer(pensionable);
     const net = computeEmployeeMonthlyNetPay(e, { nhfApplicable });
     const totalMonthlyCost = gross + pensionEmployer;
     return {
@@ -463,7 +499,8 @@ export const employeesService = {
     if (!employee) return null;
 
     const gross = grossMonthly(employee);
-    const pensionEmployer = computePensionEmployer(gross);
+    const pensionable = pensionableMonthly(employee);
+    const pensionEmployer = computePensionEmployer(pensionable);
     const totalMonthlyCost = gross + pensionEmployer;
 
     const { expensesService } = await import("./expensesService");

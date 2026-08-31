@@ -153,6 +153,7 @@ export type PitDraftInputs = {
     nhisContribution?: number;
     lifeAssurance?: number;
     mortgageInterest?: number;
+    qualifyingMedicalExpenses?: number;
     pensionOverride?: number | null;
     nhfOverride?: number | null;
     rentPeriodStart?: string;

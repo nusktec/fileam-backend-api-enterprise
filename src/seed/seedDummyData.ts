@@ -19,7 +19,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import path from "path";
 import fs from "fs";
 import { seedInventoryDummyDataForUser } from "./inventoryDummySeed";
-import { PERCENT, VAT_RATE_PERCENT } from "../constants/percentages";
+import { PERCENT, VAT_RATE_PERCENT, VAT_TURNOVER_THRESHOLD_NGN } from "../constants/percentages";
 
 const SALE_CATEGORIES = ["Consulting", "Product Sales", "Service Income", "Subscription", "Other"];
 const EXPENSE_CATEGORIES = ["Rent", "Tools & Software", "Marketing", "Internet", "Salary", "Other"];
@@ -247,13 +247,11 @@ async function runSeedDummy() {
       update: {},
     });
 
+    const vatThresholdLabel = `N${VAT_TURNOVER_THRESHOLD_NGN.toLocaleString("en-NG")}`;
     const thresholdMessages: Record<string, string> = {
-      below:
-        "This business turnover in the last 12 months is below N25,000,000. VAT registration is not currently required.",
-      approaching:
-        "This business is approaching the VAT threshold of N25,000,000. Consider preparing for VAT registration.",
-      above:
-        "This business turnover exceeds N25,000,000. VAT registration is required.",
+      below: `This business turnover in the last 12 months is below ${vatThresholdLabel}. VAT registration is not currently required.`,
+      approaching: `This business is approaching the VAT threshold of ${vatThresholdLabel}. Consider preparing for VAT registration.`,
+      above: `This business turnover exceeds ${vatThresholdLabel}. VAT registration is required.`,
     };
 
     if (isThresholdClient) {

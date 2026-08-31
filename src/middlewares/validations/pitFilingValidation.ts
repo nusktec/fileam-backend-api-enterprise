@@ -38,6 +38,7 @@ export const validatePitSubmitBody = [
   body("computation.annualRent").isFloat({ min: 0 }),
   body("computation.lifeAssurance").isFloat({ min: 0 }),
   body("computation.mortgageInterest").isFloat({ min: 0 }),
+  body("computation.qualifyingMedicalExpenses").isFloat({ min: 0 }),
   body("computation.payeCredits").isFloat({ min: 0 }),
   body("computation.whtCredits").isFloat({ min: 0 }),
   body("computation.remainingPayable").isFloat({ min: 0 }),

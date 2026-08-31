@@ -1,4 +1,5 @@
 import { STATE_OF_EMPLOYMENT_VALUES } from "./employer";
+import { computeProgressivePitWithBands } from "./pitTaxSchedule";
 
 /** NTA 2025 Fourth Schedule — band widths applied top-down on chargeable income. */
 export const PIT_BAND_WIDTHS: ReadonlyArray<{
@@ -52,6 +53,7 @@ export type PitComputationSnapshot = {
   propertyAddress: string | null;
   lifeAssurance: number;
   mortgageInterest: number;
+  qualifyingMedicalExpenses: number;
   totalReliefs: number;
   chargeableIncome: number;
   pitLiability: number;
@@ -93,27 +95,15 @@ export function computeFourthScheduleTax(chargeableIncome: number): {
   pitLiability: number;
   bands: PitBandResult[];
 } {
-  let remaining = Math.max(0, chargeableIncome);
-  let pitLiability = 0;
-  const bands: PitBandResult[] = [];
-
-  for (const band of PIT_BAND_WIDTHS) {
-    if (remaining <= 0) break;
-    const width =
-      band.width === Number.POSITIVE_INFINITY ? remaining : band.width;
-    const taxableAmount = Math.min(width, remaining);
-    const tax = Math.round(taxableAmount * band.rate);
-    bands.push({
-      label: band.label,
-      width:
-        band.width === Number.POSITIVE_INFINITY ? taxableAmount : band.width,
-      rate: band.rate,
-      taxableAmount,
-      tax,
-    });
-    pitLiability += tax;
-    remaining -= taxableAmount;
-  }
+  const { pitLiability, bands: rawBands } =
+    computeProgressivePitWithBands(chargeableIncome);
+  const bands: PitBandResult[] = rawBands.map((band, index) => ({
+    label: PIT_BAND_WIDTHS[index]?.label ?? `Band ${index + 1}`,
+    width: band.width,
+    rate: band.ratePercent / 100,
+    taxableAmount: band.taxableAmount,
+    tax: Math.round(band.tax),
+  }));
 
   return { pitLiability, bands };
 }
@@ -142,6 +132,7 @@ export type PitReliefInputs = {
   annualRent: number;
   lifeAssurance: number;
   mortgageInterest: number;
+  qualifyingMedicalExpenses?: number;
 };
 
 export function computeGrossIncome(input: PitIncomeInputs): number {
@@ -167,7 +158,8 @@ export function computeTotalReliefs(input: PitReliefInputs): {
     Math.max(0, input.nhisContribution) +
     rentRelief +
     Math.max(0, input.lifeAssurance) +
-    Math.max(0, input.mortgageInterest);
+    Math.max(0, input.mortgageInterest) +
+    Math.max(0, input.qualifyingMedicalExpenses ?? 0);
   return { rentRelief, totalReliefs };
 }
 
@@ -197,6 +189,7 @@ export function computePitFromSnapshot(
     annualRent: snapshot.annualRent,
     lifeAssurance: snapshot.lifeAssurance,
     mortgageInterest: snapshot.mortgageInterest,
+    qualifyingMedicalExpenses: snapshot.qualifyingMedicalExpenses,
   });
 
   const chargeableIncome = snapshot.minimumWageExempt

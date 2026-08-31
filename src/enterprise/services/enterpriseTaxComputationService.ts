@@ -4,6 +4,7 @@ import {
   PERCENT,
   WHT_RATE_SERVICES_PERCENT,
   CIT_RATE_STANDARD_PERCENT,
+  VAT_TURNOVER_THRESHOLD_NGN,
 } from "../../constants/percentages";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
@@ -11,9 +12,8 @@ import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 const VAT_TYPES = ["Standard Rate", "Reduced Rate", "Zero Rate", "Exempt"];
 const VAT_PERIODS = ["Monthly", "Quarterly", "Annual"];
 const VAT_THRESHOLD_DEFAULT = 100000;
-const VAT_TURNOVER_THRESHOLD = 25_000_000;
-const BELOW_THRESHOLD_MESSAGE =
-  "This business turnover in the last 12 months is below N25,000,000. VAT registration is not currently required. We will monitor the turnover and alert you if VAT registration becomes necessary in the future.";
+const VAT_TURNOVER_THRESHOLD = VAT_TURNOVER_THRESHOLD_NGN;
+const BELOW_THRESHOLD_MESSAGE = `This business turnover in the last 12 months is below N${VAT_TURNOVER_THRESHOLD_NGN.toLocaleString("en-NG")}. VAT registration is not currently required. We will monitor the turnover and alert you if VAT registration becomes necessary in the future.`;
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -264,8 +264,8 @@ export const enterpriseTaxComputationService = {
         : "VAT registration required";
     const turnoverStatement =
       totalTurnOver < VAT_TURNOVER_THRESHOLD
-        ? `Turnover (N${totalTurnOver.toLocaleString()}) is below N25,000,000 threshold`
-        : `Turnover (N${totalTurnOver.toLocaleString()}) is above N25,000,000 threshold`;
+        ? `Turnover (N${totalTurnOver.toLocaleString()}) is below N${VAT_TURNOVER_THRESHOLD.toLocaleString("en-NG")} threshold`
+        : `Turnover (N${totalTurnOver.toLocaleString()}) is above N${VAT_TURNOVER_THRESHOLD.toLocaleString("en-NG")} threshold`;
     return {
       totalTurnOver,
       chartSet,
