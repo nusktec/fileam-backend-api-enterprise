@@ -5,6 +5,7 @@ import {
   changePassword,
   getBusinessProfile,
   updateBusinessProfile,
+  getTaxEligibilityProfile,
   getNotificationSettings,
   updateNotificationSettings,
   getConsultant,
@@ -23,6 +24,7 @@ router.get("/profile", getProfile);
 router.put("/profile", validations.updateProfileValidation, updateProfile);
 router.patch("/password", validations.changePasswordValidation, changePassword);
 router.get("/business-profile", getBusinessProfile);
+router.get("/tax-eligibility-profile", getTaxEligibilityProfile);
 router.put(
   "/business-profile",
   express.json(),

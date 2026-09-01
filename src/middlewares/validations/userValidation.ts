@@ -1,4 +1,8 @@
 import { check } from "express-validator";
+import {
+  PRIMARY_BUSINESS_ACTIVITY_VALUES,
+  PROVIDES_PROFESSIONAL_SERVICES_VALUES,
+} from "../../constants/taxEligibility";
 import { handleValidation } from "../errorHandler";
 import {
   normalizeSolopreneurRegistration,
@@ -53,15 +57,59 @@ const updateProfileValidation = [
   handleValidation,
 ];
 
+function optionalBusinessProfileMoney(field: string) {
+  return check(field)
+    .optional({ nullable: true })
+    .custom((value) => {
+      if (value === null) return true;
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new Error(`${field} must be a JSON number`);
+      }
+      if (value < 0) {
+        throw new Error(`${field} must be greater than or equal to 0`);
+      }
+      return true;
+    });
+}
+
 const updateBusinessProfileValidation = [
   check("businessName").optional().isString(),
   check("tin").optional().isString(),
   check("rcNumber").optional().isString(),
   check("businessType").optional().isString(),
-  check("sector").optional().isString(),
+  check("sector").optional({ nullable: true }).isString(),
   check("stateOfResidence").optional().isString(),
   check("bankAccount").optional().isString(),
   check("address").optional().isString(),
+  optionalBusinessProfileMoney("totalFixedAssets"),
+  optionalBusinessProfileMoney("annualGrossTurnover"),
+  check("providesProfessionalServices")
+    .optional({ nullable: true })
+    .custom((v) => {
+      if (v === null || v === undefined || v === "") return true;
+      return (PROVIDES_PROFESSIONAL_SERVICES_VALUES as readonly string[]).includes(
+        String(v).trim().toUpperCase(),
+      );
+    })
+    .withMessage(
+      `providesProfessionalServices must be one of: ${PROVIDES_PROFESSIONAL_SERVICES_VALUES.join(", ")}`,
+    ),
+  check("professionalService")
+    .optional({ nullable: true })
+    .isBoolean()
+    .withMessage("professionalService must be a JSON boolean or null"),
+  check("primaryBusinessActivity")
+    .optional({ nullable: true })
+    .custom((v) => {
+      if (v === null || v === undefined || v === "") return true;
+      const normalized = String(v).trim().toUpperCase().replace(/[\s/]+/g, "_");
+      return (PRIMARY_BUSINESS_ACTIVITY_VALUES as readonly string[]).includes(
+        normalized,
+      );
+    })
+    .withMessage(
+      `primaryBusinessActivity must be one of: ${PRIMARY_BUSINESS_ACTIVITY_VALUES.join(", ")}`,
+    ),
   check("logo")
     .optional({ values: "null" })
     .isString()

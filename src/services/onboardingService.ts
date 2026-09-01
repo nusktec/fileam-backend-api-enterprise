@@ -3,6 +3,17 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../config/database";
 import { EmailVerificationService } from "./emailVerificationService";
 import {
+  decimalFromBusinessProfileMoney,
+  normalizeBusinessProfileSector,
+} from "../constants/businessProfile";
+import {
+  normalizePrimaryBusinessActivity,
+  normalizeProvidesProfessionalServices,
+  type PrimaryBusinessActivity,
+  type ProvidesProfessionalServicesAnswer,
+} from "../constants/taxEligibility";
+import { HttpReplyError } from "../utils/httpReplyError";
+import {
   generateOnboardingToken,
   verifyOnboardingToken,
   OnboardingTokenPayload,
@@ -382,6 +393,11 @@ export const onboardingService = {
       streetAddress?: string;
       stateOfResidence?: string;
       primaryTaxOffice?: string;
+      sector?: string | null;
+      totalFixedAssets?: number | null;
+      annualGrossTurnover?: number | null;
+      providesProfessionalServices?: ProvidesProfessionalServicesAnswer | null;
+      primaryBusinessActivity?: PrimaryBusinessActivity | null;
     },
   ) {
     const user = await this.getUserByEmail(tokenPayload.email);
@@ -398,6 +414,25 @@ export const onboardingService = {
     if (!business)
       return { success: false as const, message: "Business not found." };
 
+    const mergedProvides =
+      data.providesProfessionalServices !== undefined
+        ? data.providesProfessionalServices
+        : normalizeProvidesProfessionalServices(
+            business.providesProfessionalServices,
+          );
+    const mergedActivity =
+      data.primaryBusinessActivity !== undefined
+        ? data.primaryBusinessActivity
+        : normalizePrimaryBusinessActivity(business.primaryBusinessActivity);
+    if (mergedProvides === "NOT_SURE" && !mergedActivity) {
+      throw new HttpReplyError(
+        422,
+        "primaryBusinessActivity is required when providesProfessionalServices is NOT_SURE",
+        null,
+        "VALIDATION_ERROR",
+      );
+    }
+
     const updatedBusiness = await prisma.business.update({
       where: { id: business.id },
       data: {
@@ -407,6 +442,23 @@ export const onboardingService = {
         streetAddress: data.streetAddress ?? null,
         stateOfResidence: data.stateOfResidence ?? null,
         primaryTaxOffice: data.primaryTaxOffice ?? null,
+        ...(data.sector !== undefined && {
+          sector: normalizeBusinessProfileSector(data.sector),
+        }),
+        ...(data.totalFixedAssets !== undefined && {
+          totalFixedAssets: decimalFromBusinessProfileMoney(data.totalFixedAssets),
+        }),
+        ...(data.annualGrossTurnover !== undefined && {
+          annualGrossTurnover: decimalFromBusinessProfileMoney(
+            data.annualGrossTurnover,
+          ),
+        }),
+        ...(data.providesProfessionalServices !== undefined && {
+          providesProfessionalServices: data.providesProfessionalServices,
+        }),
+        ...(data.primaryBusinessActivity !== undefined && {
+          primaryBusinessActivity: data.primaryBusinessActivity,
+        }),
       },
     });
     await prisma.user.update({

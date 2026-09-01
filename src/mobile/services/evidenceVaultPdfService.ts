@@ -10,6 +10,9 @@ import {
   generateTaxFilingPdf,
   generateFullReportPdf,
 } from "../../services/template/pdfTemplates";
+import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
+import { resolveSaleInvoiceStatus } from "../../constants/salePaymentRules";
+import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import {
   getReportDataForPeriod,
   fetchLogoBuffer,
@@ -58,6 +61,21 @@ export async function generatePdfForDocument(
       }),
     ]);
 
+    const totalAmount = toNum(sale.totalAmount);
+    const amountPaid = normalizeMoneyAmount(
+      coerceInvoiceAmountPaid(sale.invoiceAmountPaid).total,
+    );
+    const outstandingBalance = normalizeMoneyAmount(
+      Math.max(0, totalAmount - amountPaid),
+    );
+    const status = resolveSaleInvoiceStatus({
+      paymentType: sale.paymentType,
+      status: sale.status,
+      invoiceAmountPaid: coerceInvoiceAmountPaid(sale.invoiceAmountPaid),
+      totalAmount,
+      invoiceDueDate: sale.invoiceDueDate,
+    });
+
     buffer = await generateInvoicePdf({
       invoiceNumber: sale.invoiceNumber,
       customerName: sale.customerName,
@@ -65,14 +83,16 @@ export async function generatePdfForDocument(
       amount: toNum(sale.amount),
       vatRate: toNum(sale.vatRate),
       vatAmount: toNum(sale.vatAmount),
-      totalAmount: toNum(sale.totalAmount),
+      totalAmount,
+      amountPaid,
+      outstandingBalance,
       paymentType: sale.paymentType,
       saleDate: sale.saleDate,
       invoiceDueDate: sale.invoiceDueDate,
       accountNumber: business?.bankAccount ?? null,
       vatableIncome: sale.vatableIncome,
       serviceIncome: sale.serviceIncome,
-      status: sale.status,
+      status,
       businessName: business?.name ?? user?.organizationName ?? undefined,
       businessAddress: business?.streetAddress ?? user?.organizationAddress ?? undefined,
     });

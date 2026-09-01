@@ -14,6 +14,11 @@ import {
   summarizeExpensesForPayable,
 } from "../../utils/transactionSummaryHelper";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import {
+  assertSupplierContactUniqueness,
+  normalizeDirectoryPhone,
+  normalizeDirectoryTin,
+} from "../../utils/directoryContactUniqueness";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const SUPPLIER_COUNTER = "supplier_code";
@@ -95,18 +100,22 @@ export const suppliersService = {
       tin?: string;
     },
   ) {
+    const phone = normalizeDirectoryPhone(data.phone);
+    const tin = normalizeDirectoryTin(data.tin);
+    await assertSupplierContactUniqueness(userId, { phone, tin });
+
     const supplierCode = await nextDisplayCode(SUPPLIER_COUNTER, "SUP");
     const row = await prisma.supplier.create({
       data: {
         userId,
         supplierCode,
         name: data.name.trim(),
-        phone: data.phone.trim(),
+        phone,
         address: data.address.trim(),
         businessName: data.businessName?.trim() || null,
         email: data.email?.trim() || null,
         contactPerson: data.contactPerson?.trim() || null,
-        tin: data.tin?.trim() || null,
+        tin,
         status: "ACTIVE",
       },
     });
@@ -141,11 +150,23 @@ export const suppliersService = {
     const row = await findSupplier(userId, supplierIdOrCode);
     if (!row) throw new HttpReplyError(404, "Supplier not found");
 
+    const phone =
+      data.phone !== undefined
+        ? normalizeDirectoryPhone(data.phone)
+        : row.phone;
+    const tin =
+      data.tin !== undefined ? normalizeDirectoryTin(data.tin) : row.tin;
+    await assertSupplierContactUniqueness(
+      userId,
+      { phone, tin },
+      row.id,
+    );
+
     const updated = await prisma.supplier.update({
       where: { id: row.id },
       data: {
         ...(data.name !== undefined ? { name: data.name.trim() } : {}),
-        ...(data.phone !== undefined ? { phone: data.phone.trim() } : {}),
+        ...(data.phone !== undefined ? { phone } : {}),
         ...(data.address !== undefined ? { address: data.address.trim() } : {}),
         ...(data.businessName !== undefined
           ? { businessName: data.businessName?.trim() || null }
@@ -156,7 +177,7 @@ export const suppliersService = {
         ...(data.contactPerson !== undefined
           ? { contactPerson: data.contactPerson?.trim() || null }
           : {}),
-        ...(data.tin !== undefined ? { tin: data.tin?.trim() || null } : {}),
+        ...(data.tin !== undefined ? { tin } : {}),
       },
     });
 

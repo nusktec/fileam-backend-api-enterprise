@@ -6,6 +6,7 @@ import {
   INVENTORY_SLOW_MOVING_DAYS,
   INVENTORY_SLOW_MOVING_GRACE_DAYS,
   INVENTORY_VELOCITY_DAYS,
+  computeInventoryLineValue,
 } from "../../constants/inventory";
 import {
   PERCENT,
@@ -27,6 +28,8 @@ import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 const EXPENSE_COUNTER_ID = "expense_number";
+
+const activeInventoryWhere = { deletedAt: null } as const;
 
 /** 1 + VAT rate (e.g. 1.075) — Base = Total / divisor for VAT-inclusive. */
 const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
@@ -253,7 +256,7 @@ async function findInventoryItemByName(
   const normalized = name.trim();
   if (!normalized) return null;
   const existing = await prisma.inventoryItem.findMany({
-    where: { userId },
+    where: { userId, ...activeInventoryWhere },
     select: { id: true, name: true },
   });
   const lower = normalized.toLowerCase();
@@ -283,7 +286,7 @@ async function assertUniqueInventoryName(
 export const inventoryService = {
   async overview(userId: string) {
     const items = await prisma.inventoryItem.findMany({
-      where: { userId },
+      where: { userId, ...activeInventoryWhere },
     });
 
     let stockCost = 0;
@@ -321,7 +324,7 @@ export const inventoryService = {
       const price = d(it.sellingPrice);
       const alert = d(it.lowStockAlertLevel);
 
-      stockCost += qty * cost;
+      stockCost += computeInventoryLineValue(qty, cost);
       potentialRevenue += qty * price;
       if (qty > 0 && price > 0) {
         marginNumerator += qty * (price - cost);
@@ -429,7 +432,7 @@ export const inventoryService = {
 
   async alerts(userId: string) {
     const items = await prisma.inventoryItem.findMany({
-      where: { userId },
+      where: { userId, ...activeInventoryWhere },
     });
     const now = new Date();
     const velocityFrom = new Date(now);
@@ -457,7 +460,7 @@ export const inventoryService = {
 
     for (const it of runningLow) {
       const qty = d(it.quantity);
-      stockValueTiedUp += qty * d(it.purchaseCost);
+      stockValueTiedUp += computeInventoryLineValue(qty, d(it.purchaseCost));
       quantitySum += qty;
       if (it.lastSaleAt && (!lastSaleMax || it.lastSaleAt > lastSaleMax)) {
         lastSaleMax = it.lastSaleAt;
@@ -474,7 +477,7 @@ export const inventoryService = {
         category: it.category,
         quantity: d(it.quantity),
         lowStockAlertLevel: d(it.lowStockAlertLevel),
-        stockValue: d(it.quantity) * d(it.purchaseCost),
+        stockValue: computeInventoryLineValue(d(it.quantity), d(it.purchaseCost)),
         lastSaleAt: it.lastSaleAt ? it.lastSaleAt.toISOString() : null,
       })),
       movingLow: movingLow.map((it) => ({
@@ -483,7 +486,7 @@ export const inventoryService = {
         category: it.category,
         quantity: d(it.quantity),
         lowStockAlertLevel: d(it.lowStockAlertLevel),
-        stockValue: d(it.quantity) * d(it.purchaseCost),
+        stockValue: computeInventoryLineValue(d(it.quantity), d(it.purchaseCost)),
         lastSaleAt: it.lastSaleAt ? it.lastSaleAt.toISOString() : null,
       })),
       stats: {
@@ -508,7 +511,8 @@ export const inventoryService = {
     const where: {
       userId: string;
       category?: string;
-    } = { userId };
+      deletedAt: null;
+    } = { userId, ...activeInventoryWhere };
     if (opts?.category?.trim()) where.category = opts.category.trim();
 
     let rows = await prisma.inventoryItem.findMany({
@@ -552,7 +556,7 @@ export const inventoryService = {
           quantity: qty,
           lowStockAlertLevel: alert,
           isLowStock: qty <= alert,
-          stockValue: qty * d(it.purchaseCost),
+          stockValue: computeInventoryLineValue(qty, d(it.purchaseCost)),
           lastMovementAt: lm ? lm.createdAt.toISOString() : null,
           lastMovementType: lm?.type ?? null,
         };
@@ -565,7 +569,7 @@ export const inventoryService = {
 
   async getItemDetail(userId: string, itemId: string) {
     const it = await prisma.inventoryItem.findFirst({
-      where: { id: itemId, userId },
+      where: { id: itemId, userId, ...activeInventoryWhere },
     });
     if (!it) return null;
 
@@ -683,7 +687,7 @@ export const inventoryService = {
 
     await prisma.$transaction(async (tx) => {
       const item = await tx.inventoryItem.findFirst({
-        where: { id: itemId, userId },
+        where: { id: itemId, userId, ...activeInventoryWhere },
       });
       if (!item) throw new Error("Inventory item not found");
       const newQty = d(item.quantity) + qty;
@@ -733,7 +737,7 @@ export const inventoryService = {
     const { linkedSale, linkedExpense } = await prisma.$transaction(
       async (tx) => {
         const item = await tx.inventoryItem.findFirst({
-          where: { id: itemId, userId },
+          where: { id: itemId, userId, ...activeInventoryWhere },
         });
         if (!item) throw new Error("Inventory item not found");
         const current = d(item.quantity);
@@ -888,7 +892,7 @@ export const inventoryService = {
     }>,
   ) {
     const existing = await prisma.inventoryItem.findFirst({
-      where: { id: itemId, userId },
+      where: { id: itemId, userId, ...activeInventoryWhere },
     });
     if (!existing) return null;
 
@@ -924,26 +928,47 @@ export const inventoryService = {
     return inventoryService.getItemDetail(userId, itemId);
   },
 
-  async deleteItem(userId: string, itemId: string): Promise<"ok" | "not_found" | "blocked"> {
+  async deleteItem(userId: string, itemId: string): Promise<"ok" | "not_found"> {
     const existing = await prisma.inventoryItem.findFirst({
-      where: { id: itemId, userId },
+      where: { id: itemId, userId, ...activeInventoryWhere },
     });
     if (!existing) return "not_found";
 
-    if (d(existing.quantity) > 0) {
-      return "blocked";
-    }
+    await prisma.$transaction(async (tx) => {
+      const remainingQty = d(existing.quantity);
+      if (remainingQty > 0) {
+        await tx.inventoryItem.update({
+          where: { id: itemId },
+          data: { quantity: dec(0) },
+        });
+        await tx.inventoryMovement.create({
+          data: {
+            userId,
+            inventoryItemId: itemId,
+            type: INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_OUT,
+            quantityDelta: dec(-remainingQty),
+            quantityAfter: dec(0),
+            note: "Stock written off on product deletion",
+          },
+        });
+      }
 
-    const saleLineCount = await prisma.inventorySaleLine.count({
-      where: { inventoryItemId: itemId },
-    });
-    if (saleLineCount > 0) {
-      return "blocked";
-    }
+      const saleLineCount = await tx.inventorySaleLine.count({
+        where: { inventoryItemId: itemId },
+      });
 
-    await prisma.inventoryItem.delete({
-      where: { id: itemId },
+      if (saleLineCount > 0) {
+        await tx.inventoryItem.update({
+          where: { id: itemId },
+          data: { deletedAt: new Date() },
+        });
+      } else {
+        await tx.inventoryItem.delete({
+          where: { id: itemId },
+        });
+      }
     });
+
     return "ok";
   },
 
@@ -980,7 +1005,7 @@ export const inventoryService = {
         const qty = line.quantity;
         if (qty <= 0) throw new Error("quantity must be positive");
         const item = await tx.inventoryItem.findFirst({
-          where: { id: line.inventoryItemId, userId },
+          where: { id: line.inventoryItemId, userId, ...activeInventoryWhere },
         });
         if (!item) throw new Error(`Item not found: ${line.inventoryItemId}`);
         const current = d(item.quantity);

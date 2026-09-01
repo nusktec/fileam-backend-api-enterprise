@@ -198,6 +198,10 @@ function mapSaleSummary(sale: {
 }) {
   const invoiceAmountPaid = coerceInvoiceAmountPaid(sale.invoiceAmountPaid);
   const totalAmount = decimalToNumber(sale.totalAmount);
+  const amountPaid = normalizeMoneyAmount(invoiceAmountPaid.total);
+  const outstandingBalance = normalizeMoneyAmount(
+    Math.max(0, totalAmount - amountPaid),
+  );
   const status = resolveSaleInvoiceStatus({
     paymentType: sale.paymentType,
     status: sale.status,
@@ -216,6 +220,8 @@ function mapSaleSummary(sale: {
     amount: decimalToNumber(sale.amount),
     vatAmount: decimalToNumber(sale.vatAmount),
     totalAmount,
+    amountPaid,
+    outstandingBalance,
     customerName: sale.customerName ?? null,
     customerId: sale.customerId ?? null,
     receiptUrl: sale.receiptUrl ?? null,

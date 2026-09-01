@@ -63,6 +63,8 @@ export interface InvoiceData {
   vatRate: number;
   vatAmount: number;
   totalAmount: number;
+  amountPaid: number;
+  outstandingBalance: number;
   paymentType: string;
   saleDate: Date;
   invoiceDueDate?: Date | null;
@@ -182,22 +184,43 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     );
 
     y = rowTop + rowH + 16;
-    const totalBoxH = 44;
-    const totalBoxW = Math.min(contentWidth, 280);
+    const summaryRows: Array<{ label: string; value: string; emphasize?: boolean }> = [
+      { label: "Invoice Total", value: formatCurrency(data.totalAmount) },
+      { label: "Amount Paid", value: formatCurrency(data.amountPaid) },
+      {
+        label: "Outstanding Balance",
+        value: formatCurrency(data.outstandingBalance),
+        emphasize: true,
+      },
+    ];
+
+    const summaryLineH = 16;
+    const totalBoxH = 12 + summaryRows.length * summaryLineH + 8;
+    const totalBoxW = Math.min(contentWidth, 300);
     doc.rect(left, y, totalBoxW, totalBoxH).fillAndStroke("#e6f7f7", PRIMARY_COLOR);
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(10)
-      .fillColor("#004d4d")
-      .text("Total Amount", left + 12, y + 10, { width: totalBoxW - 24 });
-    drawFittedCellText(
-      doc,
-      formatCurrency(data.totalAmount),
-      left + 12,
-      y + 26,
-      totalBoxW - 24,
-      { fontSize: 10, font: "Helvetica-Bold", color: "#004d4d" },
-    );
+
+    let summaryY = y + 10;
+    for (const row of summaryRows) {
+      doc
+        .font(row.emphasize ? "Helvetica-Bold" : "Helvetica")
+        .fontSize(row.emphasize ? 10 : 9)
+        .fillColor(row.emphasize ? "#004d4d" : "#1a1a1a")
+        .text(row.label, left + 12, summaryY, { width: totalBoxW * 0.55 - 12 });
+      drawFittedCellText(
+        doc,
+        row.value,
+        left + totalBoxW * 0.55,
+        summaryY,
+        totalBoxW * 0.45 - 12,
+        {
+          align: "right",
+          fontSize: row.emphasize ? 10 : 9,
+          font: row.emphasize ? "Helvetica-Bold" : "Helvetica",
+          color: row.emphasize ? "#004d4d" : "#1a1a1a",
+        },
+      );
+      summaryY += summaryLineH;
+    }
     doc.font("Helvetica").fillColor("#1a1a1a");
 
     y += totalBoxH + 12;

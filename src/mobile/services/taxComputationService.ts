@@ -12,8 +12,10 @@ import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputatio
 import { computePayeMonthly } from "../../constants/payroll";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 import { ASSET_ON_BOOKS_STATUSES } from "../../constants/assets";
+import { VAT_CLASSIFICATION } from "../../constants/taxEligibility";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import { buildTaxEligibilityProfileForUser } from "./taxEligibilityService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -67,7 +69,7 @@ export const taxComputationService = {
   async getForPeriod(userId: string, year: number, month: number) {
     const { start, end } = monthDateRangeUtc(year, month);
 
-    const [sales, expenses, personaPayload, business, fixedAssetRows] =
+    const [sales, expenses, personaPayload, business, fixedAssetRows, taxProfile] =
       await Promise.all([
       prisma.sale.findMany({
         where: { userId, saleDate: { gte: start, lte: end } },
@@ -85,6 +87,7 @@ export const taxComputationService = {
         where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
         select: { purchaseCost: true },
       }),
+      buildTaxEligibilityProfileForUser(userId),
     ]);
 
     const { taxpayerContext, taxPersonaGuidance, employmentGrossSalaryMonthly } =
@@ -124,16 +127,22 @@ export const taxComputationService = {
     const monthlyProfit = netProfit;
     const annualizedProfit = monthlyProfit * 12;
     const annualizedTurnover = totalIncome * 12;
-    const fixedAssetsProxy = fixedAssetRows.reduce(
-      (s, a) => s + decimalToNumber(a.purchaseCost),
-      0,
-    );
+    const fixedAssetsProxy = taxProfile?.taxEligibility.inputs.totalFixedAssets ??
+      fixedAssetRows.reduce(
+        (s, a) => s + decimalToNumber(a.purchaseCost),
+        0,
+      );
+    const eligibilityTurnover =
+      taxProfile?.taxEligibility.inputs.annualGrossTurnover ?? annualizedTurnover;
+    const providesProfessional =
+      taxProfile?.taxEligibility.inputs.providesProfessionalServicesResolved;
     const citEstimate = estimateCitFromBooks({
-      annualizedTurnover,
+      annualizedTurnover: eligibilityTurnover,
       annualizedProfit,
       fixedAssets: fixedAssetsProxy,
       businessType: business?.businessType,
       sector: business?.sector,
+      providesProfessionalServices: providesProfessional,
     });
 
     const pitFromBooks = estimateAnnualPersonalIncomeTaxNg(
@@ -156,7 +165,15 @@ export const taxComputationService = {
       VAT_TURNOVER_THRESHOLD_NGN - totalIncome,
     );
     const percentOfCitThreshold =
-      (annualizedTurnover / CIT_TURNOVER_THRESHOLD_NGN) * PERCENT;
+      (eligibilityTurnover / CIT_TURNOVER_THRESHOLD_NGN) * PERCENT;
+    const vatBelowThreshold =
+      taxProfile?.taxEligibility.vatClassification ===
+      VAT_CLASSIFICATION.SMALL_BUSINESS
+        ? true
+        : taxProfile?.taxEligibility.vatClassification ===
+            VAT_CLASSIFICATION.NON_SMALL_BUSINESS
+          ? false
+          : totalIncome < VAT_TURNOVER_THRESHOLD_NGN;
 
     return {
       taxpayerContext,
@@ -173,7 +190,8 @@ export const taxComputationService = {
       },
       vat: {
         summary: normalizeMoneyAmount(netVatPayable),
-        belowThreshold: totalIncome < VAT_TURNOVER_THRESHOLD_NGN,
+        belowThreshold: vatBelowThreshold,
+        vatClassification: taxProfile?.taxEligibility.vatClassification ?? null,
         income: normalizeMoneyAmount(totalIncome),
         vatThreshold: VAT_TURNOVER_THRESHOLD_NGN,
         percentOfThreshold: percentOfVatThreshold,
@@ -191,12 +209,13 @@ export const taxComputationService = {
       cit: {
         summary: normalizeMoneyAmount(citEstimate.totalCitLiability),
         isSmallCompany: citEstimate.isSmallCompany,
+        citClassification: taxProfile?.taxEligibility.citClassification ?? null,
         taxClassLabel: citEstimate.taxClassLabel,
         citThreshold: CIT_TURNOVER_THRESHOLD_NGN,
         percentOfThreshold: percentOfCitThreshold,
         monthlyProfit,
         annualizedProfit,
-        annualizedTurnover,
+        annualizedTurnover: eligibilityTurnover,
         fixedAssetsProxy,
         citRate: citEstimate.citRate,
         levyRate: citEstimate.levyRate,

@@ -5,6 +5,8 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { userService } from "../services/userService";
+import { extractOptionalBusinessProfileFields } from "../../constants/businessProfile";
+import { HttpReplyError } from "../../utils/httpReplyError";
 
 export const getProfile = async (
   req: IRequest,
@@ -147,25 +149,67 @@ export const updateBusinessProfile = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const data = matchedData(req, { locations: ["body"], includeOptionals: true }) as {
+    const data = matchedData(req, { locations: ["body"] }) as {
       businessName?: string;
       tin?: string;
       rcNumber?: string;
       businessType?: string;
-      sector?: string;
       stateOfResidence?: string;
       bankAccount?: string;
       address?: string;
-      logo?: string;
+      logo?: string | null;
     };
-    const result = await userService.updateBusinessProfile(userId, data);
+    let profileFields: ReturnType<typeof extractOptionalBusinessProfileFields> =
+      {};
+    try {
+      profileFields = extractOptionalBusinessProfileFields(
+        req.body as Record<string, unknown>,
+      );
+    } catch (e) {
+      if (e instanceof HttpReplyError) {
+        res.status(e.statusCode).json(outJson(false, e.message, null));
+        return;
+      }
+      throw e;
+    }
+    const result = await userService.updateBusinessProfile(userId, {
+      ...data,
+      ...profileFields,
+    });
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Business profile updated", result));
   } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json(outJson(false, error.message, null));
+      return;
+    }
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to update business profile", null));
+  }
+};
+
+export const getTaxEligibilityProfile = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = await userService.getTaxEligibilityProfile(userId);
+    if (!data) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Business profile not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Tax eligibility profile retrieved", data));
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to retrieve tax eligibility profile", null));
   }
 };
 

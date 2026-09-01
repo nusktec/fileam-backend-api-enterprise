@@ -422,18 +422,6 @@ export const deleteInventoryItem = async (
         .json(outJson(false, "Inventory item not found", null));
       return;
     }
-    if (result === "blocked") {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(
-          outJson(
-            false,
-            "Cannot delete item with remaining stock or past sale history. Adjust stock to zero first.",
-            null,
-          ),
-        );
-      return;
-    }
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Inventory item deleted", null));

@@ -20,6 +20,7 @@ import {
   computeStraightLineDepreciation,
 } from "../../constants/assetDepreciation";
 import { PERCENT } from "../../constants/percentages";
+import { computeInventoryLineValue } from "../../constants/inventory";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
 import {
@@ -80,12 +81,14 @@ function isCashLedgerCode(code: string): boolean {
  * Book-based current assets from the double-entry ledger:
  * - Cash / Bank balances = posted ledger account balances
  * - AR: unpaid sales (Pending / Partial / Overdue / IN_PROGRESS) at outstanding amount
- * - Inventory: qty × purchaseCost
+ * - Inventory: on-hand qty × purchaseCost (active items only; excludes soft-deleted)
  */
 async function buildCurrentAssetsSnapshot(userId: string) {
   const [inventoryItems, unpaidSales, business, userCash, userBanks, receivableRows, ledgerBalances] =
     await Promise.all([
-      prisma.inventoryItem.findMany({ where: { userId } }),
+      prisma.inventoryItem.findMany({
+        where: { userId, deletedAt: null, quantity: { gt: 0 } },
+      }),
       prisma.sale.findMany({
         where: {
           userId,
@@ -110,16 +113,17 @@ async function buildCurrentAssetsSnapshot(userId: string) {
     ledgerBalances.map((row) => [row.accountCode, row.balance]),
   );
 
-  const inventoryRows = inventoryItems
-    .map((it) => {
-      const amount = normalizeMoneyAmount(d(it.quantity) * d(it.purchaseCost));
-      return {
-        stockName: it.name,
-        amount,
-        quantity: d(it.quantity),
-      };
-    })
-    .filter((r) => r.amount > 0 || r.quantity > 0);
+  const inventoryRows = inventoryItems.map((it) => {
+    const quantity = d(it.quantity);
+    const amount = normalizeMoneyAmount(
+      computeInventoryLineValue(quantity, d(it.purchaseCost)),
+    );
+    return {
+      stockName: it.name,
+      amount,
+      quantity,
+    };
+  });
 
   const inventoryTotal = normalizeMoneyAmount(
     inventoryRows.reduce((s, r) => s + r.amount, 0),

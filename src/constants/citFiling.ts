@@ -137,6 +137,8 @@ export function classifySmallCompany(input: {
   fixedAssets: number;
   businessType?: string | null;
   sector?: string | null;
+  /** When set, overrides businessType/sector inference for professional-services test. */
+  providesProfessionalServices?: boolean;
 }): {
   isSmallCompany: boolean;
   taxClassCode: CitTaxClassCode;
@@ -146,10 +148,10 @@ export function classifySmallCompany(input: {
 } {
   const turnover = Math.max(0, input.turnover);
   const fixedAssets = Math.max(0, input.fixedAssets);
-  const professional = isProfessionalServicesBusiness(
-    input.businessType,
-    input.sector,
-  );
+  const professional =
+    input.providesProfessionalServices !== undefined
+      ? input.providesProfessionalServices
+      : isProfessionalServicesBusiness(input.businessType, input.sector);
   const isSmall =
     !professional &&
     turnover <= CIT_SMALL_COMPANY_TURNOVER_CAP_NGN &&
@@ -334,6 +336,7 @@ export function estimateCitFromBooks(input: {
   fixedAssets: number;
   businessType?: string | null;
   sector?: string | null;
+  providesProfessionalServices?: boolean;
 }): {
   isSmallCompany: boolean;
   taxClassCode: CitTaxClassCode;
@@ -350,6 +353,7 @@ export function estimateCitFromBooks(input: {
     fixedAssets: input.fixedAssets,
     businessType: input.businessType,
     sector: input.sector,
+    providesProfessionalServices: input.providesProfessionalServices,
   });
   const assessableProfitProxy = Math.max(0, input.annualizedProfit);
   const estimatedAnnualCit = roundCitNaira(

@@ -14,6 +14,11 @@ import {
   summarizeSalesForReceivable,
 } from "../../utils/transactionSummaryHelper";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import {
+  assertCustomerContactUniqueness,
+  normalizeDirectoryPhone,
+  normalizeDirectoryTin,
+} from "../../utils/directoryContactUniqueness";
 import { Decimal } from "@prisma/client/runtime/library";
 
 const CUSTOMER_COUNTER = "customer_code";
@@ -94,17 +99,21 @@ export const customersService = {
       tin?: string;
     },
   ) {
+    const phone = normalizeDirectoryPhone(data.phone);
+    const tin = normalizeDirectoryTin(data.tin);
+    await assertCustomerContactUniqueness(userId, { phone, tin });
+
     const customerCode = await nextDisplayCode(CUSTOMER_COUNTER, "CUS");
     const row = await prisma.customer.create({
       data: {
         userId,
         customerCode,
         name: data.name.trim(),
-        phone: data.phone.trim(),
+        phone,
         address: data.address.trim(),
         businessName: data.businessName?.trim() || null,
         email: data.email?.trim() || null,
-        tin: data.tin?.trim() || null,
+        tin,
         status: "ACTIVE",
       },
     });
@@ -137,11 +146,23 @@ export const customersService = {
     const row = await findCustomer(userId, customerIdOrCode);
     if (!row) throw new HttpReplyError(404, "Customer not found");
 
+    const phone =
+      data.phone !== undefined
+        ? normalizeDirectoryPhone(data.phone)
+        : row.phone;
+    const tin =
+      data.tin !== undefined ? normalizeDirectoryTin(data.tin) : row.tin;
+    await assertCustomerContactUniqueness(
+      userId,
+      { phone, tin },
+      row.id,
+    );
+
     const updated = await prisma.customer.update({
       where: { id: row.id },
       data: {
         ...(data.name !== undefined ? { name: data.name.trim() } : {}),
-        ...(data.phone !== undefined ? { phone: data.phone.trim() } : {}),
+        ...(data.phone !== undefined ? { phone } : {}),
         ...(data.address !== undefined ? { address: data.address.trim() } : {}),
         ...(data.businessName !== undefined
           ? { businessName: data.businessName?.trim() || null }
@@ -149,7 +170,7 @@ export const customersService = {
         ...(data.email !== undefined
           ? { email: data.email?.trim() || null }
           : {}),
-        ...(data.tin !== undefined ? { tin: data.tin?.trim() || null } : {}),
+        ...(data.tin !== undefined ? { tin } : {}),
       },
     });
 

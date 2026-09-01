@@ -3,6 +3,8 @@ import { outJson } from "../../utils/renders";
 import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { onboardingService } from "../../services/onboardingService";
+import { extractOptionalBusinessProfileFields } from "../../constants/businessProfile";
+import { HttpReplyError } from "../../utils/httpReplyError";
 
 export async function stepEmail(req: IRequest, res: Response): Promise<void> {
   const { email, firstName } = req.body;
@@ -218,23 +220,44 @@ export async function stepBusinessDetails(
       .json(outJson(false, "Business name is required", null));
     return;
   }
-  const result = await onboardingService.stepBusinessDetails(payload, {
+
+  const stepData: Parameters<typeof onboardingService.stepBusinessDetails>[1] = {
     name,
     businessIdNumber,
     tin,
     streetAddress,
     stateOfResidence,
     primaryTaxOffice,
-  });
-  if (!result.success) {
-    res
-      .status(HttpStatusCode.BAD_REQUEST)
-      .json(outJson(false, result.message, null));
-    return;
+  };
+
+  try {
+    Object.assign(stepData, extractOptionalBusinessProfileFields(req.body));
+  } catch (e) {
+    if (e instanceof HttpReplyError) {
+      res.status(e.statusCode).json(outJson(false, e.message, null));
+      return;
+    }
+    throw e;
   }
-  res
-    .status(HttpStatusCode.OK)
-    .json(outJson(true, "Business details saved", result.data));
+
+  try {
+    const result = await onboardingService.stepBusinessDetails(payload, stepData);
+    if (!result.success) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, result.message, null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Business details saved", result.data));
+  } catch (e) {
+    if (e instanceof HttpReplyError) {
+      res.status(e.statusCode).json(outJson(false, e.message, null));
+      return;
+    }
+    throw e;
+  }
 }
 
 export async function stepTaxJurisdiction(

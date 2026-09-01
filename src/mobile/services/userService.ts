@@ -5,11 +5,29 @@ import {
   normalizeSolopreneurRegistration,
   normalizeTaxPersona,
 } from "../../constants/taxPersona";
+import {
+  businessProfileMoneyToNumber,
+  decimalFromBusinessProfileMoney,
+  normalizeBusinessProfileSector,
+} from "../../constants/businessProfile";
+import { buildTaxEligibilityProfileForUser } from "./taxEligibilityService";
+import {
+  normalizePrimaryBusinessActivity,
+  normalizeProvidesProfessionalServices,
+  providesProfessionalServicesAnswerToBoolean,
+  type PrimaryBusinessActivity,
+  type ProvidesProfessionalServicesAnswer,
+} from "../../constants/taxEligibility";
+import { HttpReplyError } from "../../utils/httpReplyError";
 
 type BusinessWithExtras = {
   rcNumber?: string | null;
   businessType?: string | null;
   sector?: string | null;
+  totalFixedAssets?: Decimal | null;
+  annualGrossTurnover?: Decimal | null;
+  providesProfessionalServices?: string | null;
+  primaryBusinessActivity?: string | null;
   bankAccount?: string | null;
   name?: string;
   tin?: string | null;
@@ -264,6 +282,7 @@ export const userService = {
     ]);
     if (!user) return null;
     const b = business as BusinessWithExtras | null | undefined;
+    const taxProfile = await buildTaxEligibilityProfileForUser(userId);
     return {
       businessName: b?.name ?? user.organizationName ?? "",
       tin: b?.tin ?? user.organizationName ?? "",
@@ -275,7 +294,24 @@ export const userService = {
       address:
         b?.streetAddress ?? user.organizationAddress ?? user.address ?? null,
       logo: user.logo ?? null,
+      totalFixedAssets: businessProfileMoneyToNumber(b?.totalFixedAssets),
+      annualGrossTurnover: businessProfileMoneyToNumber(b?.annualGrossTurnover),
+      professionalService: providesProfessionalServicesAnswerToBoolean(
+        taxProfile?.providesProfessionalServices ?? null,
+      ),
+      providesProfessionalServices:
+        taxProfile?.providesProfessionalServices ?? null,
+      primaryBusinessActivity: taxProfile?.primaryBusinessActivity ?? null,
+      citClassification:
+        taxProfile?.taxEligibility.citClassification ?? null,
+      vatClassification:
+        taxProfile?.taxEligibility.vatClassification ?? null,
+      taxEligibility: taxProfile?.taxEligibility ?? null,
     };
+  },
+
+  async getTaxEligibilityProfile(userId: string) {
+    return buildTaxEligibilityProfileForUser(userId);
   },
 
   async updateBusinessProfile(
@@ -285,27 +321,67 @@ export const userService = {
       tin?: string;
       rcNumber?: string;
       businessType?: string;
-      sector?: string;
+      sector?: string | null;
       stateOfResidence?: string;
       bankAccount?: string;
       address?: string;
       logo?: string | null;
+      totalFixedAssets?: number | null;
+      annualGrossTurnover?: number | null;
+      providesProfessionalServices?: ProvidesProfessionalServicesAnswer | null;
+      primaryBusinessActivity?: PrimaryBusinessActivity | null;
     },
   ) {
     const business = await prisma.business.findFirst({ where: { userId } });
-    const payload = {
+
+    const mergedProvides =
+      data.providesProfessionalServices !== undefined
+        ? data.providesProfessionalServices
+        : normalizeProvidesProfessionalServices(
+            business?.providesProfessionalServices,
+          );
+    const mergedActivity =
+      data.primaryBusinessActivity !== undefined
+        ? data.primaryBusinessActivity
+        : normalizePrimaryBusinessActivity(business?.primaryBusinessActivity);
+    if (mergedProvides === "NOT_SURE" && !mergedActivity) {
+      throw new HttpReplyError(
+        422,
+        "primaryBusinessActivity is required when providesProfessionalServices is NOT_SURE",
+        null,
+        "VALIDATION_ERROR",
+      );
+    }
+
+    const payload: Record<string, unknown> = {
       ...(data.businessName !== undefined && { name: data.businessName }),
       ...(data.tin !== undefined && { tin: data.tin }),
       ...(data.rcNumber !== undefined && { rcNumber: data.rcNumber }),
       ...(data.businessType !== undefined && {
         businessType: data.businessType,
       }),
-      ...(data.sector !== undefined && { sector: data.sector }),
+      ...(data.sector !== undefined && {
+        sector: normalizeBusinessProfileSector(data.sector),
+      }),
       ...(data.stateOfResidence !== undefined && {
         stateOfResidence: data.stateOfResidence,
       }),
       ...(data.bankAccount !== undefined && { bankAccount: data.bankAccount }),
       ...(data.address !== undefined && { streetAddress: data.address }),
+      ...(data.totalFixedAssets !== undefined && {
+        totalFixedAssets: decimalFromBusinessProfileMoney(data.totalFixedAssets),
+      }),
+      ...(data.annualGrossTurnover !== undefined && {
+        annualGrossTurnover: decimalFromBusinessProfileMoney(
+          data.annualGrossTurnover,
+        ),
+      }),
+      ...(data.providesProfessionalServices !== undefined && {
+        providesProfessionalServices: data.providesProfessionalServices,
+      }),
+      ...(data.primaryBusinessActivity !== undefined && {
+        primaryBusinessActivity: data.primaryBusinessActivity,
+      }),
     };
     if (business) {
       await prisma.business.update({
