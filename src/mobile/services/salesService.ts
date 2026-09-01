@@ -8,8 +8,6 @@ import {
   isInvoicePaymentType,
   isTransferPaymentType,
   isSalePaidStatus,
-  isSettledOnCreatePaymentType,
-  PAYMENT_TYPE_CARD,
   PAYMENT_TYPE_TRANSFER,
   resolveSaleInvoiceStatus,
   SALE_STATUS,
@@ -264,7 +262,6 @@ function resolveSaleStatusAfterPatch(
   const nextPaymentType = data.paymentType ?? sale.paymentType;
 
   if (!isInvoicePaymentType(nextPaymentType)) {
-    const settledOnCreate = isSettledOnCreatePaymentType(nextPaymentType);
     const paid =
       data.invoiceAmountPaid != null
         ? data.invoiceAmountPaid
@@ -272,7 +269,7 @@ function resolveSaleStatusAfterPatch(
     return initialSaleStatusForPaymentType(nextPaymentType, {
       invoiceAmountPaid: paid,
       totalAmount,
-      fullyPaid: settledOnCreate,
+      fullyPaid: isCashPaymentType(nextPaymentType),
     });
   }
 
@@ -453,9 +450,7 @@ export const salesService = {
     const saleDate = toCalendarDate(data.date);
     const invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate) ?? null;
     const totalNum = Number(totalAmount);
-    const settledOnCreate =
-      !isInvoicePaymentType(data.paymentType) &&
-      isSettledOnCreatePaymentType(data.paymentType);
+    const settledOnCreate = isCashPaymentType(data.paymentType);
     const invoiceAmountPaid =
       data.invoiceAmountPaid != null
         ? parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid)
@@ -587,11 +582,12 @@ export const salesService = {
       if (!raw.date) {
         throw new HttpReplyError(400, `items[${index}]: date is required`);
       }
-      // Bulk sales: Cash and Transfer → PAID on create (posts to Cash/Bank). Card → IN_PROGRESS.
+      // Bulk: default Transfer → PAID. Card → IN_PROGRESS. Cash → PAID if provided.
       const paymentType = raw.paymentType?.trim() || PAYMENT_TYPE_TRANSFER;
       const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
       const totalNum = Number(resolved.totalAmount);
-      const fullyPaid = isSettledOnCreatePaymentType(paymentType);
+      const fullyPaid =
+        isCashPaymentType(paymentType) || isTransferPaymentType(paymentType);
       const invoiceAmountPaid =
         raw.invoiceAmountPaid != null
           ? parseAndValidateInvoiceAmountPaid(
@@ -819,7 +815,7 @@ export const salesService = {
       assertInvoiceNotOverpaid(nextPaid.total, nextTotal);
       updateData.invoiceAmountPaid = invoiceAmountPaidToJson(nextPaid);
     } else if (data.paymentType != null) {
-      if (isSettledOnCreatePaymentType(nextPaymentType)) {
+      if (isCashPaymentType(nextPaymentType)) {
         updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
           invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
         );
@@ -833,7 +829,7 @@ export const salesService = {
       }
     } else if (
       touchesFinancial &&
-      isSettledOnCreatePaymentType(nextPaymentType) &&
+      isCashPaymentType(nextPaymentType) &&
       data.invoiceAmountPaid == null
     ) {
       updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
@@ -857,8 +853,7 @@ export const salesService = {
       nextTotal,
     );
 
-    if (nextPaymentType === PAYMENT_TYPE_CARD) {
-      // Card must be re-confirmed after an edit.
+    if (isAsyncPaymentType(nextPaymentType)) {
       updateData.paymentConfirmedAt = null;
     }
 

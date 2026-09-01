@@ -53,9 +53,9 @@ export function isPendingAsyncPaymentType(paymentType: string): boolean {
   return isAsyncPaymentType(paymentType);
 }
 
-/** Cash and Transfer settle on create (PAID, posts to Cash/Bank). Card stays IN_PROGRESS. */
+/** Cash settles on create (PAID, posts to Cash). Transfer/Card → IN_PROGRESS; Invoice → Pending. */
 export function isSettledOnCreatePaymentType(paymentType: string): boolean {
-  return isCashPaymentType(paymentType) || isTransferPaymentType(paymentType);
+  return isCashPaymentType(paymentType);
 }
 
 /**
@@ -70,7 +70,7 @@ export function initialSaleStatusForPaymentType(
     invoiceAmountPaid?: InvoiceAmountPaid | number;
     totalAmount?: number;
     invoiceDueDate?: Date | null;
-    /** Bulk cash-only shortcut — never use for Transfer/Card per movement rules. */
+    /** Bulk Transfer (or Cash) → PAID on create; overrides normal Transfer IN_PROGRESS rule. */
     fullyPaid?: boolean;
   },
 ): string {

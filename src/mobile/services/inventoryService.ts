@@ -17,7 +17,7 @@ import {
 } from "../../constants/percentages";
 import {
   initialSaleStatusForPaymentType,
-  isSettledOnCreatePaymentType,
+  isCashPaymentType,
   PAYMENT_TYPE_CASH,
 } from "../../constants/salePaymentRules";
 import {
@@ -39,9 +39,9 @@ const activeInventoryWhere = { deletedAt: null } as const;
 /** 1 + VAT rate (e.g. 1.075) — Base = Total / divisor for VAT-inclusive. */
 const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
 
-/** Cash and Transfer settle on create for inventory-linked sales (posts to Cash/Bank, not AR). */
+/** Only Cash settles on create for inventory-linked sales; Transfer/Card → IN_PROGRESS. */
 function isInventoryLinkedSaleSettledOnCreate(paymentType: string): boolean {
-  return isSettledOnCreatePaymentType(paymentType);
+  return isCashPaymentType(paymentType);
 }
 
 async function finalizeLinkedSaleLedger(
