@@ -6,6 +6,7 @@ import {
   isAsyncPaymentType,
   isCashPaymentType,
   isInvoicePaymentType,
+  isTransferPaymentType,
   isSalePaidStatus,
   PAYMENT_TYPE_TRANSFER,
   resolveSaleInvoiceStatus,
@@ -570,11 +571,12 @@ export const salesService = {
       if (!raw.date) {
         throw new HttpReplyError(400, `items[${index}]: date is required`);
       }
-      // Bulk sales: default Transfer → IN_PROGRESS (same as single create). Cash → PAID.
+      // Bulk sales: Cash and Transfer → PAID on create (posts to Cash/Bank). Card → IN_PROGRESS.
       const paymentType = raw.paymentType?.trim() || PAYMENT_TYPE_TRANSFER;
       const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
       const totalNum = Number(resolved.totalAmount);
-      const fullyPaid = isCashPaymentType(paymentType);
+      const fullyPaid =
+        isCashPaymentType(paymentType) || isTransferPaymentType(paymentType);
       const invoiceAmountPaid =
         raw.invoiceAmountPaid != null
           ? parseAndValidateInvoiceAmountPaid(

@@ -108,6 +108,7 @@ export const sellFromInventory = async (
       vatInclusive?: boolean;
       serviceIncome?: boolean;
       saleCategory?: string;
+      bankCode?: string | null;
     };
     const customerFields = await resolveCustomerFields(userId, req.body ?? {});
     const sale = await inventoryService.sellFromInventory(userId, {
@@ -119,6 +120,7 @@ export const sellFromInventory = async (
       customerId: customerFields.customerId ?? undefined,
       createSalesInvoice: data.createSalesInvoice,
       paymentType: data.paymentType,
+      bankCode: data.bankCode,
       saleDate: data.saleDate,
       invoiceDueDate: data.invoiceDueDate,
       vatableIncome: data.vatableIncome,
@@ -305,6 +307,7 @@ export const adjustInventoryItem = async (
       serviceIncome?: boolean;
       saleCategory?: string;
       expenseCategory?: string;
+      bankCode?: string | null;
     };
     const detail = await inventoryService.adjustment(userId, id!, {
       direction: data.direction,
@@ -312,6 +315,7 @@ export const adjustInventoryItem = async (
       note: data.note,
       createSalesInvoice: data.createSalesInvoice,
       paymentType: data.paymentType,
+      bankCode: data.bankCode,
       saleDate: data.saleDate,
       invoiceDueDate: data.invoiceDueDate,
       vatableIncome: data.vatableIncome,

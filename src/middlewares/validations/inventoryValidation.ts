@@ -38,6 +38,7 @@ export const validateInventorySell = [
   check("customer.name").optional().trim().isString(),
   check("createSalesInvoice").optional().isBoolean().toBoolean(),
   check("paymentType").optional().trim().isString(),
+  check("bankCode").optional({ nullable: true }).trim().isString(),
   check("saleDate")
     .optional()
     .matches(/^\d{4}-\d{2}-\d{2}$/)
@@ -85,6 +86,7 @@ export const validateInventoryAdjustment = [
   check("note").optional().trim().isString(),
   check("createSalesInvoice").optional().isBoolean().toBoolean(),
   check("paymentType").optional().trim().isString(),
+  check("bankCode").optional({ nullable: true }).trim().isString(),
   check("saleDate")
     .optional()
     .matches(/^\d{4}-\d{2}-\d{2}$/)

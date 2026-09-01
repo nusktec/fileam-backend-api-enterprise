@@ -17,6 +17,7 @@ import {
 } from "../../constants/percentages";
 import {
   initialSaleStatusForPaymentType,
+  isTransferPaymentType,
   PAYMENT_TYPE_CASH,
 } from "../../constants/salePaymentRules";
 import {
@@ -26,6 +27,10 @@ import {
 } from "../../constants/invoiceAmountPaid";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
+import { resolveSettlementBankCode } from "../../utils/settlementBank";
+import { calendarPeriodFromDate } from "../../utils/dateRangeQuery";
+import { taxPayablesService } from "./taxPayablesService";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 
@@ -33,6 +38,41 @@ const activeInventoryWhere = { deletedAt: null } as const;
 
 /** 1 + VAT rate (e.g. 1.075) — Base = Total / divisor for VAT-inclusive. */
 const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
+
+/** Cash and Transfer settle on create for inventory-linked sales (posts to Cash/Bank, not AR). */
+function isInventoryLinkedSaleSettledOnCreate(paymentType: string): boolean {
+  return (
+    paymentType === PAYMENT_TYPE_CASH || isTransferPaymentType(paymentType)
+  );
+}
+
+async function finalizeLinkedSaleLedger(
+  userId: string,
+  saleId: string,
+): Promise<void> {
+  const sale = await prisma.sale.findFirst({
+    where: { id: saleId, userId },
+  });
+  if (!sale) return;
+  await ledgerPostingService.postSaleRecognition(userId, sale);
+  await taxPayablesService.syncPayablesForPeriods(userId, [
+    calendarPeriodFromDate(sale.saleDate),
+  ]);
+}
+
+async function finalizeLinkedExpenseLedger(
+  userId: string,
+  expenseId: string,
+): Promise<void> {
+  const expense = await prisma.expense.findFirst({
+    where: { id: expenseId, userId },
+  });
+  if (!expense) return;
+  await ledgerPostingService.postExpenseRecognition(userId, expense);
+  await taxPayablesService.syncPayablesForPeriods(userId, [
+    calendarPeriodFromDate(expense.expenseDate),
+  ]);
+}
 
 async function createLinkedSaleInTx(
   tx: Prisma.TransactionClient,
@@ -49,6 +89,8 @@ async function createLinkedSaleInTx(
     vatableIncome: boolean;
     vatInclusive?: boolean;
     serviceIncome: boolean;
+    bankCode?: string | null;
+    fullyPaid?: boolean;
   },
 ) {
   const userRow = await tx.user.findUnique({
@@ -106,15 +148,29 @@ async function createLinkedSaleInTx(
   }
 
   const invoiceDueDate = input.invoiceDueDate ?? null;
+  const paymentType = input.paymentType.trim();
+  const settledOnCreate =
+    input.fullyPaid === true ||
+    (input.fullyPaid !== false &&
+      isInventoryLinkedSaleSettledOnCreate(paymentType));
   const invoiceAmountPaid = initialInvoiceAmountPaid(
-    input.paymentType,
+    paymentType,
     Number(totalAmount),
+    { fullyPaid: settledOnCreate },
   );
-  const status = initialSaleStatusForPaymentType(input.paymentType, {
+  const status = initialSaleStatusForPaymentType(paymentType, {
     invoiceAmountPaid,
     totalAmount: Number(totalAmount),
     invoiceDueDate,
+    fullyPaid: settledOnCreate,
   });
+  const settlementBankCode = await resolveSettlementBankCode(
+    userId,
+    paymentType,
+    null,
+    input.bankCode,
+    tx,
+  );
 
   const sale = await tx.sale.create({
     data: {
@@ -130,13 +186,14 @@ async function createLinkedSaleInTx(
       vatRate,
       vatAmount,
       totalAmount,
-      paymentType: input.paymentType,
+      paymentType,
       saleDate: input.saleDate,
       invoiceDueDate,
       invoiceAmountPaid: invoiceAmountPaidToJson(invoiceAmountPaid),
       vatableIncome,
       serviceIncome: input.serviceIncome,
       status,
+      settlementBankCode,
     },
   });
   return {
@@ -726,6 +783,7 @@ export const inventoryService = {
       serviceIncome?: boolean;
       saleCategory?: string;
       expenseCategory?: string;
+      bankCode?: string | null;
     },
   ) {
     const qty = data.quantity;
@@ -811,6 +869,7 @@ export const inventoryService = {
               vatableIncome: data.vatableIncome === true,
               vatInclusive: data.vatInclusive === true,
               serviceIncome: data.serviceIncome !== false,
+              bankCode: data.bankCode,
             });
           }
         }
@@ -818,6 +877,13 @@ export const inventoryService = {
         return { linkedSale, linkedExpense };
       },
     );
+
+    if (linkedSale?.id) {
+      await finalizeLinkedSaleLedger(userId, linkedSale.id);
+    }
+    if (linkedExpense?.id) {
+      await finalizeLinkedExpenseLedger(userId, linkedExpense.id);
+    }
 
     const detail = await inventoryService.getItemDetail(userId, itemId);
     if (!detail) return null;
@@ -986,6 +1052,7 @@ export const inventoryService = {
       vatInclusive?: boolean;
       serviceIncome?: boolean;
       saleCategory?: string;
+      bankCode?: string | null;
     },
   ) {
     if (!data.lines?.length) throw new Error("lines required");
@@ -1098,11 +1165,16 @@ export const inventoryService = {
           vatableIncome: data.vatableIncome === true,
           vatInclusive: data.vatInclusive === true,
           serviceIncome: data.serviceIncome !== false,
+          bankCode: data.bankCode,
         });
       }
 
       return { invSaleId: invSale.id, linkedSale };
     });
+
+    if (linkedSale?.id) {
+      await finalizeLinkedSaleLedger(userId, linkedSale.id);
+    }
 
     const sale = await prisma.inventorySale.findFirst({
       where: { id: invSaleId, userId },
