@@ -17,7 +17,7 @@ import {
 } from "../../constants/percentages";
 import {
   initialSaleStatusForPaymentType,
-  isTransferPaymentType,
+  isSettledOnCreatePaymentType,
   PAYMENT_TYPE_CASH,
 } from "../../constants/salePaymentRules";
 import {
@@ -41,9 +41,7 @@ const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
 
 /** Cash and Transfer settle on create for inventory-linked sales (posts to Cash/Bank, not AR). */
 function isInventoryLinkedSaleSettledOnCreate(paymentType: string): boolean {
-  return (
-    paymentType === PAYMENT_TYPE_CASH || isTransferPaymentType(paymentType)
-  );
+  return isSettledOnCreatePaymentType(paymentType);
 }
 
 async function finalizeLinkedSaleLedger(

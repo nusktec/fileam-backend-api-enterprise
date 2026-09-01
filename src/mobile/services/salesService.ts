@@ -8,6 +8,8 @@ import {
   isInvoicePaymentType,
   isTransferPaymentType,
   isSalePaidStatus,
+  isSettledOnCreatePaymentType,
+  PAYMENT_TYPE_CARD,
   PAYMENT_TYPE_TRANSFER,
   resolveSaleInvoiceStatus,
   SALE_STATUS,
@@ -31,7 +33,7 @@ import {
 } from "../../utils/dateRangeQuery";
 import { taxPayablesService } from "./taxPayablesService";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
-import { syncSaleLedgerAfterUpdate } from "../../services/ledgerSyncService";
+import { syncSaleLedgerAfterUpdate, reverseSaleLedgerOnDelete } from "../../services/ledgerSyncService";
 import {
   assertInvoiceNotOverpaid,
   assertInvoicePaymentsAppendOnly,
@@ -261,10 +263,17 @@ function resolveSaleStatusAfterPatch(
 
   const nextPaymentType = data.paymentType ?? sale.paymentType;
 
-  // Any record update re-applies create defaults for the payment type:
-  // Cash → PAID, Card/Transfer → IN_PROGRESS, Invoice → calculated (Pending when unpaid).
   if (!isInvoicePaymentType(nextPaymentType)) {
-    return initialSaleStatusForPaymentType(nextPaymentType);
+    const settledOnCreate = isSettledOnCreatePaymentType(nextPaymentType);
+    const paid =
+      data.invoiceAmountPaid != null
+        ? data.invoiceAmountPaid
+        : coerceInvoiceAmountPaid(sale.invoiceAmountPaid);
+    return initialSaleStatusForPaymentType(nextPaymentType, {
+      invoiceAmountPaid: paid,
+      totalAmount,
+      fullyPaid: settledOnCreate,
+    });
   }
 
   const paid =
@@ -443,14 +452,21 @@ export const salesService = {
     });
     const saleDate = toCalendarDate(data.date);
     const invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate) ?? null;
+    const totalNum = Number(totalAmount);
+    const settledOnCreate =
+      !isInvoicePaymentType(data.paymentType) &&
+      isSettledOnCreatePaymentType(data.paymentType);
     const invoiceAmountPaid =
       data.invoiceAmountPaid != null
         ? parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid)
-        : initialInvoiceAmountPaid(data.paymentType, Number(totalAmount));
+        : initialInvoiceAmountPaid(data.paymentType, totalNum, {
+            fullyPaid: settledOnCreate,
+          });
     const status = initialSaleStatusForPaymentType(data.paymentType, {
       invoiceAmountPaid,
-      totalAmount: Number(totalAmount),
+      totalAmount: totalNum,
       invoiceDueDate,
+      fullyPaid: settledOnCreate,
     });
     const settlementBankCode = await resolveSettlementBankCode(
       userId,
@@ -575,8 +591,7 @@ export const salesService = {
       const paymentType = raw.paymentType?.trim() || PAYMENT_TYPE_TRANSFER;
       const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
       const totalNum = Number(resolved.totalAmount);
-      const fullyPaid =
-        isCashPaymentType(paymentType) || isTransferPaymentType(paymentType);
+      const fullyPaid = isSettledOnCreatePaymentType(paymentType);
       const invoiceAmountPaid =
         raw.invoiceAmountPaid != null
           ? parseAndValidateInvoiceAmountPaid(
@@ -804,7 +819,7 @@ export const salesService = {
       assertInvoiceNotOverpaid(nextPaid.total, nextTotal);
       updateData.invoiceAmountPaid = invoiceAmountPaidToJson(nextPaid);
     } else if (data.paymentType != null) {
-      if (isCashPaymentType(nextPaymentType)) {
+      if (isSettledOnCreatePaymentType(nextPaymentType)) {
         updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
           invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
         );
@@ -816,6 +831,14 @@ export const salesService = {
           initialInvoiceAmountPaid(nextPaymentType, nextTotal),
         );
       }
+    } else if (
+      touchesFinancial &&
+      isSettledOnCreatePaymentType(nextPaymentType) &&
+      data.invoiceAmountPaid == null
+    ) {
+      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+        invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
+      );
     }
 
     const patchPaid =
@@ -834,8 +857,8 @@ export const salesService = {
       nextTotal,
     );
 
-    if (isAsyncPaymentType(nextPaymentType)) {
-      // Confirmed Card/Transfer payments must be re-confirmed after an edit.
+    if (nextPaymentType === PAYMENT_TYPE_CARD) {
+      // Card must be re-confirmed after an edit.
       updateData.paymentConfirmedAt = null;
     }
 
@@ -1027,16 +1050,21 @@ export const salesService = {
   async deleteForUser(userId: string, saleId: string): Promise<boolean> {
     const sale = await prisma.sale.findFirst({
       where: { id: saleId, userId },
-      select: { saleDate: true },
     });
     if (!sale) return false;
     const period = calendarPeriodFromDate(sale.saleDate);
-    const result = await prisma.sale.deleteMany({
-      where: { id: saleId, userId },
+
+    const deleted = await prisma.$transaction(async (tx) => {
+      await reverseSaleLedgerOnDelete(userId, toSaleLedgerRow(sale), tx);
+      const result = await tx.sale.deleteMany({
+        where: { id: saleId, userId },
+      });
+      return result.count > 0;
     });
-    if (result.count > 0) {
+
+    if (deleted) {
       await taxPayablesService.syncPayablesForPeriods(userId, [period]);
     }
-    return result.count > 0;
+    return deleted;
   },
 };

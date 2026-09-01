@@ -62,6 +62,11 @@ function recognitionChanged(
 ): boolean {
   if (previous.paymentType !== next.paymentType) return true;
   if (num(previous.totalAmount) !== num(next.totalAmount)) return true;
+  if (
+    (previous.settlementBankCode ?? null) !== (next.settlementBankCode ?? null)
+  ) {
+    return true;
+  }
   if ("amount" in previous && "amount" in next) {
     if (num(previous.amount) !== num(next.amount)) return true;
     const pv = previous.vatAmount != null ? num(previous.vatAmount) : 0;
@@ -372,4 +377,54 @@ export async function syncExpenseLedgerAfterUpdate(
       await repostInvoiceExpensePayments(userId, next, nextPaid, db);
     }
   }
+}
+
+/** Reverse all ledger postings for a deleted sale. */
+export async function reverseSaleLedgerOnDelete(
+  userId: string,
+  sale: SaleLedgerRow,
+  db: DbClient = prisma,
+): Promise<void> {
+  const txnDate = sale.saleDate;
+  await reverseByReferencePrefix(
+    userId,
+    LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
+    `${sale.id}:`,
+    `Delete sale collections ${sale.id}`,
+    txnDate,
+    db,
+  );
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.SALE_RECOGNITION,
+    sale.id,
+    `Delete sale recognition ${sale.id}`,
+    txnDate,
+    db,
+  );
+}
+
+/** Reverse all ledger postings for a deleted expense. */
+export async function reverseExpenseLedgerOnDelete(
+  userId: string,
+  expense: ExpenseLedgerRow,
+  db: DbClient = prisma,
+): Promise<void> {
+  const txnDate = expense.expenseDate;
+  await reverseByReferencePrefix(
+    userId,
+    LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
+    `${expense.id}:`,
+    `Delete expense payments ${expense.id}`,
+    txnDate,
+    db,
+  );
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
+    expense.id,
+    `Delete expense recognition ${expense.id}`,
+    txnDate,
+    db,
+  );
 }

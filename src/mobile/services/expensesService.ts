@@ -17,6 +17,8 @@ import {
   isCashPaymentType,
   isInvoicePaymentType,
   isSalePaidStatus,
+  isSettledOnCreatePaymentType,
+  PAYMENT_TYPE_CARD,
   PAYMENT_TYPE_TRANSFER,
   resolveSaleInvoiceStatus,
   SALE_STATUS,
@@ -39,7 +41,7 @@ import {
 import { taxPayablesService } from "./taxPayablesService";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
-import { syncExpenseLedgerAfterUpdate } from "../../services/ledgerSyncService";
+import { syncExpenseLedgerAfterUpdate, reverseExpenseLedgerOnDelete } from "../../services/ledgerSyncService";
 import {
   assertInvoiceNotOverpaid,
   assertInvoicePaymentsAppendOnly,
@@ -387,14 +389,20 @@ export const expensesService = {
         : PAYMENT_TYPE_TRANSFER;
     const invoiceDueDate = optionalInvoiceDueDate(data.invoiceDueDate) ?? null;
     const totalNum = Number(totalAmount);
+    const settledOnCreate =
+      !isInvoicePaymentType(paymentType) &&
+      isSettledOnCreatePaymentType(paymentType);
     const invoiceAmountPaid =
       data.invoiceAmountPaid != null
         ? parseAndValidateInvoiceAmountPaid(data.invoiceAmountPaid)
-        : initialInvoiceAmountPaid(paymentType, totalNum);
+        : initialInvoiceAmountPaid(paymentType, totalNum, {
+            fullyPaid: settledOnCreate,
+          });
     const status = initialSaleStatusForPaymentType(paymentType, {
       invoiceAmountPaid,
       totalAmount: totalNum,
       invoiceDueDate,
+      fullyPaid: settledOnCreate,
     });
     const settlementBankCode = await resolveSettlementBankCode(
       userId,
@@ -527,14 +535,16 @@ export const expensesService = {
         }
         throw e;
       }
-      // Bulk expenses: default Transfer → IN_PROGRESS. Cash → PAID.
+      // Bulk expenses: Cash and Transfer → PAID on create. Card → IN_PROGRESS.
       const paymentType =
         raw.paymentType != null && String(raw.paymentType).trim() !== ""
           ? String(raw.paymentType).trim()
           : PAYMENT_TYPE_TRANSFER;
       const invoiceDueDate = optionalInvoiceDueDate(raw.invoiceDueDate) ?? null;
       const totalNum = Number(resolved.totalAmount);
-      const fullyPaid = isCashPaymentType(paymentType);
+      const fullyPaid =
+        !isInvoicePaymentType(paymentType) &&
+        isSettledOnCreatePaymentType(paymentType);
       const invoiceAmountPaid =
         raw.invoiceAmountPaid != null
           ? parseAndValidateInvoiceAmountPaid(
@@ -800,7 +810,7 @@ export const expensesService = {
       assertInvoiceNotOverpaid(nextPaid.total, nextTotal);
       updateData.invoiceAmountPaid = invoiceAmountPaidToJson(nextPaid);
     } else if (data.paymentType != null) {
-      if (isCashPaymentType(nextPaymentType)) {
+      if (isSettledOnCreatePaymentType(nextPaymentType)) {
         updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
           invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
         );
@@ -812,6 +822,14 @@ export const expensesService = {
           initialInvoiceAmountPaid(nextPaymentType, nextTotal),
         );
       }
+    } else if (
+      touchesFinancial &&
+      isSettledOnCreatePaymentType(nextPaymentType) &&
+      data.invoiceAmountPaid == null
+    ) {
+      updateData.invoiceAmountPaid = invoiceAmountPaidToJson(
+        invoiceAmountPaidFromSingle(nextTotal, nextPaymentType),
+      );
     }
 
     const nextPaidStruct =
@@ -832,10 +850,15 @@ export const expensesService = {
         invoiceDueDate: nextDue,
       });
     } else {
-      updateData.status = initialSaleStatusForPaymentType(nextPaymentType);
+      const settledOnCreate = isSettledOnCreatePaymentType(nextPaymentType);
+      updateData.status = initialSaleStatusForPaymentType(nextPaymentType, {
+        invoiceAmountPaid: nextPaidStruct,
+        totalAmount: nextTotal,
+        fullyPaid: settledOnCreate,
+      });
     }
 
-    if (isAsyncPaymentType(nextPaymentType)) {
+    if (nextPaymentType === PAYMENT_TYPE_CARD) {
       updateData.paymentConfirmedAt = null;
     }
 
@@ -966,16 +989,25 @@ export const expensesService = {
   async deleteForUser(userId: string, expenseId: string): Promise<boolean> {
     const expense = await prisma.expense.findFirst({
       where: { id: expenseId, userId },
-      select: { expenseDate: true },
     });
     if (!expense) return false;
     const period = calendarPeriodFromDate(expense.expenseDate);
-    const result = await prisma.expense.deleteMany({
-      where: { id: expenseId, userId },
+
+    const deleted = await prisma.$transaction(async (tx) => {
+      await reverseExpenseLedgerOnDelete(
+        userId,
+        toExpenseLedgerRow(expense),
+        tx,
+      );
+      const result = await tx.expense.deleteMany({
+        where: { id: expenseId, userId },
+      });
+      return result.count > 0;
     });
-    if (result.count > 0) {
+
+    if (deleted) {
       await taxPayablesService.syncPayablesForPeriods(userId, [period]);
     }
-    return result.count > 0;
+    return deleted;
   },
 };

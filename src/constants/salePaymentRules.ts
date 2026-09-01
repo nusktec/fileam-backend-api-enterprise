@@ -53,6 +53,11 @@ export function isPendingAsyncPaymentType(paymentType: string): boolean {
   return isAsyncPaymentType(paymentType);
 }
 
+/** Cash and Transfer settle on create (PAID, posts to Cash/Bank). Card stays IN_PROGRESS. */
+export function isSettledOnCreatePaymentType(paymentType: string): boolean {
+  return isCashPaymentType(paymentType) || isTransferPaymentType(paymentType);
+}
+
 /**
  * Initial stored status on create:
  * - Invoice → calculated from invoiceAmountPaid.total / totalAmount / invoiceDueDate
