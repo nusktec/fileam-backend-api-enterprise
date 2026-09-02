@@ -52,6 +52,16 @@ function yearsBetween(from: Date, to: Date): number {
   return Math.max(0, (to.getTime() - from.getTime()) / (MS_PER_DAY * DAYS_PER_YEAR));
 }
 
+/** Calendar months from purchase month through asOf month (inclusive). */
+function calendarMonthsInclusive(from: Date, to: Date): number {
+  if (to.getTime() < from.getTime()) return 0;
+  const fromYear = from.getUTCFullYear();
+  const fromMonth = from.getUTCMonth();
+  const toYear = to.getUTCFullYear();
+  const toMonth = to.getUTCMonth();
+  return (toYear - fromYear) * 12 + (toMonth - fromMonth) + 1;
+}
+
 function computeStraightLine(
   cost: number,
   residual: number,
@@ -65,13 +75,18 @@ function computeStraightLine(
   const depreciable = cost - residual;
   const annualDepreciation = normalizeMoneyAmount(depreciable / usefulLife);
   const monthlyDepreciation = normalizeMoneyAmount(annualDepreciation / 12);
-  const yearsElapsed = yearsBetween(purchaseDate, asOf);
+  const totalMonths = usefulLife * 12;
+  const monthsElapsed = Math.min(
+    totalMonths,
+    calendarMonthsInclusive(purchaseDate, asOf),
+  );
   const accumulatedDepreciation = normalizeMoneyAmount(
-    Math.min(depreciable, Math.max(0, annualDepreciation * yearsElapsed)),
+    Math.min(depreciable, Math.max(0, monthlyDepreciation * monthsElapsed)),
   );
   const bookValue = normalizeMoneyAmount(
     Math.max(residual, cost - accumulatedDepreciation),
   );
+  const yearsElapsed = monthsElapsed / 12;
   return {
     annualDepreciation,
     monthlyDepreciation,
