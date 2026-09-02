@@ -22,6 +22,7 @@ import {
   PENSION_REGULATORY_BASIS,
   PERIOD_REGEX,
   REMITTANCE_METHOD_DEFAULT,
+  isEmployeeActiveInPayrollPeriod,
   type ObligationType,
 } from "../../constants/payrollObligations";
 import { isContractorEmployment } from "../../constants/employmentTypes";
@@ -128,6 +129,7 @@ async function resolvePayeAuthority(userId: string): Promise<string> {
 function computePeriodTotals(
   employees: EmpRow[],
   nhfApplicable: boolean,
+  periodKey: string,
 ) {
   let totalPayroll = 0;
   let netPayout = 0;
@@ -135,6 +137,7 @@ function computePeriodTotals(
   let totalNhf = 0;
   let totalPension = 0;
   let applicableNhfCount = 0;
+  let activeEmployeeCount = 0;
   const pfas = new Set<string>();
 
   const payeLines: Array<{
@@ -159,6 +162,9 @@ function computePeriodTotals(
   }> = [];
 
   for (const e of employees) {
+    if (!isEmployeeActiveInPayrollPeriod(e.startDate, periodKey)) continue;
+    activeEmployeeCount += 1;
+
     const gross = grossMonthly(e);
     totalPayroll += gross;
     const contractor = isContractorEmployment(e.employmentType);
@@ -235,6 +241,7 @@ function computePeriodTotals(
     totalNhf: round2(totalNhf),
     totalPension: round2(totalPension),
     applicableNhfCount,
+    activeEmployeeCount,
     totalNoOfPfas: pfas.size,
     primaryPfa: [...pfas][0] ?? "Pension Fund Administrators",
     payeLines,
@@ -314,7 +321,7 @@ export const payrollService = {
       prisma.employee.findMany({ where: { userId } }),
       getOrCreateSettings(userId),
     ]);
-    const totals = computePeriodTotals(employees, settings.isNhfApplicable);
+    const totals = computePeriodTotals(employees, settings.isNhfApplicable, key);
     const payeAuth = await resolvePayeAuthority(userId);
 
     const [payeRow, nhfRow, pensionRow] = await Promise.all([
@@ -387,7 +394,7 @@ export const payrollService = {
         obligationType: o.type,
         dateDue: o.dueDate,
       })),
-      totalEmployee: employees.length,
+      totalEmployee: totals.activeEmployeeCount,
       /** Client downloads via GET /mobile/payroll/annual-report */
       annualReport: `/api/v1/mobile/payroll/annual-report?period=${key}`,
     };
@@ -403,7 +410,7 @@ export const payrollService = {
       prisma.employee.findMany({ where: { userId } }),
       getOrCreateSettings(userId),
     ]);
-    const totals = computePeriodTotals(employees, settings.isNhfApplicable);
+    const totals = computePeriodTotals(employees, settings.isNhfApplicable, key);
     const payeAuth = await resolvePayeAuthority(userId);
     const row = await upsertObligationSnapshot(
       userId,
@@ -467,7 +474,7 @@ export const payrollService = {
     }
 
     const employees = await prisma.employee.findMany({ where: { userId } });
-    const totals = computePeriodTotals(employees, true);
+    const totals = computePeriodTotals(employees, true, key);
     const row = await upsertObligationSnapshot(
       userId,
       OBLIGATION_TYPE.NHF,
@@ -520,7 +527,7 @@ export const payrollService = {
       prisma.employee.findMany({ where: { userId } }),
       getOrCreateSettings(userId),
     ]);
-    const totals = computePeriodTotals(employees, settings.isNhfApplicable);
+    const totals = computePeriodTotals(employees, settings.isNhfApplicable, key);
     const row = await upsertObligationSnapshot(
       userId,
       OBLIGATION_TYPE.PENSION,
@@ -699,7 +706,11 @@ export const payrollService = {
     if (type === OBLIGATION_TYPE.NHF && !settings.isNhfApplicable) {
       throw new HttpReplyError(400, "NHF is not applicable for this business");
     }
-    const totals = computePeriodTotals(employees, settings.isNhfApplicable);
+    const totals = computePeriodTotals(
+      employees,
+      settings.isNhfApplicable,
+      _period,
+    );
     if (type === OBLIGATION_TYPE.PAYE) return totals.totalPaye;
     if (type === OBLIGATION_TYPE.NHF) return totals.totalNhf;
     return totals.totalPension;

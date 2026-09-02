@@ -5069,7 +5069,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/obligations",
-                "description": "Aggregated PAYE / pension / contractor WHT. PAYE = sum of strict PDF formula per employee (pension on B+H+T, NHF on basic, NHIS monthly×12, rent relief, otherAllowableDeductions)."
+                "description": "Aggregated PAYE / pension / contractor WHT for the current month. Only employees whose startDate month has begun are included. PAYE = sum of strict PDF formula per active employee."
               }
             },
             {
@@ -5092,10 +5092,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"mealAllowance\": 15000,\n  \"otherAllowances\": 5000,\n  \"otherTaxableIncome\": 10000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\",\n  \"annualHouseRent\": 2000000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 10000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"otherAllowableDeductions\": 100000\n}"
+                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"startDate\": \"2026-01-01\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"mealAllowance\": 15000,\n  \"otherAllowances\": 5000,\n  \"otherTaxableIncome\": 10000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\",\n  \"annualHouseRent\": 2000000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 10000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"otherAllowableDeductions\": 100000\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
-                "description": "Salary: basicSalary, housingAllowance, transportAllowance, mealAllowance, otherAllowances, otherTaxableIncome (all monthly except annualHouseRent). Reliefs: annualHouseRent; nhisHealthInsurance (monthly — annual relief = ×12); lifeAssurancePremium, mortgageInterest, otherAllowableDeductions (annual). Legacy alias: qualifyingMedicalExpenses → otherAllowableDeductions. employmentType: Full time | Part time | Contract."
+                "description": "Salary: basicSalary, housingAllowance, transportAllowance, mealAllowance, otherAllowances, otherTaxableIncome (all monthly except annualHouseRent). startDate (ISO) — PAYE/NHF/pension obligations begin from this month. Reliefs: annualHouseRent; nhisHealthInsurance (monthly); lifeAssurancePremium, mortgageInterest, otherAllowableDeductions (annual). employmentType: Full time | Part time | Contract."
               }
             },
             {
@@ -5154,7 +5154,7 @@
         },
         {
           "name": "Payroll **",
-          "description": "Payroll & statutory remittances under /mobile (Assets-style mount). GET /payroll summary; /payee, /nhf, /pension detail; PATCH /nhf/applicability (business-global). PAYE amounts use Universal Nigeria PAYE Formula 2026 per employee (see Employees folder). Shared actions per obligation: POST /{payee|nhf|pension}/:period/{evidence|assign-consultant|mark-as-paid|pay}. period=YYYY-MM. Pay returns placeholder URL (PAYMENT_BASE_URL). Annual report is PDF stream. Employee pfa via /employees.",
+          "description": "Payroll & statutory remittances under /mobile (Assets-style mount). GET /payroll summary; /payee, /nhf, /pension detail; PATCH /nhf/applicability (business-global). period=YYYY-MM — PAYE/NHF/pension/complianceCalendar only include employees active in that month (startDate month ≤ period). PAYE amounts use Universal Nigeria PAYE Formula 2026. Shared actions: POST /{payee|nhf|pension}/:period/{evidence|assign-consultant|mark-as-paid|pay}. Annual report is PDF stream.",
           "item": [
             {
               "name": "GET payroll summary",

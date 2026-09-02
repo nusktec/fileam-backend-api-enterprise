@@ -157,7 +157,10 @@ export const taxComputationService = {
     let payeMonthlyEstimate = 0;
     let payeDerivedFrom: "employees" | "profile_gross" | "none" = "none";
     if (flags.paye) {
-      const employeePaye = await computeTotalMonthlyPayeForUser(userId);
+      const employeePaye = await computeTotalMonthlyPayeForUser(
+        userId,
+        `${year}-${String(month).padStart(2, "0")}`,
+      );
       if (employeePaye > 0) {
         payeMonthlyEstimate = employeePaye;
         payeDerivedFrom = "employees";

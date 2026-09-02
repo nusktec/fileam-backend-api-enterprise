@@ -11,6 +11,10 @@ import {
   PAYE_DUE_DAY,
   type PayeReliefInputs,
 } from "../../constants/payroll";
+import {
+  currentPayrollPeriodKey,
+  isEmployeeActiveInPayrollPeriod,
+} from "../../constants/payrollObligations";
 import { isContractorEmployment } from "../../constants/employmentTypes";
 import { PERCENT, WHT_RATE_SERVICES_PERCENT } from "../../constants/percentages";
 
@@ -175,9 +179,10 @@ function taxReliefPayload(e: {
   };
 }
 
-/** Sum monthly PAYE across non-contractor employees (PDF strict). */
+/** Sum monthly PAYE across non-contractor employees active in the period (PDF strict). */
 export async function computeTotalMonthlyPayeForUser(
   userId: string,
+  periodKey: string = currentPayrollPeriodKey(),
 ): Promise<number> {
   const [employees, nhfApplicable] = await Promise.all([
     prisma.employee.findMany({ where: { userId } }),
@@ -186,6 +191,7 @@ export async function computeTotalMonthlyPayeForUser(
   let total = 0;
   for (const e of employees) {
     if (isContractorEmployment(e.employmentType)) continue;
+    if (!isEmployeeActiveInPayrollPeriod(e.startDate, periodKey)) continue;
     total += computePayeForEmployee(e, { nhfApplicable });
   }
   return total;
@@ -262,14 +268,13 @@ export const employeesService = {
   },
 
   async getObligations(userId: string) {
-    const totalPaye = await computeTotalMonthlyPayeForUser(userId);
-    const [employees, nhfApplicable] = await Promise.all([
-      prisma.employee.findMany({ where: { userId } }),
-      isNhfApplicableForUser(userId),
-    ]);
+    const periodKey = currentPayrollPeriodKey();
+    const totalPaye = await computeTotalMonthlyPayeForUser(userId, periodKey);
+    const employees = await prisma.employee.findMany({ where: { userId } });
     let totalPension = 0;
     let totalContractorWht = 0;
     for (const e of employees) {
+      if (!isEmployeeActiveInPayrollPeriod(e.startDate, periodKey)) continue;
       const gross = grossMonthly(e);
       if (isContractorEmployment(e.employmentType)) {
         totalContractorWht += (gross * WHT_RATE_SERVICES_PERCENT) / PERCENT;
