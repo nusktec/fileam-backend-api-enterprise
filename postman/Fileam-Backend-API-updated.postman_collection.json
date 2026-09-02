@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment & ledger (payment_and_account_movement_logic.pdf): Cash -> PAID on create, posts to Cash; Transfer/Card -> IN_PROGRESS on create (AR/AP only, no bank movement); confirm via PATCH .../payment-status with {\"status\":\"PAID\",\"bankCode\":\"...\"} (bankCode optional — omit to post to aggregate BANK ledger; when provided must be a registered bank account). Card without bankCode -> CARD_SETTLEMENT. Transfer without bankCode -> BANK. settlementBankCode returned on sales/expenses when set. invoiceAmountPaid = { total, items:[{amount,paymentType,bankCode?}] } — bankCode optional on all line types. Bulk sales/expenses: default Transfer -> PAID on create (posts to Bank). Single create: Cash -> PAID; Transfer/Card -> IN_PROGRESS; Invoice -> Pending. PATCH update syncs ledger (reverses confirm/collections when needed). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): 12-step workspace on tax_payables — GET/PUT /filings/{vat|wht|pit|cit}/workspace, confirm-computation, validate (TaxGPT), generate-documents, package; POST /filings/{id}/complete (step 12). Pending workspaces appear in GET /filings with completionPercent from currentStep/12. PIT/CIT: POST /pit|cit/draft for reliefs/adjustments; calculation honours draft + frozen snapshot. VAT: inputVatBroughtForward from prior month credit; WHT schedule from beneficiary PAYMENT rows. Submit all types accepts submissionReference. Reports: PIT Return Summary, CIT Return Summary added. VAT/WHT monthly; PIT annual (due 31 Mar); CIT annual NTA 2025 (due 30 Jun, periodMonth=12). Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents — phone and TIN unique per user (409 DUPLICATE_CONTACT on duplicate). Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents — same phone/TIN uniqueness rules. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nEmployees tax relief: annualHouseRent (actual rent; PAYE relief = MIN(20%, ₦500k)), nhf (boolean), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses.\n\nBusiness profile & tax eligibility: GET/PUT /mobile/user/business-profile — sector, totalFixedAssets, annualGrossTurnover (NGN JSON numbers), professionalService (boolean|null) or providesProfessionalServices (YES|NO|NOT_SURE), primaryBusinessActivity; partial PUT (omitted keys unchanged, JSON null clears). GET /mobile/user/tax-eligibility-profile — CIT/VAT classifications with profile+books blend. Onboarding POST …/step/business-details accepts same optional LTD/tax fields. Tax computation cit/vat blocks include citClassification and vatClassification from eligibility engine.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment & ledger (payment_and_account_movement_logic.pdf): Cash -> PAID on create, posts to Cash; Transfer/Card -> IN_PROGRESS on create (AR/AP only, no bank movement); confirm via PATCH .../payment-status with {\"status\":\"PAID\",\"bankCode\":\"...\"} (bankCode optional — omit to post to aggregate BANK ledger; when provided must be a registered bank account). Card without bankCode -> CARD_SETTLEMENT. Transfer without bankCode -> BANK. settlementBankCode returned on sales/expenses when set. invoiceAmountPaid = { total, items:[{amount,paymentType,bankCode?}] } — bankCode optional on all line types. Bulk sales/expenses: default Transfer -> PAID on create (posts to Bank). Single create: Cash -> PAID; Transfer/Card -> IN_PROGRESS; Invoice -> Pending. PATCH update syncs ledger (reverses confirm/collections when needed). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): 12-step workspace on tax_payables — GET/PUT /filings/{vat|wht|pit|cit}/workspace, confirm-computation, validate (TaxGPT), generate-documents, package; POST /filings/{id}/complete (step 12). Pending workspaces appear in GET /filings with completionPercent from currentStep/12. PIT/CIT: POST /pit|cit/draft for reliefs/adjustments; calculation honours draft + frozen snapshot. VAT: inputVatBroughtForward from prior month credit; WHT schedule from beneficiary PAYMENT rows. Submit all types accepts submissionReference. Reports: PIT Return Summary, CIT Return Summary added. VAT/WHT monthly; PIT annual (due 31 Mar); CIT annual NTA 2025 (due 30 Jun, periodMonth=12). Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents — phone and TIN unique per user (409 DUPLICATE_CONTACT on duplicate). Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents — same phone/TIN uniqueness rules. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nPAYE (Universal Nigeria PAYE Formula 2026): AGI = 12×(basic+housing+transport+meal+otherAllowances+otherTaxableIncome); pension 8% on basic+housing+transport; NHF 2.5% of basic; NHIS monthly×12; rent relief MIN(20%×annualRent, ₦500k); otherAllowableDeductions (annual). Tax dashboard PAYE sums /employees first; employmentGrossSalaryMonthly is legacy fallback only.\n\nBusiness profile & tax eligibility: GET/PUT /mobile/user/business-profile — sector, totalFixedAssets, annualGrossTurnover (NGN JSON numbers), professionalService (boolean|null) or providesProfessionalServices (YES|NO|NOT_SURE), primaryBusinessActivity; partial PUT (omitted keys unchanged, JSON null clears). GET /mobile/user/tax-eligibility-profile — CIT/VAT classifications with profile+books blend. Onboarding POST …/step/business-details accepts same optional LTD/tax fields. Tax computation cit/vat blocks include citClassification and vatClassification from eligibility engine.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -601,7 +601,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/profile",
-                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly once set (PUT …/user/profile after onboarding). Duplicate of Onboarding * → Get profile *."
+                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly (legacy PAYE fallback). Prefer Employees for PAYE. Duplicate of Onboarding * → Get profile *."
               }
             },
             {
@@ -639,7 +639,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile",
-                "description": "Includes taxPersona, solopreneurRegistration when set, and employmentGrossSalaryMonthly (number|null, NGN gross salary/month) used for PAYE estimates when persona marks PAYE applicable."
+                "description": "Includes taxPersona, solopreneurRegistration when set, and employmentGrossSalaryMonthly (optional legacy PAYE fallback when no Employees records). Primary PAYE: employee salary components per Universal Nigeria PAYE 2026."
               }
             },
             {
@@ -657,7 +657,7 @@
                   "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"address\":\"123 Main St\",\"organizationName\":\"My Company\",\"taxPersona\":\"PAYEE\",\"employmentGrossSalaryMonthly\":450000}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/profile",
-                "description": "taxPersona: SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER. solopreneurRegistration: NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY (meaningful when persona is SOLOPRENEUR; omit or null otherwise). employmentGrossSalaryMonthly: optional non-negative number or null (clears); drives paye block on GET …/tax-computation and PAYE rows on tax-payables sync when PAYE applies."
+                "description": "taxPersona: SOLOPRENEUR | TRADER | PAYEE | GIG_WORKER | REMOTE_WORKER. solopreneurRegistration: NOT_REGISTERED | BUSINESS_NAME | LIMITED_COMPANY (meaningful when persona is SOLOPRENEUR; omit or null otherwise). employmentGrossSalaryMonthly: optional legacy fallback when no Employees exist (approximate PAYE). Prefer POST /mobile/employees with full salary components for strict PDF PAYE."
               }
             },
             {
@@ -982,7 +982,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/profile",
-                "description": "Returns taxPersonaOptions (code + tooltip), solopreneurRegistrationOptions, taxPersonaGuidance, user fields (taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly when set). After password, currentOnboardingStep is tax_persona."
+                "description": "Returns taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance, user fields (taxPersona, solopreneurRegistration, optional employmentGrossSalaryMonthly legacy PAYE). After password, currentOnboardingStep is tax_persona."
               }
             },
             {
@@ -1088,7 +1088,7 @@
                   "raw": "{\"taxPersona\":\"PAYEE\",\"employmentGrossSalaryMonthly\":450000}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/tax-persona",
-                "description": "Required after password. SOLOPRENEUR requires solopreneurRegistration. Optional employmentGrossSalaryMonthly (non-negative number or null to clear): saved with persona for PAYE estimates when applicable. Returns taxGuidancePreview + employmentGrossSalaryMonthly echo."
+                "description": "Required after password. SOLOPRENEUR requires solopreneurRegistration. Optional employmentGrossSalaryMonthly (legacy PAYE fallback only). Add Employees for strict PDF PAYE. Returns taxGuidancePreview + employmentGrossSalaryMonthly echo."
               }
             },
             {
@@ -2004,7 +2004,7 @@
         },
         {
           "name": "Assets **",
-          "description": "Fixed assets. Summary: totalAssetValue = currentAssets + netNonCurrentAssets (+ pendingCustomerReviews). Non-current: purchaseCost, accumulatedDepreciation, netNonCurrentAssets (total = NBV). Create requires depreciationMethod: STRAIGHT_LINE | REDUCING_BALANCE | UNIT_OF_PRODUCTION (legacy DECLINING_BALANCE / UNITS_OF_PRODUCTION accepted). STRAIGHT_LINE: usefulLife + residualValue. REDUCING_BALANCE: usefulLife + depreciationRate + residualValue. UNIT_OF_PRODUCTION: totalEstimatedUnit + unitProduced + residualValue. Book value never falls below residual.",
+          "description": "Fixed assets. Summary: totalAssetValue = currentAssets + netNonCurrentAssets (+ pendingCustomerReviews). Non-current: purchaseCost, accumulatedDepreciation, netNonCurrentAssets (total = NBV). Create requires depreciationMethod: STRAIGHT_LINE | REDUCING_BALANCE | UNIT_OF_PRODUCTION (legacy DECLINING_BALANCE / UNITS_OF_PRODUCTION accepted). STRAIGHT_LINE: usefulLife + residualValue; accumulated depreciation = monthly rate × full calendar months elapsed (purchase month counts as month 1). REDUCING_BALANCE: usefulLife + depreciationRate + residualValue. UNIT_OF_PRODUCTION: totalEstimatedUnit + unitProduced + residualValue. Book value never falls below residual.",
           "item": [
             {
               "name": "Get assets summary **",
@@ -2037,7 +2037,12 @@
               "name": "Add cash balance **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/cash",
                 "body": {
                   "mode": "raw",
@@ -2049,7 +2054,12 @@
               "name": "Add bank account **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/bank-accounts",
                 "body": {
                   "mode": "raw",
@@ -2081,7 +2091,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/depreciation-amortization",
-                "description": "Per-asset straight-line depreciation schedule (book value, remaining life, annual charge)."
+                "description": "Per-asset depreciation schedule. STRAIGHT_LINE: monthlyDepreciation = annual charge ÷ 12; accumulatedDepreciation = monthly × calendar months since purchase (inclusive). Also book value, remaining life, annual charge."
               }
             },
             {
@@ -2187,7 +2197,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/{{assetId}}",
-                "description": "Full asset detail with computed bookValue / depreciation fields."
+                "description": "Full asset detail with computed bookValue, monthlyDepreciation, accumulatedDepreciation (STRAIGHT_LINE uses calendar-month accumulation)."
               }
             },
             {
@@ -2498,14 +2508,14 @@
         },
         {
           "name": "Tax Computation *",
-          "description": "GET /mobile/tax-computation?period=YYYY-MM — persona-aware estimates. CIT/VAT use tax eligibility profile (blended turnover/assets, professionalService). VAT threshold ₦100M (NTA 2025).",
+          "description": "GET /mobile/tax-computation?period=YYYY-MM — persona-aware estimates. paye.derivedFrom: employees (PDF 2026) | profile_gross (legacy) | none. CIT/VAT use tax eligibility profile. VAT threshold ₦100M (NTA 2025).",
           "item": [
             {
               "name": "Get tax computation **",
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation?period=2026-02",
-                "description": "taxpayerContext respects saved taxPersona (when set). taxPersonaGuidance: taxes[] flip-card lines. Blocks: vat (belowThreshold, vatClassification), wht, cit (isSmallCompany, citClassification, NTA 2025: 0% small / 30% standard, threshold ₦100m turnover), pit, paye (employmentGrossSalaryMonthly when PAYE applicable). Official PIT/CIT numbers: GET /mobile/filings/pit|cit/calculation."
+                "description": "taxpayerContext respects saved taxPersona. Blocks: vat, wht, cit, pit, paye { applicable, derivedFrom: employees|profile_gross|none, summaryMonthlyEstimate, methodology }. PAYE primary: sum of /employees (PDF 2026 formula). Legacy: employmentGrossSalaryMonthly when no employees. Official PIT/CIT: GET /mobile/filings/pit|cit/calculation."
               }
             }
           ]
@@ -2741,7 +2751,12 @@
               "name": "Complete filing (step 12)",
               "request": {
                 "method": "POST",
-                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\"rrr\":\"2508-1234-5678\",\"paymentReceiptUrl\":\"https://example.com/remita.pdf\",\"submissionProofUrl\":\"https://example.com/ack.pdf\"}"
@@ -2773,7 +2788,12 @@
               "name": "Workspace - Update (PUT)",
               "request": {
                 "method": "PUT",
-                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"id\": \"{{filingId}}\",\n  \"currentStep\": 5,\n  \"completedSteps\": [1, 2, 3, 4],\n  \"acknowledgedGaps\": true,\n  \"reviewedDocumentIds\": [\"form-002\", \"output-schedule\"],\n  \"submissionReference\": \"NRS-VAT-2026-0001\",\n  \"rrr\": \"2508-1234-5678\",\n  \"submissionProofUrl\": \"https://example.com/ack.pdf\",\n  \"paymentReceiptUrl\": \"https://example.com/remita.pdf\"\n}"
@@ -2786,7 +2806,12 @@
               "name": "Workspace - Confirm computation (step 1)",
               "request": {
                 "method": "POST",
-                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}}}"
@@ -2799,7 +2824,12 @@
               "name": "Workspace - Validate TaxGPT (step 2)",
               "request": {
                 "method": "POST",
-                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}}}"
@@ -2823,7 +2853,12 @@
               ],
               "request": {
                 "method": "POST",
-                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}}}"
@@ -2970,7 +3005,12 @@
               "name": "PIT - Save draft (reliefs / income)",
               "request": {
                 "method": "POST",
-                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\"periodYear\":2025,\"payerFeesIncludedInSales\":true,\"reliefs\":{\"annualRent\":1800000,\"landlordName\":\"Adewale Johnson\",\"landlordContact\":\"08031234567\",\"propertyAddress\":\"12 Allen Avenue\",\"rentPeriodStart\":\"Jan 2025\",\"rentPeriodEnd\":\"Dec 2025\"},\"reliefsReviewed\":true}"
@@ -3029,7 +3069,12 @@
               "name": "CIT - Save draft (adjustments)",
               "request": {
                 "method": "POST",
-                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\"periodYear\":2025,\"adjustments\":{\"depreciation\":2000000,\"fines\":100000,\"lossCarryForward\":500000,\"whtCredits\":1200000}}"
@@ -3147,7 +3192,12 @@
               "name": "Generate report - PIT",
               "request": {
                 "method": "POST",
-                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\"reportType\":\"PIT Return Summary\",\"periodYear\":{{filingYear}},\"periodMonth\":12,\"format\":\"PDF\"}"
@@ -3160,7 +3210,12 @@
               "name": "Generate report - CIT",
               "request": {
                 "method": "POST",
-                "header": [{"key": "Content-Type", "value": "application/json"}],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\"reportType\":\"CIT Return Summary\",\"periodYear\":{{filingYear}},\"periodMonth\":12,\"format\":\"PDF\"}"
@@ -3634,23 +3689,30 @@
               "name": "Create unit attribution **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/unit-attributions",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"productName\": \"Premium Widget\",\n  \"brandName\": \"FileAm\",\n  \"skuCode\": \"WDG-001\",\n  \"unitOfMeasurement\": \"units\",\n  \"periodType\": \"MONTHLY\"\n}"
                 }
               },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "if(j.status&&d&&d.id){pm.collectionVariables.set('unitAttributionId', d.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('unitAttributionId', d.id);}"
+                    ]
+                  }
                 }
-              }]
+              ]
             },
             {
               "name": "List unit attributions **",
@@ -3672,7 +3734,12 @@
               "name": "Record production units **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/unit-attributions/{{unitAttributionId}}/records",
                 "body": {
                   "mode": "raw",
@@ -3698,29 +3765,41 @@
               "name": "Fixed asset sale on credit **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/fixed-asset-sale",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assetId\": \"{{assetId}}\",\n  \"partyName\": \"ABC Limited\",\n  \"phone\": \"08012345678\",\n  \"address\": \"12 Marina Road, Lagos\",\n  \"salePrice\": 2500000,\n  \"paymentDueDate\": \"2026-09-30\",\n  \"amountReceived\": 500000\n}"
                 }
               },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "if(j.status&&d&&d.id){pm.collectionVariables.set('receivableId', d.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('receivableId', d.id);}"
+                    ]
+                  }
                 }
-              }]
+              ]
             },
             {
               "name": "Supplier refund overpayment **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/supplier-refund-overpayment",
                 "body": {
                   "mode": "raw",
@@ -3732,7 +3811,12 @@
               "name": "Employee/director advance **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/employee-director-advance",
                 "body": {
                   "mode": "raw",
@@ -3744,7 +3828,12 @@
               "name": "Tax refund / VAT credit **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/tax-refund-vat-credit",
                 "body": {
                   "mode": "raw",
@@ -3756,7 +3845,12 @@
               "name": "Investment income owed **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/receivables/investment-income-owed",
                 "body": {
                   "mode": "raw",
@@ -3790,7 +3884,12 @@
               "name": "Create payer **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers",
                 "description": "Required: entityType (COMPANY|INDIVIDUAL), fullName, category. Sets {{payerId}}.",
                 "body": {
@@ -3798,16 +3897,18 @@
                   "raw": "{\n  \"entityType\": \"COMPANY\",\n  \"fullName\": \"Chidi Okonkwo\",\n  \"companyName\": \"ABC Corp Ltd\",\n  \"tin\": \"TIN-0098765432\",\n  \"category\": \"PROFESSIONAL_CONSULTANCY\",\n  \"vatApplicable\": true,\n  \"whtApplicable\": true,\n  \"phone\": \"+234 803 456 7890\",\n  \"email\": \"chidi@abccorp.ng\",\n  \"address\": \"12 Broad Street, Lagos Island, Lagos\",\n  \"bankName\": \"First Bank\",\n  \"bankAccount\": \"3012345678\",\n  \"beneficiary\": \"BUSINESS_CLIENT\"\n}"
                 }
               },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "if(d&&d.id){pm.collectionVariables.set('payerId', d.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(d&&d.id){pm.collectionVariables.set('payerId', d.id);}"
+                    ]
+                  }
                 }
-              }]
+              ]
             },
             {
               "name": "List payers **",
@@ -3817,17 +3918,19 @@
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers?status=ALL&page=1&limit=50",
                 "description": "Query: status=ALL|AR_BALANCE|OVERDUE, search, page, limit. Summary totals cover all payers regardless of tab filter."
               },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "var rows=d&&d.payers?d.payers:[];",
-                    "if(rows.length&&rows[0].id){pm.collectionVariables.set('payerId', rows[0].id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "var rows=d&&d.payers?d.payers:[];",
+                      "if(rows.length&&rows[0].id){pm.collectionVariables.set('payerId', rows[0].id);}"
+                    ]
+                  }
                 }
-              }]
+              ]
             },
             {
               "name": "Get payer by id **",
@@ -3842,7 +3945,12 @@
               "name": "Update payer **",
               "request": {
                 "method": "PATCH",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}",
                 "body": {
                   "mode": "raw",
@@ -3854,7 +3962,12 @@
               "name": "Record payer transaction (Invoice) **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/transactions",
                 "description": "Invoice creates AR (OUTSTANDING/OVERDUE). Sets {{payerTransactionId}}.",
                 "body": {
@@ -3862,22 +3975,29 @@
                   "raw": "{\n  \"date\": \"2026-08-20\",\n  \"amount\": 1800000,\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-09-20\",\n  \"purpose\": \"SALES\",\n  \"paymentReference\": \"INV-061\",\n  \"notes\": \"Q2 Consulting Services\"\n}"
                 }
               },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "if(d&&d.id){pm.collectionVariables.set('payerTransactionId', d.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(d&&d.id){pm.collectionVariables.set('payerTransactionId', d.id);}"
+                    ]
+                  }
                 }
-              }]
+              ]
             },
             {
               "name": "Record payer transaction (Transfer) **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/transactions",
                 "description": "Immediate payment → status PAID.",
                 "body": {
@@ -3908,7 +4028,12 @@
               "name": "Record invoice payment **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/transactions/{{payerTransactionId}}/payments",
                 "description": "Partial/full settlement. paymentType: Cash | Transfer | Card (not Invoice). Returns updated payer totals.",
                 "body": {
@@ -3921,7 +4046,12 @@
               "name": "Upload payer document **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/documents",
                 "description": "Link pre-uploaded media URL. kind: CONTRACT | PURCHASE_ORDER | WHT | OTHER.",
                 "body": {
@@ -3929,16 +4059,18 @@
                   "raw": "{\n  \"title\": \"Service Contract 2026.pdf\",\n  \"kind\": \"CONTRACT\",\n  \"url\": \"https://cdn.fileam.app/payers/abc-contract.pdf\",\n  \"date\": \"2026-08-20\"\n}"
                 }
               },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "if(d&&d.id){pm.collectionVariables.set('payerDocumentId', d.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(d&&d.id){pm.collectionVariables.set('payerDocumentId', d.id);}"
+                    ]
+                  }
                 }
-              }]
+              ]
             },
             {
               "name": "List payer documents **",
@@ -3959,7 +4091,12 @@
               "name": "Create employer (PAYE employee) **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers",
                 "description": "LIMITED_COMPANY + FULL_TIME → PAYE. Seeds document slots. Sets {{employerId}}.",
                 "body": {
@@ -3967,22 +4104,29 @@
                   "raw": "{\n  \"employerType\": \"LIMITED_COMPANY\",\n  \"name\": \"NovaTech Systems Ltd\",\n  \"address\": \"12 Kofo Abayomi Street, Victoria Island, Lagos\",\n  \"relationship\": \"FULL_TIME\",\n  \"stateOfEmployment\": \"Lagos\",\n  \"startDate\": \"2022-01-01\",\n  \"paymentMethod\": \"BASIC_MONTHLY\",\n  \"paymentFrequency\": \"MONTHLY\",\n  \"basicSalary\": 900000,\n  \"hasPension\": true,\n  \"cacNumber\": \"RC-1234567\",\n  \"tin\": \"10234567-0001\",\n  \"email\": \"payroll@novatech.ng\",\n  \"phone\": \"08031234567\",\n  \"housingAllowance\": 350000,\n  \"transportAllowance\": 150000,\n  \"otherAllowances\": 100000,\n  \"bonuses\": 0,\n  \"commissions\": 0,\n  \"pensionStatus\": \"ACTIVE\",\n  \"rsaPin\": \"PEN123456789012\",\n  \"pfa\": \"Access ARM Pensions Limited\",\n  \"employeeRate\": 8,\n  \"employerRate\": 10\n}"
                 }
               },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "if(j.status&&d&&d.id){pm.collectionVariables.set('employerId', d.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "if(j.status&&d&&d.id){pm.collectionVariables.set('employerId', d.id);}"
+                    ]
+                  }
                 }
-              }]
+              ]
             },
             {
               "name": "Create employer (WHT contractor) **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers",
                 "description": "LIMITED_COMPANY + CONTRACTOR → WHT 5%.",
                 "body": {
@@ -3999,17 +4143,19 @@
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers?year=2026",
                 "description": "Optional: status=ACTIVE|ENDED, taxTreatment=PAYE|WHT|SELF_ASSESSMENT, year (for payeCredit)."
               },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "var rows=d&&d.employers?d.employers:[];",
-                    "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('employerId', rows[0].id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "var rows=d&&d.employers?d.employers:[];",
+                      "if(j.status&&rows.length&&rows[0].id){pm.collectionVariables.set('employerId', rows[0].id);}"
+                    ]
+                  }
                 }
-              }]
+              ]
             },
             {
               "name": "Get employer by id **",
@@ -4024,7 +4170,12 @@
               "name": "Update employer **",
               "request": {
                 "method": "PATCH",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}",
                 "body": {
                   "mode": "raw",
@@ -4049,24 +4200,31 @@
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/documents",
                 "description": "Required slots (MISSING/LINKED) + optional uploads. Sets {{employerDocumentId}} from first missing PAYE evidence slot."
               },
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); var d=j.data;",
-                    "var rows=d&&d.documents?d.documents:[];",
-                    "var slot=rows.find(function(x){return x.status==='MISSING'&&x.required;})||rows[0];",
-                    "if(j.status&&slot&&slot.id){pm.collectionVariables.set('employerDocumentId', slot.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); var d=j.data;",
+                      "var rows=d&&d.documents?d.documents:[];",
+                      "var slot=rows.find(function(x){return x.status==='MISSING'&&x.required;})||rows[0];",
+                      "if(j.status&&slot&&slot.id){pm.collectionVariables.set('employerDocumentId', slot.id);}"
+                    ]
+                  }
                 }
-              }]
+              ]
             },
             {
               "name": "Link employer document **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/documents",
                 "description": "Link required slot via documentId, or omit documentId for additional supporting file.",
                 "body": {
@@ -4079,7 +4237,12 @@
               "name": "Patch employer document **",
               "request": {
                 "method": "PATCH",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/documents/{{employerDocumentId}}",
                 "body": {
                   "mode": "raw",
@@ -4120,18 +4283,25 @@
             },
             {
               "name": "Create vendor beneficiary **",
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); if(j.data&&j.data.id){pm.collectionVariables.set('beneficiaryId', j.data.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); if(j.data&&j.data.id){pm.collectionVariables.set('beneficiaryId', j.data.id);}"
+                    ]
+                  }
                 }
-              }],
+              ],
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"Kano Steel Supplies Ltd\",\n  \"beneficiaryType\": \"VENDOR\",\n  \"vendorCategory\": \"PURCHASES\",\n  \"entityType\": \"CORPORATE\",\n  \"residency\": \"RESIDENT\",\n  \"whtApplicable\": true,\n  \"tin\": \"12345678-0001\",\n  \"phone\": \"+2348034567890\",\n  \"email\": \"accounts@kanosteel.ng\",\n  \"address\": \"12 Challawa Rd, Kano\",\n  \"bankName\": \"Access Bank\",\n  \"accountNumber\": \"0123456789\"\n}"
@@ -4150,7 +4320,12 @@
               "name": "Update beneficiary **",
               "request": {
                 "method": "PATCH",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"name\": \"Kano Steel Supplies Ltd\",\n  \"beneficiaryType\": \"VENDOR\",\n  \"vendorCategory\": \"PURCHASES\",\n  \"entityType\": \"CORPORATE\",\n  \"residency\": \"RESIDENT\",\n  \"whtApplicable\": true,\n  \"tin\": \"12345678-0001\",\n  \"phone\": \"+2348034567890\",\n  \"email\": \"accounts@kanosteel.ng\",\n  \"address\": \"12 Challawa Rd, Kano\",\n  \"bankName\": \"Access Bank\",\n  \"accountNumber\": \"0123456789\"\n}"
@@ -4161,18 +4336,25 @@
             },
             {
               "name": "Record invoice **",
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); if(j.data&&j.data.transaction&&j.data.transaction.id){pm.collectionVariables.set('beneficiaryInvoiceId', j.data.transaction.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); if(j.data&&j.data.transaction&&j.data.transaction.id){pm.collectionVariables.set('beneficiaryInvoiceId', j.data.transaction.id);}"
+                    ]
+                  }
                 }
-              }],
+              ],
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"entryType\": \"INVOICE\",\n  \"description\": \"Q3 steel delivery\",\n  \"date\": \"2026-08-01\",\n  \"grossAmount\": 600000,\n  \"whtClass\": \"GOODS_SUPPLY\",\n  \"invoiceNumber\": \"INV-1042\",\n  \"reference\": \"EXP-002\"\n}"
@@ -4182,18 +4364,25 @@
             },
             {
               "name": "Pay invoice **",
-              "event": [{
-                "listen": "test",
-                "script": {
-                  "type": "text/javascript",
-                  "exec": [
-                    "var j=pm.response.json(); if(j.data&&j.data.transaction&&j.data.transaction.id){pm.collectionVariables.set('beneficiaryTransactionId', j.data.transaction.id);}"
-                  ]
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json(); if(j.data&&j.data.transaction&&j.data.transaction.id){pm.collectionVariables.set('beneficiaryTransactionId', j.data.transaction.id);}"
+                    ]
+                  }
                 }
-              }],
+              ],
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"entryType\": \"PAYMENT\",\n  \"description\": \"Q3 steel delivery\",\n  \"date\": \"2026-08-12\",\n  \"grossAmount\": 600000,\n  \"whtClass\": \"GOODS_SUPPLY\",\n  \"invoiceId\": \"{{beneficiaryInvoiceId}}\",\n  \"invoiceNumber\": \"INV-1042\",\n  \"reference\": \"EXP-003\"\n}"
@@ -4205,8 +4394,16 @@
               "name": "Remit WHT **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
-                "body": { "mode": "raw", "raw": "{}" },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries/{{beneficiaryId}}/transactions/{{beneficiaryTransactionId}}/remit"
               }
             },
@@ -4214,7 +4411,12 @@
               "name": "Attach document **",
               "request": {
                 "method": "POST",
-                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"title\": \"Supply contract 2026.pdf\",\n  \"kind\": \"CONTRACT\",\n  \"url\": \"https://cdn.fileam.app/media/example.pdf\",\n  \"date\": \"2026-08-24\"\n}"
@@ -4841,7 +5043,7 @@
         },
         {
           "name": "Employees",
-          "description": "Employee CRUD + obligations. Optional pfa (Pension Fund Administrator) on create/update; returned on list/detail. Used by Payroll pension remittance.",
+          "description": "Employee CRUD + obligations. PAYE: Universal Nigeria PAYE Formula 2026 (AGI from salary components; pension on basic+housing+transport; NHF 2.5% basic; NHIS monthly×12; rent relief; otherAllowableDeductions). Fields: otherTaxableIncome (monthly), nhisHealthInsurance (monthly), otherAllowableDeductions (annual; qualifyingMedicalExpenses alias). Optional pfa for pension remittance.",
           "item": [
             {
               "name": "List employees",
@@ -4859,7 +5061,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Paginated employees. Includes nhf flag, paye/netPay using tax relief fields when present."
+                "description": "Paginated employees. PAYE/netPay from Universal Nigeria PAYE 2026 (salary components + reliefs)."
               }
             },
             {
@@ -4867,7 +5069,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/obligations",
-                "description": "Aggregated PAYE / pension / contractor WHT. PAYE uses per-employee reliefs (rent, NHIS, life, mortgage, medical)."
+                "description": "Aggregated PAYE / pension / contractor WHT. PAYE = sum of strict PDF formula per employee (pension on B+H+T, NHF on basic, NHIS monthly×12, rent relief, otherAllowableDeductions)."
               }
             },
             {
@@ -4875,7 +5077,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
-                "description": "Includes taxRelief { annualHouseRent, nhf, nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses, computedReliefs { houseRentRelief, … } }, salaryStructure, deductions (paye/nhf/net)."
+                "description": "Includes taxRelief { annualHouseRent, nhf, nhisHealthInsuranceMonthly, annualNhis, lifeAssurancePremium, mortgageInterest, otherAllowableDeductions, computedReliefs }, salaryStructure { …, otherTaxableIncome, grossPay }, deductions (paye/nhf/net)."
               }
             },
             {
@@ -4890,10 +5092,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\",\n  \"annualHouseRent\": 2000000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 120000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"qualifyingMedicalExpenses\": 100000\n}"
+                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"mealAllowance\": 15000,\n  \"otherAllowances\": 5000,\n  \"otherTaxableIncome\": 10000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\",\n  \"annualHouseRent\": 2000000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 10000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"otherAllowableDeductions\": 100000\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
-                "description": "Optional pfa; tax relief fields: annualHouseRent (actual rent — PAYE uses MIN(20%, 500k)), nhf (boolean contributor), nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses (annual, non-negative). employmentType: Full time | Part time | Contract."
+                "description": "Salary: basicSalary, housingAllowance, transportAllowance, mealAllowance, otherAllowances, otherTaxableIncome (all monthly except annualHouseRent). Reliefs: annualHouseRent; nhisHealthInsurance (monthly — annual relief = ×12); lifeAssurancePremium, mortgageInterest, otherAllowableDeductions (annual). Legacy alias: qualifyingMedicalExpenses → otherAllowableDeductions. employmentType: Full time | Part time | Contract."
               }
             },
             {
@@ -4926,10 +5128,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"jobTitle\": \"Senior Developer\",\n  \"basicSalary\": 150000,\n  \"housingAllowance\": 35000,\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"annualHouseRent\": 2500000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 120000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"qualifyingMedicalExpenses\": 100000\n}"
+                  "raw": "{\n  \"jobTitle\": \"Senior Developer\",\n  \"basicSalary\": 150000,\n  \"housingAllowance\": 35000,\n  \"transportAllowance\": 25000,\n  \"otherTaxableIncome\": 15000,\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"annualHouseRent\": 2500000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 12000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"otherAllowableDeductions\": 100000\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
-                "description": "Partial update. Optional pfa (null to clear). Tax relief fields optional: annualHouseRent, nhf, nhisHealthInsurance, lifeAssurancePremium, mortgageInterest, qualifyingMedicalExpenses."
+                "description": "Partial update. Optional: salary components, otherTaxableIncome, pfa, annualHouseRent, nhf, nhisHealthInsurance (monthly), lifeAssurancePremium, mortgageInterest, otherAllowableDeductions (qualifyingMedicalExpenses accepted as alias)."
               }
             },
             {
@@ -4952,7 +5154,7 @@
         },
         {
           "name": "Payroll **",
-          "description": "Payroll & statutory remittances under /mobile (Assets-style mount). GET /payroll summary; /payee, /nhf, /pension detail; PATCH /nhf/applicability (business-global). Shared actions per obligation: POST /{payee|nhf|pension}/:period/{evidence|assign-consultant|mark-as-paid|pay}. period=YYYY-MM. Pay returns placeholder URL (PAYMENT_BASE_URL). Annual report is PDF stream. Employee pfa via /employees.",
+          "description": "Payroll & statutory remittances under /mobile (Assets-style mount). GET /payroll summary; /payee, /nhf, /pension detail; PATCH /nhf/applicability (business-global). PAYE amounts use Universal Nigeria PAYE Formula 2026 per employee (see Employees folder). Shared actions per obligation: POST /{payee|nhf|pension}/:period/{evidence|assign-consultant|mark-as-paid|pay}. period=YYYY-MM. Pay returns placeholder URL (PAYMENT_BASE_URL). Annual report is PDF stream. Employee pfa via /employees.",
           "item": [
             {
               "name": "GET payroll summary",
@@ -4996,7 +5198,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payee?period=2026-07",
-                "description": "PAYE summary, employeeDetails, schedule, history."
+                "description": "PAYE summary, employeeDetails, schedule, history. Amounts use Universal Nigeria PAYE 2026 per employee."
               }
             },
             {
@@ -5702,7 +5904,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
-                "description": "Consultant user profile: taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly (same semantics as mobile — PAYE salary basis when applicable)."
+                "description": "Consultant user profile: taxPersona, solopreneurRegistration, employmentGrossSalaryMonthly (legacy PAYE fallback; same as mobile)."
               }
             },
             {
@@ -5720,7 +5922,7 @@
                   "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"organizationName\":\"Fileam Consulting\",\"taxPersona\":\"GIG_WORKER\",\"employmentGrossSalaryMonthly\":null}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
-                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (number ≥ 0 or null to clear)."
+                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (legacy PAYE fallback; number ≥ 0 or null to clear)."
               }
             },
             {
@@ -7093,7 +7295,8 @@
                           "mode": "raw",
                           "raw": "{\"periodYear\":2026,\"periodMonth\":1,\"amount\":75000,\"paymentStatus\":\"not_paid\",\"documentUrl\":\"https://example.com/paye-return.pdf\"}"
                         },
-                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/paye/submit-return"
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/paye/submit-return",
+                        "description": "Submit client PAYE return for periodYear/periodMonth. amount should match computed PAYE (PDF 2026 formula per employee)."
                       }
                     },
                     {
@@ -7172,7 +7375,8 @@
                       "name": "PAYE computation report",
                       "request": {
                         "method": "GET",
-                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports/paye"
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports/paye",
+                        "description": "PAYE computation report for client employees. Uses Universal Nigeria PAYE Formula 2026 (pension on B+H+T, NHF on basic, NHIS monthly×12, rent relief, otherAllowableDeductions)."
                       }
                     },
                     {

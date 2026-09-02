@@ -9,7 +9,10 @@ import {
 import { estimateCitFromBooks } from "../../constants/citFiling";
 import { resolveTaxpayerComputationContext } from "../../constants/taxpayerComputationProfile";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
-import { computePayeMonthly } from "../../constants/payroll";
+import {
+  computeLegacyPayeMonthlyFromProfileGross,
+} from "../../constants/payroll";
+import { computeTotalMonthlyPayeForUser } from "./employeesService";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 import { ASSET_ON_BOOKS_STATUSES } from "../../constants/assets";
 import { VAT_CLASSIFICATION } from "../../constants/taxEligibility";
@@ -151,11 +154,20 @@ export const taxComputationService = {
 
     const flags = taxPersonaGuidance.applicableTaxes;
 
-    const employmentGrossAnnual = salaryMonthlyCaptured * 12;
-    const payeMonthlyEstimate =
-      flags.paye && employmentGrossAnnual > 0
-        ? computePayeMonthly(employmentGrossAnnual)
-        : 0;
+    let payeMonthlyEstimate = 0;
+    let payeDerivedFrom: "employees" | "profile_gross" | "none" = "none";
+    if (flags.paye) {
+      const employeePaye = await computeTotalMonthlyPayeForUser(userId);
+      if (employeePaye > 0) {
+        payeMonthlyEstimate = employeePaye;
+        payeDerivedFrom = "employees";
+      } else if (salaryMonthlyCaptured > 0) {
+        payeMonthlyEstimate = computeLegacyPayeMonthlyFromProfileGross(
+          salaryMonthlyCaptured,
+        );
+        payeDerivedFrom = "profile_gross";
+      }
+    }
     const payeAnnualEstimate = payeMonthlyEstimate * 12;
 
     const percentOfVatThreshold =
@@ -236,21 +248,24 @@ export const taxComputationService = {
         methodology: pitFromBooks.methodology,
       },
       /**
-       * PAYE (Pay As You Earn) — salary withholding. Distinct from tax persona **PAYEE**.
-       * Uses `User.employmentGrossSalaryMonthly` (NGN) when PAYE is persona-applicable.
+       * PAYE (Pay As You Earn) — Universal Nigeria PAYE Formula 2026.
+       * Primary: sum of employee payroll records. Legacy fallback: profile gross monthly.
        */
       paye: {
         applicable: flags.paye,
+        derivedFrom: payeDerivedFrom,
         employmentGrossSalaryMonthlyCaptured:
           salaryMonthlyCaptured > 0 ? salaryMonthlyCaptured : null,
         summaryMonthlyEstimate: payeMonthlyEstimate,
         summaryAnnualEstimate: payeAnnualEstimate,
         methodology:
-          flags.paye && salaryMonthlyCaptured > 0
-            ? "Estimated PAYE under NTA 2025 (effective 1 Jan 2026): progressive bands (first ₦800,000 tax-free on chargeable income, then 15%/18%/21%/23%/25%) after employee pension (8% of gross). Consolidated Relief Allowance (CRA) abolished — use employee rent relief (min(20% × annual rent, ₦500,000)) via payroll records. NHF not included here unless basic salary is captured separately on profile. Reconcile with employer payslips."
-            : flags.paye && salaryMonthlyCaptured <= 0
-              ? "PAYE applies to salary — set employmentGrossSalaryMonthly on your mobile profile to populate estimates."
-              : "PAYE mainly applies when your tax persona is PAYEE (employee + side income).",
+          payeDerivedFrom === "employees"
+            ? "PAYE from employee salary components (AGI = 12×[basic+housing+transport+meal+allowances+other income]; pension on basic+housing+transport; NHF 2.5% of basic; NHIS monthly×12; rent relief min(20%×rent, ₦500k); progressive 2026 bands)."
+            : payeDerivedFrom === "profile_gross"
+              ? "Legacy profile gross only — add Employees with full salary breakdown for strict PDF PAYE. Approximate: treats profile gross as basic for pension/NHF."
+              : flags.paye
+                ? "PAYE applies — add Employees (recommended) or optional employmentGrossSalaryMonthly on profile for a legacy estimate."
+                : "PAYE mainly applies when your tax persona is PAYEE (employee + side income).",
       },
       /** Placeholder until local levy amounts are modeled from location/trade data. */
       localGovLevies: {

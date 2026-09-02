@@ -177,14 +177,22 @@ async function aggregatePitInputs(
   }
 
   if (employers.length === 0) {
-    const persona = await taxComputationService.getPersonaPayloadForUser(userId);
-    const monthly = persona.employmentGrossSalaryMonthly ?? 0;
-    if (monthly > 0) {
-      const annual = monthly * 12;
-      if (monthly <= PIT_MINIMUM_WAGE_MONTHLY_NGN) {
-        employmentExempt = annual;
-      } else {
-        employmentTaxable = annual;
+    const { computeTotalMonthlyPayeForUser } = await import(
+      "./employeesService"
+    );
+    const employeePayeMonthly = await computeTotalMonthlyPayeForUser(userId);
+    if (employeePayeMonthly > 0) {
+      employmentTaxable = normalizeMoneyAmount(employeePayeMonthly * 12);
+    } else {
+      const persona = await taxComputationService.getPersonaPayloadForUser(userId);
+      const monthly = persona.employmentGrossSalaryMonthly ?? 0;
+      if (monthly > 0) {
+        const annual = monthly * 12;
+        if (monthly <= PIT_MINIMUM_WAGE_MONTHLY_NGN) {
+          employmentExempt = annual;
+        } else {
+          employmentTaxable = annual;
+        }
       }
     }
   }

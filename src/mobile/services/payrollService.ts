@@ -2,9 +2,9 @@ import { Decimal } from "@prisma/client/runtime/library";
 import PDFDocument from "pdfkit";
 import { prisma } from "../../config/database";
 import {
-  buildEmployeePayeOptions,
+  computeEmployeePayeMonthly,
+  computeMonthlyTaxableEarnings,
   computeNhf,
-  computePayeMonthly,
   computePensionEmployee,
   computePensionEmployer,
   computePensionableMonthly,
@@ -81,14 +81,16 @@ function grossMonthly(e: {
   transportAllowance: Decimal;
   mealAllowance: Decimal;
   otherAllowances: Decimal;
+  otherTaxableIncome?: Decimal;
 }): number {
-  return (
-    decimalToNumber(e.basicSalary) +
-    decimalToNumber(e.housingAllowance) +
-    decimalToNumber(e.transportAllowance) +
-    decimalToNumber(e.mealAllowance) +
-    decimalToNumber(e.otherAllowances)
-  );
+  return computeMonthlyTaxableEarnings({
+    basicMonthly: decimalToNumber(e.basicSalary),
+    housingAllowanceMonthly: decimalToNumber(e.housingAllowance),
+    transportAllowanceMonthly: decimalToNumber(e.transportAllowance),
+    mealAllowanceMonthly: decimalToNumber(e.mealAllowance),
+    otherTaxableAllowancesMonthly: decimalToNumber(e.otherAllowances),
+    otherTaxableIncomeMonthly: decimalToNumber(e.otherTaxableIncome),
+  });
 }
 
 type EmpRow = Awaited<ReturnType<typeof prisma.employee.findMany>>[number];
@@ -172,23 +174,22 @@ function computePeriodTotals(
     });
     const pensionEmp = computePensionEmployee(pensionable);
     const pensionEr = computePensionEmployer(pensionable);
-    const paye = computePayeMonthly(
-      gross * 12,
-      buildEmployeePayeOptions({
-        grossMonthly: gross,
-        basicMonthly: decimalToNumber(e.basicSalary),
-        housingAllowanceMonthly: decimalToNumber(e.housingAllowance),
-        transportAllowanceMonthly: decimalToNumber(e.transportAllowance),
-        nhfApplicable,
-        employeeContributesNhf: e.nhf !== false,
-        reliefs: {
-          annualHouseRent: decimalToNumber(e.annualHouseRent),
-          nhisHealthInsurance: decimalToNumber(e.nhisHealthInsurance),
-          lifeAssurancePremium: decimalToNumber(e.lifeAssurancePremium),
-          mortgageInterest: decimalToNumber(e.mortgageInterest),
-          qualifyingMedicalExpenses: decimalToNumber(e.qualifyingMedicalExpenses),
-        },
-      }),
+    const paye = computeEmployeePayeMonthly(
+      {
+        basicSalary: decimalToNumber(e.basicSalary),
+        housingAllowance: decimalToNumber(e.housingAllowance),
+        transportAllowance: decimalToNumber(e.transportAllowance),
+        mealAllowance: decimalToNumber(e.mealAllowance),
+        otherAllowances: decimalToNumber(e.otherAllowances),
+        otherTaxableIncome: decimalToNumber(e.otherTaxableIncome),
+        annualHouseRent: decimalToNumber(e.annualHouseRent),
+        nhisHealthInsurance: decimalToNumber(e.nhisHealthInsurance),
+        lifeAssurancePremium: decimalToNumber(e.lifeAssurancePremium),
+        mortgageInterest: decimalToNumber(e.mortgageInterest),
+        otherAllowableDeductions: decimalToNumber(e.otherAllowableDeductions),
+        nhf: e.nhf,
+      },
+      { nhfApplicable },
     );
     const employeeNhf = e.nhf !== false;
     const nhf =

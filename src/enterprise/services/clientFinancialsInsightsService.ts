@@ -9,7 +9,10 @@ import { WHT_RATE_TABLE } from "../../constants/beneficiary";
 import { estimateCitFromBooks } from "../../constants/citFiling";
 import { ASSET_ON_BOOKS_STATUSES } from "../../constants/assets";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
-import { computePayeMonthly } from "../../constants/payroll";
+import {
+  computeLegacyPayeMonthlyFromProfileGross,
+} from "../../constants/payroll";
+import { computeTotalMonthlyPayeForUser } from "../../mobile/services/employeesService";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 import { VAT_FILING_DAY } from "../../constants/taxPayable";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
@@ -358,10 +361,17 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
     user?.employmentGrossSalaryMonthly != null
       ? decimalToNumber(user.employmentGrossSalaryMonthly)
       : 0;
-  const payeAnnual =
-    flags.paye && salaryMonthly > 0
-      ? Math.round(computePayeMonthly(salaryMonthly * 12) * 12)
-      : 0;
+  let payeAnnual = 0;
+  if (flags.paye) {
+    const employeePayeMonthly = await computeTotalMonthlyPayeForUser(linkedUserId);
+    if (employeePayeMonthly > 0) {
+      payeAnnual = Math.round(employeePayeMonthly * 12);
+    } else if (salaryMonthly > 0) {
+      payeAnnual = Math.round(
+        computeLegacyPayeMonthlyFromProfileGross(salaryMonthly) * 12,
+      );
+    }
+  }
 
   const pitEst = estimateAnnualPersonalIncomeTaxNg(taxableProfit);
 

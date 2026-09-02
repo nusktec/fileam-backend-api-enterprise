@@ -39,6 +39,7 @@ export const validateCreateEmployee = [
   check("transportAllowance").optional().isFloat({ min: 0 }),
   check("mealAllowance").optional().isFloat({ min: 0 }),
   check("otherAllowances").optional().isFloat({ min: 0 }),
+  check("otherTaxableIncome").optional().isFloat({ min: 0 }),
   check("stateOfResidence").optional().trim().isString(),
   check("startDate").optional().isISO8601(),
   check("tin").optional().trim().isString(),
@@ -50,6 +51,7 @@ export const validateCreateEmployee = [
   check("lifeAssurancePremium").optional().isFloat({ min: 0 }),
   check("mortgageInterest").optional().isFloat({ min: 0 }),
   check("qualifyingMedicalExpenses").optional().isFloat({ min: 0 }),
+  check("otherAllowableDeductions").optional().isFloat({ min: 0 }),
   handleValidation,
 ];
 
@@ -67,6 +69,7 @@ export const validateUpdateEmployee = [
   check("transportAllowance").optional().isFloat({ min: 0 }),
   check("mealAllowance").optional().isFloat({ min: 0 }),
   check("otherAllowances").optional().isFloat({ min: 0 }),
+  check("otherTaxableIncome").optional().isFloat({ min: 0 }),
   check("stateOfResidence").optional({ nullable: true }).trim().isString(),
   check("startDate").optional().isISO8601(),
   check("tin").optional({ nullable: true }).trim().isString(),
@@ -78,5 +81,6 @@ export const validateUpdateEmployee = [
   check("lifeAssurancePremium").optional().isFloat({ min: 0 }),
   check("mortgageInterest").optional().isFloat({ min: 0 }),
   check("qualifyingMedicalExpenses").optional().isFloat({ min: 0 }),
+  check("otherAllowableDeductions").optional().isFloat({ min: 0 }),
   handleValidation,
 ];
