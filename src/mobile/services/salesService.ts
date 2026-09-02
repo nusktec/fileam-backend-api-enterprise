@@ -675,7 +675,9 @@ export const salesService = {
     if (!sales) return null;
 
     for (const sale of sales) {
-      await ledgerPostingService.postSaleRecognition(userId, sale);
+      await ledgerPostingService.postSaleRecognition(userId, sale, prisma, {
+        settleCollectedToPaymentType: true,
+      });
     }
 
     const periods = [

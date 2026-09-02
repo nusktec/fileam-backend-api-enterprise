@@ -137,7 +137,11 @@ export const ledgerPostingService = {
       settlementBankCode?: string | null;
     },
     db: DbClient = prisma,
-    opts?: { postInvoiceCollections?: boolean },
+    opts?: {
+      postInvoiceCollections?: boolean;
+      /** Bulk Transfer/Cash PAID on create — post collected amount to paymentType asset (Bank/Cash), not Cash only. */
+      settleCollectedToPaymentType?: boolean;
+    },
   ) {
     const netRevenue = Number(sale.amount);
     const vatAmount = sale.vatAmount != null ? Number(sale.vatAmount) : 0;
@@ -160,18 +164,26 @@ export const ledgerPostingService = {
       collected = totalAmount;
     }
 
-    const cashAsset = await resolvePaymentAssetAccount(
-      userId,
-      PAYMENT_TYPE_CASH,
-      null,
-      db,
-    );
+    const collectedAsset =
+      collected > 0 && opts?.settleCollectedToPaymentType
+        ? await resolvePaymentAssetAccount(
+            userId,
+            sale.paymentType,
+            sale.settlementBankCode,
+            db,
+          )
+        : await resolvePaymentAssetAccount(
+            userId,
+            PAYMENT_TYPE_CASH,
+            null,
+            db,
+          );
     const entries = saleRecognitionEntries({
       netRevenue,
       vatAmount,
       collectedAmount: collected,
       arAmount: ar,
-      collectedAsset: cashAsset,
+      collectedAsset,
     });
     if (entries.length === 0 || totalAmount <= 0) return null;
 
@@ -272,7 +284,11 @@ export const ledgerPostingService = {
       settlementBankCode?: string | null;
     },
     db: DbClient = prisma,
-    opts?: { postInvoiceCollections?: boolean },
+    opts?: {
+      postInvoiceCollections?: boolean;
+      /** Bulk Transfer/Cash PAID on create — settle to paymentType asset (Bank/Cash), not AP + cash. */
+      settleCollectedToPaymentType?: boolean;
+    },
   ) {
     const total = normalizeMoneyAmount(Number(expense.totalAmount));
     if (total <= 0) return null;
@@ -283,7 +299,11 @@ export const ledgerPostingService = {
       isPendingAsyncPaymentType(expense.paymentType) &&
       !isSalePaidStatus(expense.status);
 
-    const onCredit = isInvoice || pendingAsync;
+    const bulkSettledOnCreate =
+      opts?.settleCollectedToPaymentType === true &&
+      isSalePaidStatus(expense.status);
+    const onCredit =
+      isInvoice || (pendingAsync && !bulkSettledOnCreate);
 
     const paymentAsset = onCredit
       ? null

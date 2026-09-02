@@ -631,7 +631,9 @@ export const expensesService = {
     });
 
     for (const expense of expenses) {
-      await ledgerPostingService.postExpenseRecognition(userId, expense);
+      await ledgerPostingService.postExpenseRecognition(userId, expense, prisma, {
+        settleCollectedToPaymentType: true,
+      });
     }
 
     const periods = [
