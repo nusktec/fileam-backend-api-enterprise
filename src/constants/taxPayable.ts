@@ -27,4 +27,4 @@ export const VAT_FILING_DAY = 21;
  * Explains book-sync vs PAYE when salary is captured on the user profile.
  */
 export const TAX_PAYABLES_SCOPE_NOTE =
-  "Payable rows sync VAT, WHT, CIT, and PIT from book estimates. PAYE uses employee salary components (Universal Nigeria PAYE 2026) when employees exist; optional employmentGrossSalaryMonthly on profile is a legacy fallback only.";
+  "VAT, WHT, and PAYE sync per book month. CIT and PIT sync once per calendar year (periodMonth 12) using the same annual figures as filing. totals.cit / totals.pit are full-year liabilities; VAT/WHT/PAYE totals match the selected period filter.";

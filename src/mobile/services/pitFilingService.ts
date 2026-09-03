@@ -245,6 +245,42 @@ async function aggregatePitInputs(
   };
 }
 
+/** Dashboard / tax-computation — same core inputs as filing (no draft overrides). */
+export async function getPitAnnualEstimateForYear(userId: string, year: number) {
+  const inputs = await aggregatePitInputs(userId, year);
+  const snapshot = computePitFromSnapshot({
+    tradingProfit: inputs.tradingProfit,
+    otherBusinessIncome: inputs.otherBusinessIncome,
+    otherPersonalIncome: inputs.otherPersonalIncome,
+    payerFees: inputs.payerFeesIncludedInSales ? 0 : inputs.payerFees,
+    payerFeesIncludedInSales: inputs.payerFeesIncludedInSales,
+    pensionContribution: inputs.pensionContribution,
+    nhfContribution: 0,
+    nhisContribution: 0,
+    annualRent: 0,
+    rentPeriodStart: null,
+    rentPeriodEnd: null,
+    landlordName: null,
+    landlordContact: null,
+    propertyAddress: null,
+    lifeAssurance: 0,
+    mortgageInterest: 0,
+    qualifyingMedicalExpenses: 0,
+    payeCredits: inputs.payeCredits,
+    whtCredits: inputs.whtCredits,
+    minimumWageExempt: inputs.minimumWageExempt,
+  });
+  return {
+    tradingProfit: inputs.tradingProfit,
+    grossIncome: snapshot.grossIncome,
+    chargeableIncome: snapshot.chargeableIncome,
+    pitLiability: snapshot.pitLiability,
+    remainingPayable: snapshot.remainingPayable,
+    payeCredits: inputs.payeCredits,
+    whtCredits: inputs.whtCredits,
+  };
+}
+
 function applyPitDraft(
   inputs: AggregatedInputs,
   draft: PitDraftInputs | null | undefined,

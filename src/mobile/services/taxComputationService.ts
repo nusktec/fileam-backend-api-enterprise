@@ -8,7 +8,6 @@ import {
 } from "../../constants/percentages";
 import { estimateCitFromBooks } from "../../constants/citFiling";
 import { resolveTaxpayerComputationContext } from "../../constants/taxpayerComputationProfile";
-import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
 import {
   computeLegacyPayeMonthlyFromProfileGross,
 } from "../../constants/payroll";
@@ -19,6 +18,8 @@ import { VAT_CLASSIFICATION } from "../../constants/taxEligibility";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { buildTaxEligibilityProfileForUser } from "./taxEligibilityService";
+import { resolveCitClassificationInputsForYear } from "./citClassificationInputsService";
+import { getPitAnnualEstimateForYear } from "./pitFilingService";
 import {
   monthsInTaxRange,
   taxPeriodLabel,
@@ -28,6 +29,31 @@ import {
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
+}
+
+/** Calendar-year net profit (Jan–Dec) — matches PIT/CIT filing book aggregation. */
+async function sumCalendarYearNetProfit(
+  userId: string,
+  year: number,
+): Promise<number> {
+  let profit = 0;
+  for (let month = 1; month <= 12; month++) {
+    const { start, end } = monthDateRangeUtc(year, month);
+    const [sales, expenses] = await Promise.all([
+      prisma.sale.findMany({
+        where: { userId, saleDate: { gte: start, lte: end } },
+        select: { amount: true },
+      }),
+      prisma.expense.findMany({
+        where: { userId, expenseDate: { gte: start, lte: end } },
+        select: { amount: true },
+      }),
+    ]);
+    const income = sales.reduce((s, x) => s + decimalToNumber(x.amount), 0);
+    const exp = expenses.reduce((s, x) => s + decimalToNumber(x.amount), 0);
+    profit += income - exp;
+  }
+  return normalizeMoneyAmount(profit);
 }
 
 export const taxComputationService = {
@@ -74,29 +100,89 @@ export const taxComputationService = {
     };
   },
 
+  /**
+   * CIT/PIT estimates aligned with annual filing (calendar-year books + classification rules).
+   * VAT/WHT/PAYE remain period-specific in getForPeriod.
+   */
+  async getAnnualTaxEstimates(
+    userId: string,
+    year: number,
+    context: {
+      business?: { businessType: string | null; sector: string | null } | null;
+      taxProfile: Awaited<ReturnType<typeof buildTaxEligibilityProfileForUser>>;
+      fixedAssetRows: Array<{ purchaseCost: Decimal }>;
+    },
+  ) {
+    const [calendarYearProfit, classificationInputs, pitEstimate] =
+      await Promise.all([
+        sumCalendarYearNetProfit(userId, year),
+        resolveCitClassificationInputsForYear(userId, year),
+        getPitAnnualEstimateForYear(userId, year),
+      ]);
+
+    const fixedAssetsProxy =
+      classificationInputs?.fixedAssets ??
+      context.taxProfile?.taxEligibility.inputs.totalFixedAssets ??
+      context.fixedAssetRows.reduce(
+        (s, a) => s + decimalToNumber(a.purchaseCost),
+        0,
+      );
+    const eligibilityTurnover =
+      classificationInputs?.turnover ??
+      context.taxProfile?.taxEligibility.inputs.annualGrossTurnover ??
+      0;
+    const providesProfessional =
+      context.taxProfile?.taxEligibility.inputs
+        .providesProfessionalServicesResolved;
+
+    const citEstimate = estimateCitFromBooks({
+      annualizedTurnover: eligibilityTurnover,
+      annualizedProfit: calendarYearProfit,
+      fixedAssets: fixedAssetsProxy,
+      businessType: context.business?.businessType,
+      sector: context.business?.sector,
+      providesProfessionalServices: providesProfessional,
+    });
+
+    return {
+      calendarYearProfit,
+      classificationInputs,
+      citEstimate,
+      pitEstimate,
+      eligibilityTurnover,
+      fixedAssetsProxy,
+    };
+  },
+
   async getForPeriod(userId: string, year: number, month: number) {
     const { start, end } = monthDateRangeUtc(year, month);
 
     const [sales, expenses, personaPayload, business, fixedAssetRows, taxProfile] =
       await Promise.all([
-      prisma.sale.findMany({
-        where: { userId, saleDate: { gte: start, lte: end } },
-      }),
-      prisma.expense.findMany({
-        where: { userId, expenseDate: { gte: start, lte: end } },
-      }),
-      this.getPersonaPayloadForUser(userId),
-      prisma.business.findFirst({
-        where: { userId },
-        orderBy: { updatedAt: "desc" },
-        select: { businessType: true, sector: true },
-      }),
-      prisma.asset.findMany({
-        where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
-        select: { purchaseCost: true },
-      }),
-      buildTaxEligibilityProfileForUser(userId),
-    ]);
+        prisma.sale.findMany({
+          where: { userId, saleDate: { gte: start, lte: end } },
+        }),
+        prisma.expense.findMany({
+          where: { userId, expenseDate: { gte: start, lte: end } },
+        }),
+        this.getPersonaPayloadForUser(userId),
+        prisma.business.findFirst({
+          where: { userId },
+          orderBy: { updatedAt: "desc" },
+          select: { businessType: true, sector: true },
+        }),
+        prisma.asset.findMany({
+          where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
+          select: { purchaseCost: true },
+        }),
+        buildTaxEligibilityProfileForUser(userId),
+      ]);
+
+    const annual = await this.getAnnualTaxEstimates(userId, year, {
+      business,
+      taxProfile,
+      fixedAssetRows,
+    });
 
     const { taxpayerContext, taxPersonaGuidance, employmentGrossSalaryMonthly } =
       personaPayload;
@@ -133,29 +219,6 @@ export const taxComputationService = {
     const estimatedWhtDeducted =
       (serviceIncome * WHT_RATE_SERVICES_PERCENT) / PERCENT;
     const monthlyProfit = netProfit;
-    const annualizedProfit = monthlyProfit * 12;
-    const annualizedTurnover = totalIncome * 12;
-    const fixedAssetsProxy = taxProfile?.taxEligibility.inputs.totalFixedAssets ??
-      fixedAssetRows.reduce(
-        (s, a) => s + decimalToNumber(a.purchaseCost),
-        0,
-      );
-    const eligibilityTurnover =
-      taxProfile?.taxEligibility.inputs.annualGrossTurnover ?? annualizedTurnover;
-    const providesProfessional =
-      taxProfile?.taxEligibility.inputs.providesProfessionalServicesResolved;
-    const citEstimate = estimateCitFromBooks({
-      annualizedTurnover: eligibilityTurnover,
-      annualizedProfit,
-      fixedAssets: fixedAssetsProxy,
-      businessType: business?.businessType,
-      sector: business?.sector,
-      providesProfessionalServices: providesProfessional,
-    });
-
-    const pitFromBooks = estimateAnnualPersonalIncomeTaxNg(
-      Math.max(0, annualizedProfit),
-    );
 
     const flags = taxPersonaGuidance.applicableTaxes;
 
@@ -185,7 +248,7 @@ export const taxComputationService = {
       VAT_TURNOVER_THRESHOLD_NGN - totalIncome,
     );
     const percentOfCitThreshold =
-      (eligibilityTurnover / CIT_TURNOVER_THRESHOLD_NGN) * PERCENT;
+      (annual.eligibilityTurnover / CIT_TURNOVER_THRESHOLD_NGN) * PERCENT;
     const vatBelowThreshold =
       taxProfile?.taxEligibility.vatClassification ===
       VAT_CLASSIFICATION.SMALL_BUSINESS
@@ -194,6 +257,8 @@ export const taxComputationService = {
             VAT_CLASSIFICATION.NON_SMALL_BUSINESS
           ? false
           : totalIncome < VAT_TURNOVER_THRESHOLD_NGN;
+
+    const { citEstimate, pitEstimate, calendarYearProfit } = annual;
 
     return {
       taxpayerContext,
@@ -239,32 +304,35 @@ export const taxComputationService = {
         citThreshold: CIT_TURNOVER_THRESHOLD_NGN,
         percentOfThreshold: percentOfCitThreshold,
         monthlyProfit,
-        annualizedProfit,
-        annualizedTurnover: eligibilityTurnover,
-        fixedAssetsProxy,
+        /** Calendar-year profit (same basis as CIT filing), not single-month × 12. */
+        annualizedProfit: calendarYearProfit,
+        annualizedTurnover: annual.eligibilityTurnover,
+        fixedAssetsProxy: annual.fixedAssetsProxy,
+        turnoverSource: annual.classificationInputs?.turnoverSource ?? "profile",
+        fixedAssetsSource:
+          annual.classificationInputs?.fixedAssetsSource ?? "profile",
         citRate: citEstimate.citRate,
         levyRate: citEstimate.levyRate,
         estimatedAnnualCit: citEstimate.estimatedAnnualCit,
         developmentLevy: citEstimate.developmentLevy,
         totalCitLiability: citEstimate.totalCitLiability,
-        /** Placeholder until book records track allowances; 0 means not supplied in-app. */
         capitalAllowances: 0,
-        /** Loss brought forward applied before tax (not tracked in-app; 0 = none). */
         lossCarryForward: 0,
       },
       pit: {
-        summary: pitFromBooks.estimatedAnnualPitNgn,
-        periodAmount: pitFromBooks.estimatedAnnualPitNgn / 12,
+        summary: pitEstimate.remainingPayable,
+        periodAmount: pitEstimate.remainingPayable / 12,
         monthlyProfit,
-        annualizedProfit,
-        chargeableIncomeProxyAnnual: pitFromBooks.chargeableIncomeProxyAnnualNgn,
-        estimatedAnnualPit: pitFromBooks.estimatedAnnualPitNgn,
-        methodology: pitFromBooks.methodology,
+        /** Calendar-year trading profit (same basis as PIT filing). */
+        annualizedProfit: calendarYearProfit,
+        chargeableIncomeProxyAnnual: pitEstimate.chargeableIncome,
+        estimatedAnnualPit: pitEstimate.remainingPayable,
+        pitLiability: pitEstimate.pitLiability,
+        payeCredits: pitEstimate.payeCredits,
+        whtCredits: pitEstimate.whtCredits,
+        methodology:
+          "Aligned with PIT filing: calendar-year trading profit, employment income, PAYE/WHT credits (no draft overrides).",
       },
-      /**
-       * PAYE (Pay As You Earn) — Universal Nigeria PAYE Formula 2026.
-       * Primary: sum of employee payroll records. Legacy fallback: profile gross monthly.
-       */
       paye: {
         applicable: flags.paye,
         derivedFrom: payeDerivedFrom,
@@ -282,7 +350,6 @@ export const taxComputationService = {
                 ? "PAYE applies — add Employees (recommended) or optional employmentGrossSalaryMonthly on profile for a legacy estimate."
                 : "PAYE mainly applies when your tax persona is PAYEE (employee + side income).",
       },
-      /** Placeholder until local levy amounts are modeled from location/trade data. */
       localGovLevies: {
         applicable: flags.localGovLevies,
         summaryMonthlyEstimate: 0,
@@ -318,7 +385,9 @@ export const taxComputationService = {
         ? ("profile_gross" as const)
         : ("none" as const);
 
-    const annualizationFactor = 12 / months.length;
+    const rangeShare = months.length / 12;
+    const annualCitLiability = anchor.cit.totalCitLiability;
+    const annualPitPayable = anchor.pit.estimatedAnnualPit;
 
     return {
       taxpayerContext: anchor.taxpayerContext,
@@ -356,32 +425,26 @@ export const taxComputationService = {
       },
       cit: {
         ...anchor.cit,
-        summary: normalizeMoneyAmount(
-          sum((c) => c.cit.totalCitLiability / 12),
-        ),
-        periodAmount: normalizeMoneyAmount(
-          sum((c) => c.cit.totalCitLiability / 12),
-        ),
-        monthlyProfit: sum((c) => c.cit.monthlyProfit),
-        annualizedProfit: sum((c) => c.cit.monthlyProfit) * annualizationFactor,
-        annualizedTurnover:
-          sum((c) => c.vat.income) * annualizationFactor,
+        summary: normalizeMoneyAmount(annualCitLiability * rangeShare),
+        periodAmount: normalizeMoneyAmount(annualCitLiability * rangeShare),
+        monthlyProfit: sum((c) => c.overview.netProfit),
+        annualizedProfit: anchor.cit.annualizedProfit,
+        annualizedTurnover: anchor.cit.annualizedTurnover,
       },
       pit: {
         ...anchor.pit,
-        summary: sum((c) => c.pit.summary / 12),
-        periodAmount: sum((c) => c.pit.summary / 12),
-        monthlyProfit: sum((c) => c.pit.monthlyProfit),
-        annualizedProfit: sum((c) => c.pit.monthlyProfit) * annualizationFactor,
-        estimatedAnnualPit:
-          sum((c) => c.pit.summary / 12) * annualizationFactor,
+        summary: normalizeMoneyAmount(annualPitPayable * rangeShare),
+        periodAmount: normalizeMoneyAmount(annualPitPayable * rangeShare),
+        monthlyProfit: sum((c) => c.overview.netProfit),
+        annualizedProfit: anchor.pit.annualizedProfit,
+        estimatedAnnualPit: annualPitPayable,
       },
       paye: {
         ...anchor.paye,
         derivedFrom: payeDerivedFrom,
         summaryMonthlyEstimate: payeMonthlyTotal,
         periodAmount: payeMonthlyTotal,
-        summaryAnnualEstimate: payeMonthlyTotal * annualizationFactor,
+        summaryAnnualEstimate: payeMonthlyTotal * (12 / months.length),
       },
       localGovLevies: anchor.localGovLevies,
     };
