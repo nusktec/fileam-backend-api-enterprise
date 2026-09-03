@@ -5043,7 +5043,7 @@
         },
         {
           "name": "Employees",
-          "description": "Employee CRUD + obligations. PAYE: Universal Nigeria PAYE Formula 2026 (AGI from salary components; pension on basic+housing+transport; NHF 2.5% basic; NHIS monthly×12; rent relief; otherAllowableDeductions). Fields: otherTaxableIncome (monthly), nhisHealthInsurance (monthly), otherAllowableDeductions (annual; qualifyingMedicalExpenses alias). Optional pfa for pension remittance.",
+          "description": "Employees API final contract. POST/PATCH: annualHouseRent (annual); nhisHealthInsuranceMonthly, lifeAssurancePremiumMonthly, mortgageInterestMonthly (monthly inputs). GET /:id returns taxRelief with computedReliefs (annualLifeAssurancePremium, annualMortgageInterest, etc.). Payroll obligations begin from employee startDate month.",
           "item": [
             {
               "name": "List employees",
@@ -5077,7 +5077,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
-                "description": "Includes taxRelief { annualHouseRent, nhf, nhisHealthInsuranceMonthly, annualNhis, lifeAssurancePremium, mortgageInterest, otherAllowableDeductions, computedReliefs }, salaryStructure { …, otherTaxableIncome, grossPay }, deductions (paye/nhf/net)."
+                "description": "Final contract response: taxRelief { annualHouseRent, nhisHealthInsuranceMonthly, lifeAssurancePremiumMonthly, mortgageInterestMonthly, nhf, computedReliefs }, salaryStructure { basicSalary, housingAllowance, transportAllowance, mealAllowance, otherAllowances, grossPay }, deductions, employerObligations."
               }
             },
             {
@@ -5092,10 +5092,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"startDate\": \"2026-01-01\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"mealAllowance\": 15000,\n  \"otherAllowances\": 5000,\n  \"otherTaxableIncome\": 10000,\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"1234567890\",\n  \"annualHouseRent\": 2000000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 10000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"otherAllowableDeductions\": 100000\n}"
+                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"mealAllowance\": 0,\n  \"otherAllowances\": 0,\n  \"stateOfResidence\": \"Lagos\",\n  \"startDate\": \"2026-09-03\",\n  \"tin\": \"1234567890\",\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"annualHouseRent\": 2000000,\n  \"nhisHealthInsuranceMonthly\": 120000,\n  \"lifeAssurancePremiumMonthly\": 150000,\n  \"mortgageInterestMonthly\": 300000,\n  \"nhf\": true\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
-                "description": "Salary: basicSalary, housingAllowance, transportAllowance, mealAllowance, otherAllowances, otherTaxableIncome (all monthly except annualHouseRent). startDate (ISO) — PAYE/NHF/pension obligations begin from this month. Reliefs: annualHouseRent; nhisHealthInsurance (monthly); lifeAssurancePremium, mortgageInterest, otherAllowableDeductions (annual). employmentType: Full time | Part time | Contract."
+                "description": "Final POST contract. annualHouseRent is annual (not ×12). nhisHealthInsuranceMonthly, lifeAssurancePremiumMonthly, mortgageInterestMonthly are monthly (relief annualized ×12). 0 and false are valid."
               }
             },
             {
@@ -5128,10 +5128,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"jobTitle\": \"Senior Developer\",\n  \"basicSalary\": 150000,\n  \"housingAllowance\": 35000,\n  \"transportAllowance\": 25000,\n  \"otherTaxableIncome\": 15000,\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"annualHouseRent\": 2500000,\n  \"nhf\": true,\n  \"nhisHealthInsurance\": 12000,\n  \"lifeAssurancePremium\": 150000,\n  \"mortgageInterest\": 300000,\n  \"otherAllowableDeductions\": 100000\n}"
+                  "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"mealAllowance\": 0,\n  \"otherAllowances\": 0,\n  \"stateOfResidence\": \"Lagos\",\n  \"startDate\": \"2026-09-03\",\n  \"tin\": \"1234567890\",\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"annualHouseRent\": 2000000,\n  \"nhisHealthInsuranceMonthly\": 120000,\n  \"lifeAssurancePremiumMonthly\": 0,\n  \"mortgageInterestMonthly\": 0,\n  \"nhf\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
-                "description": "Partial update. Optional: salary components, otherTaxableIncome, pfa, annualHouseRent, nhf, nhisHealthInsurance (monthly), lifeAssurancePremium, mortgageInterest, otherAllowableDeductions (qualifyingMedicalExpenses accepted as alias)."
+                "description": "Final PATCH contract — same field names as POST. Numeric 0 and boolean false must persist."
               }
             },
             {

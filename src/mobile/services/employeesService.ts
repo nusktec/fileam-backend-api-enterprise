@@ -31,14 +31,12 @@ type EmployeeCompensation = {
   transportAllowance: Decimal;
   mealAllowance: Decimal;
   otherAllowances: Decimal;
-  otherTaxableIncome?: Decimal;
   employmentType: string;
   annualHouseRent?: Decimal;
   nhf?: boolean;
-  nhisHealthInsurance?: Decimal;
-  lifeAssurancePremium?: Decimal;
-  mortgageInterest?: Decimal;
-  otherAllowableDeductions?: Decimal;
+  nhisHealthInsuranceMonthly?: Decimal;
+  lifeAssurancePremiumMonthly?: Decimal;
+  mortgageInterestMonthly?: Decimal;
 };
 
 function employeePayeRecord(e: EmployeeCompensation) {
@@ -48,12 +46,10 @@ function employeePayeRecord(e: EmployeeCompensation) {
     transportAllowance: decimalToNumber(e.transportAllowance),
     mealAllowance: decimalToNumber(e.mealAllowance),
     otherAllowances: decimalToNumber(e.otherAllowances),
-    otherTaxableIncome: decimalToNumber(e.otherTaxableIncome),
     annualHouseRent: decimalToNumber(e.annualHouseRent),
-    nhisHealthInsurance: decimalToNumber(e.nhisHealthInsurance),
-    lifeAssurancePremium: decimalToNumber(e.lifeAssurancePremium),
-    mortgageInterest: decimalToNumber(e.mortgageInterest),
-    otherAllowableDeductions: decimalToNumber(e.otherAllowableDeductions),
+    nhisHealthInsuranceMonthly: decimalToNumber(e.nhisHealthInsuranceMonthly),
+    lifeAssurancePremiumMonthly: decimalToNumber(e.lifeAssurancePremiumMonthly),
+    mortgageInterestMonthly: decimalToNumber(e.mortgageInterestMonthly),
     nhf: e.nhf,
   };
 }
@@ -66,36 +62,34 @@ function grossMonthly(e: EmployeeCompensation): number {
     transportAllowanceMonthly: row.transportAllowance,
     mealAllowanceMonthly: row.mealAllowance,
     otherTaxableAllowancesMonthly: row.otherAllowances,
-    otherTaxableIncomeMonthly: row.otherTaxableIncome,
   });
 }
 
 export function payeReliefsFromEmployee(e: {
   annualHouseRent?: Decimal | number | null;
-  nhisHealthInsurance?: Decimal | number | null;
-  lifeAssurancePremium?: Decimal | number | null;
-  mortgageInterest?: Decimal | number | null;
-  otherAllowableDeductions?: Decimal | number | null;
+  nhisHealthInsuranceMonthly?: Decimal | number | null;
+  lifeAssurancePremiumMonthly?: Decimal | number | null;
+  mortgageInterestMonthly?: Decimal | number | null;
 }): PayeReliefInputs {
   return {
     annualHouseRent: decimalToNumber(e.annualHouseRent as Decimal),
-    nhisHealthInsuranceMonthly: decimalToNumber(e.nhisHealthInsurance as Decimal),
-    lifeAssurancePremium: decimalToNumber(e.lifeAssurancePremium as Decimal),
-    mortgageInterest: decimalToNumber(e.mortgageInterest as Decimal),
-    otherAllowableDeductions: decimalToNumber(
-      e.otherAllowableDeductions as Decimal,
+    nhisHealthInsuranceMonthly: decimalToNumber(
+      e.nhisHealthInsuranceMonthly as Decimal,
     ),
+    lifeAssurancePremiumMonthly: decimalToNumber(
+      e.lifeAssurancePremiumMonthly as Decimal,
+    ),
+    mortgageInterestMonthly: decimalToNumber(e.mortgageInterestMonthly as Decimal),
   };
 }
 
-/** Monthly gross pay (PDF taxable earnings) — analytics / expense totals. */
+/** Monthly gross pay — basic + allowances per Employees API contract. */
 export function computeEmployeeMonthlyGrossPay(e: {
   basicSalary: Decimal;
   housingAllowance: Decimal;
   transportAllowance: Decimal;
   mealAllowance: Decimal;
   otherAllowances: Decimal;
-  otherTaxableIncome?: Decimal;
 }): number {
   return grossMonthly(e as EmployeeCompensation);
 }
@@ -153,27 +147,34 @@ async function isNhfApplicableForUser(userId: string): Promise<boolean> {
 function taxReliefPayload(e: {
   annualHouseRent: Decimal;
   nhf: boolean;
-  nhisHealthInsurance: Decimal;
-  lifeAssurancePremium: Decimal;
-  mortgageInterest: Decimal;
-  otherAllowableDeductions: Decimal;
+  nhisHealthInsuranceMonthly: Decimal;
+  lifeAssurancePremiumMonthly: Decimal;
+  mortgageInterestMonthly: Decimal;
 }) {
-  const inputs = payeReliefsFromEmployee(e);
-  const computed = computeAnnualPayeReliefs(inputs);
+  const annualHouseRent = decimalToNumber(e.annualHouseRent);
+  const nhisHealthInsuranceMonthly = decimalToNumber(e.nhisHealthInsuranceMonthly);
+  const lifeAssurancePremiumMonthly = decimalToNumber(
+    e.lifeAssurancePremiumMonthly,
+  );
+  const mortgageInterestMonthly = decimalToNumber(e.mortgageInterestMonthly);
+  const computed = computeAnnualPayeReliefs({
+    annualHouseRent,
+    nhisHealthInsuranceMonthly,
+    lifeAssurancePremiumMonthly,
+    mortgageInterestMonthly,
+  });
   return {
-    annualHouseRent: inputs.annualHouseRent ?? 0,
+    annualHouseRent,
+    nhisHealthInsuranceMonthly,
+    lifeAssurancePremiumMonthly,
+    mortgageInterestMonthly,
     nhf: e.nhf,
-    nhisHealthInsuranceMonthly: inputs.nhisHealthInsuranceMonthly ?? 0,
-    annualNhis: computed.annualNhis,
-    lifeAssurancePremium: inputs.lifeAssurancePremium ?? 0,
-    mortgageInterest: inputs.mortgageInterest ?? 0,
-    otherAllowableDeductions: inputs.otherAllowableDeductions ?? 0,
     computedReliefs: {
+      annualHouseRent,
       houseRentRelief: computed.houseRentRelief,
       annualNhis: computed.annualNhis,
-      lifeAssurancePremium: computed.lifeAssurancePremium,
-      mortgageInterest: computed.mortgageInterest,
-      otherAllowableDeductions: computed.otherAllowableDeductions,
+      annualLifeAssurancePremium: computed.annualLifeAssurancePremium,
+      annualMortgageInterest: computed.annualMortgageInterest,
       totalAdditionalReliefs: computed.totalAdditionalReliefs,
     },
   };
@@ -348,7 +349,6 @@ export const employeesService = {
         transportAllowance: decimalToNumber(e.transportAllowance),
         mealAllowance: decimalToNumber(e.mealAllowance),
         otherAllowances: decimalToNumber(e.otherAllowances),
-        otherTaxableIncome: decimalToNumber(e.otherTaxableIncome),
         grossPay: gross,
       },
       deductions: {
@@ -376,7 +376,6 @@ export const employeesService = {
       transportAllowance?: number;
       mealAllowance?: number;
       otherAllowances?: number;
-      otherTaxableIncome?: number;
       stateOfResidence?: string;
       startDate?: string;
       tin?: string;
@@ -384,10 +383,9 @@ export const employeesService = {
       pfa?: string;
       annualHouseRent?: number;
       nhf?: boolean;
-      nhisHealthInsurance?: number;
-      lifeAssurancePremium?: number;
-      mortgageInterest?: number;
-      otherAllowableDeductions?: number;
+      nhisHealthInsuranceMonthly?: number;
+      lifeAssurancePremiumMonthly?: number;
+      mortgageInterestMonthly?: number;
     },
   ) {
     const counter = await prisma.counter.upsert({
@@ -409,17 +407,19 @@ export const employeesService = {
         transportAllowance: new Decimal(data.transportAllowance ?? 0),
         mealAllowance: new Decimal(data.mealAllowance ?? 0),
         otherAllowances: new Decimal(data.otherAllowances ?? 0),
-        otherTaxableIncome: new Decimal(data.otherTaxableIncome ?? 0),
         stateOfResidence: data.stateOfResidence ?? null,
         tin: data.tin ?? null,
         pensionRsa: data.pensionRsa ?? null,
         pfa: data.pfa?.trim() || null,
         annualHouseRent: new Decimal(data.annualHouseRent ?? 0),
         nhf: data.nhf !== false,
-        nhisHealthInsurance: new Decimal(data.nhisHealthInsurance ?? 0),
-        lifeAssurancePremium: new Decimal(data.lifeAssurancePremium ?? 0),
-        mortgageInterest: new Decimal(data.mortgageInterest ?? 0),
-        otherAllowableDeductions: new Decimal(data.otherAllowableDeductions ?? 0),
+        nhisHealthInsuranceMonthly: new Decimal(
+          data.nhisHealthInsuranceMonthly ?? 0,
+        ),
+        lifeAssurancePremiumMonthly: new Decimal(
+          data.lifeAssurancePremiumMonthly ?? 0,
+        ),
+        mortgageInterestMonthly: new Decimal(data.mortgageInterestMonthly ?? 0),
         startDate,
       },
     });
@@ -438,7 +438,6 @@ export const employeesService = {
       transportAllowance: number;
       mealAllowance: number;
       otherAllowances: number;
-      otherTaxableIncome: number;
       stateOfResidence: string | null;
       startDate: string;
       tin: string | null;
@@ -446,10 +445,9 @@ export const employeesService = {
       pfa: string | null;
       annualHouseRent: number;
       nhf: boolean;
-      nhisHealthInsurance: number;
-      lifeAssurancePremium: number;
-      mortgageInterest: number;
-      otherAllowableDeductions: number;
+      nhisHealthInsuranceMonthly: number;
+      lifeAssurancePremiumMonthly: number;
+      mortgageInterestMonthly: number;
     }>,
   ) {
     const existing = await prisma.employee.findFirst({
@@ -472,8 +470,6 @@ export const employeesService = {
       updateData.mealAllowance = new Decimal(data.mealAllowance);
     if (data.otherAllowances != null)
       updateData.otherAllowances = new Decimal(data.otherAllowances);
-    if (data.otherTaxableIncome != null)
-      updateData.otherTaxableIncome = new Decimal(data.otherTaxableIncome);
     if (data.stateOfResidence !== undefined) {
       updateData.stateOfResidence = data.stateOfResidence?.trim() || null;
     }
@@ -489,18 +485,19 @@ export const employeesService = {
       updateData.annualHouseRent = new Decimal(data.annualHouseRent);
     }
     if (data.nhf !== undefined) updateData.nhf = Boolean(data.nhf);
-    if (data.nhisHealthInsurance != null) {
-      updateData.nhisHealthInsurance = new Decimal(data.nhisHealthInsurance);
+    if (data.nhisHealthInsuranceMonthly != null) {
+      updateData.nhisHealthInsuranceMonthly = new Decimal(
+        data.nhisHealthInsuranceMonthly,
+      );
     }
-    if (data.lifeAssurancePremium != null) {
-      updateData.lifeAssurancePremium = new Decimal(data.lifeAssurancePremium);
+    if (data.lifeAssurancePremiumMonthly != null) {
+      updateData.lifeAssurancePremiumMonthly = new Decimal(
+        data.lifeAssurancePremiumMonthly,
+      );
     }
-    if (data.mortgageInterest != null) {
-      updateData.mortgageInterest = new Decimal(data.mortgageInterest);
-    }
-    if (data.otherAllowableDeductions != null) {
-      updateData.otherAllowableDeductions = new Decimal(
-        data.otherAllowableDeductions,
+    if (data.mortgageInterestMonthly != null) {
+      updateData.mortgageInterestMonthly = new Decimal(
+        data.mortgageInterestMonthly,
       );
     }
 

@@ -22,13 +22,13 @@ export type PayeMonthlyEarningsInput = {
   otherTaxableIncomeMonthly?: number;
 };
 
-/** Statutory reliefs / allowable deductions (annual amounts except NHIS monthly). */
+/** Statutory reliefs / allowable deductions (annual house rent; other inputs monthly). */
 export type PayeReliefInputs = {
   annualHouseRent?: number;
-  /** Monthly NHIS premium — annual relief = monthly × 12. */
   nhisHealthInsuranceMonthly?: number;
-  lifeAssurancePremium?: number;
-  mortgageInterest?: number;
+  lifeAssurancePremiumMonthly?: number;
+  mortgageInterestMonthly?: number;
+  /** @deprecated Legacy annual deduction — not used on Employees API. */
   otherAllowableDeductions?: number;
 };
 
@@ -94,34 +94,36 @@ export function computeHouseRentRelief(annualHouseRent: number): number {
   return Math.min(rent * HOUSE_RENT_RELIEF_RATE, HOUSE_RENT_RELIEF_CAP);
 }
 
-/** Sum optional reliefs (excludes pension and NHF). NHIS annualized from monthly. */
+/** Sum optional reliefs (excludes pension and NHF). Monthly inputs annualized ×12. */
 export function computeAnnualPayeReliefs(reliefs?: PayeReliefInputs): {
   houseRentRelief: number;
   annualNhis: number;
-  lifeAssurancePremium: number;
-  mortgageInterest: number;
+  annualLifeAssurancePremium: number;
+  annualMortgageInterest: number;
   otherAllowableDeductions: number;
   totalAdditionalReliefs: number;
 } {
   const houseRentRelief = computeHouseRentRelief(reliefs?.annualHouseRent ?? 0);
   const annualNhis =
     nonNegative(reliefs?.nhisHealthInsuranceMonthly) * 12;
-  const lifeAssurancePremium = nonNegative(reliefs?.lifeAssurancePremium);
-  const mortgageInterest = nonNegative(reliefs?.mortgageInterest);
+  const annualLifeAssurancePremium =
+    nonNegative(reliefs?.lifeAssurancePremiumMonthly) * 12;
+  const annualMortgageInterest =
+    nonNegative(reliefs?.mortgageInterestMonthly) * 12;
   const otherAllowableDeductions = nonNegative(
     reliefs?.otherAllowableDeductions,
   );
   return {
     houseRentRelief,
     annualNhis,
-    lifeAssurancePremium,
-    mortgageInterest,
+    annualLifeAssurancePremium,
+    annualMortgageInterest,
     otherAllowableDeductions,
     totalAdditionalReliefs:
       houseRentRelief +
       annualNhis +
-      lifeAssurancePremium +
-      mortgageInterest +
+      annualLifeAssurancePremium +
+      annualMortgageInterest +
       otherAllowableDeductions,
   };
 }
@@ -185,8 +187,8 @@ export function computePayeFromMonthlyEarnings(input: {
     nhfDeduction,
     annualNhis: statutoryReliefs.annualNhis,
     houseRentRelief: statutoryReliefs.houseRentRelief,
-    lifeAssurancePremium: statutoryReliefs.lifeAssurancePremium,
-    mortgageInterest: statutoryReliefs.mortgageInterest,
+    lifeAssurancePremium: statutoryReliefs.annualLifeAssurancePremium,
+    mortgageInterest: statutoryReliefs.annualMortgageInterest,
     otherAllowableDeductions: statutoryReliefs.otherAllowableDeductions,
     totalStatutoryReliefs: statutoryReliefs.totalAdditionalReliefs,
     totalDeductions,
@@ -208,12 +210,10 @@ export function computeEmployeePayeMonthly(
     transportAllowance?: number;
     mealAllowance?: number;
     otherAllowances?: number;
-    otherTaxableIncome?: number;
     annualHouseRent?: number;
-    nhisHealthInsurance?: number;
-    lifeAssurancePremium?: number;
-    mortgageInterest?: number;
-    otherAllowableDeductions?: number;
+    nhisHealthInsuranceMonthly?: number;
+    lifeAssurancePremiumMonthly?: number;
+    mortgageInterestMonthly?: number;
     nhf?: boolean;
   },
   opts?: { nhfApplicable?: boolean },
@@ -225,16 +225,14 @@ export function computeEmployeePayeMonthly(
       transportAllowanceMonthly: employee.transportAllowance,
       mealAllowanceMonthly: employee.mealAllowance,
       otherTaxableAllowancesMonthly: employee.otherAllowances,
-      otherTaxableIncomeMonthly: employee.otherTaxableIncome,
     },
     nhfApplicable: opts?.nhfApplicable,
     employeeContributesNhf: employee.nhf !== false,
     reliefs: {
       annualHouseRent: employee.annualHouseRent,
-      nhisHealthInsuranceMonthly: employee.nhisHealthInsurance,
-      lifeAssurancePremium: employee.lifeAssurancePremium,
-      mortgageInterest: employee.mortgageInterest,
-      otherAllowableDeductions: employee.otherAllowableDeductions,
+      nhisHealthInsuranceMonthly: employee.nhisHealthInsuranceMonthly,
+      lifeAssurancePremiumMonthly: employee.lifeAssurancePremiumMonthly,
+      mortgageInterestMonthly: employee.mortgageInterestMonthly,
     },
   }).monthlyPaye;
 }
@@ -300,8 +298,8 @@ export function computeAnnualPaye(
     nhfDeduction,
     annualNhis: statutoryReliefs.annualNhis,
     houseRentRelief: statutoryReliefs.houseRentRelief,
-    lifeAssurancePremium: statutoryReliefs.lifeAssurancePremium,
-    mortgageInterest: statutoryReliefs.mortgageInterest,
+    lifeAssurancePremium: statutoryReliefs.annualLifeAssurancePremium,
+    mortgageInterest: statutoryReliefs.annualMortgageInterest,
     otherAllowableDeductions: statutoryReliefs.otherAllowableDeductions,
     totalStatutoryReliefs: statutoryReliefs.totalAdditionalReliefs,
     totalDeductions,

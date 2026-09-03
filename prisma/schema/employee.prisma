@@ -10,8 +10,6 @@ model Employee {
   transportAllowance  Decimal  @default(0) @map("transport_allowance") @db.Decimal(14, 2)
   mealAllowance       Decimal  @default(0) @map("meal_allowance") @db.Decimal(14, 2)
   otherAllowances     Decimal  @default(0) @map("other_allowances") @db.Decimal(14, 2)
-  /** Other taxable income (monthly) — PDF Annual Gross Income component. */
-  otherTaxableIncome  Decimal  @default(0) @map("other_taxable_income") @db.Decimal(14, 2)
   stateOfResidence    String?  @map("state_of_residence")
   tin                 String?  @map("tin")
   pensionRsa          String?  @map("pension_rsa")
@@ -21,12 +19,12 @@ model Employee {
   annualHouseRent     Decimal  @default(0) @map("annual_house_rent") @db.Decimal(14, 2)
   /** Whether this employee is an NHF contributor (amount from statutory rules). */
   nhf                 Boolean  @default(true)
-  /** Monthly NHIS premium — annual relief = monthly × 12 (PDF). */
-  nhisHealthInsurance Decimal  @default(0) @map("nhis_health_insurance") @db.Decimal(14, 2)
-  lifeAssurancePremium Decimal @default(0) @map("life_assurance_premium") @db.Decimal(14, 2)
-  mortgageInterest    Decimal  @default(0) @map("mortgage_interest") @db.Decimal(14, 2)
-  /** Annual other allowable deductions (PDF taxable income relief). */
-  otherAllowableDeductions Decimal @default(0) @map("other_allowable_deductions") @db.Decimal(14, 2)
+  /** Monthly NHIS premium — annual relief = monthly × 12. */
+  nhisHealthInsuranceMonthly Decimal @default(0) @map("nhis_health_insurance") @db.Decimal(14, 2)
+  /** Monthly life assurance premium — annual relief = monthly × 12. */
+  lifeAssurancePremiumMonthly Decimal @default(0) @map("life_assurance_premium") @db.Decimal(14, 2)
+  /** Monthly mortgage interest — annual relief = monthly × 12. */
+  mortgageInterestMonthly Decimal @default(0) @map("mortgage_interest") @db.Decimal(14, 2)
   startDate           DateTime @map("start_date") @db.Date
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")

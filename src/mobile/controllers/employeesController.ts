@@ -85,7 +85,6 @@ export const createEmployee = async (
       transportAllowance,
       mealAllowance,
       otherAllowances,
-      otherTaxableIncome,
       stateOfResidence,
       startDate,
       tin,
@@ -93,11 +92,9 @@ export const createEmployee = async (
       pfa,
       annualHouseRent,
       nhf,
-      nhisHealthInsurance,
-      lifeAssurancePremium,
-      mortgageInterest,
-      otherAllowableDeductions,
-      qualifyingMedicalExpenses,
+      nhisHealthInsuranceMonthly,
+      lifeAssurancePremiumMonthly,
+      mortgageInterestMonthly,
     } = req.body ?? {};
     const data = await employeesService.create(userId, {
       fullName,
@@ -111,8 +108,6 @@ export const createEmployee = async (
       mealAllowance: mealAllowance != null ? Number(mealAllowance) : undefined,
       otherAllowances:
         otherAllowances != null ? Number(otherAllowances) : undefined,
-      otherTaxableIncome:
-        otherTaxableIncome != null ? Number(otherTaxableIncome) : undefined,
       stateOfResidence,
       startDate,
       tin,
@@ -121,18 +116,18 @@ export const createEmployee = async (
       annualHouseRent:
         annualHouseRent != null ? Number(annualHouseRent) : undefined,
       nhf: nhf != null ? Boolean(nhf) : undefined,
-      nhisHealthInsurance:
-        nhisHealthInsurance != null ? Number(nhisHealthInsurance) : undefined,
-      lifeAssurancePremium:
-        lifeAssurancePremium != null ? Number(lifeAssurancePremium) : undefined,
-      mortgageInterest:
-        mortgageInterest != null ? Number(mortgageInterest) : undefined,
-      otherAllowableDeductions:
-        otherAllowableDeductions != null
-          ? Number(otherAllowableDeductions)
-          : qualifyingMedicalExpenses != null
-            ? Number(qualifyingMedicalExpenses)
-            : undefined,
+      nhisHealthInsuranceMonthly:
+        nhisHealthInsuranceMonthly != null
+          ? Number(nhisHealthInsuranceMonthly)
+          : undefined,
+      lifeAssurancePremiumMonthly:
+        lifeAssurancePremiumMonthly != null
+          ? Number(lifeAssurancePremiumMonthly)
+          : undefined,
+      mortgageInterestMonthly:
+        mortgageInterestMonthly != null
+          ? Number(mortgageInterestMonthly)
+          : undefined,
     });
     res.status(HttpStatusCode.OK).json(outJson(true, "Employee added", data));
   } catch (error) {
@@ -173,10 +168,6 @@ export const updateEmployee = async (
         body.mealAllowance != null ? Number(body.mealAllowance) : undefined,
       otherAllowances:
         body.otherAllowances != null ? Number(body.otherAllowances) : undefined,
-      otherTaxableIncome:
-        body.otherTaxableIncome != null
-          ? Number(body.otherTaxableIncome)
-          : undefined,
       stateOfResidence: body.stateOfResidence,
       startDate: body.startDate,
       tin: body.tin,
@@ -185,22 +176,18 @@ export const updateEmployee = async (
       annualHouseRent:
         body.annualHouseRent != null ? Number(body.annualHouseRent) : undefined,
       nhf: body.nhf != null ? Boolean(body.nhf) : undefined,
-      nhisHealthInsurance:
-        body.nhisHealthInsurance != null
-          ? Number(body.nhisHealthInsurance)
+      nhisHealthInsuranceMonthly:
+        body.nhisHealthInsuranceMonthly != null
+          ? Number(body.nhisHealthInsuranceMonthly)
           : undefined,
-      lifeAssurancePremium:
-        body.lifeAssurancePremium != null
-          ? Number(body.lifeAssurancePremium)
+      lifeAssurancePremiumMonthly:
+        body.lifeAssurancePremiumMonthly != null
+          ? Number(body.lifeAssurancePremiumMonthly)
           : undefined,
-      mortgageInterest:
-        body.mortgageInterest != null ? Number(body.mortgageInterest) : undefined,
-      otherAllowableDeductions:
-        body.otherAllowableDeductions != null
-          ? Number(body.otherAllowableDeductions)
-          : body.qualifyingMedicalExpenses != null
-            ? Number(body.qualifyingMedicalExpenses)
-            : undefined,
+      mortgageInterestMonthly:
+        body.mortgageInterestMonthly != null
+          ? Number(body.mortgageInterestMonthly)
+          : undefined,
     });
     if (!data) {
       res

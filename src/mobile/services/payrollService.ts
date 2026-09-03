@@ -82,7 +82,6 @@ function grossMonthly(e: {
   transportAllowance: Decimal;
   mealAllowance: Decimal;
   otherAllowances: Decimal;
-  otherTaxableIncome?: Decimal;
 }): number {
   return computeMonthlyTaxableEarnings({
     basicMonthly: decimalToNumber(e.basicSalary),
@@ -90,7 +89,6 @@ function grossMonthly(e: {
     transportAllowanceMonthly: decimalToNumber(e.transportAllowance),
     mealAllowanceMonthly: decimalToNumber(e.mealAllowance),
     otherTaxableAllowancesMonthly: decimalToNumber(e.otherAllowances),
-    otherTaxableIncomeMonthly: decimalToNumber(e.otherTaxableIncome),
   });
 }
 
@@ -187,12 +185,14 @@ function computePeriodTotals(
         transportAllowance: decimalToNumber(e.transportAllowance),
         mealAllowance: decimalToNumber(e.mealAllowance),
         otherAllowances: decimalToNumber(e.otherAllowances),
-        otherTaxableIncome: decimalToNumber(e.otherTaxableIncome),
         annualHouseRent: decimalToNumber(e.annualHouseRent),
-        nhisHealthInsurance: decimalToNumber(e.nhisHealthInsurance),
-        lifeAssurancePremium: decimalToNumber(e.lifeAssurancePremium),
-        mortgageInterest: decimalToNumber(e.mortgageInterest),
-        otherAllowableDeductions: decimalToNumber(e.otherAllowableDeductions),
+        nhisHealthInsuranceMonthly: decimalToNumber(
+          e.nhisHealthInsuranceMonthly,
+        ),
+        lifeAssurancePremiumMonthly: decimalToNumber(
+          e.lifeAssurancePremiumMonthly,
+        ),
+        mortgageInterestMonthly: decimalToNumber(e.mortgageInterestMonthly),
         nhf: e.nhf,
       },
       { nhfApplicable },
