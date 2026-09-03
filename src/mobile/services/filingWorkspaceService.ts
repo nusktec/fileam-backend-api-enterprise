@@ -19,7 +19,7 @@ import {
   pitDueDateForYear,
   PIT_PERIOD_MONTH,
 } from "../../constants/pitFiling";
-import { VAT_FILING_DAY } from "../../constants/taxPayable";
+import { monthlyFilingDueDateUtc } from "../../constants/taxPayable";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { citFilingService } from "./citFilingService";
@@ -49,9 +49,7 @@ function periodLabel(taxType: string, year: number, month: number): string {
 }
 
 function monthlyDueDate(year: number, month: number): Date {
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  return new Date(nextYear, nextMonth - 1, VAT_FILING_DAY);
+  return monthlyFilingDueDateUtc(year, month);
 }
 
 function resolveDueDate(

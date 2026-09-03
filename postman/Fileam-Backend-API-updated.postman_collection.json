@@ -2543,7 +2543,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20&period={{bookPeriod}}&range=month&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Syncs books for filtered period before list. period=YYYY-MM + optional range=month|quarter|year (dateFrom/dateTo ignored when period set).\n\nSync rules (aligned with filing):\n• VAT / WHT / PAYE — one row per book month in the filter.\n• CIT / PIT — one row per calendar year on periodMonth 12 (full annual amountDue, same basis as /filings/cit|pit/calculation). Included in monthly period views for that calendar year.\n\nResponse totals: VAT/WHT/PAYE = selected period; totals.cit / totals.pit = full calendar-year liability. Legacy monthly CIT/PIT rows (periodMonth ≠ 12) are removed on sync unless already filed."
+                "description": "Syncs books for filtered period before list. period=YYYY-MM + optional range=month|quarter|year (dateFrom/dateTo ignored when period set).\n\nBook period rules:\n• periodYear/periodMonth on each row = the book month (same as sale/expense dates), NOT the filing due date month.\n• filingDueDate for VAT/WHT/PAYE = 21st of the following month (Feb period → due Mar 21).\n• CIT/PIT rows use periodMonth 12 (annual) for the calendar year.\n\nResponse includes syncedBookPeriod { year, month } echoing the requested filter. Re-call after deploy to refresh rows that were stored with timezone-shifted dates."
               }
             },
             {

@@ -85,16 +85,34 @@ export function parsePeriodQuery(value: unknown): { year: number; month: number 
   return { year, month };
 }
 
-/** Calendar month for a stored `@db.Date` / book date (UTC date parts). */
-export function calendarPeriodFromDate(d: Date): { year: number; month: number } {
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+/** UTC calendar date for Prisma `@db.Date` columns (avoids timezone month shifts). */
+export function utcCalendarDate(
+  year: number,
+  month: number,
+  day = 1,
+): Date {
+  return new Date(Date.UTC(year, month - 1, day));
 }
 
-/** Normalize API date strings to a calendar date for Prisma `@db.Date` columns. */
+/** Parse YYYY-MM-DD (or ISO prefix) to UTC calendar date for `@db.Date` fields. */
 export function toCalendarDate(value: string): Date {
+  const s = String(value).trim();
+  const match = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    return utcCalendarDate(+match[1]!, +match[2]!, +match[3]!);
+  }
   const d = parseQueryDate(value);
   if (!d) throw new Error("Invalid date");
-  return d;
+  return utcCalendarDate(
+    d.getUTCFullYear(),
+    d.getUTCMonth() + 1,
+    d.getUTCDate(),
+  );
+}
+
+/** Calendar month for a stored `@db.Date` / book date (UTC parts — matches monthDateRangeUtc). */
+export function calendarPeriodFromDate(d: Date): { year: number; month: number } {
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
 }
 
 /** Inclusive UTC calendar month range for `@db.Date` book fields (sales/expenses). */

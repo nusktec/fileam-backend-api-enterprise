@@ -23,6 +23,13 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 /** VAT filing due: 21st of the month following the tax period (e.g. Feb period -> due Mar 21) */
 export const VAT_FILING_DAY = 21;
 
+/** Filing due date for a monthly book period (VAT/WHT/PAYE). Uses UTC calendar dates. */
+export function monthlyFilingDueDateUtc(year: number, month: number): Date {
+  const dueMonth = month === 12 ? 1 : month + 1;
+  const dueYear = month === 12 ? year + 1 : year;
+  return new Date(Date.UTC(dueYear, dueMonth - 1, VAT_FILING_DAY));
+}
+
 /**
  * Explains book-sync vs PAYE when salary is captured on the user profile.
  */

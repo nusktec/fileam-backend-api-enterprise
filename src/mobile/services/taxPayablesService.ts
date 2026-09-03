@@ -2,13 +2,14 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { taxComputationService } from "./taxComputationService";
 import {
-  VAT_FILING_DAY,
   TAX_PAYABLES_SCOPE_NOTE,
+  monthlyFilingDueDateUtc,
   type TaxType,
   type PayableStatus,
 } from "../../constants/taxPayable";
 import { citDueDateForYear, CIT_PERIOD_MONTH } from "../../constants/citFiling";
 import { pitDueDateForYear, PIT_PERIOD_MONTH } from "../../constants/pitFiling";
+import { utcCalendarDate } from "../../utils/dateRangeQuery";
 import {
   monthsInTaxRange,
   type TaxPeriodRange,
@@ -31,15 +32,19 @@ function getPaymentLink(payableId: string, storedLink: string | null): string {
 }
 
 function getMonthlyFilingDueDate(year: number, month: number): Date {
-  const nextMonth = month === 12 ? 1 : month + 1;
-  const nextYear = month === 12 ? year + 1 : year;
-  return new Date(nextYear, nextMonth - 1, VAT_FILING_DAY);
+  return monthlyFilingDueDateUtc(year, month);
 }
 
 function getAnnualFilingDueDate(taxType: TaxType, year: number): Date {
-  if (taxType === "CIT") return new Date(citDueDateForYear(year));
-  if (taxType === "PIT") return new Date(pitDueDateForYear(year));
-  return getMonthlyFilingDueDate(year, 12);
+  if (taxType === "CIT") {
+    const [y, m, d] = citDueDateForYear(year).split("-").map(Number);
+    return utcCalendarDate(y!, m!, d!);
+  }
+  if (taxType === "PIT") {
+    const [y, m, d] = pitDueDateForYear(year).split("-").map(Number);
+    return utcCalendarDate(y!, m!, d!);
+  }
+  return monthlyFilingDueDateUtc(year, 12);
 }
 
 function derivePayableStatus(
@@ -326,10 +331,17 @@ export const taxPayablesService = {
 
   async ensurePayablesForUser(userId: string, monthsBack = 12) {
     const now = new Date();
+    const anchorYear = now.getUTCFullYear();
+    const anchorMonth = now.getUTCMonth() + 1;
     const periods: Array<{ year: number; month: number }> = [];
     for (let i = 0; i <= monthsBack; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      periods.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
+      let month = anchorMonth - i;
+      let year = anchorYear;
+      while (month < 1) {
+        month += 12;
+        year -= 1;
+      }
+      periods.push({ year, month });
     }
     await this.syncPayablesForPeriods(userId, periods);
   },
@@ -357,7 +369,16 @@ export const taxPayablesService = {
         opts.periodMonth,
         range,
       );
-      await this.syncPayablesForPeriods(userId, months);
+      if (range === "month" && months.length === 1) {
+        await this.syncPeriodPayables(
+          userId,
+          opts.periodYear,
+          opts.periodMonth,
+        );
+        await this.syncAnnualTaxPayables(userId, opts.periodYear);
+      } else {
+        await this.syncPayablesForPeriods(userId, months);
+      }
       periodComputation = await taxComputationService.getForQuery(userId, {
         year: opts.periodYear,
         month: opts.periodMonth,
@@ -498,6 +519,10 @@ export const taxPayablesService = {
       taxpayerContext,
       taxPersonaGuidance,
       payablesScopeNote: TAX_PAYABLES_SCOPE_NOTE,
+      syncedBookPeriod:
+        opts?.periodYear != null && opts?.periodMonth != null
+          ? { year: opts.periodYear, month: opts.periodMonth }
+          : null,
       period: periodComputation?.period ?? null,
       totals: periodComputation
         ? totalsFromComputation(periodComputation)
