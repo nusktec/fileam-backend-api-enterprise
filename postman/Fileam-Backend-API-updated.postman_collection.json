@@ -690,7 +690,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/tax-eligibility-profile",
-                "description": "Returns professionalService, providesProfessionalServices, primaryBusinessActivity, annualGrossTurnover, totalFixedAssets, and taxEligibility (citClassification, vatClassification, messages). Profile values blend with books (sales turnover, asset purchase costs); books can push classification upward. Example: turnover ₦34M, assets ₦80M, professionalService false → CIT SMALL_COMPANY, VAT SMALL_BUSINESS."
+                "description": "Returns professionalService, providesProfessionalServices, primaryBusinessActivity, annualGrossTurnover, totalFixedAssets, and taxEligibility (citClassification, vatClassification, messages). Fixed assets: registered assets on books when present, otherwise signup totalFixedAssets. Turnover: signup annualGrossTurnover until the business is 12+ months old and has sales/expense transactions; then trailing-12-month sales. turnoverSource is profile | books | transactions."
               },
               "event": [
                 {
@@ -2004,7 +2004,7 @@
         },
         {
           "name": "Assets **",
-          "description": "Fixed assets. Summary: totalAssetValue = currentAssets + netNonCurrentAssets (+ pendingCustomerReviews). Non-current: purchaseCost, accumulatedDepreciation, netNonCurrentAssets (total = NBV). Create requires depreciationMethod: STRAIGHT_LINE | REDUCING_BALANCE | UNIT_OF_PRODUCTION (legacy DECLINING_BALANCE / UNITS_OF_PRODUCTION accepted). STRAIGHT_LINE: usefulLife + residualValue; accumulated depreciation = monthly rate × full calendar months elapsed (purchase month counts as month 1). REDUCING_BALANCE: usefulLife + depreciationRate + residualValue. UNIT_OF_PRODUCTION: totalEstimatedUnit + unitProduced + residualValue. Book value never falls below residual.",
+          "description": "Fixed assets. Summary: totalAssetValue = currentAssets + netNonCurrentAssets (+ pendingCustomerReviews). Non-current: purchaseCost, accumulatedDepreciation, netNonCurrentAssets (total = NBV). Create requires depreciationMethod: STRAIGHT_LINE | REDUCING_BALANCE | UNIT_OF_PRODUCTION (legacy DECLINING_BALANCE / UNITS_OF_PRODUCTION accepted). STRAIGHT_LINE: usefulLife + residualValue; accumulated depreciation = 0 in purchase month, then monthly rate × completed calendar months from the month after purchase. REDUCING_BALANCE: usefulLife + depreciationRate + residualValue (same purchase-month grace). UNIT_OF_PRODUCTION: totalEstimatedUnit + unitProduced + residualValue. Book value never falls below residual.",
           "item": [
             {
               "name": "Get assets summary **",
@@ -2091,7 +2091,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/depreciation-amortization",
-                "description": "Per-asset depreciation schedule. STRAIGHT_LINE: monthlyDepreciation = annual charge ÷ 12; accumulatedDepreciation = monthly × calendar months since purchase (inclusive). Also book value, remaining life, annual charge."
+                "description": "Per-asset depreciation schedule. STRAIGHT_LINE: monthlyDepreciation = annual charge ÷ 12; accumulatedDepreciation = 0 in purchase month, then monthly × completed months from next month. Also book value, remaining life, annual charge."
               }
             },
             {
@@ -2197,7 +2197,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/{{assetId}}",
-                "description": "Full asset detail with computed bookValue, monthlyDepreciation, accumulatedDepreciation (STRAIGHT_LINE uses calendar-month accumulation)."
+                "description": "Full asset detail with computed bookValue, monthlyDepreciation, accumulatedDepreciation (0 until the month after purchase)."
               }
             },
             {
@@ -2508,14 +2508,14 @@
         },
         {
           "name": "Tax Computation *",
-          "description": "GET /mobile/tax-computation?period=YYYY-MM — persona-aware estimates. paye.derivedFrom: employees (PDF 2026) | profile_gross (legacy) | none. CIT/VAT use tax eligibility profile. VAT threshold ₦100M (NTA 2025).",
+          "description": "GET /mobile/tax-computation?period=YYYY-MM&range=month|quarter|year — book-period estimates. Each block includes periodAmount for the selected range. PAYE respects employee startDate per month.",
           "item": [
             {
               "name": "Get tax computation **",
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation?period=2026-02",
-                "description": "taxpayerContext respects saved taxPersona. Blocks: vat, wht, cit, pit, paye { applicable, derivedFrom: employees|profile_gross|none, summaryMonthlyEstimate, methodology }. PAYE primary: sum of /employees (PDF 2026 formula). Legacy: employmentGrossSalaryMonthly when no employees. Official PIT/CIT: GET /mobile/filings/pit|cit/calculation."
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation?period=2026-02&range=month",
+                "description": "period=YYYY-MM (defaults to current month). range=month|quarter|year ending at period month. Response period { year, month, range, monthsIncluded, label }. Tax blocks include periodAmount (use for dashboard cards). paye.derivedFrom: employees | profile_gross | none."
               }
             }
           ]
@@ -2538,8 +2538,8 @@
               ],
               "request": {
                 "method": "GET",
-                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20&period={{bookPeriod}}&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Response includes taxpayerContext and taxPersonaGuidance. Syncs payables from books before list. Use period=YYYY-MM ({{bookPeriod}}) to filter by tax book month (What I Owe navigation); when period is set, dateFrom/dateTo are ignored. Otherwise optional dateFrom/dateTo filter by filing due date. Rows in data[]."
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20&period={{bookPeriod}}&range=month&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
+                "description": "Syncs books for filtered period before list. period=YYYY-MM + optional range=month|quarter|year. Returns period, totals { vat, wht, cit, pit, paye, total }, and data[] rows. When period is set, dateFrom/dateTo are ignored."
               }
             },
             {
@@ -3062,7 +3062,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/calculation?year={{filingYear}}",
-                "description": "Honours draft adjustments and prior-year carry (CA b/f, loss b/f, unused WHT). Returns priorYearCarry, frozen when workspace confirmed."
+                "description": "Honours draft adjustments and prior-year carry (CA b/f, loss b/f, unused WHT). Returns priorYearCarry, frozen when workspace confirmed. inputs.turnoverSource: profile (signup) until 12+ months with transactions, then transactions (annual sales for filing year). inputs.fixedAssetsSource: books when assets registered, else profile totalFixedAssets."
               }
             },
             {

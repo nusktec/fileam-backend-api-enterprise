@@ -7,6 +7,10 @@ import {
   type TaxType,
   type PayableStatus,
 } from "../../constants/taxPayable";
+import {
+  monthsInTaxRange,
+  type TaxPeriodRange,
+} from "../../utils/taxPeriodQuery";
 
 const PAYMENT_BASE_URL =
   process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
@@ -62,29 +66,56 @@ function periodKey(year: number, month: number): string {
 }
 
 function amountsFromComputation(
-  computation: Awaited<ReturnType<typeof taxComputationService.getForPeriod>>,
+  computation: Awaited<ReturnType<typeof taxComputationService.getForQuery>>,
 ): Array<{ taxType: TaxType; amountDue: number }> {
+  const flags = computation.taxPersonaGuidance.applicableTaxes;
   return [
-    { taxType: "VAT", amountDue: Math.max(0, computation.vat.netVatPayable) },
+    {
+      taxType: "VAT",
+      amountDue: flags.vat
+        ? Math.max(0, computation.vat.periodAmount)
+        : 0,
+    },
     {
       taxType: "WHT",
-      amountDue: Math.max(0, computation.wht.estimatedWhtDeducted),
+      amountDue: flags.wht
+        ? Math.max(0, computation.wht.periodAmount)
+        : 0,
     },
     {
       taxType: "CIT",
-      amountDue:
-        computation.cit.summary > 0 ? computation.cit.summary / 12 : 0,
+      amountDue: flags.cit ? Math.max(0, computation.cit.periodAmount) : 0,
     },
     {
       taxType: "PIT",
-      amountDue:
-        computation.pit.summary > 0 ? computation.pit.summary / 12 : 0,
+      amountDue: flags.pit ? Math.max(0, computation.pit.periodAmount) : 0,
     },
     {
       taxType: "PAYE",
-      amountDue: Math.max(0, computation.paye.summaryMonthlyEstimate),
+      amountDue:
+        flags.paye && computation.paye.applicable
+          ? Math.max(0, computation.paye.periodAmount)
+          : 0,
     },
   ];
+}
+
+export function totalsFromComputation(
+  computation: Awaited<ReturnType<typeof taxComputationService.getForQuery>>,
+) {
+  const byType = Object.fromEntries(
+    amountsFromComputation(computation).map((row) => [row.taxType, row.amountDue]),
+  ) as Record<TaxType, number>;
+  const total =
+    byType.VAT + byType.WHT + byType.CIT + byType.PIT + byType.PAYE;
+  return {
+    vat: byType.VAT,
+    wht: byType.WHT,
+    cit: byType.CIT,
+    pit: byType.PIT,
+    paye: byType.PAYE,
+    total,
+  };
 }
 
 export const taxPayablesService = {
@@ -216,9 +247,30 @@ export const taxPayablesService = {
       dateTo?: Date;
       periodYear?: number;
       periodMonth?: number;
+      range?: TaxPeriodRange;
     },
   ) {
-    await this.ensurePayablesForUser(userId);
+    const range = opts?.range ?? "month";
+    let periodComputation: Awaited<
+      ReturnType<typeof taxComputationService.getForQuery>
+    > | null = null;
+
+    if (opts?.periodYear != null && opts?.periodMonth != null) {
+      const months = monthsInTaxRange(
+        opts.periodYear,
+        opts.periodMonth,
+        range,
+      );
+      await this.syncPayablesForPeriods(userId, months);
+      periodComputation = await taxComputationService.getForQuery(userId, {
+        year: opts.periodYear,
+        month: opts.periodMonth,
+        range,
+      });
+    } else {
+      await this.ensurePayablesForUser(userId);
+    }
+
     const where: {
       userId: string;
       status?: string;
@@ -226,14 +278,28 @@ export const taxPayablesService = {
       filingDueDate?: { gte?: Date; lte?: Date };
       periodYear?: number;
       periodMonth?: number;
+      OR?: Array<{ periodYear: number; periodMonth: number }>;
     } = {
       userId,
     };
     if (filters?.status) where.status = filters.status;
     if (filters?.taxType) where.taxType = filters.taxType;
+
     if (opts?.periodYear != null && opts?.periodMonth != null) {
-      where.periodYear = opts.periodYear;
-      where.periodMonth = opts.periodMonth;
+      const months = monthsInTaxRange(
+        opts.periodYear,
+        opts.periodMonth,
+        range,
+      );
+      if (months.length === 1) {
+        where.periodYear = opts.periodYear;
+        where.periodMonth = opts.periodMonth;
+      } else {
+        where.OR = months.map((m) => ({
+          periodYear: m.year,
+          periodMonth: m.month,
+        }));
+      }
     } else if (opts?.dateFrom || opts?.dateTo) {
       where.filingDueDate = {};
       if (opts.dateFrom) where.filingDueDate.gte = opts.dateFrom;
@@ -284,6 +350,10 @@ export const taxPayablesService = {
       taxpayerContext,
       taxPersonaGuidance,
       payablesScopeNote: TAX_PAYABLES_SCOPE_NOTE,
+      period: periodComputation?.period ?? null,
+      totals: periodComputation
+        ? totalsFromComputation(periodComputation)
+        : null,
       data,
       total,
       page,

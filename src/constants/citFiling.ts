@@ -230,6 +230,7 @@ export function computeCitFromSnapshot(
     companyName: string;
     businessType?: string | null;
     sector?: string | null;
+    providesProfessionalServices?: boolean;
     allowances?: CitAllowanceRow[];
   } & CitAdjustmentsInput,
 ): CitComputationSnapshot {
@@ -238,6 +239,7 @@ export function computeCitFromSnapshot(
     fixedAssets: input.fixedAssets,
     businessType: input.businessType,
     sector: input.sector,
+    providesProfessionalServices: input.providesProfessionalServices,
   });
 
   const fines = Math.max(0, input.fines ?? 0);

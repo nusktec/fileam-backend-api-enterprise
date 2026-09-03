@@ -19,6 +19,11 @@ import { VAT_CLASSIFICATION } from "../../constants/taxEligibility";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { buildTaxEligibilityProfileForUser } from "./taxEligibilityService";
+import {
+  monthsInTaxRange,
+  taxPeriodLabel,
+  type TaxPeriodRange,
+} from "../../utils/taxPeriodQuery";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -196,7 +201,9 @@ export const taxComputationService = {
       period: {
         year,
         month,
-        label: `${new Date(year, month - 1).toLocaleString("default", { month: "long" })} ${year}`,
+        range: "month" as TaxPeriodRange,
+        monthsIncluded: 1,
+        label: taxPeriodLabel(year, month, "month"),
       },
       overview: {
         totalIncome,
@@ -205,6 +212,7 @@ export const taxComputationService = {
       },
       vat: {
         summary: normalizeMoneyAmount(netVatPayable),
+        periodAmount: normalizeMoneyAmount(netVatPayable),
         belowThreshold: vatBelowThreshold,
         vatClassification: taxProfile?.taxEligibility.vatClassification ?? null,
         income: normalizeMoneyAmount(totalIncome),
@@ -217,12 +225,14 @@ export const taxComputationService = {
       },
       wht: {
         summary: estimatedWhtDeducted,
+        periodAmount: estimatedWhtDeducted,
         serviceIncome,
         whtRateServices: WHT_RATE_SERVICES_PERCENT,
         estimatedWhtDeducted,
       },
       cit: {
         summary: normalizeMoneyAmount(citEstimate.totalCitLiability),
+        periodAmount: normalizeMoneyAmount(citEstimate.totalCitLiability / 12),
         isSmallCompany: citEstimate.isSmallCompany,
         citClassification: taxProfile?.taxEligibility.citClassification ?? null,
         taxClassLabel: citEstimate.taxClassLabel,
@@ -244,6 +254,7 @@ export const taxComputationService = {
       },
       pit: {
         summary: pitFromBooks.estimatedAnnualPitNgn,
+        periodAmount: pitFromBooks.estimatedAnnualPitNgn / 12,
         monthlyProfit,
         annualizedProfit,
         chargeableIncomeProxyAnnual: pitFromBooks.chargeableIncomeProxyAnnualNgn,
@@ -260,10 +271,11 @@ export const taxComputationService = {
         employmentGrossSalaryMonthlyCaptured:
           salaryMonthlyCaptured > 0 ? salaryMonthlyCaptured : null,
         summaryMonthlyEstimate: payeMonthlyEstimate,
+        periodAmount: payeMonthlyEstimate,
         summaryAnnualEstimate: payeAnnualEstimate,
         methodology:
           payeDerivedFrom === "employees"
-            ? "PAYE from employee salary components (AGI = 12×[basic+housing+transport+meal+allowances+other income]; pension on basic+housing+transport; NHF 2.5% of basic; NHIS monthly×12; rent relief min(20%×rent, ₦500k); progressive 2026 bands)."
+            ? "PAYE from employee salary components (AGI = 12×[basic+housing+transport+meal+otherAllowances]; pension on basic+housing+transport; NHF 2.5% of basic; NHIS/life/mortgage monthly×12; rent relief min(20%×annual rent, ₦500k); progressive 2026 bands). Only employees active in this period are included."
             : payeDerivedFrom === "profile_gross"
               ? "Legacy profile gross only — add Employees with full salary breakdown for strict PDF PAYE. Approximate: treats profile gross as basic for pension/NHF."
               : flags.paye
@@ -278,6 +290,100 @@ export const taxComputationService = {
           ? "Local/trade levies vary by state and LGA; amounts are not estimated from books in this release."
           : "Not emphasized for your current tax persona.",
       },
+    };
+  },
+
+  /** Period-aware computation for dashboard / payables (month, quarter, or year ending at anchor month). */
+  async getForQuery(
+    userId: string,
+    opts: { year: number; month: number; range?: TaxPeriodRange },
+  ) {
+    const range = opts.range ?? "month";
+    const months = monthsInTaxRange(opts.year, opts.month, range);
+    if (months.length === 1) {
+      return this.getForPeriod(userId, opts.year, opts.month);
+    }
+
+    const results = await Promise.all(
+      months.map((m) => this.getForPeriod(userId, m.year, m.month)),
+    );
+    const anchor = results[results.length - 1]!;
+    const sum = (pick: (c: (typeof results)[number]) => number) =>
+      results.reduce((total, c) => total + pick(c), 0);
+
+    const payeMonthlyTotal = sum((c) => c.paye.summaryMonthlyEstimate);
+    const payeDerivedFrom = results.some((c) => c.paye.derivedFrom === "employees")
+      ? ("employees" as const)
+      : results.some((c) => c.paye.derivedFrom === "profile_gross")
+        ? ("profile_gross" as const)
+        : ("none" as const);
+
+    const annualizationFactor = 12 / months.length;
+
+    return {
+      taxpayerContext: anchor.taxpayerContext,
+      taxPersonaGuidance: anchor.taxPersonaGuidance,
+      period: {
+        year: opts.year,
+        month: opts.month,
+        range,
+        monthsIncluded: months.length,
+        label: taxPeriodLabel(opts.year, opts.month, range),
+      },
+      overview: {
+        totalIncome: sum((c) => c.overview.totalIncome),
+        totalExpenses: sum((c) => c.overview.totalExpenses),
+        netProfit: sum((c) => c.overview.netProfit),
+      },
+      vat: {
+        ...anchor.vat,
+        summary: normalizeMoneyAmount(sum((c) => c.vat.netVatPayable)),
+        periodAmount: normalizeMoneyAmount(sum((c) => c.vat.netVatPayable)),
+        income: normalizeMoneyAmount(sum((c) => c.vat.income)),
+        outputVat: normalizeMoneyAmount(sum((c) => c.vat.outputVat)),
+        inputVatClaimable: normalizeMoneyAmount(
+          sum((c) => c.vat.inputVatClaimable),
+        ),
+        netVatPayable: normalizeMoneyAmount(sum((c) => c.vat.netVatPayable)),
+        belowThreshold: results.every((c) => c.vat.belowThreshold),
+      },
+      wht: {
+        summary: sum((c) => c.wht.estimatedWhtDeducted),
+        periodAmount: sum((c) => c.wht.estimatedWhtDeducted),
+        serviceIncome: sum((c) => c.wht.serviceIncome),
+        whtRateServices: anchor.wht.whtRateServices,
+        estimatedWhtDeducted: sum((c) => c.wht.estimatedWhtDeducted),
+      },
+      cit: {
+        ...anchor.cit,
+        summary: normalizeMoneyAmount(
+          sum((c) => c.cit.totalCitLiability / 12),
+        ),
+        periodAmount: normalizeMoneyAmount(
+          sum((c) => c.cit.totalCitLiability / 12),
+        ),
+        monthlyProfit: sum((c) => c.cit.monthlyProfit),
+        annualizedProfit: sum((c) => c.cit.monthlyProfit) * annualizationFactor,
+        annualizedTurnover:
+          sum((c) => c.vat.income) * annualizationFactor,
+      },
+      pit: {
+        ...anchor.pit,
+        summary: sum((c) => c.pit.summary / 12),
+        periodAmount: sum((c) => c.pit.summary / 12),
+        monthlyProfit: sum((c) => c.pit.monthlyProfit),
+        annualizedProfit: sum((c) => c.pit.monthlyProfit) * annualizationFactor,
+        estimatedAnnualPit:
+          sum((c) => c.pit.summary / 12) * annualizationFactor,
+      },
+      paye: {
+        ...anchor.paye,
+        derivedFrom: payeDerivedFrom,
+        summaryMonthlyEstimate: payeMonthlyTotal,
+        periodAmount: payeMonthlyTotal,
+        summaryAnnualEstimate: payeMonthlyTotal * annualizationFactor,
+      },
+      localGovLevies: anchor.localGovLevies,
     };
   },
 };

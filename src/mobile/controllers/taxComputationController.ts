@@ -4,6 +4,11 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { taxComputationService } from "../services/taxComputationService";
+import {
+  parseTaxPeriodRange,
+  resolveTaxPeriod,
+  TAX_PERIOD_RANGES,
+} from "../../utils/taxPeriodQuery";
 
 export const getTaxComputation = async (
   req: IRequest,
@@ -11,20 +16,27 @@ export const getTaxComputation = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const period = (req.query.period as string) || "";
-    const match = period.match(/^(\d{4})-(\d{2})$/);
-    const now = new Date();
-    const year = match ? parseInt(match[1], 10) : now.getFullYear();
-    const month = match ? parseInt(match[2], 10) : now.getMonth() + 1;
-    if (month < 1 || month > 12) {
+    const range = parseTaxPeriodRange(req.query.range);
+    if (
+      req.query.range &&
+      !TAX_PERIOD_RANGES.includes(
+        String(req.query.range).trim().toLowerCase() as (typeof TAX_PERIOD_RANGES)[number],
+      )
+    ) {
       res
         .status(HttpStatusCode.BAD_REQUEST)
         .json(
-          outJson(false, "Invalid period. Use YYYY-MM (e.g. 2026-02)", null),
+          outJson(false, "Invalid range. Use month, quarter, or year.", null),
         );
       return;
     }
-    const data = await taxComputationService.getForPeriod(userId, year, month);
+
+    const { year, month } = resolveTaxPeriod(req.query.period);
+    const data = await taxComputationService.getForQuery(userId, {
+      year,
+      month,
+      range,
+    });
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Tax computation retrieved", data));

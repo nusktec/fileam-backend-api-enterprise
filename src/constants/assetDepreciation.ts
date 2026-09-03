@@ -52,7 +52,7 @@ function yearsBetween(from: Date, to: Date): number {
   return Math.max(0, (to.getTime() - from.getTime()) / (MS_PER_DAY * DAYS_PER_YEAR));
 }
 
-/** Calendar months from purchase month through asOf month (inclusive). */
+/** Calendar months from start month through asOf month (inclusive). */
 function calendarMonthsInclusive(from: Date, to: Date): number {
   if (to.getTime() < from.getTime()) return 0;
   const fromYear = from.getUTCFullYear();
@@ -60,6 +60,13 @@ function calendarMonthsInclusive(from: Date, to: Date): number {
   const toYear = to.getUTCFullYear();
   const toMonth = to.getUTCMonth();
   return (toYear - fromYear) * 12 + (toMonth - fromMonth) + 1;
+}
+
+/** Depreciation starts the month after purchase (accumulated stays 0 in purchase month). */
+function depreciationStartMonth(purchaseDate: Date): Date {
+  return new Date(
+    Date.UTC(purchaseDate.getUTCFullYear(), purchaseDate.getUTCMonth() + 1, 1),
+  );
 }
 
 function computeStraightLine(
@@ -78,7 +85,7 @@ function computeStraightLine(
   const totalMonths = usefulLife * 12;
   const monthsElapsed = Math.min(
     totalMonths,
-    calendarMonthsInclusive(purchaseDate, asOf),
+    calendarMonthsInclusive(depreciationStartMonth(purchaseDate), asOf),
   );
   const accumulatedDepreciation = normalizeMoneyAmount(
     Math.min(depreciable, Math.max(0, monthlyDepreciation * monthsElapsed)),
@@ -116,7 +123,24 @@ function computeReducingBalance(
   }
 
   const rate = ratePercent / PERCENT;
-  const yearsElapsed = yearsBetween(purchaseDate, asOf);
+  const depStart = depreciationStartMonth(purchaseDate);
+  if (asOf.getTime() < depStart.getTime()) {
+    const annualFromCost = normalizeMoneyAmount(
+      Math.min(cost - residual, cost * rate),
+    );
+    return {
+      annualDepreciation: annualFromCost,
+      monthlyDepreciation: normalizeMoneyAmount(annualFromCost / 12),
+      accumulatedDepreciation: 0,
+      bookValue: cost,
+      remainingUsefulLife: usefulLife,
+      depreciationPercentage: ratePercent,
+      depreciationPerUnit: null,
+      method: "REDUCING_BALANCE",
+    };
+  }
+
+  const yearsElapsed = yearsBetween(depStart, asOf);
   const fullYears = Math.floor(yearsElapsed);
   const fraction = yearsElapsed - fullYears;
 

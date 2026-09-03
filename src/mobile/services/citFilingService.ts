@@ -8,6 +8,7 @@ import {
   computeCitFromSnapshot,
   CIT_PERIOD_MONTH,
   isCitYearOpenForFiling,
+  isProfessionalServicesBusiness,
   type CitComputationSnapshot,
 } from "../../constants/citFiling";
 import { PERCENT, WHT_RATE_SERVICES_PERCENT } from "../../constants/percentages";
@@ -15,6 +16,7 @@ import { isFinalWhtPayerCategory, normalizePayerCategory } from "../../constants
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
+import { businessProfileMoneyToNumber } from "../../constants/businessProfile";
 import { assetsService } from "./assetsService";
 import { evidenceVaultService } from "./evidenceVaultService";
 import { taxComputationService } from "./taxComputationService";
@@ -25,6 +27,12 @@ import {
   copyCarryForwardOnSubmit,
   getCitPriorYearCarry,
 } from "./filingCarryForwardService";
+import { resolveCitClassificationInputsForYear } from "./citClassificationInputsService";
+import {
+  normalizeProvidesProfessionalServices,
+  normalizePrimaryBusinessActivity,
+  resolveProvidesProfessionalServices,
+} from "../../constants/taxEligibility";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -45,7 +53,7 @@ async function sumAnnualTurnoverAndProfit(
     const [sales, expenses] = await Promise.all([
       prisma.sale.findMany({
         where: { userId, saleDate: { gte: start, lte: end } },
-        select: { amount: true },
+        select: { amount: true, totalAmount: true },
       }),
       prisma.expense.findMany({
         where: { userId, expenseDate: { gte: start, lte: end } },
@@ -53,8 +61,9 @@ async function sumAnnualTurnoverAndProfit(
       }),
     ]);
     const income = sales.reduce((s, x) => s + d(x.amount), 0);
+    const grossSales = sales.reduce((s, x) => s + d(x.totalAmount), 0);
     const exp = expenses.reduce((s, x) => s + d(x.amount), 0);
-    turnover += income;
+    turnover += grossSales;
     accountingProfit += income - exp;
   }
   return {
@@ -110,7 +119,12 @@ async function buildCapitalAllowanceSchedule(userId: string, year: number) {
 
 function validateSubmitBody(
   body: Record<string, unknown>,
-  business?: { businessType: string | null; sector: string | null } | null,
+  business?: {
+    businessType: string | null;
+    sector: string | null;
+    providesProfessionalServices: string | null;
+    primaryBusinessActivity: string | null;
+  } | null,
 ): CitComputationSnapshot {
   const periodYear = Number(body.periodYear);
   const rcNumber = String(body.rcNumber ?? "").trim();
@@ -180,6 +194,18 @@ function validateSubmitBody(
     companyName: String(computation.companyName ?? body.companyName ?? ""),
     businessType: business?.businessType ?? null,
     sector: business?.sector ?? null,
+    providesProfessionalServices: business
+      ? resolveProvidesProfessionalServices({
+          providesProfessionalServices: normalizeProvidesProfessionalServices(
+            business.providesProfessionalServices,
+          ),
+          primaryBusinessActivity: normalizePrimaryBusinessActivity(
+            business.primaryBusinessActivity,
+          ),
+          businessType: business.businessType,
+          sector: business.sector,
+        })
+      : undefined,
     allowances: computation.allowances ?? [],
   });
 
@@ -220,7 +246,6 @@ export const citFilingService = {
   async getCalculation(userId: string, year: number) {
     const [
       books,
-      nonCurrent,
       dashboard,
       caSchedule,
       payerWht,
@@ -230,7 +255,6 @@ export const citFilingService = {
       priorCarry,
     ] = await Promise.all([
       sumAnnualTurnoverAndProfit(userId, year),
-      assetsService.nonCurrentAssets(userId),
       assetsService.dashboard(userId),
       buildCapitalAllowanceSchedule(userId, year),
       sumPayerWhtCredits(userId),
@@ -292,6 +316,10 @@ export const citFilingService = {
       year,
       month,
     );
+    const classificationInputs = await resolveCitClassificationInputsForYear(
+      userId,
+      year,
+    );
     const booksWht = normalizeMoneyAmount(
       (taxComp.wht.estimatedWhtDeducted / Math.max(1, month)) * 12,
     );
@@ -299,11 +327,23 @@ export const citFilingService = {
       books.accountingProfit > 0
         ? books.accountingProfit
         : taxComp.cit.annualizedProfit;
-    const turnover =
-      books.turnover > 0
-        ? books.turnover
-        : normalizeMoneyAmount((taxComp.overview.totalIncome / month) * 12);
-    const fixedAssets = nonCurrent.purchaseCost;
+    const turnover = classificationInputs?.turnover ?? books.turnover;
+    const fixedAssets = classificationInputs?.fixedAssets ?? 0;
+    const providesProfessional = business
+      ? resolveProvidesProfessionalServices({
+          providesProfessionalServices: normalizeProvidesProfessionalServices(
+            business.providesProfessionalServices,
+          ),
+          primaryBusinessActivity: normalizePrimaryBusinessActivity(
+            business.primaryBusinessActivity,
+          ),
+          businessType: business.businessType,
+          sector: business.sector,
+        })
+      : isProfessionalServicesBusiness(
+          profile?.businessType,
+          profile?.sector,
+        );
     const depreciation =
       adjustments.depreciation ??
       (dashboard.plImpact.annualDepreciationCharge ||
@@ -339,6 +379,7 @@ export const citFilingService = {
       companyName: profile?.businessName?.trim() ?? "",
       businessType: business?.businessType ?? profile?.businessType ?? null,
       sector: business?.sector ?? profile?.sector ?? null,
+      providesProfessionalServices: providesProfessional,
       allowances: caSchedule.allowances,
     });
 
@@ -358,6 +399,19 @@ export const citFilingService = {
       inputs: {
         turnover,
         fixedAssets,
+        turnoverSource: classificationInputs?.turnoverSource ?? "profile",
+        fixedAssetsSource: classificationInputs?.fixedAssetsSource ?? "profile",
+        usesTransactionTurnover:
+          classificationInputs?.usesTransactionTurnover ?? false,
+        businessMonthsElapsed:
+          classificationInputs?.businessMonthsElapsed ?? 0,
+        profileTurnover: businessProfileMoneyToNumber(
+          business?.annualGrossTurnover,
+        ),
+        profileFixedAssets: businessProfileMoneyToNumber(
+          business?.totalFixedAssets,
+        ),
+        booksTurnover: books.turnover,
         accountingProfit,
         depreciation,
         capitalAllowancesAvailable,

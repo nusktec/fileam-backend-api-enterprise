@@ -162,7 +162,7 @@ export type TaxEligibilityResult = {
     annualGrossTurnover: number;
     totalFixedAssets: number;
     providesProfessionalServicesResolved: boolean;
-    turnoverSource: "profile" | "books" | "blended";
+    turnoverSource: "profile" | "books" | "blended" | "transactions";
     fixedAssetsSource: "profile" | "books" | "blended";
   };
   citClassification: CitClassification;
@@ -300,7 +300,7 @@ function vatMessages(
 
 export function computeTaxEligibility(
   input: TaxEligibilityInputs & {
-    turnoverSource?: "profile" | "books" | "blended";
+    turnoverSource?: "profile" | "books" | "blended" | "transactions";
     fixedAssetsSource?: "profile" | "books" | "blended";
   },
 ): TaxEligibilityResult {
