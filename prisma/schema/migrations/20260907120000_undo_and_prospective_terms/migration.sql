@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS "payroll_period_snapshots" (
 CREATE UNIQUE INDEX IF NOT EXISTS "payroll_period_snapshots_employee_id_period_key_key" ON "payroll_period_snapshots"("employee_id", "period_key");
 CREATE INDEX IF NOT EXISTS "payroll_period_snapshots_user_id_period_key_idx" ON "payroll_period_snapshots"("user_id", "period_key");
 ALTER TABLE "payroll_period_snapshots" DROP CONSTRAINT IF EXISTS "payroll_period_snapshots_user_id_fkey";
-ALTER TABLE "payroll_period_snapshots" ADD CONSTRAINT "payroll_period_snapshots_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "payroll_period_snapshots" ADD CONSTRAINT "payroll_period_snapshots_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "payroll_period_snapshots" DROP CONSTRAINT IF EXISTS "payroll_period_snapshots_employee_id_fkey";
 ALTER TABLE "payroll_period_snapshots" ADD CONSTRAINT "payroll_period_snapshots_employee_id_fkey" FOREIGN KEY ("employee_id") REFERENCES "employees"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
