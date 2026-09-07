@@ -19,6 +19,14 @@ import {
   createAssetDisposal,
   listAssetDisposals,
   updateAssetDisposal,
+  getAssetUndoCheck,
+  undoAsset,
+  getAssetSaleUndoCheck,
+  undoAssetSale,
+  getAssetDisposalUndoCheck,
+  undoAssetDisposal,
+  getAssetTransferUndoCheck,
+  undoAssetTransfer,
 } from "../controllers/assetsController";
 import {
   listAssetReviews,
@@ -44,6 +52,12 @@ import {
   validateCreateDisposal,
   validateUpdateDisposal,
 } from "../../middlewares/validations/assetsValidation";
+import {
+  assetDisposalUndoValidation,
+  assetSaleUndoValidation,
+  assetTransferUndoValidation,
+  assetUndoValidation,
+} from "../../middlewares/validations/recordUndoValidation";
 import {
   uploadMultiple,
   handleUploadError,
@@ -99,6 +113,14 @@ router.post(
   createAssetTransfer,
 );
 router.get("/transfers", withPagination(), listAssetTransfers);
+router.get("/transfers/:id/undo", validateIdParam, getAssetTransferUndoCheck);
+router.post(
+  "/transfers/:id/undo",
+  validateIdParam,
+  express.json(),
+  assetTransferUndoValidation,
+  undoAssetTransfer,
+);
 router.patch(
   "/transfers/:id",
   validateIdParam,
@@ -119,6 +141,14 @@ router.post(
 
 router.post("/sales", express.json(), validateCreateSale, createAssetSale);
 router.get("/sales", withPagination(), listAssetSales);
+router.get("/sales/:id/undo", validateIdParam, getAssetSaleUndoCheck);
+router.post(
+  "/sales/:id/undo",
+  validateIdParam,
+  express.json(),
+  assetSaleUndoValidation,
+  undoAssetSale,
+);
 
 router.post(
   "/disposals",
@@ -127,6 +157,14 @@ router.post(
   createAssetDisposal,
 );
 router.get("/disposals", withPagination(), listAssetDisposals);
+router.get("/disposals/:id/undo", validateIdParam, getAssetDisposalUndoCheck);
+router.post(
+  "/disposals/:id/undo",
+  validateIdParam,
+  express.json(),
+  assetDisposalUndoValidation,
+  undoAssetDisposal,
+);
 router.patch(
   "/disposals/:id",
   validateIdParam,
@@ -158,6 +196,14 @@ router.post(
 );
 router.post("/:id/confirm-review", validateIdParam, confirmAssetReview);
 router.post("/:id/approve-review", validateIdParam, approveAssetReview);
+router.get("/:id/undo", validateIdParam, getAssetUndoCheck);
+router.post(
+  "/:id/undo",
+  validateIdParam,
+  express.json(),
+  assetUndoValidation,
+  undoAsset,
+);
 
 router.patch(
   "/:id",

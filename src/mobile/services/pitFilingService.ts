@@ -33,7 +33,7 @@ import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { evidenceVaultService } from "./evidenceVaultService";
 import { taxComputationService } from "./taxComputationService";
-import { sumGeneratedPayeCreditForYear } from "./employersService";
+import { sumPayeCreditForYear } from "./employersService";
 import { copyCarryForwardOnSubmit } from "./filingCarryForwardService";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
 
@@ -163,7 +163,13 @@ async function aggregatePitInputs(
       );
     }
 
-    const payeCredit = sumGeneratedPayeCreditForYear(row, taxTreatment, year);
+    const payeCredit = await sumPayeCreditForYear(
+      userId,
+      row.id,
+      row,
+      taxTreatment,
+      year,
+    );
     if (taxTreatment === "PAYE" && payeCredit > 0) {
       payeCredits = normalizeMoneyAmount(payeCredits + payeCredit);
     }
@@ -242,6 +248,39 @@ async function aggregatePitInputs(
     employerWhtCredits,
     payerWhtCredits,
     payerFeesRecorded,
+  };
+}
+
+/** Monthly tax-computation PIT — uses this month's books only (annualized). */
+export async function getPitMonthlyEstimateFromBooks(
+  tradingProfitAnnualized: number,
+) {
+  const snapshot = computePitFromSnapshot({
+    tradingProfit: tradingProfitAnnualized,
+    otherBusinessIncome: 0,
+    otherPersonalIncome: 0,
+    payerFees: 0,
+    payerFeesIncludedInSales: true,
+    pensionContribution: 0,
+    nhfContribution: 0,
+    nhisContribution: 0,
+    annualRent: 0,
+    rentPeriodStart: null,
+    rentPeriodEnd: null,
+    landlordName: null,
+    landlordContact: null,
+    propertyAddress: null,
+    lifeAssurance: 0,
+    mortgageInterest: 0,
+    qualifyingMedicalExpenses: 0,
+    payeCredits: 0,
+    whtCredits: 0,
+    minimumWageExempt: false,
+  });
+  return {
+    chargeableIncome: snapshot.chargeableIncome,
+    pitLiability: snapshot.pitLiability,
+    remainingPayable: snapshot.remainingPayable,
   };
 }
 

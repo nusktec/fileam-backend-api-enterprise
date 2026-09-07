@@ -4,6 +4,11 @@ import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { payersService } from "../services/payersService";
+import { payerUndoService } from "../services/payerUndoService";
+import type {
+  PayerTransactionUndoReason,
+  PayerUndoReason,
+} from "../../constants/recordUndo";
 
 function paramId(req: IRequest, key: string): string {
   const v = req.params[key];
@@ -52,7 +57,7 @@ export const listPayers = async (req: IRequest, res: Response) => {
       locations: ["query"],
       includeOptionals: true,
     }) as {
-      status?: "ALL" | "AR_BALANCE" | "OVERDUE";
+      status?: "ALL" | "AR_BALANCE" | "OVERDUE" | "VOIDED";
       search?: string;
       page?: number;
       limit?: number;
@@ -213,5 +218,90 @@ export const listPayerDocuments = async (req: IRequest, res: Response) => {
   } catch (error) {
     if (replyError(res, error)) return;
     res.status(500).json({ error: "Failed to list documents" });
+  }
+};
+
+export const getPayerUndoCheck = async (req: IRequest, res: Response) => {
+  try {
+    ensureValid(req);
+    const userId = getAuthUserId(req);
+    const result = await payerUndoService.getPayerUndoCheck(
+      userId,
+      paramId(req, "id"),
+    );
+    if (!result) {
+      res.status(404).json({ error: "Payer not found" });
+      return;
+    }
+    res.status(200).json({ data: result });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res.status(500).json({ error: "Failed to check payer undo" });
+  }
+};
+
+export const undoPayer = async (req: IRequest, res: Response) => {
+  try {
+    ensureValid(req);
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, { locations: ["body"] }) as { reason: string };
+    const result = await payerUndoService.undoPayer(
+      userId,
+      paramId(req, "id"),
+      body.reason as PayerUndoReason,
+    );
+    if (!result) {
+      res.status(404).json({ error: "Payer not found" });
+      return;
+    }
+    res.status(200).json({ data: result });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res.status(500).json({ error: "Failed to undo payer" });
+  }
+};
+
+export const getPayerTransactionUndoCheck = async (
+  req: IRequest,
+  res: Response,
+) => {
+  try {
+    ensureValid(req);
+    const userId = getAuthUserId(req);
+    const result = await payerUndoService.getTransactionUndoCheck(
+      userId,
+      paramId(req, "id"),
+      paramId(req, "transactionId"),
+    );
+    if (!result) {
+      res.status(404).json({ error: "Transaction not found" });
+      return;
+    }
+    res.status(200).json({ data: result });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res.status(500).json({ error: "Failed to check transaction undo" });
+  }
+};
+
+export const undoPayerTransaction = async (req: IRequest, res: Response) => {
+  try {
+    ensureValid(req);
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, { locations: ["body"] }) as { reason: string };
+    const result = await payerUndoService.undoTransaction(
+      userId,
+      paramId(req, "id"),
+      paramId(req, "transactionId"),
+      body.reason as PayerTransactionUndoReason,
+    );
+    if (!result) {
+      res.status(404).json({ error: "Transaction not found" });
+      return;
+    }
+    res.status(200).json({ data: result });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res.status(500).json({ error: "Failed to undo transaction" });
   }
 };

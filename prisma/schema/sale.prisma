@@ -41,6 +41,12 @@ model Sale {
   settlementBankCode String? @map("settlement_bank_code")
   /** Set when Card/Transfer sale is confirmed PAID via payment-status endpoint */
   paymentConfirmedAt DateTime? @map("payment_confirmed_at")
+  /** Linked inventory sale when created from inventory sell. */
+  inventorySaleId String? @unique @map("inventory_sale_id")
+  undoAt         DateTime? @map("undo_at")
+  undoReason     String?   @map("undo_reason")
+  reversingEntryId String? @map("reversing_entry_id")
+  reversingEntryDate DateTime? @map("reversing_entry_date") @db.Date
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

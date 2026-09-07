@@ -5,9 +5,11 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { expensesService } from "../services/expensesService";
+import { expenseUndoService } from "../services/expenseUndoService";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { resolveSupplierFields } from "../../utils/directoryResolver";
 import { monetaryAmountLimitMessage } from "../../utils/monetaryAmount";
+import type { ExpenseUndoReason } from "../../constants/recordUndo";
 import { normalizeExpenseClass, type ExpenseClass } from "../../constants/expenseClass";
 
 function replyExpenseError(res: Response, error: unknown): boolean {
@@ -37,6 +39,7 @@ export const listExpenses = async (
     const userId = getAuthUserId(req);
     const pagination = req.pagination;
     const classFilter = req.query.class as string | undefined;
+    const status = (req.query.status as string) || "all";
     let expenseClass: ExpenseClass | undefined;
     if (classFilter?.trim()) {
       expenseClass = normalizeExpenseClass(classFilter.trim()) ?? undefined;
@@ -53,7 +56,7 @@ export const listExpenses = async (
         return;
       }
     }
-    const data = await expensesService.list(userId, {
+    const data = await expensesService.list(userId, status, {
       page: pagination?.page,
       limit: pagination?.limit,
       sortOrder: pagination?.sortOrder,
@@ -406,5 +409,66 @@ export const deleteExpense = async (
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to delete expense", null));
+  }
+};
+
+export const getExpenseUndoCheck = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const expenseId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const result = await expenseUndoService.getUndoCheck(userId, expenseId!);
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Expense not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Expense undo check", result));
+  } catch (error) {
+    if (replyExpenseError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check expense undo", null));
+  }
+};
+
+export const undoExpense = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const expenseId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const body = matchedData(req, { locations: ["body"] }) as {
+      reason: string;
+    };
+    const result = await expenseUndoService.undo(
+      userId,
+      expenseId!,
+      body.reason as ExpenseUndoReason,
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Expense not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Expense undone", result));
+  } catch (error) {
+    if (replyExpenseError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo expense", null));
   }
 };

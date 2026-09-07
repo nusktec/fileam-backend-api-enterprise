@@ -17,6 +17,15 @@ import {
 } from "../../constants/payrollObligations";
 import { isContractorEmployment } from "../../constants/employmentTypes";
 import { PERCENT, WHT_RATE_SERVICES_PERCENT } from "../../constants/percentages";
+import { computeEmployeeTaxComputation } from "./employeeTaxComputation";
+import {
+  employeeStartMonthKey,
+  employeeTermsFieldsChanged,
+  insertEmployeeTerms,
+  invalidateOpenEmployeeSnapshotsFrom,
+  resolveEffectiveMonth,
+  resolveEmployeePeriodAmounts,
+} from "./prospectiveTermsService";
 
 const EMPLOYEE_COUNTER_ID = "employee_id";
 
@@ -192,8 +201,14 @@ export async function computeTotalMonthlyPayeForUser(
   let total = 0;
   for (const e of employees) {
     if (isContractorEmployment(e.employmentType)) continue;
-    if (!isEmployeeActiveInPayrollPeriod(e.startDate, periodKey)) continue;
-    total += computePayeForEmployee(e, { nhfApplicable });
+    const amounts = await resolveEmployeePeriodAmounts(
+      userId,
+      e.id,
+      periodKey,
+      nhfApplicable,
+      e.startDate,
+    );
+    if (amounts) total += amounts.paye;
   }
   return total;
 }
@@ -331,6 +346,18 @@ export const employeesService = {
     const pensionEmployer = contractor ? 0 : computePensionEmployer(pensionable);
     const net = computeEmployeeMonthlyNetPay(e, { nhfApplicable });
     const totalMonthlyCost = gross + pensionEmployer;
+    const taxRelief = taxReliefPayload(e);
+    const taxComputation = computeEmployeeTaxComputation({
+      basicSalary: basic,
+      housingAllowance: decimalToNumber(e.housingAllowance),
+      transportAllowance: decimalToNumber(e.transportAllowance),
+      mealAllowance: decimalToNumber(e.mealAllowance),
+      otherAllowances: decimalToNumber(e.otherAllowances),
+      nhf: e.nhf,
+      nhfApplicable,
+      taxRelief,
+      deductions: { pensionEmployee: pensionEmp, nhf, paye },
+    });
     return {
       id: e.id,
       fullName: e.fullName,
@@ -342,7 +369,8 @@ export const employeesService = {
       tin: e.tin,
       pensionRsa: e.pensionRsa,
       pfa: e.pfa ?? null,
-      taxRelief: taxReliefPayload(e),
+      taxRelief,
+      taxComputation,
       salaryStructure: {
         basicSalary: basic,
         housingAllowance: decimalToNumber(e.housingAllowance),
@@ -423,6 +451,11 @@ export const employeesService = {
         startDate,
       },
     });
+    await insertEmployeeTerms(
+      employee.id,
+      employeeStartMonthKey(startDate),
+      employee,
+    );
     return this.getById(userId, employee.id);
   },
 
@@ -505,10 +538,25 @@ export const employeesService = {
       return this.getById(userId, employeeId);
     }
 
-    await prisma.employee.update({
+    const termsChanged = employeeTermsFieldsChanged(existing, data);
+    const effectiveMonth = termsChanged
+      ? await resolveEffectiveMonth(userId, { employeeId })
+      : null;
+
+    const updated = await prisma.employee.update({
       where: { id: employeeId },
       data: updateData,
     });
+
+    if (termsChanged && effectiveMonth) {
+      await insertEmployeeTerms(employeeId, effectiveMonth, updated);
+      await invalidateOpenEmployeeSnapshotsFrom(
+        userId,
+        employeeId,
+        effectiveMonth,
+      );
+    }
+
     return this.getById(userId, employeeId);
   },
 

@@ -21,6 +21,9 @@ model Beneficiary {
   remitted            Decimal  @default(0) @map("remitted") @db.Decimal(14, 2)
   lastTransactionDate String?  @map("last_transaction_date")
   whtDueDate          String?  @map("wht_due_date")
+  voided              Boolean  @default(false)
+  undoAt              DateTime? @map("undo_at")
+  undoReason          String?   @map("undo_reason")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
@@ -51,6 +54,10 @@ model BeneficiaryTransaction {
   whtAmount         Decimal  @map("wht_amount") @db.Decimal(14, 2)
   netPayable        Decimal  @map("net_payable") @db.Decimal(14, 2)
   status            String
+  undoAt            DateTime? @map("undo_at")
+  undoReason        String?   @map("undo_reason")
+  reversingEntryId  String?   @map("reversing_entry_id")
+  reversingEntryDate DateTime? @map("reversing_entry_date") @db.Date
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 

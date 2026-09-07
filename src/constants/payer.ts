@@ -27,7 +27,12 @@ export type PayerBeneficiaryType = (typeof PAYER_BENEFICIARY_TYPES)[number];
 export const PAYER_STATUSES = ["OVERDUE", "AR_BALANCE", "CLEARED"] as const;
 export type PayerStatus = (typeof PAYER_STATUSES)[number];
 
-export const PAYER_LIST_FILTERS = ["ALL", "AR_BALANCE", "OVERDUE"] as const;
+export const PAYER_LIST_FILTERS = [
+  "ALL",
+  "AR_BALANCE",
+  "OVERDUE",
+  "VOIDED",
+] as const;
 export type PayerListFilter = (typeof PAYER_LIST_FILTERS)[number];
 
 export const PAYER_TRANSACTION_STATUSES = [

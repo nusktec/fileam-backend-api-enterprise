@@ -9,6 +9,10 @@ import {
   listBeneficiaries,
   remitBeneficiaryWht,
   updateBeneficiary,
+  getBeneficiaryUndoCheck,
+  undoBeneficiary,
+  getBeneficiaryTransactionUndoCheck,
+  undoBeneficiaryTransaction,
 } from "../controllers/beneficiariesController";
 import {
   beneficiaryIdParamValidation,
@@ -20,6 +24,10 @@ import {
   remitBeneficiaryWhtValidation,
   updateBeneficiaryValidation,
 } from "../../middlewares/validations/beneficiaryValidation";
+import {
+  beneficiaryTransactionUndoValidation,
+  beneficiaryUndoValidation,
+} from "../../middlewares/validations/recordUndoValidation";
 
 const router = express.Router();
 
@@ -28,6 +36,14 @@ router.use(authenticate(), requireOnboardingComplete);
 router.get("/", listBeneficiariesValidation, listBeneficiaries);
 router.post("/", express.json(), createBeneficiaryValidation, createBeneficiary);
 router.get("/:id", beneficiaryIdParamValidation, getBeneficiary);
+router.get("/:id/undo", beneficiaryIdParamValidation, getBeneficiaryUndoCheck);
+router.post(
+  "/:id/undo",
+  beneficiaryIdParamValidation,
+  express.json(),
+  beneficiaryUndoValidation,
+  undoBeneficiary,
+);
 router.patch(
   "/:id",
   express.json(),
@@ -39,6 +55,18 @@ router.post(
   express.json(),
   createBeneficiaryTransactionValidation,
   createBeneficiaryTransaction,
+);
+router.get(
+  "/:id/transactions/:transactionId/undo",
+  beneficiaryTransactionIdParamValidation,
+  getBeneficiaryTransactionUndoCheck,
+);
+router.post(
+  "/:id/transactions/:transactionId/undo",
+  beneficiaryTransactionIdParamValidation,
+  express.json(),
+  beneficiaryTransactionUndoValidation,
+  undoBeneficiaryTransaction,
 );
 router.post(
   "/:id/transactions/:transactionId/remit",

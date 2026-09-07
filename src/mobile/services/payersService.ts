@@ -31,6 +31,11 @@ import { HttpReplyError } from "../../utils/httpReplyError";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { formatTodayYmd } from "../../constants/employer";
+import {
+  isUndoneStatus,
+  mapUndoPayload,
+  normalizeUndoTxnStatus,
+} from "../../constants/recordUndo";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -72,6 +77,10 @@ function mapTransactionRow(row: {
   notes: string | null;
   invoiceDueDate: string | null;
   invoiceAmountPaid: unknown;
+  undoAt?: Date | null;
+  undoReason?: string | null;
+  reversingEntryId?: string | null;
+  reversingEntryDate?: Date | null;
   createdAt: Date;
 }) {
   const amount = d(row.amount);
@@ -83,7 +92,7 @@ function mapTransactionRow(row: {
     date: row.date,
     invoiceNumber: row.invoiceNumber,
     amount,
-    status: row.status,
+    status: normalizeUndoTxnStatus(row.status),
     paymentType: row.paymentType,
     purpose: row.purpose,
     paymentReference: row.paymentReference,
@@ -92,6 +101,7 @@ function mapTransactionRow(row: {
     invoiceAmountPaid: paid,
     amountPaid: paid.total,
     amountRemaining: amountRemaining(amount, paid),
+    undo: mapUndoPayload(row),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -112,7 +122,7 @@ function computePayerRollups(
   let lastTransactionDate: string | null = null;
 
   for (const t of transactions) {
-    if (t.status === "VOID") continue;
+    if (isUndoneStatus(t.status)) continue;
     const amount = d(t.amount);
     totalAmount = normalizeMoneyAmount(totalAmount + amount);
     if (!lastTransactionDate || t.date > lastTransactionDate) {
@@ -204,6 +214,11 @@ function mapPayerBase(
     whtRate: Decimal;
     whtNote: string | null;
     since: string;
+    voided: boolean;
+    undoAt?: Date | null;
+    undoReason?: string | null;
+    reversingEntryId?: string | null;
+    reversingEntryDate?: Date | null;
     createdAt: Date;
     updatedAt: Date;
   },
@@ -228,6 +243,8 @@ function mapPayerBase(
     whtRate: d(payer.whtRate),
     whtNote: payer.whtNote,
     since: payer.since,
+    voided: payer.voided,
+    undo: payer.voided ? mapUndoPayload(payer) : null,
     lastTransactionDate: rollups.lastTransactionDate,
     totalAmount: rollups.totalAmount,
     arBalance: rollups.arBalance,
@@ -431,20 +448,27 @@ export const payersService = {
       enriched.push({ payer: p, rollups });
     }
 
+    const liveEnriched = enriched.filter((e) => !e.payer.voided);
+
     const summary = {
       arOutstanding: normalizeMoneyAmount(
-        enriched.reduce((s, e) => s + e.rollups.arBalance, 0),
+        liveEnriched.reduce((s, e) => s + e.rollups.arBalance, 0),
       ),
-      overdueCount: enriched.filter((e) => e.rollups.status === "OVERDUE")
+      overdueCount: liveEnriched.filter((e) => e.rollups.status === "OVERDUE")
         .length,
-      payerCount: enriched.length,
+      payerCount: liveEnriched.length,
     };
 
     let filtered = enriched;
-    if (query.status === "AR_BALANCE") {
-      filtered = enriched.filter((e) => e.rollups.arBalance > 0);
-    } else if (query.status === "OVERDUE") {
-      filtered = enriched.filter((e) => e.rollups.status === "OVERDUE");
+    if (query.status === "VOIDED") {
+      filtered = enriched.filter((e) => e.payer.voided);
+    } else {
+      filtered = enriched.filter((e) => !e.payer.voided);
+      if (query.status === "AR_BALANCE") {
+        filtered = filtered.filter((e) => e.rollups.arBalance > 0);
+      } else if (query.status === "OVERDUE") {
+        filtered = filtered.filter((e) => e.rollups.status === "OVERDUE");
+      }
     }
 
     if (query.search?.trim()) {
@@ -474,6 +498,7 @@ export const payersService = {
         entityType: payer.entityType,
         category: payer.category,
         contactPerson: payer.contactPerson,
+        voided: payer.voided,
         totalAmount: rollups.totalAmount,
         arBalance: rollups.arBalance,
         overdueAmount: rollups.overdueAmount,

@@ -5,9 +5,11 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { salesService } from "../services/salesService";
+import { saleUndoService } from "../services/saleUndoService";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { resolveCustomerFields } from "../../utils/directoryResolver";
 import { monetaryAmountLimitMessage } from "../../utils/monetaryAmount";
+import type { SaleUndoReason } from "../../constants/recordUndo";
 
 function replySaleError(res: Response, error: unknown): boolean {
   if (error instanceof HttpReplyError) {
@@ -418,5 +420,64 @@ export const deleteSale = async (
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to delete sale", null));
+  }
+};
+
+export const getSaleUndoCheck = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const saleId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const result = await saleUndoService.getUndoCheck(userId, saleId!);
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Sale not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Sale undo check", result));
+  } catch (error) {
+    if (replySaleError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check sale undo", null));
+  }
+};
+
+export const undoSale = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const saleId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    const body = matchedData(req, { locations: ["body"] }) as {
+      reason: string;
+    };
+    const result = await saleUndoService.undo(
+      userId,
+      saleId!,
+      body.reason as SaleUndoReason,
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Sale not found", null));
+      return;
+    }
+    res.status(HttpStatusCode.OK).json(outJson(true, "Sale undone", result));
+  } catch (error) {
+    if (replySaleError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo sale", null));
   }
 };

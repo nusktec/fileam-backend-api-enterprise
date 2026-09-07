@@ -1,6 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import {
+  ASSET_EVENT_STATUS,
   ASSET_ON_BOOKS_STATUSES,
   ASSET_STATUS,
   ASSET_TYPES,
@@ -45,6 +46,10 @@ import { RECEIVABLE_TYPES } from "../../constants/receivables";
 import { cashBankService } from "./cashBankService";
 import { LEDGER_ACCOUNTS } from "../../constants/ledger";
 import { ledgerService } from "../../services/ledgerService";
+import {
+  RECORD_UNDO_STATUS,
+  mapUndoPayload,
+} from "../../constants/recordUndo";
 
 export { computeAssetDepreciation, computeStraightLineDepreciation };
 
@@ -626,6 +631,70 @@ async function findOwnedTransfer(
   });
 }
 
+function buildAssetListStatusFilter(
+  status?: string,
+): string | { notIn: string[] } {
+  const normalized = status?.trim() || "all";
+  if (normalized === "all") {
+    return {
+      notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+    };
+  }
+  if (
+    normalized === RECORD_UNDO_STATUS.VOIDED ||
+    normalized === "Voided"
+  ) {
+    return RECORD_UNDO_STATUS.VOIDED;
+  }
+  if (
+    normalized === RECORD_UNDO_STATUS.REVERSED ||
+    normalized === "Reversed"
+  ) {
+    return RECORD_UNDO_STATUS.REVERSED;
+  }
+  return normalized;
+}
+
+function buildAssetEventListStatusFilter(
+  status?: string,
+): string | { notIn: string[] } {
+  const normalized = status?.trim() || "all";
+  if (normalized === "all") {
+    return { notIn: [ASSET_EVENT_STATUS.REVERSED] };
+  }
+  if (
+    normalized === RECORD_UNDO_STATUS.REVERSED ||
+    normalized === "Reversed"
+  ) {
+    return ASSET_EVENT_STATUS.REVERSED;
+  }
+  return ASSET_EVENT_STATUS.LIVE;
+}
+
+function buildAssetTransferListStatusFilter(
+  status?: string,
+): string | { notIn: string[] } {
+  const normalized = status?.trim() || "all";
+  if (normalized === "all") {
+    return {
+      notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+    };
+  }
+  if (
+    normalized === RECORD_UNDO_STATUS.VOIDED ||
+    normalized === "Voided"
+  ) {
+    return RECORD_UNDO_STATUS.VOIDED;
+  }
+  if (
+    normalized === RECORD_UNDO_STATUS.REVERSED ||
+    normalized === "Reversed"
+  ) {
+    return RECORD_UNDO_STATUS.REVERSED;
+  }
+  return normalized;
+}
+
 function mapAssetRow(
   asset: {
     id: string;
@@ -650,6 +719,10 @@ function mapAssetRow(
     assignedConsultantId?: string | null;
     consultantReviewStatus: string | null;
     status: string;
+    undoAt?: Date | null;
+    undoReason?: string | null;
+    reversingEntryId?: string | null;
+    reversingEntryDate?: Date | null;
     createdAt: Date;
     updatedAt: Date;
   },
@@ -697,6 +770,7 @@ function mapAssetRow(
     assignedConsultantId: asset.assignedConsultantId ?? null,
     consultantReviewStatus: asset.consultantReviewStatus,
     status: asset.status,
+    undo: mapUndoPayload(asset),
     createdAt: asset.createdAt.toISOString(),
     updatedAt: asset.updatedAt.toISOString(),
   };
@@ -1017,42 +1091,79 @@ export const assetsService = {
   ) {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
-    const where: {
+    const normalizedStatus = opts?.status?.trim() || "all";
+    const baseWhere: {
       userId: string;
       assetType?: string;
-      status?: string;
     } = { userId };
-    if (opts?.assetType?.trim()) where.assetType = opts.assetType.trim();
-    if (opts?.status?.trim()) where.status = opts.status.trim();
+    if (opts?.assetType?.trim()) baseWhere.assetType = opts.assetType.trim();
 
-    const [rows, total, pendingReviews] = await Promise.all([
+    const liveWhere = {
+      ...baseWhere,
+      status: {
+        notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+      },
+    };
+    const listWhere = {
+      ...baseWhere,
+      status: buildAssetListStatusFilter(normalizedStatus),
+    };
+
+    const [rows, total, pendingReviews, liveRows, counts] = await Promise.all([
       prisma.asset.findMany({
-        where,
+        where: listWhere,
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.asset.count({ where }),
+      prisma.asset.count({ where: listWhere }),
       prisma.asset.count({
         where: {
           userId,
           assignToConsultant: true,
           consultantReviewStatus: { in: [...CONSULTANT_REVIEW_OPEN_STATUSES] },
+          status: {
+            notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+          },
         },
+      }),
+      prisma.asset.findMany({ where: liveWhere }),
+      prisma.asset.groupBy({
+        by: ["status"],
+        where: baseWhere,
+        _count: true,
       }),
     ]);
 
     const now = new Date();
     const assets = rows.map((a) => mapAssetRow(a, now));
     const totalNetBookValue = normalizeMoneyAmount(
-      assets.reduce((s, a) => s + a.bookValue, 0),
+      liveRows.reduce((s, a) => s + depFromAsset(a, now).bookValue, 0),
     );
+
+    const dbCount = (s: string) =>
+      counts.find((c) => c.status === s)?._count ?? 0;
+    const liveAll =
+      counts.reduce((s, c) => {
+        if (
+          c.status === RECORD_UNDO_STATUS.VOIDED ||
+          c.status === RECORD_UNDO_STATUS.REVERSED
+        ) {
+          return s;
+        }
+        return s + c._count;
+      }, 0);
 
     return {
       summary: {
-        totalAssets: total,
+        totalAssets: liveRows.length,
         totalNetBookValue,
         pendingReviews,
+      },
+      counts: {
+        all: liveAll,
+        voided: dbCount(RECORD_UNDO_STATUS.VOIDED),
+        reversed: dbCount(RECORD_UNDO_STATUS.REVERSED),
       },
       assets,
       pagination: {
@@ -1327,12 +1438,22 @@ export const assetsService = {
   ) {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
-    const where: { userId: string; status?: string } = { userId };
-    if (opts?.status?.trim()) where.status = opts.status.trim();
+    const normalizedStatus = opts?.status?.trim() || "all";
+    const baseWhere = { userId };
+    const liveWhere = {
+      ...baseWhere,
+      status: {
+        notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+      },
+    };
+    const listWhere = {
+      ...baseWhere,
+      status: buildAssetTransferListStatusFilter(normalizedStatus),
+    };
 
-    const [rows, total] = await Promise.all([
+    const [rows, total, liveCount, counts] = await Promise.all([
       prisma.assetTransfer.findMany({
-        where,
+        where: listWhere,
         include: {
           asset: {
             select: {
@@ -1346,30 +1467,73 @@ export const assetsService = {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.assetTransfer.count({ where }),
+      prisma.assetTransfer.count({ where: listWhere }),
+      prisma.assetTransfer.count({ where: liveWhere }),
+      prisma.assetTransfer.groupBy({
+        by: ["status"],
+        where: baseWhere,
+        _count: true,
+      }),
     ]);
 
+    const dbCount = (s: string) =>
+      counts.find((c) => c.status === s)?._count ?? 0;
+
+    const mapTransfer = (t: (typeof rows)[number]) => ({
+      id: t.id,
+      transferId: t.transferCode,
+      assetId: t.asset.assetCode,
+      assetName: t.asset.assetName,
+      assetType: t.asset.assetType,
+      transferType: t.transferType,
+      status: t.status,
+      fromLocation: t.fromLocation,
+      toLocation: t.toLocation,
+      transferDate: dateToIsoDate(t.transferDate),
+      reason: t.reason,
+      undo: mapUndoPayload(t),
+    });
+
     return {
-      summary: { totalTransfers: total },
-      transfers: rows.map((t) => ({
-        id: t.id,
-        transferId: t.transferCode,
-        assetId: t.asset.assetCode,
-        assetName: t.asset.assetName,
-        assetType: t.asset.assetType,
-        transferType: t.transferType,
-        status: t.status,
-        fromLocation: t.fromLocation,
-        toLocation: t.toLocation,
-        transferDate: dateToIsoDate(t.transferDate),
-        reason: t.reason,
-      })),
+      summary: { totalTransfers: liveCount },
+      counts: {
+        all: liveCount,
+        voided: dbCount(RECORD_UNDO_STATUS.VOIDED),
+        reversed: dbCount(RECORD_UNDO_STATUS.REVERSED),
+      },
+      transfers: rows.map(mapTransfer),
       pagination: {
         page,
         limit,
         totalRecords: total,
         totalPages: Math.max(1, Math.ceil(total / limit)),
       },
+    };
+  },
+
+  async getTransferById(userId: string, transferId: string) {
+    const t = await prisma.assetTransfer.findFirst({
+      where: { id: transferId, userId },
+      include: {
+        asset: {
+          select: { assetCode: true, assetName: true, assetType: true },
+        },
+      },
+    });
+    if (!t) return null;
+    return {
+      id: t.id,
+      transferId: t.transferCode,
+      assetId: t.asset.assetCode,
+      assetName: t.asset.assetName,
+      assetType: t.asset.assetType,
+      transferType: t.transferType,
+      status: t.status,
+      fromLocation: t.fromLocation,
+      toLocation: t.toLocation,
+      transferDate: dateToIsoDate(t.transferDate),
+      reason: t.reason,
+      undo: mapUndoPayload(t),
     };
   },
 
@@ -1609,15 +1773,24 @@ export const assetsService = {
 
   async listSales(
     userId: string,
-    opts?: { page?: number; limit?: number },
+    opts?: { page?: number; limit?: number; status?: string },
   ) {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
-    const where = { userId };
+    const normalizedStatus = opts?.status?.trim() || "all";
+    const baseWhere = { userId };
+    const liveWhere = {
+      ...baseWhere,
+      status: { notIn: [ASSET_EVENT_STATUS.REVERSED] },
+    };
+    const listWhere = {
+      ...baseWhere,
+      status: buildAssetEventListStatusFilter(normalizedStatus),
+    };
 
-    const [rows, total, agg] = await Promise.all([
+    const [rows, total, liveCount, agg, counts] = await Promise.all([
       prisma.assetSale.findMany({
-        where,
+        where: listWhere,
         include: {
           asset: {
             select: { assetCode: true, assetName: true, assetType: true },
@@ -1627,37 +1800,81 @@ export const assetsService = {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.assetSale.count({ where }),
+      prisma.assetSale.count({ where: listWhere }),
+      prisma.assetSale.count({ where: liveWhere }),
       prisma.assetSale.aggregate({
-        where,
+        where: liveWhere,
         _sum: { salePrice: true },
+      }),
+      prisma.assetSale.groupBy({
+        by: ["status"],
+        where: baseWhere,
+        _count: true,
       }),
     ]);
 
+    const dbCount = (s: string) =>
+      counts.find((c) => c.status === s)?._count ?? 0;
+
+    const mapSale = (s: (typeof rows)[number]) => ({
+      id: s.id,
+      saleId: s.saleCode,
+      assetId: s.asset.assetCode,
+      assetName: s.asset.assetName,
+      assetType: s.asset.assetType,
+      buyer: s.buyer,
+      saleDate: dateToIsoDate(s.saleDate),
+      salePrice: d(s.salePrice),
+      bookValue: d(s.bookValueAtSale),
+      gainLossType: s.gainLossType,
+      gainLossAmount: d(s.gainLossAmount),
+      status: s.status,
+      undo: mapUndoPayload(s),
+    });
+
     return {
       summary: {
-        totalSales: total,
+        totalSales: liveCount,
         totalSaleValue: normalizeMoneyAmount(d(agg._sum.salePrice)),
       },
-      sales: rows.map((s) => ({
-        id: s.id,
-        saleId: s.saleCode,
-        assetId: s.asset.assetCode,
-        assetName: s.asset.assetName,
-        assetType: s.asset.assetType,
-        buyer: s.buyer,
-        saleDate: dateToIsoDate(s.saleDate),
-        salePrice: d(s.salePrice),
-        bookValue: d(s.bookValueAtSale),
-        gainLossType: s.gainLossType,
-        gainLossAmount: d(s.gainLossAmount),
-      })),
+      counts: {
+        all: liveCount,
+        reversed: dbCount(ASSET_EVENT_STATUS.REVERSED),
+      },
+      sales: rows.map(mapSale),
       pagination: {
         page,
         limit,
         totalRecords: total,
         totalPages: Math.max(1, Math.ceil(total / limit)),
       },
+    };
+  },
+
+  async getSaleById(userId: string, saleId: string) {
+    const s = await prisma.assetSale.findFirst({
+      where: { id: saleId, userId },
+      include: {
+        asset: {
+          select: { assetCode: true, assetName: true, assetType: true },
+        },
+      },
+    });
+    if (!s) return null;
+    return {
+      id: s.id,
+      saleId: s.saleCode,
+      assetId: s.asset.assetCode,
+      assetName: s.asset.assetName,
+      assetType: s.asset.assetType,
+      buyer: s.buyer,
+      saleDate: dateToIsoDate(s.saleDate),
+      salePrice: d(s.salePrice),
+      bookValue: d(s.bookValueAtSale),
+      gainLossType: s.gainLossType,
+      gainLossAmount: d(s.gainLossAmount),
+      status: s.status,
+      undo: mapUndoPayload(s),
     };
   },
 
@@ -1738,15 +1955,24 @@ export const assetsService = {
 
   async listDisposals(
     userId: string,
-    opts?: { page?: number; limit?: number },
+    opts?: { page?: number; limit?: number; status?: string },
   ) {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
-    const where = { userId };
+    const normalizedStatus = opts?.status?.trim() || "all";
+    const baseWhere = { userId };
+    const liveWhere = {
+      ...baseWhere,
+      status: { notIn: [ASSET_EVENT_STATUS.REVERSED] },
+    };
+    const listWhere = {
+      ...baseWhere,
+      status: buildAssetEventListStatusFilter(normalizedStatus),
+    };
 
-    const [rows, total, agg] = await Promise.all([
+    const [rows, total, liveCount, agg, counts] = await Promise.all([
       prisma.assetDisposal.findMany({
-        where,
+        where: listWhere,
         include: {
           asset: {
             select: { assetCode: true, assetName: true, assetType: true },
@@ -1756,38 +1982,82 @@ export const assetsService = {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.assetDisposal.count({ where }),
+      prisma.assetDisposal.count({ where: listWhere }),
+      prisma.assetDisposal.count({ where: liveWhere }),
       prisma.assetDisposal.aggregate({
-        where,
+        where: liveWhere,
         _sum: { bookValueAtDisposal: true },
+      }),
+      prisma.assetDisposal.groupBy({
+        by: ["status"],
+        where: baseWhere,
+        _count: true,
       }),
     ]);
 
+    const dbCount = (s: string) =>
+      counts.find((c) => c.status === s)?._count ?? 0;
+
+    const mapDisposal = (r: (typeof rows)[number]) => ({
+      id: r.id,
+      disposalId: r.disposalCode,
+      assetId: r.asset.assetCode,
+      assetName: r.asset.assetName,
+      assetType: r.asset.assetType,
+      disposalReason: r.disposalReason,
+      disposalDate: dateToIsoDate(r.disposalDate),
+      bookValueAtDisposal: d(r.bookValueAtDisposal),
+      note: r.note,
+      hasEvidence: Boolean(r.evidenceUrl),
+      status: r.status,
+      undo: mapUndoPayload(r),
+    });
+
     return {
       summary: {
-        totalDisposals: total,
+        totalDisposals: liveCount,
         totalBookValueAtDisposal: normalizeMoneyAmount(
           d(agg._sum.bookValueAtDisposal),
         ),
       },
-      disposals: rows.map((r) => ({
-        id: r.id,
-        disposalId: r.disposalCode,
-        assetId: r.asset.assetCode,
-        assetName: r.asset.assetName,
-        assetType: r.asset.assetType,
-        disposalReason: r.disposalReason,
-        disposalDate: dateToIsoDate(r.disposalDate),
-        bookValueAtDisposal: d(r.bookValueAtDisposal),
-        note: r.note,
-        hasEvidence: Boolean(r.evidenceUrl),
-      })),
+      counts: {
+        all: liveCount,
+        reversed: dbCount(ASSET_EVENT_STATUS.REVERSED),
+      },
+      disposals: rows.map(mapDisposal),
       pagination: {
         page,
         limit,
         totalRecords: total,
         totalPages: Math.max(1, Math.ceil(total / limit)),
       },
+    };
+  },
+
+  async getDisposalById(userId: string, disposalId: string) {
+    const r = await prisma.assetDisposal.findFirst({
+      where: { id: disposalId, userId },
+      include: {
+        asset: {
+          select: { assetCode: true, assetName: true, assetType: true },
+        },
+      },
+    });
+    if (!r) return null;
+    return {
+      id: r.id,
+      disposalId: r.disposalCode,
+      assetId: r.asset.assetCode,
+      assetName: r.asset.assetName,
+      assetType: r.asset.assetType,
+      disposalReason: r.disposalReason,
+      disposalDate: dateToIsoDate(r.disposalDate),
+      bookValueAtDisposal: d(r.bookValueAtDisposal),
+      note: r.note,
+      hasEvidence: Boolean(r.evidenceUrl),
+      evidenceUrl: r.evidenceUrl,
+      status: r.status,
+      undo: mapUndoPayload(r),
     };
   },
 

@@ -404,6 +404,48 @@ export async function reverseSaleLedgerOnDelete(
   );
 }
 
+/** Reverse loan principal and interest ledger postings for a repayment undo. */
+export async function reverseLoanRepaymentLedgerOnUndo(
+  userId: string,
+  repaymentId: string,
+  paymentDate: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.LOAN_INTEREST_PAID,
+    `${repaymentId}:interest`,
+    `Undo loan interest payment ${repaymentId}`,
+    paymentDate,
+    db,
+  );
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.LOAN_PRINCIPAL_PAID,
+    repaymentId,
+    `Undo loan principal payment ${repaymentId}`,
+    paymentDate,
+    db,
+  );
+}
+
+/** Reverse loan received posting when a liability registration is undone. */
+export async function reverseLoanReceivedLedgerOnUndo(
+  userId: string,
+  liabilityId: string,
+  transactionDate: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.LOAN_RECEIVED,
+    liabilityId,
+    `Undo loan received ${liabilityId}`,
+    transactionDate,
+    db,
+  );
+}
+
 /** Reverse all ledger postings for a deleted expense. */
 export async function reverseExpenseLedgerOnDelete(
   userId: string,
@@ -424,6 +466,86 @@ export async function reverseExpenseLedgerOnDelete(
     LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
     expense.id,
     `Delete expense recognition ${expense.id}`,
+    txnDate,
+    db,
+  );
+}
+
+/** Reverse asset purchase posting on asset undo. */
+export async function reverseAssetPurchaseLedgerOnUndo(
+  userId: string,
+  assetId: string,
+  purchaseDate: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.ASSET_PURCHASE,
+    assetId,
+    `Undo asset purchase ${assetId}`,
+    purchaseDate,
+    db,
+  );
+}
+
+/** Reverse payer recognition and invoice collections on transaction undo. */
+export async function reversePayerTransactionLedgerOnUndo(
+  userId: string,
+  transactionId: string,
+  date: string,
+  db: DbClient = prisma,
+): Promise<void> {
+  const txnDate = new Date(`${date}T12:00:00.000Z`);
+  await reverseByReferencePrefix(
+    userId,
+    LEDGER_REFERENCE_TYPES.PAYER_COLLECTION,
+    `${transactionId}:`,
+    `Undo payer collections ${transactionId}`,
+    txnDate,
+    db,
+  );
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.PAYER_RECOGNITION,
+    transactionId,
+    `Undo payer recognition ${transactionId}`,
+    txnDate,
+    db,
+  );
+}
+
+/** Reverse beneficiary invoice/payment/remittance postings on transaction undo. */
+export async function reverseBeneficiaryTransactionLedgerOnUndo(
+  userId: string,
+  transactionId: string,
+  date: string,
+  options: { remitted?: boolean } = {},
+  db: DbClient = prisma,
+): Promise<void> {
+  const txnDate = new Date(`${date}T12:00:00.000Z`);
+  if (options.remitted) {
+    await reverseByReference(
+      userId,
+      LEDGER_REFERENCE_TYPES.WHT_REMITTED,
+      transactionId,
+      `Undo WHT remittance ${transactionId}`,
+      txnDate,
+      db,
+    );
+  }
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.BENEFICIARY_PAYMENT,
+    transactionId,
+    `Undo beneficiary payment ${transactionId}`,
+    txnDate,
+    db,
+  );
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.BENEFICIARY_INVOICE,
+    transactionId,
+    `Undo beneficiary invoice ${transactionId}`,
     txnDate,
     db,
   );

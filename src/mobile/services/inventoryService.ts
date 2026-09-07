@@ -6,6 +6,7 @@ import {
   INVENTORY_SLOW_MOVING_DAYS,
   INVENTORY_SLOW_MOVING_GRACE_DAYS,
   INVENTORY_VELOCITY_DAYS,
+  INVENTORY_SALE_STATUS,
   computeInventoryLineValue,
 } from "../../constants/inventory";
 import {
@@ -31,6 +32,11 @@ import { ledgerPostingService } from "../../services/ledgerPostingService";
 import { resolveSettlementBankCode } from "../../utils/settlementBank";
 import { calendarPeriodFromDate } from "../../utils/dateRangeQuery";
 import { taxPayablesService } from "./taxPayablesService";
+import { mapUndoPayload } from "../../constants/recordUndo";
+import {
+  inventorySaleUndoService,
+  type InventorySaleDetail,
+} from "./inventorySaleUndoService";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 
@@ -89,6 +95,7 @@ async function createLinkedSaleInTx(
     serviceIncome: boolean;
     bankCode?: string | null;
     fullyPaid?: boolean;
+    inventorySaleId?: string | null;
   },
 ) {
   const userRow = await tx.user.findUnique({
@@ -179,6 +186,7 @@ async function createLinkedSaleInTx(
       category: input.category,
       customerName: input.customerName,
       customerId: input.customerId,
+      inventorySaleId: input.inventorySaleId ?? undefined,
       amount,
       vatInclusive,
       vatRate,
@@ -992,11 +1000,19 @@ export const inventoryService = {
     return inventoryService.getItemDetail(userId, itemId);
   },
 
-  async deleteItem(userId: string, itemId: string): Promise<"ok" | "not_found"> {
+  async deleteItem(
+    userId: string,
+    itemId: string,
+  ): Promise<"ok" | "not_found" | "has_sales"> {
     const existing = await prisma.inventoryItem.findFirst({
       where: { id: itemId, userId, ...activeInventoryWhere },
     });
     if (!existing) return "not_found";
+
+    const saleLineCount = await prisma.inventorySaleLine.count({
+      where: { inventoryItemId: itemId },
+    });
+    if (saleLineCount > 0) return "has_sales";
 
     await prisma.$transaction(async (tx) => {
       const remainingQty = d(existing.quantity);
@@ -1017,20 +1033,9 @@ export const inventoryService = {
         });
       }
 
-      const saleLineCount = await tx.inventorySaleLine.count({
-        where: { inventoryItemId: itemId },
+      await tx.inventoryItem.delete({
+        where: { id: itemId },
       });
-
-      if (saleLineCount > 0) {
-        await tx.inventoryItem.update({
-          where: { id: itemId },
-          data: { deletedAt: new Date() },
-        });
-      } else {
-        await tx.inventoryItem.delete({
-          where: { id: itemId },
-        });
-      }
     });
 
     return "ok";
@@ -1164,6 +1169,11 @@ export const inventoryService = {
           vatInclusive: data.vatInclusive === true,
           serviceIncome: data.serviceIncome !== false,
           bankCode: data.bankCode,
+          inventorySaleId: invSale.id,
+        });
+        await tx.inventorySale.update({
+          where: { id: invSale.id },
+          data: { linkedSaleId: linkedSale.id },
         });
       }
 
@@ -1227,23 +1237,42 @@ export const inventoryService = {
 
   async listSales(
     userId: string,
-    opts?: { page?: number; limit?: number; dateFrom?: Date; dateTo?: Date },
+    opts?: {
+      page?: number;
+      limit?: number;
+      dateFrom?: Date;
+      dateTo?: Date;
+      status?: string;
+    },
   ) {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
-    const where: {
+    const normalizedStatus = opts?.status?.trim() || "all";
+
+    const baseWhere: {
       userId: string;
       soldAt?: { gte?: Date; lte?: Date };
+      status?: string | { not: string };
     } = { userId };
     if (opts?.dateFrom || opts?.dateTo) {
-      where.soldAt = {};
-      if (opts.dateFrom) where.soldAt.gte = opts.dateFrom;
-      if (opts.dateTo) where.soldAt.lte = opts.dateTo;
+      baseWhere.soldAt = {};
+      if (opts.dateFrom) baseWhere.soldAt.gte = opts.dateFrom;
+      if (opts.dateTo) baseWhere.soldAt.lte = opts.dateTo;
     }
 
-    const [sales, total] = await Promise.all([
+    const listWhere = { ...baseWhere };
+    if (
+      normalizedStatus === INVENTORY_SALE_STATUS.REVERSED ||
+      normalizedStatus === "Reversed"
+    ) {
+      listWhere.status = INVENTORY_SALE_STATUS.REVERSED;
+    } else {
+      listWhere.status = { not: INVENTORY_SALE_STATUS.REVERSED };
+    }
+
+    const [sales, total, counts] = await Promise.all([
       prisma.inventorySale.findMany({
-        where,
+        where: listWhere,
         include: {
           lines: {
             include: {
@@ -1255,16 +1284,33 @@ export const inventoryService = {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.inventorySale.count({ where }),
+      prisma.inventorySale.count({ where: listWhere }),
+      prisma.inventorySale.groupBy({
+        by: ["status"],
+        where: baseWhere,
+        _count: true,
+      }),
     ]);
 
+    const dbCount = (s: string) =>
+      counts.find((c) => c.status === s)?._count ?? 0;
+    const reversedCount = dbCount(INVENTORY_SALE_STATUS.REVERSED);
+    const allCount = counts.reduce((sum, c) => sum + c._count, 0) - reversedCount;
+
     return {
+      counts: {
+        all: allCount,
+        reversed: reversedCount,
+      },
       sales: sales.map((s) => ({
         id: s.id,
         soldAt: s.soldAt.toISOString(),
         totalAmount: d(s.totalAmount),
         customerName: s.customerName,
         customerId: s.customerId,
+        status: s.status,
+        saleId: s.linkedSaleId,
+        undo: mapUndoPayload(s),
         lines: s.lines.map((l) => ({
           inventoryItemId: l.inventoryItemId,
           itemName: l.inventoryItem.name,
@@ -1280,4 +1326,22 @@ export const inventoryService = {
       limit,
     };
   },
+
+  async getSaleById(userId: string, saleId: string): Promise<InventorySaleDetail | null> {
+    const sale = await prisma.inventorySale.findFirst({
+      where: { id: saleId, userId },
+      include: {
+        lines: {
+          include: {
+            inventoryItem: { select: { id: true, name: true, category: true } },
+          },
+        },
+      },
+    });
+    if (!sale) return null;
+    return inventorySaleUndoService.mapInventorySaleDetail(sale);
+  },
+
+  getInventorySaleUndoCheck: inventorySaleUndoService.getUndoCheck,
+  undoInventorySale: inventorySaleUndoService.undo,
 };

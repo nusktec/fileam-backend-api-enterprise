@@ -31,6 +31,7 @@ model Employer {
 
   user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   incomeHistory  EmployerIncomeHistory[]
+  termsHistory   EmployerTerms[]
   documents      EmployerDocument[]
 
   @@index([userId])
@@ -45,6 +46,9 @@ model EmployerIncomeHistory {
   taxDeducted    Decimal  @default(0) @map("tax_deducted") @db.Decimal(14, 2)
   pension        Decimal  @default(0) @db.Decimal(14, 2)
   includesBonus  Boolean  @default(false) @map("includes_bonus")
+  /** When true, row is a live projection and may update; false = frozen snapshot. */
+  isProjection   Boolean  @default(true) @map("is_projection")
+  frozenAt       DateTime? @map("frozen_at")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

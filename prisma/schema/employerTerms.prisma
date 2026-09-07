@@ -1,0 +1,27 @@
+/** Prospective remuneration snapshot — one row per effectiveFrom month. */
+model EmployerTerms {
+  id                  String   @id @default(uuid())
+  employerId          String   @map("employer_id")
+  effectiveFrom       String   @map("effective_from") // YYYY-MM
+  employerType        String   @map("employer_type")
+  relationship        String
+  paymentMethod       String   @map("payment_method")
+  paymentFrequency    String   @map("payment_frequency")
+  basicSalary         Decimal  @map("basic_salary") @db.Decimal(14, 2)
+  housingAllowance    Decimal  @default(0) @map("housing_allowance") @db.Decimal(14, 2)
+  transportAllowance  Decimal  @default(0) @map("transport_allowance") @db.Decimal(14, 2)
+  otherAllowances     Decimal  @default(0) @map("other_allowances") @db.Decimal(14, 2)
+  bonuses             Decimal  @default(0) @db.Decimal(14, 2)
+  commissions         Decimal  @default(0) @db.Decimal(14, 2)
+  hasPension          Boolean  @default(false) @map("has_pension")
+  pensionStatus       String?  @map("pension_status")
+  employeeRate        Decimal? @map("employee_rate") @db.Decimal(5, 2)
+  employerRate        Decimal? @map("employer_rate") @db.Decimal(5, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  employer Employer @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@unique([employerId, effectiveFrom])
+  @@index([employerId, effectiveFrom])
+  @@map("employer_terms")
+}

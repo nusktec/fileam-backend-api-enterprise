@@ -9,6 +9,7 @@ import {
   liabilityRegisterService,
   liabilityRepaymentService,
 } from "../services/liabilityRepaymentService";
+import { liabilityUndoService } from "../services/liabilityUndoService";
 
 function replyError(res: Response, error: unknown, fallback: string): boolean {
   if (error instanceof HttpReplyError) {
@@ -84,7 +85,13 @@ export const listRegisteredLiabilities = async (
     const userId = getAuthUserId(req);
     const page = req.query.page ? Number(req.query.page) : undefined;
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
-    const data = await liabilityRegisterService.list(userId, { page, limit });
+    const status =
+      typeof req.query.status === "string" ? req.query.status : undefined;
+    const data = await liabilityRegisterService.list(userId, {
+      page,
+      limit,
+      status,
+    });
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Liabilities retrieved successfully.", data));
@@ -190,9 +197,12 @@ export const listAllLiabilityRepayments = async (
     const userId = getAuthUserId(req);
     const page = req.query.page ? Number(req.query.page) : undefined;
     const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const status =
+      typeof req.query.status === "string" ? req.query.status : undefined;
     const data = await liabilityRepaymentService.listAll(userId, {
       page,
       limit,
+      status,
     });
     res
       .status(HttpStatusCode.OK)
@@ -223,5 +233,99 @@ export const getLiabilityRepayment = async (
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to get repayment", null));
+  }
+};
+
+export const getLiabilityUndoCheck = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = await liabilityUndoService.getLiabilityUndoCheck(
+      userId,
+      paramId(req, "liabilityId"),
+    );
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Undo check retrieved successfully.", data));
+  } catch (error) {
+    if (replyError(res, error, "Failed to check liability undo")) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check liability undo", null));
+  }
+};
+
+export const undoLiability = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as { reason: string };
+    const data = await liabilityUndoService.undoLiability(
+      userId,
+      paramId(req, "liabilityId"),
+      body.reason,
+    );
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Liability undone successfully.", data));
+  } catch (error) {
+    if (replyError(res, error, "Failed to undo liability")) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo liability", null));
+  }
+};
+
+export const getLiabilityRepaymentUndoCheck = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = await liabilityUndoService.getRepaymentUndoCheck(
+      userId,
+      paramId(req, "repaymentId"),
+    );
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Undo check retrieved successfully.", data));
+  } catch (error) {
+    if (replyError(res, error, "Failed to check repayment undo")) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check repayment undo", null));
+  }
+};
+
+export const undoLiabilityRepayment = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as { reason: string };
+    const data = await liabilityUndoService.undoRepayment(
+      userId,
+      paramId(req, "repaymentId"),
+      body.reason,
+    );
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Repayment undone successfully.", data));
+  } catch (error) {
+    if (replyError(res, error, "Failed to undo repayment")) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo repayment", null));
   }
 };

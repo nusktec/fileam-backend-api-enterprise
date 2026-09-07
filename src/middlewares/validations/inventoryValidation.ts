@@ -144,3 +144,22 @@ export const validateUpdateInventoryItem = [
   check("supplierId").optional({ nullable: true }).trim().isString(),
   handleValidation,
 ];
+
+export const validateInventorySaleUndo = [
+  check("reason")
+    .trim()
+    .notEmpty()
+    .withMessage("reason is required")
+    .isIn([
+      "Created by mistake",
+      "Duplicate sale",
+      "Wrong quantity",
+      "Wrong customer",
+      "Wrong product",
+      "Wrong date",
+      "Sale cancelled",
+      "Other",
+    ])
+    .withMessage("reason must be a valid inventory sale undo reason"),
+  handleValidation,
+];

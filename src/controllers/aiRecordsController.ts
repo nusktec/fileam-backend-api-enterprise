@@ -88,7 +88,7 @@ export async function getRecords(
           return;
         }
       }
-      data = await expensesService.list(clientId, {
+      data = await expensesService.list(clientId, "all", {
         page,
         limit,
         sortOrder,

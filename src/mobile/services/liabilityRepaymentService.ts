@@ -28,6 +28,11 @@ import {
   isValidRepaymentFrequency,
   isValidRepaymentStructure,
 } from "../../constants/liabilityRegister";
+import {
+  LIABILITY_REPAYMENT_RECORD_STATUS,
+  LIABILITY_RECORD_STATUS,
+  mapUndoPayload,
+} from "../../constants/recordUndo";
 import { SALE_STATUS } from "../../constants/salePaymentRules";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
@@ -533,7 +538,13 @@ function typeSpecificFields(l: LiabilityRow): Record<string, unknown> {
   }
 }
 
-function listPreview(l: LiabilityRow, schedule: ScheduleRow[]) {
+function listPreview(l: LiabilityRow & {
+  recordStatus?: string;
+  undoAt?: Date | null;
+  undoReason?: string | null;
+  reversingEntryId?: string | null;
+  reversingEntryDate?: Date | null;
+}, schedule: ScheduleRow[]) {
   const next = nextOpenSchedule(schedule);
   const overdue = overdueFromSchedule(schedule, l.paymentStatus);
   return {
@@ -554,6 +565,8 @@ function listPreview(l: LiabilityRow, schedule: ScheduleRow[]) {
     paymentStatus: l.paymentStatus,
     isOverdue: overdue.isOverdue,
     daysOverdue: overdue.daysOverdue,
+    recordStatus: l.recordStatus ?? LIABILITY_RECORD_STATUS.ACTIVE,
+    undo: mapUndoPayload(l),
   };
 }
 
@@ -584,7 +597,13 @@ function createResponse(l: LiabilityRow, schedule: ScheduleRow[] = []) {
   };
 }
 
-function detailResponse(l: LiabilityRow, schedule: ScheduleRow[]) {
+function detailResponse(l: LiabilityRow & {
+  recordStatus?: string;
+  undoAt?: Date | null;
+  undoReason?: string | null;
+  reversingEntryId?: string | null;
+  reversingEntryDate?: Date | null;
+}, schedule: ScheduleRow[]) {
   const outstanding = settlementBalance(l);
   const classification = classifyLiability(
     outstanding,
@@ -633,6 +652,8 @@ function detailResponse(l: LiabilityRow, schedule: ScheduleRow[]) {
       url: l.evidenceUrl,
     },
     note: l.note,
+    recordStatus: l.recordStatus ?? LIABILITY_RECORD_STATUS.ACTIVE,
+    undo: mapUndoPayload(l),
   };
 }
 
@@ -885,25 +906,59 @@ export const liabilityRegisterService = {
 
   async list(
     userId: string,
-    opts?: { page?: number; limit?: number },
+    opts?: { page?: number; limit?: number; status?: string },
   ) {
     const page = Math.max(1, opts?.page ?? 1);
     const limit = Math.min(100, Math.max(1, opts?.limit ?? 20));
+    const normalizedStatus = opts?.status?.trim() || "all";
 
-    const [total, rows] = await Promise.all([
-      prisma.registeredLiability.count({ where: { userId } }),
+    const baseWhere: {
+      userId: string;
+      recordStatus?: string | { notIn: string[] };
+    } = { userId };
+
+    const listWhere = { ...baseWhere };
+    if (normalizedStatus === "all") {
+      listWhere.recordStatus = {
+        notIn: [LIABILITY_RECORD_STATUS.VOIDED, LIABILITY_RECORD_STATUS.REVERSED],
+      };
+    } else if (
+      normalizedStatus === LIABILITY_RECORD_STATUS.VOIDED ||
+      normalizedStatus === "Voided"
+    ) {
+      listWhere.recordStatus = LIABILITY_RECORD_STATUS.VOIDED;
+    } else if (
+      normalizedStatus === LIABILITY_RECORD_STATUS.REVERSED ||
+      normalizedStatus === "Reversed"
+    ) {
+      listWhere.recordStatus = LIABILITY_RECORD_STATUS.REVERSED;
+    } else {
+      listWhere.recordStatus = normalizedStatus;
+    }
+
+    const [total, rows, counts] = await Promise.all([
+      prisma.registeredLiability.count({ where: listWhere }),
       prisma.registeredLiability.findMany({
-        where: { userId },
+        where: listWhere,
         include: { schedule: { orderBy: { dueDate: "asc" } } },
         orderBy: [{ createdAt: "desc" }],
         skip: (page - 1) * limit,
         take: limit,
       }),
+      prisma.registeredLiability.groupBy({
+        by: ["recordStatus"],
+        where: { userId },
+        _count: true,
+      }),
     ]);
 
-    // Summary over all liabilities (not just page)
     const all = await prisma.registeredLiability.findMany({
-      where: { userId },
+      where: {
+        userId,
+        recordStatus: {
+          notIn: [LIABILITY_RECORD_STATUS.VOIDED, LIABILITY_RECORD_STATUS.REVERSED],
+        },
+      },
       include: { schedule: true },
     });
 
@@ -927,6 +982,13 @@ export const liabilityRegisterService = {
     nonCurrentLiabilities = normalizeMoneyAmount(nonCurrentLiabilities);
     totalOverdue = normalizeMoneyAmount(totalOverdue);
 
+    const dbCount = (s: string) =>
+      counts.find((c) => c.recordStatus === s)?._count ?? 0;
+    const voidedCount = dbCount(LIABILITY_RECORD_STATUS.VOIDED);
+    const reversedCount = dbCount(LIABILITY_RECORD_STATUS.REVERSED);
+    const allCount =
+      counts.reduce((sum, c) => sum + c._count, 0) - voidedCount - reversedCount;
+
     return {
       summary: {
         totalLiabilities: totalOutstanding,
@@ -934,6 +996,11 @@ export const liabilityRegisterService = {
         nonCurrentLiabilities,
         totalOutstanding,
         totalOverdue,
+      },
+      counts: {
+        all: allCount,
+        voided: voidedCount,
+        reversed: reversedCount,
       },
       liabilities: rows.map((r) => listPreview(r, r.schedule)),
       pagination: {
@@ -965,6 +1032,9 @@ export const liabilityRegisterService = {
       where: {
         userId,
         paymentStatus: { not: "FULLY_PAID" },
+        recordStatus: {
+          notIn: [LIABILITY_RECORD_STATUS.VOIDED, LIABILITY_RECORD_STATUS.REVERSED],
+        },
       },
       select: { liabilityType: true, outstandingPrincipal: true },
     });
@@ -1039,6 +1109,11 @@ function dashboardListItem(row: {
   balanceBeforeRepayment: Decimal;
   balanceAfterRepayment: Decimal;
   paymentStatus: string;
+  recordStatus?: string;
+  undoAt?: Date | null;
+  undoReason?: string | null;
+  reversingEntryId?: string | null;
+  reversingEntryDate?: Date | null;
   isOverdue: boolean;
   daysOverdue: number;
   evidenceUrl: string | null;
@@ -1065,6 +1140,8 @@ function dashboardListItem(row: {
     daysOverdue: row.daysOverdue,
     evidenceUrl: row.evidenceUrl,
     createdAt: row.createdAt.toISOString(),
+    recordStatus: row.recordStatus ?? LIABILITY_REPAYMENT_RECORD_STATUS.ACTIVE,
+    undo: mapUndoPayload(row),
   };
 }
 
@@ -1382,6 +1459,7 @@ export const liabilityRepaymentService = {
     const where: Prisma.LiabilityRepaymentWhereInput = {
       userId,
       liabilityId: liability.id,
+      recordStatus: LIABILITY_REPAYMENT_RECORD_STATUS.ACTIVE,
     };
     if (opts?.dateFrom || opts?.dateTo) {
       where.paymentDate = {};
@@ -1422,6 +1500,7 @@ export const liabilityRepaymentService = {
     const completedWhere: Prisma.LiabilityRepaymentWhereInput = {
       userId,
       liabilityId: liability.id,
+      recordStatus: LIABILITY_REPAYMENT_RECORD_STATUS.ACTIVE,
       paymentStatus: { in: ["COMPLETED", "PARTIALLY_PAID", "FULLY_PAID"] },
     };
 
@@ -1493,34 +1572,69 @@ export const liabilityRepaymentService = {
     };
   },
 
-  /** GET /mobile/liabilities/repayments — all repayments, newest first. */
   async listAll(
     userId: string,
-    opts?: { page?: number; limit?: number },
+    opts?: { page?: number; limit?: number; status?: string },
   ) {
     const page = Math.max(1, opts?.page ?? 1);
     const limit = Math.min(100, Math.max(1, opts?.limit ?? 20));
+    const normalizedStatus = opts?.status?.trim() || "all";
     const { start, end } = monthBounds();
     const asOf = startOfUtcDay(new Date());
 
-    const [dueAgg, paidAgg, overdueItems, total, rows] = await Promise.all([
+    const baseWhere: Prisma.LiabilityRepaymentWhereInput = { userId };
+    const listWhere: Prisma.LiabilityRepaymentWhereInput = { ...baseWhere };
+    if (
+      normalizedStatus === LIABILITY_REPAYMENT_RECORD_STATUS.REVERSED ||
+      normalizedStatus === "Reversed"
+    ) {
+      listWhere.recordStatus = LIABILITY_REPAYMENT_RECORD_STATUS.REVERSED;
+    } else {
+      listWhere.recordStatus = {
+        not: LIABILITY_REPAYMENT_RECORD_STATUS.REVERSED,
+      };
+    }
+
+    const liveRepaymentWhere: Prisma.LiabilityRepaymentWhereInput = {
+      userId,
+      recordStatus: LIABILITY_REPAYMENT_RECORD_STATUS.ACTIVE,
+    };
+
+    const [dueAgg, paidAgg, overdueItems, total, rows, counts] =
+      await Promise.all([
       prisma.liabilityScheduleItem.aggregate({
         where: {
-          liability: { userId },
+          liability: {
+            userId,
+            recordStatus: {
+              notIn: [
+                LIABILITY_RECORD_STATUS.VOIDED,
+                LIABILITY_RECORD_STATUS.REVERSED,
+              ],
+            },
+          },
           dueDate: { gte: start, lt: end },
         },
         _sum: { amountDue: true },
       }),
       prisma.liabilityRepayment.aggregate({
         where: {
-          userId,
+          ...liveRepaymentWhere,
           paymentDate: { gte: start, lt: end },
         },
         _sum: { repaymentAmount: true },
       }),
       prisma.liabilityScheduleItem.findMany({
         where: {
-          liability: { userId },
+          liability: {
+            userId,
+            recordStatus: {
+              notIn: [
+                LIABILITY_RECORD_STATUS.VOIDED,
+                LIABILITY_RECORD_STATUS.REVERSED,
+              ],
+            },
+          },
           dueDate: { lt: asOf },
           status: { in: ["PENDING", "PARTIAL"] },
         },
@@ -1530,9 +1644,9 @@ export const liabilityRepaymentService = {
           liabilityId: true,
         },
       }),
-      prisma.liabilityRepayment.count({ where: { userId } }),
+      prisma.liabilityRepayment.count({ where: listWhere }),
       prisma.liabilityRepayment.findMany({
-        where: { userId },
+        where: listWhere,
         include: {
           liability: {
             select: {
@@ -1546,6 +1660,11 @@ export const liabilityRepaymentService = {
         skip: (page - 1) * limit,
         take: limit,
       }),
+      prisma.liabilityRepayment.groupBy({
+        by: ["recordStatus"],
+        where: baseWhere,
+        _count: true,
+      }),
     ]);
 
     let overdue = 0;
@@ -1558,12 +1677,22 @@ export const liabilityRepaymentService = {
       }
     }
 
+    const dbCount = (s: string) =>
+      counts.find((c) => c.recordStatus === s)?._count ?? 0;
+    const reversedCount = dbCount(LIABILITY_REPAYMENT_RECORD_STATUS.REVERSED);
+    const allCount =
+      counts.reduce((sum, c) => sum + c._count, 0) - reversedCount;
+
     return {
       summary: {
         dueThisMonth: normalizeMoneyAmount(d(dueAgg._sum.amountDue)),
         paidThisMonth: normalizeMoneyAmount(d(paidAgg._sum.repaymentAmount)),
         overdue: normalizeMoneyAmount(overdue),
         overdueCount: overdueLiabilityIds.size,
+      },
+      counts: {
+        all: allCount,
+        reversed: reversedCount,
       },
       repayments: rows.map(dashboardListItem),
       pagination: {
@@ -1625,6 +1754,8 @@ export const liabilityRepaymentService = {
         isOverdue: row.isOverdue,
         daysOverdue: row.daysOverdue,
       },
+      recordStatus: row.recordStatus ?? LIABILITY_REPAYMENT_RECORD_STATUS.ACTIVE,
+      undo: mapUndoPayload(row),
       accounting: {
         liabilityReduction: d(row.principalAmount),
         interestExpense: d(row.interestAmount),

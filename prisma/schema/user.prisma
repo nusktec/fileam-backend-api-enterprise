@@ -41,6 +41,7 @@ model User {
 
   tokens                      Token[]
   employees                   Employee[]
+  payrollPeriodSnapshots      PayrollPeriodSnapshot[]
   payrollSettings             PayrollSettings?
   payrollObligations          PayrollObligation[]
   userRoles                   UserRole[]

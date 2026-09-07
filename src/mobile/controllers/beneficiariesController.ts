@@ -4,6 +4,11 @@ import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { beneficiariesService } from "../services/beneficiariesService";
+import { beneficiaryUndoService } from "../services/beneficiaryUndoService";
+import type {
+  BeneficiaryTransactionUndoReason,
+  BeneficiaryUndoReason,
+} from "../../constants/recordUndo";
 import type { BeneficiaryDocumentKind, BeneficiaryListFilter } from "../../constants/beneficiary";
 
 function paramId(req: IRequest, key: string): string {
@@ -153,5 +158,93 @@ export const createBeneficiaryDocument = async (req: IRequest, res: Response) =>
   } catch (error) {
     if (replyError(res, error)) return;
     res.status(500).json({ message: "Failed to attach document", error: "SERVER_ERROR" });
+  }
+};
+
+export const getBeneficiaryUndoCheck = async (req: IRequest, res: Response) => {
+  try {
+    ensureValid(req);
+    const userId = getAuthUserId(req);
+    const result = await beneficiaryUndoService.getBeneficiaryUndoCheck(
+      userId,
+      paramId(req, "id"),
+    );
+    if (!result) {
+      res.status(404).json({ message: "Beneficiary not found", error: "NOT_FOUND" });
+      return;
+    }
+    res.status(200).json({ data: result });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res.status(500).json({ message: "Failed to check beneficiary undo", error: "SERVER_ERROR" });
+  }
+};
+
+export const undoBeneficiary = async (req: IRequest, res: Response) => {
+  try {
+    ensureValid(req);
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, { locations: ["body"] }) as { reason: string };
+    const result = await beneficiaryUndoService.undoBeneficiary(
+      userId,
+      paramId(req, "id"),
+      body.reason as BeneficiaryUndoReason,
+    );
+    if (!result) {
+      res.status(404).json({ message: "Beneficiary not found", error: "NOT_FOUND" });
+      return;
+    }
+    res.status(200).json({ data: result });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res.status(500).json({ message: "Failed to undo beneficiary", error: "SERVER_ERROR" });
+  }
+};
+
+export const getBeneficiaryTransactionUndoCheck = async (
+  req: IRequest,
+  res: Response,
+) => {
+  try {
+    ensureValid(req);
+    const userId = getAuthUserId(req);
+    const result = await beneficiaryUndoService.getTransactionUndoCheck(
+      userId,
+      paramId(req, "id"),
+      paramId(req, "transactionId"),
+    );
+    if (!result) {
+      res.status(404).json({ message: "Transaction not found", error: "NOT_FOUND" });
+      return;
+    }
+    res.status(200).json({ data: result });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res.status(500).json({ message: "Failed to check transaction undo", error: "SERVER_ERROR" });
+  }
+};
+
+export const undoBeneficiaryTransaction = async (
+  req: IRequest,
+  res: Response,
+) => {
+  try {
+    ensureValid(req);
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, { locations: ["body"] }) as { reason: string };
+    const result = await beneficiaryUndoService.undoTransaction(
+      userId,
+      paramId(req, "id"),
+      paramId(req, "transactionId"),
+      body.reason as BeneficiaryTransactionUndoReason,
+    );
+    if (!result) {
+      res.status(404).json({ message: "Transaction not found", error: "NOT_FOUND" });
+      return;
+    }
+    res.status(200).json({ data: result });
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res.status(500).json({ message: "Failed to undo transaction", error: "SERVER_ERROR" });
   }
 };

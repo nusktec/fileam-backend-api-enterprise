@@ -17,6 +17,10 @@ import {
 import { TAX_TYPES } from "../../constants/taxPayable";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { liabilityRegisterService } from "./liabilityRepaymentService";
+import {
+  LIABILITY_RECORD_STATUS,
+  LIABILITY_REPAYMENT_RECORD_STATUS,
+} from "../../constants/recordUndo";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 /** Upcoming payables window (active / not-overdue, due within this many days). */
@@ -598,6 +602,7 @@ async function buildCashFlowImpact(userId: string) {
     prisma.liabilityRepayment.findMany({
       where: {
         userId,
+        recordStatus: LIABILITY_REPAYMENT_RECORD_STATUS.ACTIVE,
         paymentDate: { gte: periodStart, lt: periodEnd },
       },
       select: {
@@ -611,6 +616,9 @@ async function buildCashFlowImpact(userId: string) {
       where: {
         userId,
         paymentStatus: { not: "FULLY_PAID" },
+        recordStatus: {
+          notIn: [LIABILITY_RECORD_STATUS.VOIDED, LIABILITY_RECORD_STATUS.REVERSED],
+        },
       },
       _sum: { accruedInterest: true },
     }),

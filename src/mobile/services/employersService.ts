@@ -28,6 +28,14 @@ import {
 } from "../../constants/employer";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import { currentMonthKey, compareMonthKeys, nextMonthKey } from "../../utils/lagosCalendar";
+import {
+  employerTermsFieldsChanged,
+  insertEmployerTerms,
+  invalidateOpenEmployerIncomeFrom,
+  materializeEmployerIncomeRow,
+  resolveEffectiveMonth,
+} from "./prospectiveTermsService";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -284,18 +292,15 @@ function generateScheduledIncomeRows(
     endDate?: string | null;
   },
   year: number,
+  storedByPeriod: Map<
+    string,
+    { gross: number; taxDeducted: number; pension: number; includesBonus: boolean }
+  >,
 ) {
-  const monthlyGross = computeMonthlyIncome(employer);
-  const monthlyTax =
-    computeEmployerTaxComputation(employer, 0).pitPayable / 12;
-  const monthlyPension = employer.hasPension
-    ? computeEmployeePensionAnnual(employer) / 12
-    : 0;
-
+  const yearPrefix = String(year);
   const start = employer.startDate.slice(0, 7);
   const endEmployment = employer.endDate?.slice(0, 7) ?? null;
-  const yearPrefix = String(year);
-  const now = formatTodayYmd().slice(0, 7);
+  const now = currentMonthKey();
   const entries: Array<{
     period: string;
     gross: number;
@@ -308,17 +313,23 @@ function generateScheduledIncomeRows(
     const period = start.startsWith(yearPrefix) ? start : `${yearPrefix}-01`;
     if (period.startsWith(yearPrefix)) {
       if (!endEmployment || period <= endEmployment) {
-        entries.push({
-          period,
-          gross: normalizeMoneyAmount(computeAnnualIncome(employer)),
-          taxDeducted: normalizeMoneyAmount(
-            Math.round(computeEmployerTaxComputation(employer, 0).pitPayable),
-          ),
-          pension: normalizeMoneyAmount(
-            Math.round(computeEmployeePensionAnnual(employer)),
-          ),
-          includesBonus: false,
-        });
+        const stored = storedByPeriod.get(period);
+        if (stored) {
+          entries.push({ period, ...stored });
+        } else {
+          const monthlyGross = computeMonthlyIncome(employer);
+          entries.push({
+            period,
+            gross: normalizeMoneyAmount(computeAnnualIncome(employer)),
+            taxDeducted: normalizeMoneyAmount(
+              Math.round(computeEmployerTaxComputation(employer, 0).pitPayable),
+            ),
+            pension: normalizeMoneyAmount(
+              Math.round(computeEmployeePensionAnnual(employer)),
+            ),
+            includesBonus: false,
+          });
+        }
       }
     }
     return entries;
@@ -330,13 +341,24 @@ function generateScheduledIncomeRows(
   if (endEmployment && endEmployment < end) end = endEmployment;
 
   while (cursor <= end) {
-    entries.push({
-      period: cursor,
-      gross: normalizeMoneyAmount(monthlyGross),
-      taxDeducted: normalizeMoneyAmount(Math.round(monthlyTax)),
-      pension: normalizeMoneyAmount(Math.round(monthlyPension)),
-      includesBonus: false,
-    });
+    const stored = storedByPeriod.get(cursor);
+    if (stored) {
+      entries.push({ period: cursor, ...stored });
+    } else {
+      const monthlyGross = computeMonthlyIncome(employer);
+      const monthlyTax =
+        computeEmployerTaxComputation(employer, 0).pitPayable / 12;
+      const monthlyPension = employer.hasPension
+        ? computeEmployeePensionAnnual(employer) / 12
+        : 0;
+      entries.push({
+        period: cursor,
+        gross: normalizeMoneyAmount(monthlyGross),
+        taxDeducted: normalizeMoneyAmount(Math.round(monthlyTax)),
+        pension: normalizeMoneyAmount(Math.round(monthlyPension)),
+        includesBonus: false,
+      });
+    }
     const [y, m] = cursor.split("-").map(Number);
     const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
     cursor = next;
@@ -355,7 +377,8 @@ function autoIncomeHistoryYears(startDate: string): string[] {
   return years.length > 0 ? years : [String(currentYear)];
 }
 
-function buildAutoIncomeHistoryResponse(
+async function buildIncomeHistoryResponse(
+  _userId: string,
   employerId: string,
   row: {
     startDate: string;
@@ -380,27 +403,94 @@ function buildAutoIncomeHistoryResponse(
     profile.employerType,
     profile.relationship,
   );
+  const yearPrefix = String(year);
+  const start = row.startDate.slice(0, 7);
+  const endEmployment = row.endDate?.slice(0, 7) ?? null;
+  const now = currentMonthKey();
+  let rangeEnd = now.startsWith(yearPrefix) ? now : `${yearPrefix}-12`;
+  if (endEmployment && endEmployment < rangeEnd) rangeEnd = endEmployment;
+
+  const storedRows = await prisma.employerIncomeHistory.findMany({
+    where: {
+      employerId,
+      period: { startsWith: yearPrefix },
+    },
+  });
+
+  const storedByPeriod = new Map<
+    string,
+    {
+      id: string;
+      gross: number;
+      taxDeducted: number;
+      pension: number;
+      includesBonus: boolean;
+      isProjection: boolean;
+    }
+  >();
+  for (const s of storedRows) {
+    storedByPeriod.set(s.period, {
+      id: s.id,
+      gross: d(s.gross),
+      taxDeducted: d(s.taxDeducted),
+      pension: d(s.pension),
+      includesBonus: s.includesBonus,
+      isProjection: s.isProjection,
+    });
+  }
+
+  let cursor = `${yearPrefix}-01`;
+  if (start > cursor) cursor = start;
+  while (compareMonthKeys(cursor, rangeEnd) <= 0) {
+    const stored = storedByPeriod.get(cursor);
+    if (!stored || stored.isProjection) {
+      const asProjection = compareMonthKeys(cursor, now) >= 0;
+      const materialized = await materializeEmployerIncomeRow(employerId, cursor, {
+        asProjection,
+      });
+      if (materialized) {
+        storedByPeriod.set(cursor, {
+          id: materialized.id,
+          gross: d(materialized.gross),
+          taxDeducted: d(materialized.taxDeducted),
+          pension: d(materialized.pension),
+          includesBonus: materialized.includesBonus,
+          isProjection: materialized.isProjection,
+        });
+      }
+    }
+    cursor = nextMonthKey(cursor);
+  }
+
   const scheduled = generateScheduledIncomeRows(
     { ...profile, startDate: row.startDate, endDate: row.endDate },
     year,
+    storedByPeriod,
   );
-  const mapped = scheduled.map((s) => ({
-    id: `${employerId}:${s.period}`,
-    period: s.period,
-    gross: s.gross,
-    taxDeducted: s.taxDeducted,
-    pension: s.pension,
-    net: normalizeMoneyAmount(s.gross - s.taxDeducted - s.pension),
-    includesBonus: s.includesBonus,
-  }));
+  const mapped = scheduled.map((s) => {
+    const stored = storedByPeriod.get(s.period);
+    return {
+      id: stored?.id ?? `${employerId}:${s.period}`,
+      period: s.period,
+      gross: stored?.gross ?? s.gross,
+      taxDeducted: stored?.taxDeducted ?? s.taxDeducted,
+      pension: stored?.pension ?? s.pension,
+      net: normalizeMoneyAmount(
+        (stored?.gross ?? s.gross) -
+          (stored?.taxDeducted ?? s.taxDeducted) -
+          (stored?.pension ?? s.pension),
+      ),
+      includesBonus: stored?.includesBonus ?? s.includesBonus,
+    };
+  });
   const totalGross = normalizeMoneyAmount(
-    mapped.reduce((s, e) => s + e.gross, 0),
+    mapped.reduce((sum, e) => sum + e.gross, 0),
   );
   const totalTax = normalizeMoneyAmount(
-    mapped.reduce((s, e) => s + e.taxDeducted, 0),
+    mapped.reduce((sum, e) => sum + e.taxDeducted, 0),
   );
   const totalPension = normalizeMoneyAmount(
-    mapped.reduce((s, e) => s + e.pension, 0),
+    mapped.reduce((sum, e) => sum + e.pension, 0),
   );
 
   return {
@@ -421,8 +511,10 @@ function buildAutoIncomeHistoryResponse(
   };
 }
 
-/** PAYE credit from auto-generated monthly history (not stored rows). */
-export function sumGeneratedPayeCreditForYear(
+/** PAYE credit from materialised income history (frozen rows + open projections). */
+export async function sumPayeCreditForYear(
+  userId: string,
+  employerId: string,
   row: {
     startDate: string;
     endDate: string | null;
@@ -441,16 +533,15 @@ export function sumGeneratedPayeCreditForYear(
   },
   taxTreatment: EmployerTaxTreatment,
   year: number,
-): number {
+): Promise<number> {
   if (taxTreatment !== "PAYE") return 0;
-  const profile = profileFromRow(row);
-  const scheduled = generateScheduledIncomeRows(
-    { ...profile, startDate: row.startDate, endDate: row.endDate },
+  const history = await buildIncomeHistoryResponse(
+    userId,
+    employerId,
+    row,
     year,
   );
-  return normalizeMoneyAmount(
-    scheduled.reduce((s, e) => s + e.taxDeducted, 0),
-  );
+  return history.totalTax;
 }
 
 export const employersService = {
@@ -559,6 +650,8 @@ export const employersService = {
       hasPension: body.hasPension,
     });
 
+    await insertEmployerTerms(employer.id, body.startDate.slice(0, 7), employer);
+
     return mapEmployerRow(employer, 0);
   },
 
@@ -590,7 +683,13 @@ export const employersService = {
       if (query.status && employmentStatus !== query.status) continue;
       if (query.taxTreatment && taxTreatment !== query.taxTreatment) continue;
 
-      const payeCredit = sumGeneratedPayeCreditForYear(row, taxTreatment, year);
+      const payeCredit = await sumPayeCreditForYear(
+        userId,
+        row.id,
+        row,
+        taxTreatment,
+        year,
+      );
       const mapped = mapEmployerRow(row, payeCredit);
       employers.push(mapped);
       totalAnnualIncome = normalizeMoneyAmount(
@@ -619,7 +718,13 @@ export const employersService = {
       profile.employerType,
       profile.relationship,
     );
-    const payeCredit = sumGeneratedPayeCreditForYear(row, taxTreatment, year);
+    const payeCredit = await sumPayeCreditForYear(
+      userId,
+      employerId,
+      row,
+      taxTreatment,
+      year,
+    );
     return mapEmployerRow(row, payeCredit, true);
   },
 
@@ -726,6 +831,13 @@ export const employersService = {
       },
     });
 
+    const termsChanged = employerTermsFieldsChanged(existing, body);
+    if (termsChanged) {
+      const effectiveMonth = await resolveEffectiveMonth(userId, { employerId });
+      await insertEmployerTerms(employerId, effectiveMonth, row);
+      await invalidateOpenEmployerIncomeFrom(employerId, effectiveMonth);
+    }
+
     if (wasPension && !hasPension) {
       await prisma.employerDocument.deleteMany({
         where: { employerId, kind: "PENSION_STATEMENT" },
@@ -755,7 +867,13 @@ export const employersService = {
       profile.employerType,
       profile.relationship,
     );
-    const payeCredit = sumGeneratedPayeCreditForYear(row, taxTreatment, year);
+    const payeCredit = await sumPayeCreditForYear(
+      userId,
+      employerId,
+      row,
+      taxTreatment,
+      year,
+    );
     return mapEmployerRow(row, payeCredit, true);
   },
 
@@ -771,7 +889,7 @@ export const employersService = {
   ) {
     const row = await findOwnedEmployer(userId, employerId);
     const targetYear = year ?? new Date().getFullYear();
-    return buildAutoIncomeHistoryResponse(employerId, row, targetYear);
+    return buildIncomeHistoryResponse(userId, employerId, row, targetYear);
   },
 
   async listDocuments(

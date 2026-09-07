@@ -30,6 +30,8 @@ model Employee {
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  termsHistory EmployeeTerms[]
+  payrollSnapshots PayrollPeriodSnapshot[]
 
   @@map("employees")
 }

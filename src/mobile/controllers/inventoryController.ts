@@ -73,17 +73,92 @@ export const listInventorySales = async (
   try {
     const userId = getAuthUserId(req);
     const p = req.pagination;
+    const status =
+      typeof req.query.status === "string" ? req.query.status : undefined;
     const data = await inventoryService.listSales(userId, {
       page: p?.page,
       limit: p?.limit,
       dateFrom: p?.dateFrom,
       dateTo: p?.dateTo,
+      status,
     });
     res.status(HttpStatusCode.OK).json(outJson(true, "Inventory sales", data));
   } catch {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to list inventory sales", null));
+  }
+};
+
+export const getInventorySaleDetail = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const detail = await inventoryService.getSaleById(userId, id!);
+    if (!detail) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Inventory sale not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Inventory sale detail", detail));
+  } catch {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to load inventory sale", null));
+  }
+};
+
+export const getInventorySaleUndoCheck = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const data = await inventoryService.getInventorySaleUndoCheck(userId, id!);
+    res.status(HttpStatusCode.OK).json(outJson(true, "Undo check", data));
+  } catch (e: unknown) {
+    if (e instanceof HttpReplyError) {
+      res.status(e.statusCode).json(outJson(false, e.message, null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check undo", null));
+  }
+};
+
+export const undoInventorySale = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const data = matchedData(req, {
+      locations: ["body"],
+      includeOptionals: true,
+    }) as { reason: string };
+    const result = await inventoryService.undoInventorySale(
+      userId,
+      id!,
+      data.reason,
+    );
+    res.status(HttpStatusCode.OK).json(outJson(true, "Inventory sale reversed", result));
+  } catch (e: unknown) {
+    if (e instanceof HttpReplyError) {
+      res.status(e.statusCode).json(outJson(false, e.message, null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo inventory sale", null));
   }
 };
 
@@ -424,6 +499,18 @@ export const deleteInventoryItem = async (
       res
         .status(HttpStatusCode.NOT_FOUND)
         .json(outJson(false, "Inventory item not found", null));
+      return;
+    }
+    if (result === "has_sales") {
+      res
+        .status(HttpStatusCode.CONFLICT)
+        .json(
+          outJson(
+            false,
+            "This item cannot be deleted because it has already been sold.",
+            null,
+          ),
+        );
       return;
     }
     res

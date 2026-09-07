@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>FileAm Backend API Changes Summary — September 2026</title>
+  <style>
+    @page { margin: 18mm 16mm; size: A4; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 10.5pt; line-height: 1.45; color: #1a1a1a; max-width: 210mm; margin: 0 auto; padding: 12mm; }
+    h1 { font-size: 20pt; margin: 0 0 4px; color: #0d3b2e; }
+    h2 { font-size: 13pt; margin: 22px 0 8px; color: #0d3b2e; border-bottom: 2px solid #0d3b2e; padding-bottom: 4px; page-break-after: avoid; }
+    h3 { font-size: 11pt; margin: 14px 0 6px; color: #333; page-break-after: avoid; }
+    .meta { color: #555; font-size: 9.5pt; margin-bottom: 18px; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 9.5pt; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { background: #eef5f2; font-weight: 600; }
+    tr:nth-child(even) td { background: #fafafa; }
+    code, pre { font-family: "SF Mono", Menlo, Monaco, Consolas, monospace; font-size: 8.5pt; }
+    pre { background: #f4f4f4; border: 1px solid #ddd; padding: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 6px 0 12px; }
+    .badge { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 8pt; font-weight: 600; }
+    .new { background: #d4edda; color: #155724; }
+    .changed { background: #fff3cd; color: #856404; }
+    .behavior { background: #cce5ff; color: #004085; }
+    ul { margin: 4px 0 10px 18px; padding: 0; }
+    li { margin-bottom: 3px; }
+    .toc a { color: #0d3b2e; text-decoration: none; }
+    .note { background: #fff8e6; border-left: 4px solid #f0ad4e; padding: 8px 12px; margin: 10px 0; font-size: 9.5pt; }
+    .footer { margin-top: 24px; font-size: 8.5pt; color: #777; border-top: 1px solid #ddd; padding-top: 8px; }
+  </style>
+</head>
+<body>
+
+<h1>FileAm Backend API Changes Summary</h1>
+<p class="meta">
+  <strong>Date:</strong> 7 September 2026 &nbsp;|&nbsp;
+  <strong>Base path:</strong> <code>/api/v1/mobile</code> &nbsp;|&nbsp;
+  <strong>Envelope:</strong> <code>{ status, message, data }</code>
+</p>
+
+<div class="note">
+  <strong>Deploy:</strong> Run <code>npx prisma migrate deploy</code> (migration <code>20260907120000_undo_and_prospective_terms</code>) before using undo / terms features.
+</div>
+
+<h2>Table of contents</h2>
+<ol class="toc">
+  <li><a href="#envelope">Standard response envelope</a></li>
+  <li><a href="#cit-pit">CIT/PIT monthly computation fix</a></li>
+  <li><a href="#expense-counts">Expense list counts</a></li>
+  <li><a href="#employee-tax">Employee taxComputation</a></li>
+  <li><a href="#sales-expense-undo">Sales &amp; expense undo</a></li>
+  <li><a href="#inventory-undo">Inventory sale undo</a></li>
+  <li><a href="#liability-undo">Liability undo</a></li>
+  <li><a href="#asset-undo">Asset undo</a></li>
+  <li><a href="#payer-beneficiary-undo">Payer &amp; beneficiary undo</a></li>
+  <li><a href="#prospective-terms">Employee &amp; employer prospective terms</a></li>
+  <li><a href="#shared-types">Shared undo types</a></li>
+</ol>
+
+<h2 id="envelope">1. Standard response envelope</h2>
+<p>All mobile routes return:</p>
+<pre>{
+  "status": true,
+  "message": "Human-readable message",
+  "data": { /* payload */ }
+}</pre>
+<p>Errors: <code>status: false</code>, HTTP 4xx/5xx, <code>message</code> explains the failure. Undo conflicts return <strong>409</strong>.</p>
+
+<h2 id="cit-pit">2. CIT/PIT monthly computation fix</h2>
+<p><span class="badge behavior">Behavior change</span> Source: <em>CIT_PIT_Bug_Report.pdf</em></p>
+<p>CIT and PIT now use <strong>only the requested month's</strong> sales and expenses (voided/reversed rows excluded). Each month returns a distinct value; multi-month ranges sum per-month amounts.</p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Change</th></tr>
+  <tr>
+    <td>GET</td>
+    <td><code>/tax-computation?period=YYYY-MM</code></td>
+    <td>
+      <code>data.cit.periodAmount</code> and <code>data.pit.periodAmount</code> are monthly estimates from that month's books.<br/>
+      Optional: <code>range=month|quarter|year</code> — CIT/PIT summed across included months.
+    </td>
+  </tr>
+  <tr>
+    <td>GET</td>
+    <td><code>/tax-payables?period=YYYY-MM&amp;page=1&amp;limit=20</code></td>
+    <td>
+      CIT/PIT payable rows sync <strong>per book month</strong> (not December-only).<br/>
+      <code>data.totals.cit</code> / <code>data.totals.pit</code> match the requested period computation.
+    </td>
+  </tr>
+</table>
+
+<h3>GET /tax-computation — key response fields (unchanged shape, new logic)</h3>
+<pre>{
+  "status": true,
+  "message": "Tax computation retrieved",
+  "data": {
+    "period": { "year": 2026, "month": 5, "range": "month", "label": "May 2026" },
+    "overview": { "totalIncome": 5000000, "totalExpenses": 1000000, "netProfit": 4000000 },
+    "cit": {
+      "periodAmount": 12345.67,
+      "monthlyProfit": 4000000,
+      "annualizedProfit": 48000000,
+      "totalCitLiability": 148148.04
+    },
+    "pit": {
+      "periodAmount": 8901.23,
+      "monthlyProfit": 4000000,
+      "annualizedProfit": 48000000,
+      "estimatedAnnualPit": 106814.76
+    },
+    "vat": { "periodAmount": 375000, "netVatPayable": 375000 },
+    "wht": { "periodAmount": 250000 },
+    "paye": { "periodAmount": 45000, "applicable": true }
+  }
+}</pre>
+
+<h2 id="expense-counts">3. Expense list counts</h2>
+<p><span class="badge changed">Changed</span> Source: <em>EXPENSE_LIST_COUNTS_API.pdf</em></p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Change</th></tr>
+  <tr>
+    <td>GET</td>
+    <td><code>/expenses?status={status}&amp;page=&amp;limit=</code></td>
+    <td>
+      New query <code>status</code>: <code>all</code> | <code>Paid</code> | <code>Pending</code> | <code>Partial</code> | <code>Overdue</code> | <code>IN_PROGRESS</code> | <code>Voided</code> | <code>Reversed</code><br/>
+      New response field <code>data.counts</code> (same keys as sales).<br/>
+      <code>status=all</code> excludes voided/reversed rows. Summary/topCategories use live rows only.
+    </td>
+  </tr>
+</table>
+
+<h3>GET /expenses — response (added counts)</h3>
+<pre>{
+  "status": true,
+  "message": "Expenses retrieved",
+  "data": {
+    "summary": { "totalExpenses": 1200000, "vatClaimable": 85000 },
+    "counts": {
+      "all": 40,
+      "paid": 20,
+      "pending": 8,
+      "partial": 4,
+      "overdue": 3,
+      "in_progress": 5,
+      "voided": 2,
+      "reversed": 1
+    },
+    "topCategories": [ { "category": "Rent", "amount": 400000, "percentageOfTotal": 33.3 } ],
+    "expenses": [ /* ExpenseItem[] */ ],
+    "total": 40,
+    "page": 1,
+    "limit": 20,
+    "totalPages": 2
+  }
+}</pre>
+
+<h2 id="employee-tax">4. Employee taxComputation</h2>
+<p><span class="badge changed">Changed</span> Source: <em>EMPLOYEE_TAX_COMPUTATION_API.pdf</em></p>
+<p>No new routes. <code>taxComputation</code> added to employee detail (GET, and returned after POST/PATCH).</p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Change</th></tr>
+  <tr><td>GET</td><td><code>/employees/:id</code></td><td>Response includes <code>data.taxComputation</code></td></tr>
+  <tr><td>POST</td><td><code>/employees</code></td><td>Same detail shape on create</td></tr>
+  <tr><td>PATCH</td><td><code>/employees/:id</code></td><td>Same detail shape on update</td></tr>
+</table>
+
+<h3>Added field on employee detail</h3>
+<pre>"taxComputation": {
+  "chargeableIncome": 5152000,
+  "pensionableEmoluments": 4800000,
+  "effectiveTaxRate": 12.45
+}</pre>
+<p><code>effectiveTaxRate</code> is percent (12.45 = 12.45%), not 0–1. All three keys always present; use <code>0</code> when zero.</p>
+
+<h2 id="sales-expense-undo">5. Sales &amp; expense undo</h2>
+<p><span class="badge changed">Changed</span> <span class="badge new">New routes</span> Source: <em>SALES_AND_EXPENSE_UNDO_API.pdf</em></p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Type</th><th>Description</th></tr>
+  <tr><td>GET</td><td><code>/sales?status=...</code></td><td>Changed</td><td>Status adds <code>Voided</code>, <code>Reversed</code>. Counts add <code>voided</code>, <code>reversed</code>. Summary excludes undone.</td></tr>
+  <tr><td>GET</td><td><code>/sales/:id</code></td><td>Changed</td><td>Adds <code>undo</code> when voided/reversed</td></tr>
+  <tr><td>GET</td><td><code>/sales/:id/undo</code></td><td><strong>New</strong></td><td>Returns action backend will run</td></tr>
+  <tr><td>POST</td><td><code>/sales/:id/undo</code></td><td><strong>New</strong></td><td>Executes void or reverse</td></tr>
+  <tr><td>GET</td><td><code>/expenses?status=...</code></td><td>Changed</td><td>Same status/count rules as sales</td></tr>
+  <tr><td>GET</td><td><code>/expenses/:id</code></td><td>Changed</td><td>Adds <code>undo</code></td></tr>
+  <tr><td>GET</td><td><code>/expenses/:id/undo</code></td><td><strong>New</strong></td><td>Undo check</td></tr>
+  <tr><td>POST</td><td><code>/expenses/:id/undo</code></td><td><strong>New</strong></td><td>Execute undo (409 if converted to asset)</td></tr>
+</table>
+
+<h3>GET /sales/:id/undo — response</h3>
+<pre>{ "status": true, "message": "Sale undo check", "data": { "action": "void" | "reverse" } }</pre>
+
+<h3>POST /sales/:id/undo — request</h3>
+<pre>{ "reason": "Created by mistake" | "Duplicate sale" | "Wrong amount" | "Wrong customer" | "Wrong product" | "Wrong date" | "Sale cancelled" | "Other" }</pre>
+
+<h3>POST /sales/:id/undo — response</h3>
+<pre>{
+  "status": true,
+  "message": "Sale undone",
+  "data": {
+    "action": "void" | "reverse",
+    "status": "voided" | "reversed",
+    "data": { /* full SaleDetail with undo populated */ }
+  }
+}</pre>
+
+<h3>POST /expenses/:id/undo — request reasons</h3>
+<pre>"Created by mistake" | "Duplicate expense" | "Wrong amount" | "Wrong expense category" | "Wrong supplier" | "Wrong date" | "Expense cancelled" | "Other"</pre>
+
+<h3>Detail undo block (sales &amp; expenses)</h3>
+<pre>"undo": {
+  "at": "2026-09-07T11:30:00.000Z",
+  "reason": "Wrong amount",
+  "reversingEntry": { "id": "ledger-tx-uuid", "date": "2026-09-07" } | null
+}</pre>
+<p><strong>Rules:</strong> No ledger → void. Ledger posted → reverse. Voided/reversed records cannot be edited, paid, or undone again.</p>
+
+<h2 id="inventory-undo">6. Inventory sale undo</h2>
+<p><span class="badge changed">Changed</span> <span class="badge new">New routes</span> Source: <em>INVENTORY_UNDO_API.pdf</em></p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Type</th><th>Description</th></tr>
+  <tr><td>DELETE</td><td><code>/inventory/items/:id</code></td><td>Changed</td><td>409 if item ever had an inventory sale (including reversed)</td></tr>
+  <tr><td>GET</td><td><code>/inventory/sales?status=all|Reversed</code></td><td>Changed</td><td>Adds <code>counts.all</code>, <code>counts.reversed</code>, row <code>status</code>, <code>saleId</code>, <code>undo</code></td></tr>
+  <tr><td>GET</td><td><code>/inventory/sales/:id</code></td><td><strong>New</strong></td><td>Inventory sale detail with lines</td></tr>
+  <tr><td>GET</td><td><code>/inventory/sales/:id/undo</code></td><td><strong>New</strong></td><td>Always <code>action: "reverse"</code></td></tr>
+  <tr><td>POST</td><td><code>/inventory/sales/:id/undo</code></td><td><strong>New</strong></td><td>Reverses inventory sale + linked Sales record + restores stock</td></tr>
+  <tr><td>POST</td><td><code>/sales/:id/undo</code></td><td>Changed</td><td>Also reverses linked inventory sale when sale came from inventory sell</td></tr>
+</table>
+
+<h3>GET /inventory/sales/:id — response</h3>
+<pre>{
+  "data": {
+    "id": "uuid",
+    "soldAt": "2026-05-15T10:00:00.000Z",
+    "totalAmount": 250000,
+    "customerName": "Acme Ltd",
+    "customerId": null,
+    "status": "live" | "reversed",
+    "saleId": "linked-sales-uuid",
+    "undo": null | { "at": "...", "reason": "...", "reversingEntry": { "id": "...", "date": "..." } },
+    "lines": [{
+      "inventoryItemId": "uuid",
+      "itemName": "Widget A",
+      "category": "Electronics",
+      "quantity": 5,
+      "unitSellingPrice": 50000,
+      "unitCost": 30000,
+      "lineTotal": 250000
+    }]
+  }
+}</pre>
+
+<h3>POST /inventory/sales/:id/undo — request</h3>
+<pre>{ "reason": "Created by mistake" | "Duplicate sale" | "Wrong quantity" | "Wrong customer" | "Wrong product" | "Wrong date" | "Sale cancelled" | "Other" }</pre>
+
+<h2 id="liability-undo">7. Liability undo</h2>
+<p><span class="badge changed">Changed</span> <span class="badge new">New routes</span> Source: <em>LIABILITY_UNDO_API.pdf</em></p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Type</th><th>Description</th></tr>
+  <tr><td>GET</td><td><code>/liabilities?status=all|Voided|Reversed</code></td><td>Changed</td><td><code>counts</code>, <code>recordStatus</code>, <code>undo</code> on rows</td></tr>
+  <tr><td>GET</td><td><code>/liabilities/:id</code></td><td>Changed</td><td><code>recordStatus</code>, <code>undo</code> when undone</td></tr>
+  <tr><td>GET</td><td><code>/liabilities/repayments?status=all|Reversed</code></td><td>Changed</td><td><code>counts</code>, <code>recordStatus</code>, <code>undo</code></td></tr>
+  <tr><td>GET</td><td><code>/liabilities/:id/undo</code></td><td><strong>New</strong></td><td>409 if live repayments exist</td></tr>
+  <tr><td>POST</td><td><code>/liabilities/:id/undo</code></td><td><strong>New</strong></td><td>Void or reverse financing liability</td></tr>
+  <tr><td>GET</td><td><code>/liabilities/repayments/:id/undo</code></td><td><strong>New</strong></td><td>Always reverse</td></tr>
+  <tr><td>POST</td><td><code>/liabilities/repayments/:id/undo</code></td><td><strong>New</strong></td><td>Reverse repayment; restores parent balance</td></tr>
+</table>
+
+<h3>POST /liabilities/:id/undo — request</h3>
+<pre>{ "reason": "Created by mistake" | "Duplicate liability" | "Wrong amount" | "Wrong creditor" | "Wrong date" | "Not a business liability" | "Other" }</pre>
+
+<h3>Undo response envelope (liabilities)</h3>
+<pre>{
+  "data": {
+    "action": "void" | "reverse",
+    "status": "voided" | "reversed",
+    "data": { /* LiabilityDetail or RepaymentDetail */ }
+  }
+}</pre>
+<p><code>recordStatus</code> is sibling to payment status (<code>ACTIVE</code> | <code>voided</code> | <code>reversed</code>). Undo repayments before undoing parent liability.</p>
+
+<h2 id="asset-undo">8. Asset undo</h2>
+<p><span class="badge changed">Changed</span> <span class="badge new">New routes</span> Source: <em>ASSET_UNDO_API.pdf</em> (core surfaces)</p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Type</th><th>Description</th></tr>
+  <tr><td>GET</td><td><code>/assets?status=all|Voided|Reversed</code></td><td>Changed</td><td><code>counts.all/voided/reversed</code>, summary excludes undone</td></tr>
+  <tr><td>GET</td><td><code>/assets/:id</code></td><td>Changed</td><td><code>undo</code> when voided/reversed</td></tr>
+  <tr><td>GET/POST</td><td><code>/assets/:id/undo</code></td><td><strong>New</strong></td><td>Acquire asset void/reverse</td></tr>
+  <tr><td>GET</td><td><code>/assets/sales?status=all|Reversed</code></td><td>Changed</td><td>Counts + undo on rows</td></tr>
+  <tr><td>GET/POST</td><td><code>/assets/sales/:id/undo</code></td><td><strong>New</strong></td><td>Reverse asset sale</td></tr>
+  <tr><td>GET</td><td><code>/assets/disposals?status=all|Reversed</code></td><td>Changed</td><td>Counts + undo</td></tr>
+  <tr><td>GET/POST</td><td><code>/assets/disposals/:id/undo</code></td><td><strong>New</strong></td><td>Reverse disposal</td></tr>
+  <tr><td>GET</td><td><code>/assets/transfers?status=all|Voided|Reversed</code></td><td>Changed</td><td>Counts + undo</td></tr>
+  <tr><td>GET/POST</td><td><code>/assets/transfers/:id/undo</code></td><td><strong>New</strong></td><td>Void/reverse transfer</td></tr>
+</table>
+<p class="note">Extended surfaces (cash/bank/receivable user rows, unit-attributions, production records) are specified in the full Asset Undo PDF but not covered in this deployment pass.</p>
+
+<h2 id="payer-beneficiary-undo">9. Payer &amp; beneficiary undo</h2>
+<p><span class="badge changed">Changed</span> <span class="badge new">New routes</span> Source: <em>PAYERS_AND_BENEFICIARY_UNDO_API.pdf</em></p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Type</th><th>Description</th></tr>
+  <tr><td>GET</td><td><code>/payers?status=VOIDED</code></td><td>Changed</td><td>New filter; rows have <code>voided: boolean</code></td></tr>
+  <tr><td>GET</td><td><code>/payers/:id</code></td><td>Changed</td><td><code>voided</code>, <code>undo</code>; transactions include undone with <code>undo</code></td></tr>
+  <tr><td>GET/POST</td><td><code>/payers/:id/undo</code></td><td><strong>New</strong></td><td>Void only if zero transactions</td></tr>
+  <tr><td>GET/POST</td><td><code>/payers/:id/transactions/:transactionId/undo</code></td><td><strong>New</strong></td><td>Void/reverse transaction</td></tr>
+  <tr><td>GET</td><td><code>/beneficiaries?type=VOIDED</code></td><td>Changed</td><td>New filter; <code>voided</code> on rows</td></tr>
+  <tr><td>GET</td><td><code>/beneficiaries/:id</code></td><td>Changed</td><td><code>voided</code>, <code>undo</code>; rollups exclude undone txns</td></tr>
+  <tr><td>GET/POST</td><td><code>/beneficiaries/:id/undo</code></td><td><strong>New</strong></td><td>Void if zero transactions</td></tr>
+  <tr><td>GET/POST</td><td><code>/beneficiaries/:id/transactions/:transactionId/undo</code></td><td><strong>New</strong></td><td>Void/reverse; remittance reversed in same action</td></tr>
+</table>
+<p>Legacy transaction status <code>void</code> is returned as <code>voided</code>.</p>
+
+<h2 id="prospective-terms">10. Employee &amp; employer prospective terms</h2>
+<p><span class="badge behavior">Behavior change</span> Source: <em>EMPLOYEE_AND_EMPLOYER_PROSPECTIVE_TERMS.pdf</em></p>
+<p><strong>No new routes.</strong> PATCH behaviour changes only. Calendar uses <strong>Africa/Lagos</strong>.</p>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Change</th></tr>
+  <tr><td>PATCH</td><td><code>/employees/:id</code></td><td>Salary/relief changes apply from <code>effectiveMonth</code> (current Lagos month, or next if current PAYE is PAID/COMPLETED). Frozen payroll months never recompute.</td></tr>
+  <tr><td>PATCH</td><td><code>/employers/:id</code></td><td>Remuneration changes prospective; past income-history rows immutable once frozen.</td></tr>
+  <tr><td>GET</td><td><code>/payee?period=YYYY-MM</code></td><td>Past closed periods return frozen snapshots after PATCH.</td></tr>
+  <tr><td>GET</td><td><code>/employers/:id/income-history?year=YYYY</code></td><td>Past months frozen; current month may remain projection.</td></tr>
+</table>
+<p>Request/response payloads for PATCH are unchanged. Annual totals use frozen months + open remainder (not 12 × new salary).</p>
+
+<h2 id="shared-types">11. Shared undo types</h2>
+<pre>type RecordUndoAction = "void" | "reverse"
+type RecordUndoStatus = "voided" | "reversed"
+type RecordUndo = {
+  at: string          // ISO datetime
+  reason: string | null
+  reversingEntry?: { id: string; date: string } | null  // null after void
+}
+type UndoCheckResponse = { action: RecordUndoAction }
+type UndoResponse&lt;T&gt; = { action: RecordUndoAction; status: RecordUndoStatus; data: T }</pre>
+
+<h2>Quick reference — all new routes</h2>
+<table>
+  <tr><th>Route</th><th>Method</th></tr>
+  <tr><td><code>/sales/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/expenses/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/inventory/sales/:id</code></td><td>GET</td></tr>
+  <tr><td><code>/inventory/sales/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/liabilities/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/liabilities/repayments/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/assets/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/assets/sales/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/assets/disposals/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/assets/transfers/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/payers/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/payers/:id/transactions/:transactionId/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/beneficiaries/:id/undo</code></td><td>GET, POST</td></tr>
+  <tr><td><code>/beneficiaries/:id/transactions/:transactionId/undo</code></td><td>GET, POST</td></tr>
+</table>
+
+<div class="footer">
+  FileAm Backend API v2 — Generated 7 September 2026. Auth: Bearer token required on all <code>/mobile</code> routes unless noted.
+</div>
+
+</body>
+</html>

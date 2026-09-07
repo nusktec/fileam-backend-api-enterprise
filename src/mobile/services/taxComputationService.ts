@@ -19,16 +19,34 @@ import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { buildTaxEligibilityProfileForUser } from "./taxEligibilityService";
 import { resolveCitClassificationInputsForYear } from "./citClassificationInputsService";
-import { getPitAnnualEstimateForYear } from "./pitFilingService";
+import { getPitAnnualEstimateForYear, getPitMonthlyEstimateFromBooks } from "./pitFilingService";
 import {
   monthsInTaxRange,
   taxPeriodLabel,
   type TaxPeriodRange,
 } from "../../utils/taxPeriodQuery";
+import { SALE_STATUS } from "../../constants/salePaymentRules";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
+}
+
+/** Live sales/expenses only — excludes voided and reversed. */
+function liveBookWhere(userId: string, dateRange: { gte: Date; lte: Date }) {
+  return {
+    userId,
+    saleDate: dateRange,
+    status: { notIn: [SALE_STATUS.VOIDED, SALE_STATUS.REVERSED] },
+  };
+}
+
+function liveExpenseWhere(userId: string, dateRange: { gte: Date; lte: Date }) {
+  return {
+    userId,
+    expenseDate: dateRange,
+    status: { notIn: [SALE_STATUS.VOIDED, SALE_STATUS.REVERSED] },
+  };
 }
 
 /** Calendar-year net profit (Jan–Dec) — matches PIT/CIT filing book aggregation. */
@@ -156,14 +174,15 @@ export const taxComputationService = {
 
   async getForPeriod(userId: string, year: number, month: number) {
     const { start, end } = monthDateRangeUtc(year, month);
+    const dateRange = { gte: start, lte: end };
 
-    const [sales, expenses, personaPayload, business, fixedAssetRows, taxProfile] =
+    const [sales, expenses, personaPayload, business, fixedAssetRows, taxProfile, classificationInputs] =
       await Promise.all([
         prisma.sale.findMany({
-          where: { userId, saleDate: { gte: start, lte: end } },
+          where: liveBookWhere(userId, dateRange),
         }),
         prisma.expense.findMany({
-          where: { userId, expenseDate: { gte: start, lte: end } },
+          where: liveExpenseWhere(userId, dateRange),
         }),
         this.getPersonaPayloadForUser(userId),
         prisma.business.findFirst({
@@ -176,13 +195,8 @@ export const taxComputationService = {
           select: { purchaseCost: true },
         }),
         buildTaxEligibilityProfileForUser(userId),
+        resolveCitClassificationInputsForYear(userId, year),
       ]);
-
-    const annual = await this.getAnnualTaxEstimates(userId, year, {
-      business,
-      taxProfile,
-      fixedAssetRows,
-    });
 
     const { taxpayerContext, taxPersonaGuidance, employmentGrossSalaryMonthly } =
       personaPayload;
@@ -219,9 +233,39 @@ export const taxComputationService = {
     const estimatedWhtDeducted =
       (serviceIncome * WHT_RATE_SERVICES_PERCENT) / PERCENT;
     const monthlyProfit = netProfit;
+    const annualizedProfitFromMonth = normalizeMoneyAmount(monthlyProfit * 12);
+    const annualizedTurnoverFromMonth = normalizeMoneyAmount(totalIncome * 12);
+
+    const fixedAssetsProxy =
+      classificationInputs?.fixedAssets ??
+      taxProfile?.taxEligibility.inputs.totalFixedAssets ??
+      fixedAssetRows.reduce(
+        (s, a) => s + decimalToNumber(a.purchaseCost),
+        0,
+      );
+    const eligibilityTurnover =
+      classificationInputs?.turnover ?? annualizedTurnoverFromMonth;
+    const providesProfessional =
+      taxProfile?.taxEligibility.inputs.providesProfessionalServicesResolved;
+
+    const citEstimate = estimateCitFromBooks({
+      annualizedTurnover: eligibilityTurnover,
+      annualizedProfit: annualizedProfitFromMonth,
+      fixedAssets: fixedAssetsProxy,
+      businessType: business?.businessType,
+      sector: business?.sector,
+      providesProfessionalServices: providesProfessional,
+    });
+
+    const pitEstimate = await getPitMonthlyEstimateFromBooks(
+      annualizedProfitFromMonth,
+    );
+    const monthlyCitLiability = citEstimate.totalCitLiability / 12;
+    const monthlyPitPayable = pitEstimate.remainingPayable / 12;
+    const percentOfCitThreshold =
+      (eligibilityTurnover / CIT_TURNOVER_THRESHOLD_NGN) * PERCENT;
 
     const flags = taxPersonaGuidance.applicableTaxes;
-
     let payeMonthlyEstimate = 0;
     let payeDerivedFrom: "employees" | "profile_gross" | "none" = "none";
     if (flags.paye) {
@@ -247,8 +291,6 @@ export const taxComputationService = {
       0,
       VAT_TURNOVER_THRESHOLD_NGN - totalIncome,
     );
-    const percentOfCitThreshold =
-      (annual.eligibilityTurnover / CIT_TURNOVER_THRESHOLD_NGN) * PERCENT;
     const vatBelowThreshold =
       taxProfile?.taxEligibility.vatClassification ===
       VAT_CLASSIFICATION.SMALL_BUSINESS
@@ -257,8 +299,6 @@ export const taxComputationService = {
             VAT_CLASSIFICATION.NON_SMALL_BUSINESS
           ? false
           : totalIncome < VAT_TURNOVER_THRESHOLD_NGN;
-
-    const { citEstimate, pitEstimate, calendarYearProfit } = annual;
 
     return {
       taxpayerContext,
@@ -296,21 +336,19 @@ export const taxComputationService = {
         estimatedWhtDeducted,
       },
       cit: {
-        summary: normalizeMoneyAmount(citEstimate.totalCitLiability),
-        periodAmount: normalizeMoneyAmount(citEstimate.totalCitLiability / 12),
+        summary: normalizeMoneyAmount(monthlyCitLiability),
+        periodAmount: normalizeMoneyAmount(monthlyCitLiability),
         isSmallCompany: citEstimate.isSmallCompany,
         citClassification: taxProfile?.taxEligibility.citClassification ?? null,
         taxClassLabel: citEstimate.taxClassLabel,
         citThreshold: CIT_TURNOVER_THRESHOLD_NGN,
         percentOfThreshold: percentOfCitThreshold,
         monthlyProfit,
-        /** Calendar-year profit (same basis as CIT filing), not single-month × 12. */
-        annualizedProfit: calendarYearProfit,
-        annualizedTurnover: annual.eligibilityTurnover,
-        fixedAssetsProxy: annual.fixedAssetsProxy,
-        turnoverSource: annual.classificationInputs?.turnoverSource ?? "profile",
-        fixedAssetsSource:
-          annual.classificationInputs?.fixedAssetsSource ?? "profile",
+        annualizedProfit: annualizedProfitFromMonth,
+        annualizedTurnover: eligibilityTurnover,
+        fixedAssetsProxy,
+        turnoverSource: classificationInputs?.turnoverSource ?? "profile",
+        fixedAssetsSource: classificationInputs?.fixedAssetsSource ?? "profile",
         citRate: citEstimate.citRate,
         levyRate: citEstimate.levyRate,
         estimatedAnnualCit: citEstimate.estimatedAnnualCit,
@@ -320,18 +358,17 @@ export const taxComputationService = {
         lossCarryForward: 0,
       },
       pit: {
-        summary: pitEstimate.remainingPayable,
-        periodAmount: pitEstimate.remainingPayable / 12,
+        summary: normalizeMoneyAmount(monthlyPitPayable),
+        periodAmount: normalizeMoneyAmount(monthlyPitPayable),
         monthlyProfit,
-        /** Calendar-year trading profit (same basis as PIT filing). */
-        annualizedProfit: calendarYearProfit,
+        annualizedProfit: annualizedProfitFromMonth,
         chargeableIncomeProxyAnnual: pitEstimate.chargeableIncome,
         estimatedAnnualPit: pitEstimate.remainingPayable,
         pitLiability: pitEstimate.pitLiability,
-        payeCredits: pitEstimate.payeCredits,
-        whtCredits: pitEstimate.whtCredits,
+        payeCredits: 0,
+        whtCredits: 0,
         methodology:
-          "Aligned with PIT filing: calendar-year trading profit, employment income, PAYE/WHT credits (no draft overrides).",
+          "Per-month CIT/PIT: this month's sales and expenses only (annualized ×12 for rate application).",
       },
       paye: {
         applicable: flags.paye,
@@ -386,8 +423,6 @@ export const taxComputationService = {
         : ("none" as const);
 
     const rangeShare = months.length / 12;
-    const annualCitLiability = anchor.cit.totalCitLiability;
-    const annualPitPayable = anchor.pit.estimatedAnnualPit;
 
     return {
       taxpayerContext: anchor.taxpayerContext,
@@ -425,19 +460,20 @@ export const taxComputationService = {
       },
       cit: {
         ...anchor.cit,
-        summary: normalizeMoneyAmount(annualCitLiability * rangeShare),
-        periodAmount: normalizeMoneyAmount(annualCitLiability * rangeShare),
+        summary: normalizeMoneyAmount(sum((c) => c.cit.periodAmount)),
+        periodAmount: normalizeMoneyAmount(sum((c) => c.cit.periodAmount)),
         monthlyProfit: sum((c) => c.overview.netProfit),
-        annualizedProfit: anchor.cit.annualizedProfit,
+        annualizedProfit: sum((c) => c.cit.annualizedProfit) / months.length,
         annualizedTurnover: anchor.cit.annualizedTurnover,
+        totalCitLiability: sum((c) => c.cit.totalCitLiability),
       },
       pit: {
         ...anchor.pit,
-        summary: normalizeMoneyAmount(annualPitPayable * rangeShare),
-        periodAmount: normalizeMoneyAmount(annualPitPayable * rangeShare),
+        summary: normalizeMoneyAmount(sum((c) => c.pit.periodAmount)),
+        periodAmount: normalizeMoneyAmount(sum((c) => c.pit.periodAmount)),
         monthlyProfit: sum((c) => c.overview.netProfit),
-        annualizedProfit: anchor.pit.annualizedProfit,
-        estimatedAnnualPit: annualPitPayable,
+        annualizedProfit: sum((c) => c.pit.annualizedProfit) / months.length,
+        estimatedAnnualPit: sum((c) => c.pit.estimatedAnnualPit),
       },
       paye: {
         ...anchor.paye,

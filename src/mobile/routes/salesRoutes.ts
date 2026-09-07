@@ -10,6 +10,8 @@ import {
   markInvoicePaid,
   updateSalePaymentStatus,
   deleteSale,
+  getSaleUndoCheck,
+  undoSale,
 } from "../controllers/salesController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
@@ -20,6 +22,7 @@ import {
 import { updateSaleValidation } from "../../middlewares/validations/updateSaleValidation";
 import { updateSalePaymentStatusValidation } from "../../middlewares/validations/salePaymentStatusValidation";
 import { validateIdParam } from "../../middlewares/validations/mobileValidation";
+import { saleUndoValidation } from "../../middlewares/validations/recordUndoValidation";
 import { withPagination } from "../../middlewares/paginationMiddleware";
 
 const router = express.Router();
@@ -50,6 +53,14 @@ router.patch(
   express.json(),
   updateSalePaymentStatusValidation,
   updateSalePaymentStatus,
+);
+router.get("/:id/undo", validateIdParam, getSaleUndoCheck);
+router.post(
+  "/:id/undo",
+  validateIdParam,
+  express.json(),
+  saleUndoValidation,
+  undoSale,
 );
 router.get("/:id/details", validateIdParam, getSaleDetails);
 router.get("/:id/download-invoice", validateIdParam, downloadSaleInvoice);

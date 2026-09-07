@@ -37,6 +37,11 @@ import {
   assertInvoicePaymentsAppendOnly,
 } from "../../utils/invoicePaymentLedger";
 import { resolveSettlementBankCode } from "../../utils/settlementBank";
+import {
+  isUndoneStatus,
+  mapUndoPayload,
+  RECORD_UNDO_STATUS,
+} from "../../constants/recordUndo";
 
 const BULK_CREATE_MAX = 100;
 
@@ -236,6 +241,42 @@ function mapSaleSummary(sale: {
   };
 }
 
+function assertSaleEditable(status: string): void {
+  if (isUndoneStatus(status)) {
+    throw new HttpReplyError(
+      409,
+      "This sale has been voided or reversed and cannot be modified",
+    );
+  }
+}
+
+function buildSaleListStatusFilter(
+  status?: string,
+): string | { notIn: string[] } | { in: string[] } {
+  const normalized = status?.trim() || "all";
+  if (normalized === "all") {
+    return {
+      notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+    };
+  }
+  if (
+    normalized === RECORD_UNDO_STATUS.VOIDED ||
+    normalized === "Voided"
+  ) {
+    return RECORD_UNDO_STATUS.VOIDED;
+  }
+  if (
+    normalized === RECORD_UNDO_STATUS.REVERSED ||
+    normalized === "Reversed"
+  ) {
+    return RECORD_UNDO_STATUS.REVERSED;
+  }
+  if (normalized === "Paid") {
+    return { in: [SALE_STATUS.PAID, "Paid"] };
+  }
+  return normalized;
+}
+
 function resolveSaleStatusAfterPatch(
   sale: {
     paymentType: string;
@@ -306,65 +347,65 @@ export const salesService = {
       dateTo?: Date;
     },
   ) {
-    const where: {
+    const normalizedStatus = status?.trim() || "all";
+    const baseWhere: {
       userId: string;
-      status?: string;
       saleDate?: { gte?: Date; lte?: Date };
+      status?: string | { notIn: string[] } | { in: string[] };
     } = { userId };
-    if (status && status !== "all") where.status = status;
     if (opts?.dateFrom || opts?.dateTo) {
-      where.saleDate = {};
-      if (opts.dateFrom) where.saleDate.gte = opts.dateFrom;
-      if (opts.dateTo) where.saleDate.lte = opts.dateTo;
+      baseWhere.saleDate = {};
+      if (opts.dateFrom) baseWhere.saleDate.gte = opts.dateFrom;
+      if (opts.dateTo) baseWhere.saleDate.lte = opts.dateTo;
     }
+
+    const liveWhere = {
+      ...baseWhere,
+      status: {
+        notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+      },
+    };
+
+    const listWhere = {
+      ...baseWhere,
+      status: buildSaleListStatusFilter(normalizedStatus),
+    };
+
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
 
     const [sales, total, summary, counts] = await Promise.all([
       prisma.sale.findMany({
-        where,
+        where: listWhere,
         orderBy: [{ saleDate: order }, { createdAt: order }],
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.sale.count({ where }),
+      prisma.sale.count({ where: listWhere }),
       prisma.sale.aggregate({
-        where,
+        where: liveWhere,
         _sum: { amount: true, vatAmount: true, totalAmount: true },
       }),
       prisma.sale.groupBy({
         by: ["status"],
-        where,
+        where: baseWhere,
         _count: true,
       }),
     ]);
     const mappedSales = sales.map((s) => mapSaleSummary(s));
-    // Prefer computed statuses for counts (Overdue flips with the calendar).
-    const countByStatus = mappedSales.reduce(
-      (acc, s) => {
-        acc[s.status] = (acc[s.status] ?? 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
-    const paidCount =
-      (countByStatus[SALE_STATUS.PAID] ?? 0) + (countByStatus["Paid"] ?? 0);
-    const pendingCount = countByStatus[SALE_STATUS.PENDING] ?? 0;
-    const overdueCount = countByStatus[SALE_STATUS.OVERDUE] ?? 0;
-    const partialCount = countByStatus[SALE_STATUS.PARTIAL] ?? 0;
-    const inProgressCount = countByStatus[SALE_STATUS.IN_PROGRESS] ?? 0;
-    const cancelledCount = countByStatus[SALE_STATUS.CANCELLED] ?? 0;
 
-    // Full-dataset counts from DB groupBy ("Paid" kept for legacy rows).
-    const dbCount = (status: string) =>
-      counts.find((c) => c.status === status)?._count ?? 0;
+    const dbCount = (s: string) =>
+      counts.find((c) => c.status === s)?._count ?? 0;
     const dbPaid = dbCount(SALE_STATUS.PAID) + dbCount("Paid");
     const dbPending = dbCount(SALE_STATUS.PENDING);
     const dbOverdue = dbCount(SALE_STATUS.OVERDUE);
     const dbPartial = dbCount(SALE_STATUS.PARTIAL);
     const dbInProgress = dbCount(SALE_STATUS.IN_PROGRESS);
-    const dbCancelled = dbCount(SALE_STATUS.CANCELLED);
+    const dbVoided = dbCount(RECORD_UNDO_STATUS.VOIDED);
+    const dbReversed = dbCount(RECORD_UNDO_STATUS.REVERSED);
+    const liveAll =
+      dbPaid + dbPending + dbOverdue + dbPartial + dbInProgress;
 
     return {
       summary: {
@@ -375,22 +416,14 @@ export const salesService = {
         totalIncomeIncludingVat: decimalToNumber(summary._sum.totalAmount),
       },
       counts: {
-        all: total,
+        all: liveAll,
         paid: dbPaid,
         pending: dbPending,
         overdue: dbOverdue,
         partial: dbPartial,
-        inProgress: dbInProgress,
-        cancelled: dbCancelled,
-        /** Page-local computed counts (for UI that only shows this page). */
-        page: {
-          paid: paidCount,
-          pending: pendingCount,
-          overdue: overdueCount,
-          partial: partialCount,
-          inProgress: inProgressCount,
-          cancelled: cancelledCount,
-        },
+        in_progress: dbInProgress,
+        voided: dbVoided,
+        reversed: dbReversed,
       },
       sales: mappedSales,
       total,
@@ -415,6 +448,7 @@ export const salesService = {
       vatInclusive: sale.vatInclusive,
       vatableIncome: sale.vatableIncome,
       serviceIncome: sale.serviceIncome,
+      undo: mapUndoPayload(sale),
     };
   },
 
@@ -719,6 +753,7 @@ export const salesService = {
       where: { id: saleId, userId },
     });
     if (!sale) return null;
+    assertSaleEditable(sale.status);
 
     const periodsToSync = [calendarPeriodFromDate(sale.saleDate)];
 
@@ -910,6 +945,7 @@ export const salesService = {
       where: { id: saleId, userId },
     });
     if (!sale) return null;
+    assertSaleEditable(sale.status);
 
     if (!isSalePaidStatus(status)) {
       throw new HttpReplyError(
@@ -994,6 +1030,7 @@ export const salesService = {
       where: { id: saleId, userId },
     });
     if (!sale) return null;
+    assertSaleEditable(sale.status);
 
     if (!isInvoicePaymentType(sale.paymentType)) {
       throw new HttpReplyError(

@@ -18,6 +18,15 @@ export const INVENTORY_SLOW_MOVING_GRACE_DAYS = 45;
 /** Window to measure velocity for “moving low”. */
 export const INVENTORY_VELOCITY_DAYS = 60;
 
+/** Inventory sale lifecycle (undo API). */
+export const INVENTORY_SALE_STATUS = {
+  LIVE: "live",
+  REVERSED: "reversed",
+} as const;
+
+export type InventorySaleStatus =
+  (typeof INVENTORY_SALE_STATUS)[keyof typeof INVENTORY_SALE_STATUS];
+
 /** Book value of on-hand inventory at purchase cost (qty × unit cost). */
 export function computeInventoryLineValue(
   quantity: number,

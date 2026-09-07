@@ -55,6 +55,11 @@ export const listPayersValidation = [
 
 export const payerIdParamValidation = [param("id").isUUID()];
 
+export const payerTransactionIdParamValidation = [
+  param("id").isUUID(),
+  param("transactionId").isUUID(),
+];
+
 export const createPayerTransactionValidation = [
   param("id").isUUID(),
   check("date").matches(/^\d{4}-\d{2}-\d{2}$/),

@@ -150,3 +150,38 @@ export const createLiabilityRepaymentValidation = [
     .withMessage("evidenceUrl must be a valid URL"),
   handleValidation,
 ];
+
+export const validateLiabilityUndo = [
+  check("reason")
+    .trim()
+    .notEmpty()
+    .withMessage("reason is required")
+    .isIn([
+      "Created by mistake",
+      "Duplicate liability",
+      "Wrong amount",
+      "Wrong creditor",
+      "Wrong date",
+      "Not a business liability",
+      "Other",
+    ])
+    .withMessage("reason must be a valid liability undo reason"),
+  handleValidation,
+];
+
+export const validateLiabilityRepaymentUndo = [
+  check("reason")
+    .trim()
+    .notEmpty()
+    .withMessage("reason is required")
+    .isIn([
+      "Created by mistake",
+      "Duplicate repayment",
+      "Wrong amount",
+      "Wrong liability",
+      "Wrong date",
+      "Other",
+    ])
+    .withMessage("reason must be a valid liability repayment undo reason"),
+  handleValidation,
+];

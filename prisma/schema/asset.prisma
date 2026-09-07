@@ -26,8 +26,12 @@ model Asset {
   assignToConsultant     Boolean  @default(false) @map("assign_to_consultant")
   assignedConsultantId   String?  @map("assigned_consultant_id")
   consultantReviewStatus String?  @map("consultant_review_status")
-  /** ACTIVE | AWAITING | PENDING_REVIEW | SOLD | DISPOSED (PENDING legacy) */
+  /** ACTIVE | SOLD | DISPOSED | voided | reversed */
   status                 String   @default("ACTIVE")
+  undoAt                 DateTime? @map("undo_at")
+  undoReason             String?   @map("undo_reason")
+  reversingEntryId       String?   @map("reversing_entry_id")
+  reversingEntryDate     DateTime? @map("reversing_entry_date") @db.Date
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
@@ -76,8 +80,12 @@ model AssetTransfer {
   toLocation   String   @map("to_location")
   transferDate DateTime @map("transfer_date") @db.Date
   reason       String
-  /** PENDING | COMPLETED | CANCELLED */
+  /** PENDING | COMPLETED | CANCELLED | voided | reversed */
   status       String   @default("PENDING")
+  undoAt       DateTime? @map("undo_at")
+  undoReason   String?   @map("undo_reason")
+  reversingEntryId String? @map("reversing_entry_id")
+  reversingEntryDate DateTime? @map("reversing_entry_date") @db.Date
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -102,6 +110,12 @@ model AssetSale {
   /** GAIN | LOSS | BREAK_EVEN */
   gainLossType    String   @map("gain_loss_type")
   gainLossAmount  Decimal  @map("gain_loss_amount") @db.Decimal(14, 2)
+  /** live | reversed */
+  status          String   @default("live")
+  undoAt          DateTime? @map("undo_at")
+  undoReason      String?   @map("undo_reason")
+  reversingEntryId String? @map("reversing_entry_id")
+  reversingEntryDate DateTime? @map("reversing_entry_date") @db.Date
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -123,6 +137,12 @@ model AssetDisposal {
   note                String
   evidenceUrl         String?  @map("evidence_url")
   bookValueAtDisposal Decimal  @map("book_value_at_disposal") @db.Decimal(14, 2)
+  /** live | reversed */
+  status              String   @default("live")
+  undoAt              DateTime? @map("undo_at")
+  undoReason          String?   @map("undo_reason")
+  reversingEntryId    String?   @map("reversing_entry_id")
+  reversingEntryDate  DateTime? @map("reversing_entry_date") @db.Date
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 

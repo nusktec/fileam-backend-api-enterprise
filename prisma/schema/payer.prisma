@@ -18,6 +18,9 @@ model Payer {
   whtRate       Decimal  @default(0) @map("wht_rate") @db.Decimal(5, 2)
   whtNote       String?  @map("wht_note")
   since         String
+  voided        Boolean  @default(false)
+  undoAt        DateTime? @map("undo_at")
+  undoReason    String?   @map("undo_reason")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -43,6 +46,10 @@ model PayerTransaction {
   notes             String?
   invoiceDueDate    String?   @map("invoice_due_date")
   invoiceAmountPaid Json      @default("{\"total\":0,\"items\":[]}") @map("invoice_amount_paid")
+  undoAt            DateTime? @map("undo_at")
+  undoReason        String?   @map("undo_reason")
+  reversingEntryId  String?   @map("reversing_entry_id")
+  reversingEntryDate DateTime? @map("reversing_entry_date") @db.Date
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 

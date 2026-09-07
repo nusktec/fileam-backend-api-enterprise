@@ -16,6 +16,11 @@ import {
   type WhtClass,
 } from "../../constants/beneficiary";
 import { formatTodayYmd } from "../../constants/employer";
+import {
+  isUndoneStatus,
+  mapUndoPayload,
+  normalizeUndoTxnStatus,
+} from "../../constants/recordUndo";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
 
@@ -54,6 +59,11 @@ type BeneficiaryRow = {
   remitted: Decimal;
   lastTransactionDate: string | null;
   whtDueDate: string | null;
+  voided: boolean;
+  undoAt?: Date | null;
+  undoReason?: string | null;
+  reversingEntryId?: string | null;
+  reversingEntryDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -92,6 +102,8 @@ function mapBeneficiaryBase(row: BeneficiaryRow) {
       whtDueDate: row.whtDueDate,
       todayYmd: todayYmd(),
     }),
+    voided: row.voided,
+    undo: row.voided ? mapUndoPayload(row) : null,
     createdAt: row.createdAt.toISOString().slice(0, 10),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -116,6 +128,10 @@ function mapTransactionRow(row: {
   whtAmount: Decimal;
   netPayable: Decimal;
   status: string;
+  undoAt?: Date | null;
+  undoReason?: string | null;
+  reversingEntryId?: string | null;
+  reversingEntryDate?: Date | null;
   createdAt: Date;
 }) {
   return {
@@ -136,7 +152,8 @@ function mapTransactionRow(row: {
     whtRate: roundMoney(d(row.whtRate)),
     whtAmount: roundMoney(d(row.whtAmount)),
     netPayable: roundMoney(d(row.netPayable)),
-    status: row.status,
+    status: normalizeUndoTxnStatus(row.status),
+    undo: mapUndoPayload(row),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -179,8 +196,9 @@ async function recomputeAndPersistBalances(beneficiaryId: string) {
   const transactions = await prisma.beneficiaryTransaction.findMany({
     where: { beneficiaryId },
   });
+  const liveTransactions = transactions.filter((t) => !isUndoneStatus(t.status));
   const rollup = computeBeneficiaryLedger(
-    transactions.map((t) => ({
+    liveTransactions.map((t) => ({
       entryType: t.entryType,
       date: t.date,
       grossAmount: d(t.grossAmount),
@@ -283,15 +301,21 @@ export const beneficiariesService = {
     });
 
     let filteredRows = [...rows];
-    if (filterType === "VENDOR") {
-      filteredRows = filteredRows.filter((r) => r.beneficiaryType === "VENDOR");
-    } else if (filterType === "RECEIVING_PARTY") {
-      filteredRows = filteredRows.filter(
-        (r) => r.beneficiaryType === "RECEIVING_PARTY",
-      );
+    if (filterType === "VOIDED") {
+      filteredRows = filteredRows.filter((r) => r.voided);
+    } else {
+      filteredRows = filteredRows.filter((r) => !r.voided);
+      if (filterType === "VENDOR") {
+        filteredRows = filteredRows.filter((r) => r.beneficiaryType === "VENDOR");
+      } else if (filterType === "RECEIVING_PARTY") {
+        filteredRows = filteredRows.filter(
+          (r) => r.beneficiaryType === "RECEIVING_PARTY",
+        );
+      }
     }
 
-    const allMapped = rows.map((r) => mapBeneficiaryBase(r));
+    const liveRows = rows.filter((r) => !r.voided);
+    const allMapped = liveRows.map((r) => mapBeneficiaryBase(r));
     let items = filteredRows.map((r) => mapBeneficiaryBase(r));
 
     if (filterType === "WHT_DUE") {
@@ -331,6 +355,10 @@ export const beneficiariesService = {
     };
   },
 
+  async recomputeBalances(beneficiaryId: string) {
+    await recomputeAndPersistBalances(beneficiaryId);
+  },
+
   async create(userId: string, body: Record<string, unknown>) {
     validateCreateOrUpdateBody(body);
     const profile = profileDataFromBody(body);
@@ -354,7 +382,9 @@ export const beneficiariesService = {
     ]);
 
     const ledger = computeBeneficiaryLedger(
-      transactions.map((t) => ({
+      transactions
+        .filter((t) => !isUndoneStatus(t.status))
+        .map((t) => ({
         entryType: t.entryType,
         date: t.date,
         grossAmount: d(t.grossAmount),

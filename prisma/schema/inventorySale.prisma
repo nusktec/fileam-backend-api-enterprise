@@ -5,12 +5,21 @@ model InventorySale {
   totalAmount   Decimal  @map("total_amount") @db.Decimal(14, 2)
   customerName  String?  @map("customer_name")
   customerId    String?  @map("customer_id")
+  /** Linked Sales record id when createSalesInvoice was true. */
+  linkedSaleId  String?  @unique @map("linked_sale_id")
+  /** live | reversed */
+  status        String   @default("live")
+  undoAt        DateTime? @map("undo_at")
+  undoReason    String?   @map("undo_reason")
+  reversingEntryId String? @map("reversing_entry_id")
+  reversingEntryDate DateTime? @map("reversing_entry_date") @db.Date
 
   user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   lines       InventorySaleLine[]
   movements   InventoryMovement[]
 
   @@index([userId, soldAt])
+  @@index([userId, status])
   @@map("inventory_sales")
 }
 

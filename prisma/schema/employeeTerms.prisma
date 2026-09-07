@@ -1,0 +1,47 @@
+/** Prospective compensation snapshot — one row per effectiveFrom month. */
+model EmployeeTerms {
+  id                  String   @id @default(uuid())
+  employeeId          String   @map("employee_id")
+  effectiveFrom       String   @map("effective_from") // YYYY-MM
+  basicSalary         Decimal  @map("basic_salary") @db.Decimal(14, 2)
+  housingAllowance    Decimal  @default(0) @map("housing_allowance") @db.Decimal(14, 2)
+  transportAllowance  Decimal  @default(0) @map("transport_allowance") @db.Decimal(14, 2)
+  mealAllowance       Decimal  @default(0) @map("meal_allowance") @db.Decimal(14, 2)
+  otherAllowances     Decimal  @default(0) @map("other_allowances") @db.Decimal(14, 2)
+  stateOfResidence    String?  @map("state_of_residence")
+  employmentType      String   @map("employment_type")
+  annualHouseRent     Decimal  @default(0) @map("annual_house_rent") @db.Decimal(14, 2)
+  nhf                 Boolean  @default(true)
+  nhisHealthInsuranceMonthly Decimal @default(0) @map("nhis_health_insurance") @db.Decimal(14, 2)
+  lifeAssurancePremiumMonthly Decimal @default(0) @map("life_assurance_premium") @db.Decimal(14, 2)
+  mortgageInterestMonthly Decimal @default(0) @map("mortgage_interest") @db.Decimal(14, 2)
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, effectiveFrom])
+  @@index([employeeId, effectiveFrom])
+  @@map("employee_terms")
+}
+
+/** Frozen payroll period snapshot — never rewritten after materialisation. */
+model PayrollPeriodSnapshot {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  employeeId      String   @map("employee_id")
+  periodKey       String   @map("period_key") // YYYY-MM
+  gross           Decimal  @db.Decimal(14, 2)
+  paye            Decimal  @db.Decimal(14, 2)
+  pensionEmployee Decimal  @map("pension_employee") @db.Decimal(14, 2)
+  pensionEmployer Decimal  @map("pension_employer") @db.Decimal(14, 2)
+  nhf             Decimal  @db.Decimal(14, 2)
+  netPay          Decimal  @map("net_pay") @db.Decimal(14, 2)
+  frozenAt        DateTime @default(now()) @map("frozen_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, periodKey])
+  @@index([userId, periodKey])
+  @@map("payroll_period_snapshots")
+}

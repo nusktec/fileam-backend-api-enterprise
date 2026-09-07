@@ -9,6 +9,8 @@ import {
   updateExpensePaymentStatus,
   downloadExpenseReceipt,
   deleteExpense,
+  getExpenseUndoCheck,
+  undoExpense,
 } from "../controllers/expensesController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
@@ -20,6 +22,7 @@ import { listExpensesValidation } from "../../middlewares/validations/listExpens
 import { updateExpenseValidation } from "../../middlewares/validations/updateExpenseValidation";
 import { updateExpensePaymentStatusValidation } from "../../middlewares/validations/expensePaymentStatusValidation";
 import { validateIdParam } from "../../middlewares/validations/mobileValidation";
+import { expenseUndoValidation } from "../../middlewares/validations/recordUndoValidation";
 import { withPagination } from "../../middlewares/paginationMiddleware";
 
 const router = express.Router();
@@ -43,6 +46,14 @@ router.post(
   bulkCreateExpenses,
 );
 router.delete("/:id", validateIdParam, deleteExpense);
+router.get("/:id/undo", validateIdParam, getExpenseUndoCheck);
+router.post(
+  "/:id/undo",
+  validateIdParam,
+  express.json(),
+  expenseUndoValidation,
+  undoExpense,
+);
 router.get("/:id/details", validateIdParam, getExpenseDetails);
 router.get("/:id/download-receipt", validateIdParam, downloadExpenseReceipt);
 router.patch(

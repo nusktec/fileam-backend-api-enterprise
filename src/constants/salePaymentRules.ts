@@ -3,6 +3,7 @@ import {
   coerceInvoiceAmountPaid,
   type InvoiceAmountPaid,
 } from "./invoiceAmountPaid";
+import { isUndoneStatus } from "./recordUndo";
 
 /** Matches mobile validation `paymentType` values. */
 export const PAYMENT_TYPE_CASH = "Cash";
@@ -25,6 +26,8 @@ export const SALE_STATUS = {
   PENDING: "Pending",
   OVERDUE: "Overdue",
   PARTIAL: "Partial",
+  VOIDED: "voided",
+  REVERSED: "reversed",
 } as const;
 
 export type SaleStatusValue = (typeof SALE_STATUS)[keyof typeof SALE_STATUS];
@@ -133,6 +136,7 @@ export function resolveSaleInvoiceStatus(sale: {
   totalAmount: number | { toNumber?: () => number };
   invoiceDueDate?: Date | null;
 }): string {
+  if (isUndoneStatus(sale.status)) return sale.status!;
   if (sale.status === SALE_STATUS.CANCELLED) return SALE_STATUS.CANCELLED;
   if (sale.paymentType != null && !isInvoicePaymentType(sale.paymentType)) {
     return sale.status ?? SALE_STATUS.IN_PROGRESS;

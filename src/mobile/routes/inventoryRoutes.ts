@@ -4,6 +4,9 @@ import {
   getInventoryAlerts,
   listInventoryMovements,
   listInventorySales,
+  getInventorySaleDetail,
+  getInventorySaleUndoCheck,
+  undoInventorySale,
   sellFromInventory,
   addInventoryItem,
   listInventoryItems,
@@ -23,6 +26,7 @@ import {
   validateInventoryRestock,
   validateInventoryAdjustment,
   validateUpdateInventoryItem,
+  validateInventorySaleUndo,
 } from "../../middlewares/validations/inventoryValidation";
 
 const router = express.Router();
@@ -33,6 +37,15 @@ router.get("/overview", getInventoryOverview);
 router.get("/alerts", getInventoryAlerts);
 router.get("/movements", withPagination(), listInventoryMovements);
 router.get("/sales", withPagination(), listInventorySales);
+router.get("/sales/:id/undo", validateIdParam, getInventorySaleUndoCheck);
+router.post(
+  "/sales/:id/undo",
+  validateIdParam,
+  express.json(),
+  validateInventorySaleUndo,
+  undoInventorySale,
+);
+router.get("/sales/:id", validateIdParam, getInventorySaleDetail);
 router.post("/sell", express.json(), validateInventorySell, sellFromInventory);
 
 router.post("/items", express.json(), validateAddInventoryItem, addInventoryItem);

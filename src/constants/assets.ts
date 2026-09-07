@@ -168,6 +168,15 @@ export function isAssetOnBooks(status: string): boolean {
   return (ASSET_ON_BOOKS_STATUSES as readonly string[]).includes(status);
 }
 
+/** Asset sale / disposal lifecycle (undo API). */
+export const ASSET_EVENT_STATUS = {
+  LIVE: "live",
+  REVERSED: "reversed",
+} as const;
+
+export type AssetEventStatus =
+  (typeof ASSET_EVENT_STATUS)[keyof typeof ASSET_EVENT_STATUS];
+
 export function isAssetInReviewStatus(status: string): boolean {
   return (
     status === ASSET_STATUS.AWAITING ||

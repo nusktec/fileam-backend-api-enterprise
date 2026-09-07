@@ -7,8 +7,8 @@ import {
   type TaxType,
   type PayableStatus,
 } from "../../constants/taxPayable";
-import { citDueDateForYear, CIT_PERIOD_MONTH } from "../../constants/citFiling";
-import { pitDueDateForYear, PIT_PERIOD_MONTH } from "../../constants/pitFiling";
+import { citDueDateForYear } from "../../constants/citFiling";
+import { pitDueDateForYear } from "../../constants/pitFiling";
 import { utcCalendarDate } from "../../utils/dateRangeQuery";
 import {
   monthsInTaxRange,
@@ -18,8 +18,7 @@ import {
 const PAYMENT_BASE_URL =
   process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
 
-const MONTHLY_SYNC_TAX_TYPES: TaxType[] = ["VAT", "WHT", "PAYE"];
-const ANNUAL_SYNC_TAX_TYPES: TaxType[] = ["CIT", "PIT"];
+const MONTHLY_SYNC_TAX_TYPES: TaxType[] = ["VAT", "WHT", "PAYE", "CIT", "PIT"];
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -85,7 +84,7 @@ type PeriodComputation = Awaited<
   ReturnType<typeof taxComputationService.getForQuery>
 >;
 
-/** VAT / WHT / PAYE — amounts for the selected book period. */
+/** All tax types — per book month (CIT/PIT from that month's activity). */
 function monthlyAmountsFromComputation(
   computation: PeriodComputation,
 ): Array<{ taxType: TaxType; amountDue: number }> {
@@ -110,28 +109,17 @@ function monthlyAmountsFromComputation(
           ? Math.max(0, computation.paye.periodAmount)
           : 0,
     },
-  ];
-}
-
-/** CIT / PIT — full calendar-year liability (matches filing). Stored on periodMonth 12. */
-function annualAmountsFromComputation(
-  computation: PeriodComputation,
-): Array<{ taxType: TaxType; amountDue: number; periodMonth: number }> {
-  const flags = computation.taxPersonaGuidance.applicableTaxes;
-  return [
     {
       taxType: "CIT",
       amountDue: flags.cit
-        ? Math.max(0, computation.cit.totalCitLiability)
+        ? Math.max(0, computation.cit.periodAmount)
         : 0,
-      periodMonth: CIT_PERIOD_MONTH,
     },
     {
       taxType: "PIT",
       amountDue: flags.pit
-        ? Math.max(0, computation.pit.estimatedAnnualPit)
+        ? Math.max(0, computation.pit.periodAmount)
         : 0,
-      periodMonth: PIT_PERIOD_MONTH,
     },
   ];
 }
@@ -144,12 +132,8 @@ export function totalsFromComputation(computation: PeriodComputation) {
     flags.paye && computation.paye.applicable
       ? Math.max(0, computation.paye.periodAmount)
       : 0;
-  const cit = flags.cit
-    ? Math.max(0, computation.cit.totalCitLiability)
-    : 0;
-  const pit = flags.pit
-    ? Math.max(0, computation.pit.estimatedAnnualPit)
-    : 0;
+  const cit = flags.cit ? Math.max(0, computation.cit.periodAmount) : 0;
+  const pit = flags.pit ? Math.max(0, computation.pit.periodAmount) : 0;
   const total = vat + wht + cit + pit + paye;
   return { vat, wht, cit, pit, paye, total };
 }
@@ -254,16 +238,11 @@ export const taxPayablesService = {
     periods: Array<{ year: number; month: number }>,
   ) {
     const seen = new Set<string>();
-    const years = new Set<number>();
     for (const p of periods) {
       const key = periodKey(p.year, p.month);
       if (seen.has(key)) continue;
       seen.add(key);
-      years.add(p.year);
       await this.syncPeriodPayables(userId, p.year, p.month);
-    }
-    for (const year of years) {
-      await this.syncAnnualTaxPayables(userId, year);
     }
   },
 
@@ -274,11 +253,16 @@ export const taxPayablesService = {
       year,
       month,
     );
-    const filingDueDate = getMonthlyFilingDueDate(year, month);
 
     for (const { taxType, amountDue } of monthlyAmountsFromComputation(
       computation,
     )) {
+      const filingDueDate =
+        taxType === "CIT"
+          ? getAnnualFilingDueDate("CIT", year)
+          : taxType === "PIT"
+            ? getAnnualFilingDueDate("PIT", year)
+            : getMonthlyFilingDueDate(year, month);
       await upsertPayableRow({
         userId,
         taxType,
@@ -288,45 +272,6 @@ export const taxPayablesService = {
         filingDueDate,
       });
     }
-
-    await this.removeStaleMonthlyCitPitRows(userId, year);
-  },
-
-  /** CIT / PIT once per calendar year (periodMonth 12) — aligned with filing. */
-  async syncAnnualTaxPayables(userId: string, year: number) {
-    const computation = await taxComputationService.getForPeriod(
-      userId,
-      year,
-      12,
-    );
-
-    for (const { taxType, amountDue, periodMonth } of annualAmountsFromComputation(
-      computation,
-    )) {
-      await upsertPayableRow({
-        userId,
-        taxType,
-        periodYear: year,
-        periodMonth,
-        amountDue,
-        filingDueDate: getAnnualFilingDueDate(taxType, year),
-      });
-    }
-
-    await this.removeStaleMonthlyCitPitRows(userId, year);
-  },
-
-  /** Remove legacy monthly CIT/PIT rows created before annual sync fix. */
-  async removeStaleMonthlyCitPitRows(userId: string, year: number) {
-    await prisma.taxPayable.deleteMany({
-      where: {
-        userId,
-        taxType: { in: [...ANNUAL_SYNC_TAX_TYPES] },
-        periodYear: year,
-        periodMonth: { not: CIT_PERIOD_MONTH },
-        submittedAt: null,
-      },
-    });
   },
 
   async ensurePayablesForUser(userId: string, monthsBack = 12) {
@@ -375,7 +320,6 @@ export const taxPayablesService = {
           opts.periodYear,
           opts.periodMonth,
         );
-        await this.syncAnnualTaxPayables(userId, opts.periodYear);
       } else {
         await this.syncPayablesForPeriods(userId, months);
       }
@@ -392,12 +336,13 @@ export const taxPayablesService = {
       userId: string;
       status?: string;
       taxType?: string;
+      periodYear?: number;
+      periodMonth?: number;
       filingDueDate?: { gte?: Date; lte?: Date };
       OR?: Array<{
         periodYear?: number;
         periodMonth?: number;
         taxType?: { in: TaxType[] };
-        AND?: Array<{ periodYear: number; periodMonth: number }>;
       }>;
     } = {
       userId,
@@ -416,47 +361,17 @@ export const taxPayablesService = {
         | undefined;
 
       if (months.length === 1 && !taxTypeFilter) {
-        where.OR = [
-          {
-            periodYear: opts.periodYear,
-            periodMonth: opts.periodMonth,
-            taxType: { in: [...MONTHLY_SYNC_TAX_TYPES] },
-          },
-          {
-            periodYear: opts.periodYear,
-            periodMonth: CIT_PERIOD_MONTH,
-            taxType: { in: [...ANNUAL_SYNC_TAX_TYPES] },
-          },
-        ];
+        where.periodYear = opts.periodYear;
+        where.periodMonth = opts.periodMonth;
       } else if (months.length === 1 && taxTypeFilter) {
-        if (ANNUAL_SYNC_TAX_TYPES.includes(taxTypeFilter)) {
-          where.OR = [
-            {
-              periodYear: opts.periodYear,
-              periodMonth: CIT_PERIOD_MONTH,
-              taxType: { in: [taxTypeFilter] },
-            },
-          ];
-        } else {
-          where.OR = [
-            {
-              periodYear: opts.periodYear,
-              periodMonth: opts.periodMonth,
-              taxType: { in: [taxTypeFilter] },
-            },
-          ];
-        }
+        where.periodYear = opts.periodYear;
+        where.periodMonth = opts.periodMonth;
+        where.taxType = taxTypeFilter;
       } else {
         where.OR = [
           ...months.map((m) => ({
             periodYear: m.year,
             periodMonth: m.month,
-            taxType: { in: [...MONTHLY_SYNC_TAX_TYPES] },
-          })),
-          ...calendarYears.map((year) => ({
-            periodYear: year,
-            periodMonth: CIT_PERIOD_MONTH,
-            taxType: { in: [...ANNUAL_SYNC_TAX_TYPES] },
           })),
         ];
         if (taxTypeFilter) {

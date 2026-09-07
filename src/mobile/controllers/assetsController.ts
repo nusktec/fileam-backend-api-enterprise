@@ -7,6 +7,13 @@ import { getAuthUserId } from "../../utils/authHelpers";
 import { PaginationRequest } from "../../middlewares/paginationMiddleware";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { assetsService } from "../services/assetsService";
+import { assetUndoService } from "../services/assetUndoService";
+import type {
+  AssetDisposalUndoReason,
+  AssetSaleUndoReason,
+  AssetTransferUndoReason,
+  AssetUndoReason,
+} from "../../constants/recordUndo";
 
 function paramId(req: IRequest): string {
   const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
@@ -493,6 +500,7 @@ export const listAssetSales = async (
     const data = await assetsService.listSales(userId, {
       page: p?.page,
       limit: p?.limit,
+      status: req.query.status as string | undefined,
     });
     res
       .status(HttpStatusCode.OK)
@@ -542,6 +550,7 @@ export const listAssetDisposals = async (
     const data = await assetsService.listDisposals(userId, {
       page: p?.page,
       limit: p?.limit,
+      status: req.query.status as string | undefined,
     });
     res
       .status(HttpStatusCode.OK)
@@ -593,5 +602,218 @@ export const updateAssetDisposal = async (
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to update disposal", null));
+  }
+};
+
+export const getAssetUndoCheck = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const result = await assetUndoService.getAssetUndoCheck(userId, paramId(req));
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Asset not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Asset undo check", result));
+  } catch (error) {
+    if (replyHttpError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check asset undo", null));
+  }
+};
+
+export const undoAsset = async (req: IRequest, res: Response): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, { locations: ["body"] }) as { reason: string };
+    const result = await assetUndoService.undoAsset(
+      userId,
+      paramId(req),
+      body.reason as AssetUndoReason,
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Asset not found", null));
+      return;
+    }
+    res.status(HttpStatusCode.OK).json(outJson(true, "Asset undone", result));
+  } catch (error) {
+    if (replyHttpError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo asset", null));
+  }
+};
+
+export const getAssetSaleUndoCheck = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const result = await assetUndoService.getSaleUndoCheck(userId, paramId(req));
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Asset sale not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Asset sale undo check", result));
+  } catch (error) {
+    if (replyHttpError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check asset sale undo", null));
+  }
+};
+
+export const undoAssetSale = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, { locations: ["body"] }) as { reason: string };
+    const result = await assetUndoService.undoSale(
+      userId,
+      paramId(req),
+      body.reason as AssetSaleUndoReason,
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Asset sale not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Asset sale undone", result));
+  } catch (error) {
+    if (replyHttpError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo asset sale", null));
+  }
+};
+
+export const getAssetDisposalUndoCheck = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const result = await assetUndoService.getDisposalUndoCheck(
+      userId,
+      paramId(req),
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Asset disposal not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Asset disposal undo check", result));
+  } catch (error) {
+    if (replyHttpError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check asset disposal undo", null));
+  }
+};
+
+export const undoAssetDisposal = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, { locations: ["body"] }) as { reason: string };
+    const result = await assetUndoService.undoDisposal(
+      userId,
+      paramId(req),
+      body.reason as AssetDisposalUndoReason,
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Asset disposal not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Asset disposal undone", result));
+  } catch (error) {
+    if (replyHttpError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo asset disposal", null));
+  }
+};
+
+export const getAssetTransferUndoCheck = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const result = await assetUndoService.getTransferUndoCheck(
+      userId,
+      paramId(req),
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Asset transfer not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Asset transfer undo check", result));
+  } catch (error) {
+    if (replyHttpError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check asset transfer undo", null));
+  }
+};
+
+export const undoAssetTransfer = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const body = matchedData(req, { locations: ["body"] }) as { reason: string };
+    const result = await assetUndoService.undoTransfer(
+      userId,
+      paramId(req),
+      body.reason as AssetTransferUndoReason,
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Asset transfer not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Asset transfer undone", result));
+  } catch (error) {
+    if (replyHttpError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo asset transfer", null));
   }
 };

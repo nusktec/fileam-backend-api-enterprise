@@ -88,6 +88,7 @@ export const BENEFICIARY_LIST_FILTERS = [
   "VENDOR",
   "RECEIVING_PARTY",
   "WHT_DUE",
+  "VOIDED",
 ] as const;
 export type BeneficiaryListFilter =
   (typeof BENEFICIARY_LIST_FILTERS)[number];

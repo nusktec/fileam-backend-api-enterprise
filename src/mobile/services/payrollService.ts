@@ -2,12 +2,6 @@ import { Decimal } from "@prisma/client/runtime/library";
 import PDFDocument from "pdfkit";
 import { prisma } from "../../config/database";
 import {
-  computeEmployeePayeMonthly,
-  computeMonthlyTaxableEarnings,
-  computeNhf,
-  computePensionEmployee,
-  computePensionEmployer,
-  computePensionableMonthly,
   NHF_RATE,
   PAYE_DUE_DAY,
   PENSION_EMPLOYEE_RATE,
@@ -28,7 +22,7 @@ import {
 import { isContractorEmployment } from "../../constants/employmentTypes";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
-import { computeEmployeeMonthlyNetPay } from "./employeesService";
+import { resolveEmployeePeriodAmounts } from "./prospectiveTermsService";
 
 const PAYMENT_BASE_URL =
   process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
@@ -76,22 +70,6 @@ function formatDateYmd(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-function grossMonthly(e: {
-  basicSalary: Decimal;
-  housingAllowance: Decimal;
-  transportAllowance: Decimal;
-  mealAllowance: Decimal;
-  otherAllowances: Decimal;
-}): number {
-  return computeMonthlyTaxableEarnings({
-    basicMonthly: decimalToNumber(e.basicSalary),
-    housingAllowanceMonthly: decimalToNumber(e.housingAllowance),
-    transportAllowanceMonthly: decimalToNumber(e.transportAllowance),
-    mealAllowanceMonthly: decimalToNumber(e.mealAllowance),
-    otherTaxableAllowancesMonthly: decimalToNumber(e.otherAllowances),
-  });
-}
-
 type EmpRow = Awaited<ReturnType<typeof prisma.employee.findMany>>[number];
 
 function taxableMonthly(gross: number, paye: number, pensionEmp: number): number {
@@ -124,10 +102,72 @@ async function resolvePayeAuthority(userId: string): Promise<string> {
   return PAYE_COLLECTING_AUTHORITY_DEFAULT;
 }
 
+async function loadPeriodSnapshots(
+  userId: string,
+  employees: EmpRow[],
+  periodKey: string,
+  nhfApplicable: boolean,
+) {
+  const snapshots = new Map<
+    string,
+    Awaited<ReturnType<typeof resolveEmployeePeriodAmounts>>
+  >();
+  for (const e of employees) {
+    if (!isEmployeeActiveInPayrollPeriod(e.startDate, periodKey)) continue;
+    const existing = await prisma.payrollPeriodSnapshot.findUnique({
+      where: { employeeId_periodKey: { employeeId: e.id, periodKey } },
+    });
+    if (existing) {
+      snapshots.set(e.id, {
+        gross: decimalToNumber(existing.gross),
+        paye: decimalToNumber(existing.paye),
+        pensionEmployee: decimalToNumber(existing.pensionEmployee),
+        pensionEmployer: decimalToNumber(existing.pensionEmployer),
+        nhf: decimalToNumber(existing.nhf),
+        netPay: decimalToNumber(existing.netPay),
+      });
+      continue;
+    }
+    const amounts = await resolveEmployeePeriodAmounts(
+      userId,
+      e.id,
+      periodKey,
+      nhfApplicable,
+      e.startDate,
+    );
+    if (amounts) snapshots.set(e.id, amounts);
+  }
+  return snapshots;
+}
+
+async function computePeriodTotalsForUser(
+  userId: string,
+  employees: EmpRow[],
+  nhfApplicable: boolean,
+  periodKey: string,
+) {
+  const snapshots = await loadPeriodSnapshots(
+    userId,
+    employees,
+    periodKey,
+    nhfApplicable,
+  );
+  return computePeriodTotals(
+    employees,
+    nhfApplicable,
+    periodKey,
+    snapshots,
+  );
+}
+
 function computePeriodTotals(
   employees: EmpRow[],
   nhfApplicable: boolean,
   periodKey: string,
+  snapshotsByEmployee: Map<
+    string,
+    Awaited<ReturnType<typeof resolveEmployeePeriodAmounts>>
+  >,
 ) {
   let totalPayroll = 0;
   let netPayout = 0;
@@ -163,50 +203,26 @@ function computePeriodTotals(
     if (!isEmployeeActiveInPayrollPeriod(e.startDate, periodKey)) continue;
     activeEmployeeCount += 1;
 
-    const gross = grossMonthly(e);
+    const amounts = snapshotsByEmployee.get(e.id);
+    if (!amounts) continue;
+
+    const gross = amounts.gross;
     totalPayroll += gross;
     const contractor = isContractorEmployment(e.employmentType);
-    const net = computeEmployeeMonthlyNetPay(e, { nhfApplicable });
+    const net = amounts.netPay;
     netPayout += net;
 
     if (contractor) continue;
 
-    const pensionable = computePensionableMonthly({
-      basicMonthly: decimalToNumber(e.basicSalary),
-      housingAllowanceMonthly: decimalToNumber(e.housingAllowance),
-      transportAllowanceMonthly: decimalToNumber(e.transportAllowance),
-    });
-    const pensionEmp = computePensionEmployee(pensionable);
-    const pensionEr = computePensionEmployer(pensionable);
-    const paye = computeEmployeePayeMonthly(
-      {
-        basicSalary: decimalToNumber(e.basicSalary),
-        housingAllowance: decimalToNumber(e.housingAllowance),
-        transportAllowance: decimalToNumber(e.transportAllowance),
-        mealAllowance: decimalToNumber(e.mealAllowance),
-        otherAllowances: decimalToNumber(e.otherAllowances),
-        annualHouseRent: decimalToNumber(e.annualHouseRent),
-        nhisHealthInsuranceMonthly: decimalToNumber(
-          e.nhisHealthInsuranceMonthly,
-        ),
-        lifeAssurancePremiumMonthly: decimalToNumber(
-          e.lifeAssurancePremiumMonthly,
-        ),
-        mortgageInterestMonthly: decimalToNumber(e.mortgageInterestMonthly),
-        nhf: e.nhf,
-      },
-      { nhfApplicable },
-    );
-    const employeeNhf = e.nhf !== false;
-    const nhf =
-      nhfApplicable && employeeNhf
-        ? computeNhf(decimalToNumber(e.basicSalary))
-        : 0;
+    const pensionEmp = amounts.pensionEmployee;
+    const pensionEr = amounts.pensionEmployer;
+    const paye = amounts.paye;
+    const nhf = amounts.nhf;
 
     totalPaye += paye;
     totalNhf += nhf;
     totalPension += pensionEmp + pensionEr;
-    if (nhfApplicable && employeeNhf) applicableNhfCount += 1;
+    if (nhfApplicable && e.nhf !== false && nhf > 0) applicableNhfCount += 1;
     if (e.pfa?.trim()) pfas.add(e.pfa.trim());
 
     payeLines.push({
@@ -216,7 +232,7 @@ function computePeriodTotals(
       gross: round2(gross),
       taxable: taxableMonthly(gross, paye, pensionEmp),
     });
-    if (nhfApplicable && employeeNhf) {
+    if (nhfApplicable && e.nhf !== false && nhf > 0) {
       nhfLines.push({
         name: e.fullName,
         id: e.employeeId,
@@ -321,7 +337,12 @@ export const payrollService = {
       prisma.employee.findMany({ where: { userId } }),
       getOrCreateSettings(userId),
     ]);
-    const totals = computePeriodTotals(employees, settings.isNhfApplicable, key);
+    const totals = await computePeriodTotalsForUser(
+      userId,
+      employees,
+      settings.isNhfApplicable,
+      key,
+    );
     const payeAuth = await resolvePayeAuthority(userId);
 
     const [payeRow, nhfRow, pensionRow] = await Promise.all([
@@ -410,7 +431,12 @@ export const payrollService = {
       prisma.employee.findMany({ where: { userId } }),
       getOrCreateSettings(userId),
     ]);
-    const totals = computePeriodTotals(employees, settings.isNhfApplicable, key);
+    const totals = await computePeriodTotalsForUser(
+      userId,
+      employees,
+      settings.isNhfApplicable,
+      key,
+    );
     const payeAuth = await resolvePayeAuthority(userId);
     const row = await upsertObligationSnapshot(
       userId,
@@ -474,7 +500,7 @@ export const payrollService = {
     }
 
     const employees = await prisma.employee.findMany({ where: { userId } });
-    const totals = computePeriodTotals(employees, true, key);
+    const totals = await computePeriodTotalsForUser(userId, employees, true, key);
     const row = await upsertObligationSnapshot(
       userId,
       OBLIGATION_TYPE.NHF,
@@ -527,7 +553,12 @@ export const payrollService = {
       prisma.employee.findMany({ where: { userId } }),
       getOrCreateSettings(userId),
     ]);
-    const totals = computePeriodTotals(employees, settings.isNhfApplicable, key);
+    const totals = await computePeriodTotalsForUser(
+      userId,
+      employees,
+      settings.isNhfApplicable,
+      key,
+    );
     const row = await upsertObligationSnapshot(
       userId,
       OBLIGATION_TYPE.PENSION,
@@ -706,7 +737,8 @@ export const payrollService = {
     if (type === OBLIGATION_TYPE.NHF && !settings.isNhfApplicable) {
       throw new HttpReplyError(400, "NHF is not applicable for this business");
     }
-    const totals = computePeriodTotals(
+    const totals = await computePeriodTotalsForUser(
+      userId,
       employees,
       settings.isNhfApplicable,
       _period,

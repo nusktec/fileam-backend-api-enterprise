@@ -31,6 +31,12 @@ model RegisteredLiability {
   totalPrincipalPaid   Decimal   @default(0) @map("total_principal_paid") @db.Decimal(14, 2)
   totalInterestPaid    Decimal   @default(0) @map("total_interest_paid") @db.Decimal(14, 2)
   totalAmountRepaid    Decimal   @default(0) @map("total_amount_repaid") @db.Decimal(14, 2)
+  /** ACTIVE | voided | reversed — undo state (paymentStatus stays separate). */
+  recordStatus         String    @default("ACTIVE") @map("record_status")
+  undoAt               DateTime? @map("undo_at")
+  undoReason           String?   @map("undo_reason")
+  reversingEntryId     String?   @map("reversing_entry_id")
+  reversingEntryDate   DateTime? @map("reversing_entry_date") @db.Date
   /** PENDING | PARTIALLY_PAID | FULLY_PAID */
   paymentStatus        String    @default("PENDING") @map("payment_status")
   repaymentCount       Int       @default(0) @map("repayment_count")
@@ -102,6 +108,12 @@ model LiabilityRepayment {
   paymentSource          String   @map("payment_source")
   balanceBeforeRepayment Decimal  @map("balance_before_repayment") @db.Decimal(14, 2)
   balanceAfterRepayment  Decimal  @map("balance_after_repayment") @db.Decimal(14, 2)
+  /** ACTIVE | reversed */
+  recordStatus           String   @default("ACTIVE") @map("record_status")
+  undoAt                 DateTime? @map("undo_at")
+  undoReason             String?   @map("undo_reason")
+  reversingEntryId       String?   @map("reversing_entry_id")
+  reversingEntryDate     DateTime? @map("reversing_entry_date") @db.Date
   /** PARTIALLY_PAID | FULLY_PAID */
   paymentStatus          String   @map("payment_status")
   isOverdue              Boolean  @default(false) @map("is_overdue")

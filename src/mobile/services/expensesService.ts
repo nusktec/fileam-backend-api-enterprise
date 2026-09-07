@@ -45,6 +45,11 @@ import {
   assertInvoiceNotOverpaid,
   assertInvoicePaymentsAppendOnly,
 } from "../../utils/invoicePaymentLedger";
+import {
+  isUndoneStatus,
+  mapUndoPayload,
+  RECORD_UNDO_STATUS,
+} from "../../constants/recordUndo";
 import { resolveSettlementBankCode } from "../../utils/settlementBank";
 
 const EXPENSE_COUNTER_ID = "expense_number";
@@ -219,6 +224,15 @@ function mapExpenseListItem(e: {
   };
 }
 
+function assertExpenseEditable(status: string): void {
+  if (isUndoneStatus(status)) {
+    throw new HttpReplyError(
+      409,
+      "This expense has been voided or reversed and cannot be modified",
+    );
+  }
+}
+
 function resolveExpenseClassInput(
   value: unknown,
   field = "class",
@@ -237,6 +251,7 @@ export { EXPENSE_CATEGORIES, EXPENSE_TYPES };
 export const expensesService = {
   async list(
     userId: string,
+    status?: string,
     opts?: {
       page?: number;
       limit?: number;
@@ -249,36 +264,70 @@ export const expensesService = {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";
-    const where: {
+    const normalizedStatus = status?.trim() || "all";
+
+    const baseWhere: {
       userId: string;
       expenseDate?: { gte?: Date; lte?: Date };
       expenseClass?: string;
+      status?: string | { notIn: string[] };
     } = { userId };
     if (opts?.dateFrom || opts?.dateTo) {
-      where.expenseDate = {};
-      if (opts.dateFrom) where.expenseDate.gte = opts.dateFrom;
-      if (opts.dateTo) where.expenseDate.lte = opts.dateTo;
+      baseWhere.expenseDate = {};
+      if (opts.dateFrom) baseWhere.expenseDate.gte = opts.dateFrom;
+      if (opts.dateTo) baseWhere.expenseDate.lte = opts.dateTo;
     }
     if (opts?.class) {
-      where.expenseClass = opts.class;
+      baseWhere.expenseClass = opts.class;
     }
 
-    const [expenses, total, summary, byCategory] = await Promise.all([
+    const liveWhere = {
+      ...baseWhere,
+      status: {
+        notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+      },
+    };
+
+    const listWhere = { ...baseWhere };
+    if (normalizedStatus === "all") {
+      listWhere.status = {
+        notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+      };
+    } else if (
+      normalizedStatus === RECORD_UNDO_STATUS.VOIDED ||
+      normalizedStatus === "Voided"
+    ) {
+      listWhere.status = RECORD_UNDO_STATUS.VOIDED;
+    } else if (
+      normalizedStatus === RECORD_UNDO_STATUS.REVERSED ||
+      normalizedStatus === "Reversed"
+    ) {
+      listWhere.status = RECORD_UNDO_STATUS.REVERSED;
+    } else {
+      listWhere.status = normalizedStatus;
+    }
+
+    const [expenses, total, summary, byCategory, counts] = await Promise.all([
       prisma.expense.findMany({
-        where,
+        where: listWhere,
         orderBy: [{ expenseDate: order }, { createdAt: order }],
         skip: (page - 1) * limit,
         take: limit,
       }),
-      prisma.expense.count({ where }),
+      prisma.expense.count({ where: listWhere }),
       prisma.expense.aggregate({
-        where,
+        where: liveWhere,
         _sum: { amount: true, vatAmount: true, totalAmount: true },
       }),
       prisma.expense.groupBy({
         by: ["category"],
-        where,
+        where: liveWhere,
         _sum: { amount: true },
+      }),
+      prisma.expense.groupBy({
+        by: ["status"],
+        where: baseWhere,
+        _count: true,
       }),
     ]);
     const totalExpenses = decimalToNumber(summary._sum.amount);
@@ -294,6 +343,18 @@ export const expensesService = {
       }))
       .sort((a, b) => b.amount - a.amount);
 
+    const dbCount = (s: string) =>
+      counts.find((c) => c.status === s)?._count ?? 0;
+    const dbPaid = dbCount(SALE_STATUS.PAID) + dbCount("Paid");
+    const dbPending = dbCount(SALE_STATUS.PENDING);
+    const dbOverdue = dbCount(SALE_STATUS.OVERDUE);
+    const dbPartial = dbCount(SALE_STATUS.PARTIAL);
+    const dbInProgress = dbCount(SALE_STATUS.IN_PROGRESS);
+    const dbVoided = dbCount(RECORD_UNDO_STATUS.VOIDED);
+    const dbReversed = dbCount(RECORD_UNDO_STATUS.REVERSED);
+    const liveAll =
+      dbPaid + dbPending + dbOverdue + dbPartial + dbInProgress;
+
     return {
       summary: {
         /** Ex-VAT expense base (Input VAT excluded). */
@@ -302,6 +363,16 @@ export const expensesService = {
         vatClaimable,
         /** Gross spend including VAT (optional for clients that need it). */
         totalExpensesIncludingVat: decimalToNumber(summary._sum.totalAmount),
+      },
+      counts: {
+        all: liveAll,
+        paid: dbPaid,
+        pending: dbPending,
+        overdue: dbOverdue,
+        partial: dbPartial,
+        in_progress: dbInProgress,
+        voided: dbVoided,
+        reversed: dbReversed,
       },
       topCategories,
       expenses: expenses.map(mapExpenseListItem),
@@ -349,6 +420,7 @@ export const expensesService = {
       supplierId: expense.supplierId ?? null,
       class: mapExpenseClassField(expense.expenseClass),
       isDeductible: expense.isDeductible,
+      undo: mapUndoPayload(expense),
     };
   },
 
@@ -696,6 +768,7 @@ export const expensesService = {
       where: { id: expenseId, userId },
     });
     if (!expense) return null;
+    assertExpenseEditable(expense.status);
 
     const periodsToSync = [calendarPeriodFromDate(expense.expenseDate)];
 
@@ -909,6 +982,7 @@ export const expensesService = {
       where: { id: expenseId, userId },
     });
     if (!expense) return null;
+    assertExpenseEditable(expense.status);
 
     if (!isSalePaidStatus(status)) {
       throw new HttpReplyError(

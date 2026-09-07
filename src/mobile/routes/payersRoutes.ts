@@ -12,6 +12,10 @@ import {
   listPayerTransactions,
   recordPayerInvoicePayment,
   updatePayer,
+  getPayerUndoCheck,
+  undoPayer,
+  getPayerTransactionUndoCheck,
+  undoPayerTransaction,
 } from "../controllers/payersController";
 import {
   createPayerDocumentValidation,
@@ -21,9 +25,14 @@ import {
   listPayersValidation,
   listPayerTransactionsValidation,
   payerIdParamValidation,
+  payerTransactionIdParamValidation,
   recordPayerInvoicePaymentValidation,
   updatePayerValidation,
 } from "../../middlewares/validations/payerValidation";
+import {
+  payerTransactionUndoValidation,
+  payerUndoValidation,
+} from "../../middlewares/validations/recordUndoValidation";
 
 const router = express.Router();
 
@@ -32,6 +41,14 @@ router.use(authenticate(), requireOnboardingComplete);
 router.post("/", express.json(), createPayerValidation, createPayer);
 router.get("/", listPayersValidation, listPayers);
 router.get("/:id", payerIdParamValidation, getPayer);
+router.get("/:id/undo", payerIdParamValidation, getPayerUndoCheck);
+router.post(
+  "/:id/undo",
+  payerIdParamValidation,
+  express.json(),
+  payerUndoValidation,
+  undoPayer,
+);
 router.patch("/:id", express.json(), updatePayerValidation, updatePayer);
 router.post(
   "/:id/transactions",
@@ -43,6 +60,18 @@ router.get(
   "/:id/transactions",
   listPayerTransactionsValidation,
   listPayerTransactions,
+);
+router.get(
+  "/:id/transactions/:transactionId/undo",
+  payerTransactionIdParamValidation,
+  getPayerTransactionUndoCheck,
+);
+router.post(
+  "/:id/transactions/:transactionId/undo",
+  payerTransactionIdParamValidation,
+  express.json(),
+  payerTransactionUndoValidation,
+  undoPayerTransaction,
 );
 router.get(
   "/:id/receivables",
