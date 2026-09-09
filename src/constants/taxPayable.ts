@@ -34,4 +34,4 @@ export function monthlyFilingDueDateUtc(year: number, month: number): Date {
  * Explains book-sync vs PAYE when salary is captured on the user profile.
  */
 export const TAX_PAYABLES_SCOPE_NOTE =
-  "VAT, WHT, and PAYE list strictly within the selected month or quarter range. CIT and PIT appear in the list only when range=year (12 book months). For month/quarter views, use annualEstimates for projected annual CIT/PIT; totals cover the selected range only.";
+  "VAT, WHT, and PAYE sync and list per book month. CIT and PIT are stored at periodMonth 12 (annual filing key) but appear in the payables list only when the selected period includes December. Before December, use annualEstimates for projected CIT/PIT; totals cover the selected period only.";

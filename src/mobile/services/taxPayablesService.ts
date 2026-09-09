@@ -176,14 +176,19 @@ function annualEstimatesFromComputation(computation: PeriodComputation) {
   };
 }
 
-/** No rows — used when an annual-only tax is requested outside a 12-month range. */
-function noMatchingPayablesClauses(): Array<Record<string, unknown>> {
-  return [{ periodYear: -1 }];
+/** Annual CIT/PIT rows list only when the book-period filter includes December. */
+function bookPeriodIncludesDecember(
+  periods: Array<{ year: number; month: number }>,
+): boolean {
+  return periods.some((p) => p.month === PIT_PERIOD_MONTH);
 }
 
-/** Annual CIT/PIT rows appear in the list only for range=year (12 book months). */
-function shouldListAnnualPayables(range: TaxPeriodRange): boolean {
-  return range === "year";
+function shouldListAnnualPayables(
+  periods: Array<{ year: number; month: number }>,
+  taxTypeFilter?: TaxType,
+): boolean {
+  if (taxTypeFilter === "CIT" || taxTypeFilter === "PIT") return true;
+  return bookPeriodIncludesDecember(periods);
 }
 
 function buildPayablesWhereForBookPeriods(input: {
@@ -195,7 +200,6 @@ function buildPayablesWhereForBookPeriods(input: {
   const tt = input.taxType?.trim().toUpperCase() as TaxType | undefined;
   const includeAnnual = input.includeAnnual ?? false;
   if (tt === "CIT" || tt === "PIT") {
-    if (!includeAnnual) return noMatchingPayablesClauses();
     return [
       {
         periodYear: input.periodYear,
@@ -247,7 +251,6 @@ function buildPayablesWhereForBookPeriodList(
   const years = calendarYearsFromBookPeriods(periods);
 
   if (tt === "CIT") {
-    if (!includeAnnual) return noMatchingPayablesClauses();
     return years.map((year) => ({
       periodYear: year,
       periodMonth: CIT_PERIOD_MONTH,
@@ -255,7 +258,6 @@ function buildPayablesWhereForBookPeriodList(
     }));
   }
   if (tt === "PIT") {
-    if (!includeAnnual) return noMatchingPayablesClauses();
     return years.map((year) => ({
       periodYear: year,
       periodMonth: PIT_PERIOD_MONTH,
@@ -278,18 +280,20 @@ function buildPayablesWhereForBookPeriodList(
 
   if (includeAnnual) {
     for (const year of years) {
-      clauses.push(
-        {
-          periodYear: year,
-          periodMonth: CIT_PERIOD_MONTH,
-          taxType: "CIT",
-        },
-        {
-          periodYear: year,
-          periodMonth: PIT_PERIOD_MONTH,
-          taxType: "PIT",
-        },
-      );
+      if (periods.some((p) => p.year === year && p.month === PIT_PERIOD_MONTH)) {
+        clauses.push(
+          {
+            periodYear: year,
+            periodMonth: CIT_PERIOD_MONTH,
+            taxType: "CIT",
+          },
+          {
+            periodYear: year,
+            periodMonth: PIT_PERIOD_MONTH,
+            taxType: "PIT",
+          },
+        );
+      }
     }
   }
 
@@ -603,7 +607,10 @@ export const taxPayablesService = {
         opts.periodMonth,
         range,
       );
-      includeAnnualInList = shouldListAnnualPayables(range);
+      includeAnnualInList = shouldListAnnualPayables(
+        filteredBookPeriods,
+        taxTypeFilter,
+      );
 
       if (filteredBookPeriods.length === 1) {
         where.OR = buildPayablesWhereForBookPeriods({
@@ -624,7 +631,10 @@ export const taxPayablesService = {
         opts.dateFrom,
         opts.dateTo,
       );
-      includeAnnualInList = false;
+      includeAnnualInList = shouldListAnnualPayables(
+        filteredBookPeriods,
+        taxTypeFilter,
+      );
       if (filteredBookPeriods.length > 0) {
         where.OR = buildPayablesWhereForBookPeriodList(
           filteredBookPeriods,

@@ -2543,7 +2543,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20&period={{bookPeriod}}&range=month&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Syncs books before list. period=YYYY-MM + range=month|quarter|year. When period is set, dateFrom/dateTo are ignored.\n\n• range=month or quarter: data and totals stay within that range (VAT/WHT/PAYE only). annualEstimates shows projected CIT/PIT.\n• range=year (12 months): includes monthly rows for all 12 months plus annual CIT/PIT (periodMonth 12) for each calendar year in the window.\n• annualPayablesIncludedInList is true only when range=year."
+                "description": "Syncs books before list. Use period=YYYY-MM (+ optional range) OR dateFrom/dateTo (book months). When period is set, dateFrom/dateTo are ignored.\n\n• VAT/WHT/PAYE: one row per book month (periodMonth = that month).\n• CIT/PIT: stored at periodMonth 12 (annual filing key) but listed only when the filter includes December (period=YYYY-12 or range covering Dec). Before December: annualEstimates holds projected CIT/PIT; totals are period-only (VAT/WHT/PAYE).\n• annualPayablesIncludedInList indicates whether CIT/PIT rows are in data."
               }
             },
             {
