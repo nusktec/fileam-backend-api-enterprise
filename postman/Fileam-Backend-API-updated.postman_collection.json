@@ -2512,14 +2512,14 @@
         },
         {
           "name": "Tax Computation *",
-          "description": "GET /mobile/tax-computation?period=YYYY-MM&range=month|quarter|year — book-period estimates. VAT/WHT/PAYE are period-specific. CIT/PIT align with annual filing (calendar-year profit, classification inputs). Each block includes periodAmount for the selected range.",
+          "description": "GET /mobile/tax-computation?period=YYYY-MM&range=month|quarter|year — book-period estimates. VAT/WHT/PAYE are period-specific. CIT/PIT periodAmount uses that month's trading profit (or sum across range). cit.totalCitLiability, pit.estimatedAnnualPit, annualizedProfit, and credits match GET /filings/cit|pit/calculation for the calendar year.",
           "item": [
             {
               "name": "Get tax computation **",
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation?period=2026-02&range=month",
-                "description": "period=YYYY-MM (defaults to current month). range=month|quarter|year ending at period month. VAT/WHT/PAYE use the selected book period. CIT/PIT always use calendar-year books + filing classification (same basis as /filings/cit|pit/calculation) — not single-month profit × 12. cit/pit periodAmount = annual liability × (months in range ÷ 12). Response period { year, month, range, monthsIncluded, label }. paye.derivedFrom: employees | profile_gross | none."
+                "description": "period=YYYY-MM (defaults to current month). range=month|quarter|year ending at period month. VAT/WHT/PAYE use the selected book period. CIT/PIT periodAmount = tax on that month's trading profit; estimatedAnnualPit / totalCitLiability align with /filings/pit|cit/calculation. Response period { year, month, range, monthsIncluded, label }. paye.derivedFrom: employees | profile_gross | none."
               }
             }
           ]
@@ -2543,7 +2543,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20&period={{bookPeriod}}&range=month&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Syncs books for filtered period before list. period=YYYY-MM + optional range=month|quarter|year (dateFrom/dateTo ignored when period set).\n\nBook period rules:\n• periodYear/periodMonth on each row = the book month (same as sale/expense dates), NOT the filing due date month.\n• filingDueDate for VAT/WHT/PAYE = 21st of the following month (Feb period → due Mar 21).\n• CIT/PIT rows use periodMonth 12 (annual) for the calendar year.\n\nResponse includes syncedBookPeriod { year, month } echoing the requested filter. Re-call after deploy to refresh rows that were stored with timezone-shifted dates."
+                "description": "Syncs books before list. Use period=YYYY-MM (+ optional range) OR dateFrom/dateTo (book months, not filing due dates). When period is set, dateFrom/dateTo are ignored.\n\n• VAT/WHT/PAYE rows: periodYear/periodMonth = book month; filingDueDate = 21st of following month.\n• CIT/PIT rows: periodMonth 12 for the calendar year; amountDue matches /filings/cit|pit/calculation.\n• With period=2026-02, list includes Feb VAT/WHT/PAYE plus 2026 annual CIT/PIT at month 12.\n• totals.cit / totals.pit are full-year liabilities; VAT/WHT/PAYE totals match the selected period."
               }
             },
             {

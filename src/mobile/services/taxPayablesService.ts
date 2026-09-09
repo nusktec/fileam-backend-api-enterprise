@@ -7,18 +7,25 @@ import {
   type TaxType,
   type PayableStatus,
 } from "../../constants/taxPayable";
-import { citDueDateForYear } from "../../constants/citFiling";
-import { pitDueDateForYear } from "../../constants/pitFiling";
+import { citDueDateForYear, CIT_PERIOD_MONTH } from "../../constants/citFiling";
+import { pitDueDateForYear, PIT_PERIOD_MONTH } from "../../constants/pitFiling";
 import { utcCalendarDate } from "../../utils/dateRangeQuery";
+import {
+  bookPeriodsOverlappingRange,
+  calendarYearsFromBookPeriods,
+} from "../../utils/bookPeriodQuery";
 import {
   monthsInTaxRange,
   type TaxPeriodRange,
 } from "../../utils/taxPeriodQuery";
+import { buildTaxEligibilityProfileForUser } from "./taxEligibilityService";
+import { ASSET_ON_BOOKS_STATUSES } from "../../constants/assets";
 
 const PAYMENT_BASE_URL =
   process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
 
-const MONTHLY_SYNC_TAX_TYPES: TaxType[] = ["VAT", "WHT", "PAYE", "CIT", "PIT"];
+const MONTHLY_SYNC_TAX_TYPES: TaxType[] = ["VAT", "WHT", "PAYE"];
+const ANNUAL_SYNC_TAX_TYPES: TaxType[] = ["CIT", "PIT"];
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -84,7 +91,7 @@ type PeriodComputation = Awaited<
   ReturnType<typeof taxComputationService.getForQuery>
 >;
 
-/** All tax types — per book month (CIT/PIT from that month's activity). */
+/** VAT / WHT / PAYE — per book month. */
 function monthlyAmountsFromComputation(
   computation: PeriodComputation,
 ): Array<{ taxType: TaxType; amountDue: number }> {
@@ -109,16 +116,24 @@ function monthlyAmountsFromComputation(
           ? Math.max(0, computation.paye.periodAmount)
           : 0,
     },
+  ];
+}
+
+function annualAmountsFromComputation(
+  computation: PeriodComputation,
+): Array<{ taxType: TaxType; amountDue: number }> {
+  const flags = computation.taxPersonaGuidance.applicableTaxes;
+  return [
     {
       taxType: "CIT",
       amountDue: flags.cit
-        ? Math.max(0, computation.cit.periodAmount)
+        ? Math.max(0, computation.cit.totalCitLiability)
         : 0,
     },
     {
       taxType: "PIT",
       amountDue: flags.pit
-        ? Math.max(0, computation.pit.periodAmount)
+        ? Math.max(0, computation.pit.estimatedAnnualPit)
         : 0,
     },
   ];
@@ -132,10 +147,116 @@ export function totalsFromComputation(computation: PeriodComputation) {
     flags.paye && computation.paye.applicable
       ? Math.max(0, computation.paye.periodAmount)
       : 0;
-  const cit = flags.cit ? Math.max(0, computation.cit.periodAmount) : 0;
-  const pit = flags.pit ? Math.max(0, computation.pit.periodAmount) : 0;
+  const cit = flags.cit ? Math.max(0, computation.cit.totalCitLiability) : 0;
+  const pit = flags.pit ? Math.max(0, computation.pit.estimatedAnnualPit) : 0;
   const total = vat + wht + cit + pit + paye;
   return { vat, wht, cit, pit, paye, total };
+}
+
+function buildPayablesWhereForBookPeriods(input: {
+  periodYear: number;
+  periodMonth: number;
+  taxType?: TaxType;
+}): Array<Record<string, unknown>> {
+  const tt = input.taxType?.trim().toUpperCase() as TaxType | undefined;
+  if (tt === "CIT" || tt === "PIT") {
+    return [
+      {
+        periodYear: input.periodYear,
+        periodMonth:
+          tt === "CIT" ? CIT_PERIOD_MONTH : PIT_PERIOD_MONTH,
+        taxType: tt,
+      },
+    ];
+  }
+  if (tt === "VAT" || tt === "WHT" || tt === "PAYE") {
+    return [
+      {
+        periodYear: input.periodYear,
+        periodMonth: input.periodMonth,
+        taxType: tt,
+      },
+    ];
+  }
+  return [
+    {
+      periodYear: input.periodYear,
+      periodMonth: input.periodMonth,
+      taxType: { in: [...MONTHLY_SYNC_TAX_TYPES] },
+    },
+    {
+      periodYear: input.periodYear,
+      periodMonth: CIT_PERIOD_MONTH,
+      taxType: "CIT",
+    },
+    {
+      periodYear: input.periodYear,
+      periodMonth: PIT_PERIOD_MONTH,
+      taxType: "PIT",
+    },
+  ];
+}
+
+function buildPayablesWhereForBookPeriodList(
+  periods: Array<{ year: number; month: number }>,
+  taxType?: TaxType,
+): Array<Record<string, unknown>> {
+  const tt = taxType?.trim().toUpperCase() as TaxType | undefined;
+  const years = calendarYearsFromBookPeriods(periods);
+
+  if (tt === "CIT") {
+    return years.map((year) => ({
+      periodYear: year,
+      periodMonth: CIT_PERIOD_MONTH,
+      taxType: "CIT",
+    }));
+  }
+  if (tt === "PIT") {
+    return years.map((year) => ({
+      periodYear: year,
+      periodMonth: PIT_PERIOD_MONTH,
+      taxType: "PIT",
+    }));
+  }
+  if (tt === "VAT" || tt === "WHT" || tt === "PAYE") {
+    return periods.map((p) => ({
+      periodYear: p.year,
+      periodMonth: p.month,
+      taxType: tt,
+    }));
+  }
+
+  return [
+    ...periods.map((p) => ({
+      periodYear: p.year,
+      periodMonth: p.month,
+      taxType: { in: [...MONTHLY_SYNC_TAX_TYPES] },
+    })),
+    ...years.flatMap((year) => [
+      {
+        periodYear: year,
+        periodMonth: CIT_PERIOD_MONTH,
+        taxType: "CIT",
+      },
+      {
+        periodYear: year,
+        periodMonth: PIT_PERIOD_MONTH,
+        taxType: "PIT",
+      },
+    ]),
+  ];
+}
+
+async function removeOrphanMonthlyCitPitRows(userId: string, year: number) {
+  await prisma.taxPayable.deleteMany({
+    where: {
+      userId,
+      taxType: { in: [...ANNUAL_SYNC_TAX_TYPES] },
+      periodYear: year,
+      periodMonth: { notIn: [CIT_PERIOD_MONTH, PIT_PERIOD_MONTH] },
+      submittedAt: null,
+    },
+  });
 }
 
 async function upsertPayableRow(input: {
@@ -246,7 +367,58 @@ export const taxPayablesService = {
     }
   },
 
-  /** VAT / WHT / PAYE for one calendar month. */
+  /** Annual CIT/PIT at periodMonth 12 — same figures as filing calculation. */
+  async syncAnnualPayablesForYear(userId: string, year: number) {
+    const [business, fixedAssetRows, taxProfile] = await Promise.all([
+      prisma.business.findFirst({
+        where: { userId },
+        orderBy: { updatedAt: "desc" },
+        select: { businessType: true, sector: true },
+      }),
+      prisma.asset.findMany({
+        where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
+        select: { purchaseCost: true },
+      }),
+      buildTaxEligibilityProfileForUser(userId),
+    ]);
+
+    const anchorMonth =
+      year === new Date().getUTCFullYear()
+        ? new Date().getUTCMonth() + 1
+        : PIT_PERIOD_MONTH;
+    const [computation, annualEstimates] = await Promise.all([
+      taxComputationService.getForPeriod(userId, year, anchorMonth),
+      taxComputationService.getAnnualTaxEstimates(userId, year, {
+        business,
+        taxProfile,
+        fixedAssetRows,
+      }),
+    ]);
+
+    for (const { taxType, amountDue } of annualAmountsFromComputation(
+      computation,
+    )) {
+      const periodMonth =
+        taxType === "CIT" ? CIT_PERIOD_MONTH : PIT_PERIOD_MONTH;
+      await upsertPayableRow({
+        userId,
+        taxType,
+        periodYear: year,
+        periodMonth,
+        amountDue,
+        filingDueDate: getAnnualFilingDueDate(taxType, year),
+      });
+    }
+
+    await removeOrphanMonthlyCitPitRows(userId, year);
+
+    return {
+      cit: annualEstimates.citEstimate.totalCitLiability,
+      pit: annualEstimates.pitEstimate.remainingPayable,
+    };
+  },
+
+  /** VAT / WHT / PAYE for one calendar month; refreshes annual CIT/PIT for the year. */
   async syncPeriodPayables(userId: string, year: number, month: number) {
     const computation = await taxComputationService.getForPeriod(
       userId,
@@ -257,21 +429,17 @@ export const taxPayablesService = {
     for (const { taxType, amountDue } of monthlyAmountsFromComputation(
       computation,
     )) {
-      const filingDueDate =
-        taxType === "CIT"
-          ? getAnnualFilingDueDate("CIT", year)
-          : taxType === "PIT"
-            ? getAnnualFilingDueDate("PIT", year)
-            : getMonthlyFilingDueDate(year, month);
       await upsertPayableRow({
         userId,
         taxType,
         periodYear: year,
         periodMonth: month,
         amountDue,
-        filingDueDate,
+        filingDueDate: getMonthlyFilingDueDate(year, month),
       });
     }
+
+    await this.syncAnnualPayablesForYear(userId, year);
   },
 
   async ensurePayablesForUser(userId: string, monthsBack = 12) {
@@ -289,6 +457,9 @@ export const taxPayablesService = {
       periods.push({ year, month });
     }
     await this.syncPayablesForPeriods(userId, periods);
+    for (const y of calendarYearsFromBookPeriods(periods)) {
+      await this.syncAnnualPayablesForYear(userId, y);
+    }
   },
 
   async list(
@@ -322,12 +493,33 @@ export const taxPayablesService = {
         );
       } else {
         await this.syncPayablesForPeriods(userId, months);
+        const years = calendarYearsFromBookPeriods(months);
+        for (const y of years) {
+          await this.syncAnnualPayablesForYear(userId, y);
+        }
       }
       periodComputation = await taxComputationService.getForQuery(userId, {
         year: opts.periodYear,
         month: opts.periodMonth,
         range,
       });
+    } else if (opts?.dateFrom || opts?.dateTo) {
+      const bookPeriods = bookPeriodsOverlappingRange(
+        opts.dateFrom,
+        opts.dateTo,
+      );
+      await this.syncPayablesForPeriods(userId, bookPeriods);
+      for (const y of calendarYearsFromBookPeriods(bookPeriods)) {
+        await this.syncAnnualPayablesForYear(userId, y);
+      }
+      if (bookPeriods.length > 0) {
+        const anchor = bookPeriods[bookPeriods.length - 1]!;
+        periodComputation = await taxComputationService.getForQuery(userId, {
+          year: anchor.year,
+          month: anchor.month,
+          range: "month",
+        });
+      }
     } else {
       await this.ensurePayablesForUser(userId);
     }
@@ -349,45 +541,44 @@ export const taxPayablesService = {
     };
     if (filters?.status) where.status = filters.status;
 
+    const taxTypeFilter = filters?.taxType?.trim().toUpperCase() as
+      | TaxType
+      | undefined;
+
     if (opts?.periodYear != null && opts?.periodMonth != null) {
       const months = monthsInTaxRange(
         opts.periodYear,
         opts.periodMonth,
         range,
       );
-      const calendarYears = [...new Set(months.map((m) => m.year))];
-      const taxTypeFilter = filters?.taxType?.trim().toUpperCase() as
-        | TaxType
-        | undefined;
 
-      if (months.length === 1 && !taxTypeFilter) {
-        where.periodYear = opts.periodYear;
-        where.periodMonth = opts.periodMonth;
-      } else if (months.length === 1 && taxTypeFilter) {
-        where.periodYear = opts.periodYear;
-        where.periodMonth = opts.periodMonth;
-        where.taxType = taxTypeFilter;
+      if (months.length === 1) {
+        where.OR = buildPayablesWhereForBookPeriods({
+          periodYear: opts.periodYear,
+          periodMonth: opts.periodMonth,
+          taxType: taxTypeFilter,
+        });
       } else {
-        where.OR = [
-          ...months.map((m) => ({
-            periodYear: m.year,
-            periodMonth: m.month,
-          })),
-        ];
-        if (taxTypeFilter) {
-          where.OR = where.OR.map((clause) => ({
-            ...clause,
-            taxType: { in: [taxTypeFilter] },
-          }));
-        }
+        where.OR = buildPayablesWhereForBookPeriodList(
+          months,
+          taxTypeFilter,
+        );
+      }
+    } else if (opts?.dateFrom || opts?.dateTo) {
+      const bookPeriods = bookPeriodsOverlappingRange(
+        opts.dateFrom,
+        opts.dateTo,
+      );
+      if (bookPeriods.length > 0) {
+        where.OR = buildPayablesWhereForBookPeriodList(
+          bookPeriods,
+          taxTypeFilter,
+        );
+      } else {
+        where.periodYear = -1;
       }
     } else {
       if (filters?.taxType) where.taxType = filters.taxType;
-      if (opts?.dateFrom || opts?.dateTo) {
-        where.filingDueDate = {};
-        if (opts.dateFrom) where.filingDueDate.gte = opts.dateFrom;
-        if (opts.dateTo) where.filingDueDate.lte = opts.dateTo;
-      }
     }
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
