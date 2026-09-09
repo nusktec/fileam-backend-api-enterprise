@@ -2543,7 +2543,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20&period={{bookPeriod}}&range=month&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Syncs books before list. Use period=YYYY-MM (+ optional range) OR dateFrom/dateTo (book months, not filing due dates). When period is set, dateFrom/dateTo are ignored.\n\n• VAT/WHT/PAYE rows: periodYear/periodMonth = book month; filingDueDate = 21st of following month.\n• CIT/PIT rows: periodMonth 12 for the calendar year; amountDue matches /filings/cit|pit/calculation.\n• With period=2026-02, list includes Feb VAT/WHT/PAYE plus 2026 annual CIT/PIT at month 12.\n• totals.cit / totals.pit are full-year liabilities; VAT/WHT/PAYE totals match the selected period."
+                "description": "Syncs books before list. period=YYYY-MM + range=month|quarter|year. When period is set, dateFrom/dateTo are ignored.\n\n• range=month or quarter: data and totals stay within that range (VAT/WHT/PAYE only). annualEstimates shows projected CIT/PIT.\n• range=year (12 months): includes monthly rows for all 12 months plus annual CIT/PIT (periodMonth 12) for each calendar year in the window.\n• annualPayablesIncludedInList is true only when range=year."
               }
             },
             {

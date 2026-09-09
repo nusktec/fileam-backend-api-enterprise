@@ -34,4 +34,4 @@ export function monthlyFilingDueDateUtc(year: number, month: number): Date {
  * Explains book-sync vs PAYE when salary is captured on the user profile.
  */
 export const TAX_PAYABLES_SCOPE_NOTE =
-  "VAT, WHT, and PAYE sync per book month. CIT and PIT sync once per calendar year (periodMonth 12) using the same annual figures as filing. totals.cit / totals.pit are full-year liabilities; VAT/WHT/PAYE totals match the selected period filter.";
+  "VAT, WHT, and PAYE list strictly within the selected month or quarter range. CIT and PIT appear in the list only when range=year (12 book months). For month/quarter views, use annualEstimates for projected annual CIT/PIT; totals cover the selected range only.";
