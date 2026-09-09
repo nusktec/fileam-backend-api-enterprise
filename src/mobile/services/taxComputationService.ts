@@ -19,13 +19,7 @@ import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { buildTaxEligibilityProfileForUser } from "./taxEligibilityService";
 import { resolveCitClassificationInputsForYear } from "./citClassificationInputsService";
-import {
-  getPitAnnualEstimateForYear,
-  getPitMonthlyEstimateFromBooks,
-  getTradingProfitForYear,
-} from "./pitFilingService";
-import { CIT_PERIOD_MONTH } from "../../constants/citFiling";
-import { PIT_PERIOD_MONTH } from "../../constants/pitFiling";
+import { getPitAnnualEstimateForYear, getPitMonthlyEstimateFromBooks } from "./pitFilingService";
 import {
   monthsInTaxRange,
   taxPeriodLabel,
@@ -53,6 +47,67 @@ function liveExpenseWhere(userId: string, dateRange: { gte: Date; lte: Date }) {
     expenseDate: dateRange,
     status: { notIn: [SALE_STATUS.VOIDED, SALE_STATUS.REVERSED] },
   };
+}
+
+type MonthBooks = { income: number; expenses: number; netProfit: number; hasActivity: boolean };
+
+/** Net profit and activity for one calendar month (live books only). */
+async function getMonthBooks(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<MonthBooks> {
+  const { start, end } = monthDateRangeUtc(year, month);
+  const dateRange = { gte: start, lte: end };
+  const [sales, expenses] = await Promise.all([
+    prisma.sale.findMany({
+      where: liveBookWhere(userId, dateRange),
+      select: { amount: true },
+    }),
+    prisma.expense.findMany({
+      where: liveExpenseWhere(userId, dateRange),
+      select: { amount: true },
+    }),
+  ]);
+  const income = sales.reduce((s, x) => s + decimalToNumber(x.amount), 0);
+  const exp = expenses.reduce((s, x) => s + decimalToNumber(x.amount), 0);
+  return {
+    income: normalizeMoneyAmount(income),
+    expenses: normalizeMoneyAmount(exp),
+    netProfit: normalizeMoneyAmount(income - exp),
+    hasActivity: sales.length > 0 || expenses.length > 0,
+  };
+}
+
+/**
+ * Cumulative net profit for the calendar year: sum of every month that has
+ * book activity. Same value regardless of which month the client is viewing.
+ */
+async function cumulativeYearNetProfitWithActivity(
+  userId: string,
+  year: number,
+): Promise<number> {
+  const months = await Promise.all(
+    Array.from({ length: 12 }, (_, i) => getMonthBooks(userId, year, i + 1)),
+  );
+  return normalizeMoneyAmount(
+    months
+      .filter((m) => m.hasActivity)
+      .reduce((sum, m) => sum + m.netProfit, 0),
+  );
+}
+
+/** Calendar-year net profit (Jan–Dec, live books) — used by filing-aligned estimates. */
+async function sumCalendarYearNetProfit(
+  userId: string,
+  year: number,
+): Promise<number> {
+  let profit = 0;
+  for (let month = 1; month <= 12; month++) {
+    const books = await getMonthBooks(userId, year, month);
+    profit += books.netProfit;
+  }
+  return normalizeMoneyAmount(profit);
 }
 
 export const taxComputationService = {
@@ -114,7 +169,7 @@ export const taxComputationService = {
   ) {
     const [calendarYearProfit, classificationInputs, pitEstimate] =
       await Promise.all([
-        getTradingProfitForYear(userId, year),
+        sumCalendarYearNetProfit(userId, year),
         resolveCitClassificationInputsForYear(userId, year),
         getPitAnnualEstimateForYear(userId, year),
       ]);
@@ -157,7 +212,7 @@ export const taxComputationService = {
     const { start, end } = monthDateRangeUtc(year, month);
     const dateRange = { gte: start, lte: end };
 
-    const [sales, expenses, personaPayload, business, fixedAssetRows, taxProfile, classificationInputs] =
+    const [sales, expenses, personaPayload, business, fixedAssetRows, taxProfile, classificationInputs, cumulativeProfit] =
       await Promise.all([
         prisma.sale.findMany({
           where: liveBookWhere(userId, dateRange),
@@ -177,15 +232,8 @@ export const taxComputationService = {
         }),
         buildTaxEligibilityProfileForUser(userId),
         resolveCitClassificationInputsForYear(userId, year),
+        cumulativeYearNetProfitWithActivity(userId, year),
       ]);
-
-    const annualEstimates = await this.getAnnualTaxEstimates(userId, year, {
-      business,
-      taxProfile,
-      fixedAssetRows,
-    });
-    const { citEstimate: citAnnual, pitEstimate: pitAnnual, calendarYearProfit } =
-      annualEstimates;
 
     const { taxpayerContext, taxPersonaGuidance, employmentGrossSalaryMonthly } =
       personaPayload;
@@ -237,7 +285,7 @@ export const taxComputationService = {
     const providesProfessional =
       taxProfile?.taxEligibility.inputs.providesProfessionalServicesResolved;
 
-    /** Dashboard month tab: tax on this month's trading profit only. */
+    /** Dashboard month tab: tax on this month's profit only. */
     const citMonthlyEstimate = estimateCitFromBooks({
       annualizedTurnover: eligibilityTurnover,
       annualizedProfit: monthlyProfit,
@@ -246,8 +294,20 @@ export const taxComputationService = {
       sector: business?.sector,
       providesProfessionalServices: providesProfessional,
     });
+    /** Year view: tax on cumulative profit across all active months in the year. */
+    const citCumulativeEstimate = estimateCitFromBooks({
+      annualizedTurnover: eligibilityTurnover,
+      annualizedProfit: cumulativeProfit,
+      fixedAssets: fixedAssetsProxy,
+      businessType: business?.businessType,
+      sector: business?.sector,
+      providesProfessionalServices: providesProfessional,
+    });
 
     const pitMonthlyEstimate = await getPitMonthlyEstimateFromBooks(monthlyProfit);
+    const pitCumulativeEstimate = await getPitMonthlyEstimateFromBooks(
+      cumulativeProfit,
+    );
 
     const monthlyCitLiability = citMonthlyEstimate.totalCitLiability;
     const monthlyPitPayable = pitMonthlyEstimate.remainingPayable;
@@ -327,24 +387,23 @@ export const taxComputationService = {
       cit: {
         summary: normalizeMoneyAmount(monthlyCitLiability),
         periodAmount: normalizeMoneyAmount(monthlyCitLiability),
-        isSmallCompany: citAnnual.isSmallCompany,
+        isSmallCompany: citCumulativeEstimate.isSmallCompany,
         citClassification: taxProfile?.taxEligibility.citClassification ?? null,
-        taxClassLabel: citAnnual.taxClassLabel,
+        taxClassLabel: citCumulativeEstimate.taxClassLabel,
         citThreshold: CIT_TURNOVER_THRESHOLD_NGN,
         percentOfThreshold: percentOfCitThreshold,
         monthlyProfit,
-        /** Full calendar-year net profit — same basis as /filings/cit/calculation. */
-        annualizedProfit: calendarYearProfit,
+        /** Cumulative net profit for all active months in the calendar year (not month × 12). */
+        annualizedProfit: cumulativeProfit,
         annualizedTurnover: eligibilityTurnover,
         fixedAssetsProxy,
         turnoverSource: classificationInputs?.turnoverSource ?? "profile",
         fixedAssetsSource: classificationInputs?.fixedAssetsSource ?? "profile",
-        citRate: citAnnual.citRate,
-        levyRate: citAnnual.levyRate,
-        estimatedAnnualCit: citAnnual.estimatedAnnualCit,
-        developmentLevy: citAnnual.developmentLevy,
-        totalCitLiability: citAnnual.totalCitLiability,
-        filingPeriodMonth: CIT_PERIOD_MONTH,
+        citRate: citCumulativeEstimate.citRate,
+        levyRate: citCumulativeEstimate.levyRate,
+        estimatedAnnualCit: citCumulativeEstimate.estimatedAnnualCit,
+        developmentLevy: citCumulativeEstimate.developmentLevy,
+        totalCitLiability: citCumulativeEstimate.totalCitLiability,
         capitalAllowances: 0,
         lossCarryForward: 0,
       },
@@ -352,16 +411,15 @@ export const taxComputationService = {
         summary: normalizeMoneyAmount(monthlyPitPayable),
         periodAmount: normalizeMoneyAmount(monthlyPitPayable),
         monthlyProfit,
-        /** Full calendar-year trading profit — same basis as /filings/pit/calculation. */
-        annualizedProfit: pitAnnual.tradingProfit,
-        chargeableIncomeProxyAnnual: pitAnnual.chargeableIncome,
-        estimatedAnnualPit: pitAnnual.remainingPayable,
-        pitLiability: pitAnnual.pitLiability,
-        payeCredits: pitAnnual.payeCredits,
-        whtCredits: pitAnnual.whtCredits,
-        filingPeriodMonth: PIT_PERIOD_MONTH,
+        /** Same cumulative figure on every month view for the year. */
+        annualizedProfit: cumulativeProfit,
+        chargeableIncomeProxyAnnual: pitCumulativeEstimate.chargeableIncome,
+        estimatedAnnualPit: pitCumulativeEstimate.remainingPayable,
+        pitLiability: pitCumulativeEstimate.pitLiability,
+        payeCredits: 0,
+        whtCredits: 0,
         methodology:
-          "periodAmount uses this month's trading profit only. estimatedAnnualPit, chargeableIncome, and credits match GET /filings/pit/calculation for the calendar year.",
+          "Dashboard month PIT/CIT use this month's profit only. annualizedProfit and estimatedAnnualPit use cumulative profit across all active months in the calendar year (not month × 12).",
       },
       paye: {
         applicable: flags.paye,
@@ -415,7 +473,7 @@ export const taxComputationService = {
         ? ("profile_gross" as const)
         : ("none" as const);
 
-    const calendarYearProfit = anchor.pit.annualizedProfit;
+    const cumulativeProfit = anchor.pit.annualizedProfit;
 
     return {
       taxpayerContext: anchor.taxpayerContext,
@@ -456,7 +514,7 @@ export const taxComputationService = {
         summary: normalizeMoneyAmount(sum((c) => c.cit.periodAmount)),
         periodAmount: normalizeMoneyAmount(sum((c) => c.cit.periodAmount)),
         monthlyProfit: sum((c) => c.overview.netProfit),
-        annualizedProfit: anchor.cit.annualizedProfit,
+        annualizedProfit: cumulativeProfit,
         annualizedTurnover: anchor.cit.annualizedTurnover,
         totalCitLiability: anchor.cit.totalCitLiability,
         estimatedAnnualCit: anchor.cit.estimatedAnnualCit,
@@ -466,7 +524,7 @@ export const taxComputationService = {
         summary: normalizeMoneyAmount(sum((c) => c.pit.periodAmount)),
         periodAmount: normalizeMoneyAmount(sum((c) => c.pit.periodAmount)),
         monthlyProfit: sum((c) => c.overview.netProfit),
-        annualizedProfit: calendarYearProfit,
+        annualizedProfit: cumulativeProfit,
         estimatedAnnualPit: anchor.pit.estimatedAnnualPit,
         chargeableIncomeProxyAnnual: anchor.pit.chargeableIncomeProxyAnnual,
       },

@@ -36,7 +36,6 @@ import { taxComputationService } from "./taxComputationService";
 import { sumPayeCreditForYear } from "./employersService";
 import { copyCarryForwardOnSubmit } from "./filingCarryForwardService";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
-import { SALE_STATUS } from "../../constants/salePaymentRules";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -78,30 +77,20 @@ function employerProfileFromRow(row: {
   };
 }
 
-/** Calendar-year net trading profit (live books — excludes voided/reversed). */
-export async function getTradingProfitForYear(
+async function getTradingProfitForYear(
   userId: string,
   year: number,
 ): Promise<number> {
   let total = 0;
   for (let month = 1; month <= 12; month++) {
     const { start, end } = monthDateRangeUtc(year, month);
-    const liveStatus = { notIn: [SALE_STATUS.VOIDED, SALE_STATUS.REVERSED] };
     const [sales, expenses] = await Promise.all([
       prisma.sale.findMany({
-        where: {
-          userId,
-          saleDate: { gte: start, lte: end },
-          status: liveStatus,
-        },
+        where: { userId, saleDate: { gte: start, lte: end } },
         select: { amount: true },
       }),
       prisma.expense.findMany({
-        where: {
-          userId,
-          expenseDate: { gte: start, lte: end },
-          status: liveStatus,
-        },
+        where: { userId, expenseDate: { gte: start, lte: end } },
         select: { amount: true },
       }),
     ]);
@@ -262,7 +251,7 @@ async function aggregatePitInputs(
   };
 }
 
-/** Dashboard month-tab PIT on trading profit only (employment/credits apply in annual filing). */
+/** Monthly tax-computation PIT — uses this month's books only (annualized). */
 export async function getPitMonthlyEstimateFromBooks(
   tradingProfitAnnualized: number,
 ) {

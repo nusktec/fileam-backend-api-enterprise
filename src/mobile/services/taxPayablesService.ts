@@ -7,25 +7,18 @@ import {
   type TaxType,
   type PayableStatus,
 } from "../../constants/taxPayable";
-import { citDueDateForYear, CIT_PERIOD_MONTH } from "../../constants/citFiling";
-import { pitDueDateForYear, PIT_PERIOD_MONTH } from "../../constants/pitFiling";
+import { citDueDateForYear } from "../../constants/citFiling";
+import { pitDueDateForYear } from "../../constants/pitFiling";
 import { utcCalendarDate } from "../../utils/dateRangeQuery";
-import {
-  bookPeriodsOverlappingRange,
-  calendarYearsFromBookPeriods,
-} from "../../utils/bookPeriodQuery";
 import {
   monthsInTaxRange,
   type TaxPeriodRange,
 } from "../../utils/taxPeriodQuery";
-import { buildTaxEligibilityProfileForUser } from "./taxEligibilityService";
-import { ASSET_ON_BOOKS_STATUSES } from "../../constants/assets";
 
 const PAYMENT_BASE_URL =
   process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
 
-const MONTHLY_SYNC_TAX_TYPES: TaxType[] = ["VAT", "WHT", "PAYE"];
-const ANNUAL_SYNC_TAX_TYPES: TaxType[] = ["CIT", "PIT"];
+const MONTHLY_SYNC_TAX_TYPES: TaxType[] = ["VAT", "WHT", "PAYE", "CIT", "PIT"];
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -91,7 +84,7 @@ type PeriodComputation = Awaited<
   ReturnType<typeof taxComputationService.getForQuery>
 >;
 
-/** VAT / WHT / PAYE — per book month. */
+/** All tax types — per book month (CIT/PIT from that month's activity). */
 function monthlyAmountsFromComputation(
   computation: PeriodComputation,
 ): Array<{ taxType: TaxType; amountDue: number }> {
@@ -116,33 +109,22 @@ function monthlyAmountsFromComputation(
           ? Math.max(0, computation.paye.periodAmount)
           : 0,
     },
-  ];
-}
-
-function annualAmountsFromComputation(
-  computation: PeriodComputation,
-): Array<{ taxType: TaxType; amountDue: number }> {
-  const flags = computation.taxPersonaGuidance.applicableTaxes;
-  return [
     {
       taxType: "CIT",
       amountDue: flags.cit
-        ? Math.max(0, computation.cit.totalCitLiability)
+        ? Math.max(0, computation.cit.periodAmount)
         : 0,
     },
     {
       taxType: "PIT",
       amountDue: flags.pit
-        ? Math.max(0, computation.pit.estimatedAnnualPit)
+        ? Math.max(0, computation.pit.periodAmount)
         : 0,
     },
   ];
 }
 
-export function totalsFromComputation(
-  computation: PeriodComputation,
-  opts?: { includeAnnualCitPit?: boolean },
-) {
+export function totalsFromComputation(computation: PeriodComputation) {
   const flags = computation.taxPersonaGuidance.applicableTaxes;
   const vat = flags.vat ? Math.max(0, computation.vat.periodAmount) : 0;
   const wht = flags.wht ? Math.max(0, computation.wht.periodAmount) : 0;
@@ -150,166 +132,10 @@ export function totalsFromComputation(
     flags.paye && computation.paye.applicable
       ? Math.max(0, computation.paye.periodAmount)
       : 0;
-  const cit = flags.cit
-    ? opts?.includeAnnualCitPit
-      ? Math.max(0, computation.cit.totalCitLiability)
-      : 0
-    : 0;
-  const pit = flags.pit
-    ? opts?.includeAnnualCitPit
-      ? Math.max(0, computation.pit.estimatedAnnualPit)
-      : 0
-    : 0;
+  const cit = flags.cit ? Math.max(0, computation.cit.periodAmount) : 0;
+  const pit = flags.pit ? Math.max(0, computation.pit.periodAmount) : 0;
   const total = vat + wht + cit + pit + paye;
   return { vat, wht, cit, pit, paye, total };
-}
-
-function annualEstimatesFromComputation(computation: PeriodComputation) {
-  const flags = computation.taxPersonaGuidance.applicableTaxes;
-  return {
-    cit: flags.cit
-      ? Math.max(0, computation.cit.totalCitLiability)
-      : 0,
-    pit: flags.pit
-      ? Math.max(0, computation.pit.estimatedAnnualPit)
-      : 0,
-  };
-}
-
-/** Annual CIT/PIT rows list only when the book-period filter includes December. */
-function bookPeriodIncludesDecember(
-  periods: Array<{ year: number; month: number }>,
-): boolean {
-  return periods.some((p) => p.month === PIT_PERIOD_MONTH);
-}
-
-function shouldListAnnualPayables(
-  periods: Array<{ year: number; month: number }>,
-  taxTypeFilter?: TaxType,
-): boolean {
-  if (taxTypeFilter === "CIT" || taxTypeFilter === "PIT") return true;
-  return bookPeriodIncludesDecember(periods);
-}
-
-function buildPayablesWhereForBookPeriods(input: {
-  periodYear: number;
-  periodMonth: number;
-  taxType?: TaxType;
-  includeAnnual?: boolean;
-}): Array<Record<string, unknown>> {
-  const tt = input.taxType?.trim().toUpperCase() as TaxType | undefined;
-  const includeAnnual = input.includeAnnual ?? false;
-  if (tt === "CIT" || tt === "PIT") {
-    return [
-      {
-        periodYear: input.periodYear,
-        periodMonth:
-          tt === "CIT" ? CIT_PERIOD_MONTH : PIT_PERIOD_MONTH,
-        taxType: tt,
-      },
-    ];
-  }
-  if (tt === "VAT" || tt === "WHT" || tt === "PAYE") {
-    return [
-      {
-        periodYear: input.periodYear,
-        periodMonth: input.periodMonth,
-        taxType: tt,
-      },
-    ];
-  }
-  const clauses: Array<Record<string, unknown>> = [
-    {
-      periodYear: input.periodYear,
-      periodMonth: input.periodMonth,
-      taxType: { in: [...MONTHLY_SYNC_TAX_TYPES] },
-    },
-  ];
-  if (includeAnnual) {
-    clauses.push(
-      {
-        periodYear: input.periodYear,
-        periodMonth: CIT_PERIOD_MONTH,
-        taxType: "CIT",
-      },
-      {
-        periodYear: input.periodYear,
-        periodMonth: PIT_PERIOD_MONTH,
-        taxType: "PIT",
-      },
-    );
-  }
-  return clauses;
-}
-
-function buildPayablesWhereForBookPeriodList(
-  periods: Array<{ year: number; month: number }>,
-  taxType?: TaxType,
-  includeAnnual = false,
-): Array<Record<string, unknown>> {
-  const tt = taxType?.trim().toUpperCase() as TaxType | undefined;
-  const years = calendarYearsFromBookPeriods(periods);
-
-  if (tt === "CIT") {
-    return years.map((year) => ({
-      periodYear: year,
-      periodMonth: CIT_PERIOD_MONTH,
-      taxType: "CIT",
-    }));
-  }
-  if (tt === "PIT") {
-    return years.map((year) => ({
-      periodYear: year,
-      periodMonth: PIT_PERIOD_MONTH,
-      taxType: "PIT",
-    }));
-  }
-  if (tt === "VAT" || tt === "WHT" || tt === "PAYE") {
-    return periods.map((p) => ({
-      periodYear: p.year,
-      periodMonth: p.month,
-      taxType: tt,
-    }));
-  }
-
-  const clauses: Array<Record<string, unknown>> = periods.map((p) => ({
-    periodYear: p.year,
-    periodMonth: p.month,
-    taxType: { in: [...MONTHLY_SYNC_TAX_TYPES] },
-  }));
-
-  if (includeAnnual) {
-    for (const year of years) {
-      if (periods.some((p) => p.year === year && p.month === PIT_PERIOD_MONTH)) {
-        clauses.push(
-          {
-            periodYear: year,
-            periodMonth: CIT_PERIOD_MONTH,
-            taxType: "CIT",
-          },
-          {
-            periodYear: year,
-            periodMonth: PIT_PERIOD_MONTH,
-            taxType: "PIT",
-          },
-        );
-      }
-    }
-  }
-
-  return clauses;
-}
-
-async function removeOrphanMonthlyCitPitRows(userId: string, year: number) {
-  await prisma.taxPayable.deleteMany({
-    where: {
-      userId,
-      taxType: { in: [...ANNUAL_SYNC_TAX_TYPES] },
-      periodYear: year,
-      periodMonth: { notIn: [CIT_PERIOD_MONTH, PIT_PERIOD_MONTH] },
-      submittedAt: null,
-    },
-  });
 }
 
 async function upsertPayableRow(input: {
@@ -420,58 +246,7 @@ export const taxPayablesService = {
     }
   },
 
-  /** Annual CIT/PIT at periodMonth 12 — same figures as filing calculation. */
-  async syncAnnualPayablesForYear(userId: string, year: number) {
-    const [business, fixedAssetRows, taxProfile] = await Promise.all([
-      prisma.business.findFirst({
-        where: { userId },
-        orderBy: { updatedAt: "desc" },
-        select: { businessType: true, sector: true },
-      }),
-      prisma.asset.findMany({
-        where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
-        select: { purchaseCost: true },
-      }),
-      buildTaxEligibilityProfileForUser(userId),
-    ]);
-
-    const anchorMonth =
-      year === new Date().getUTCFullYear()
-        ? new Date().getUTCMonth() + 1
-        : PIT_PERIOD_MONTH;
-    const [computation, annualEstimates] = await Promise.all([
-      taxComputationService.getForPeriod(userId, year, anchorMonth),
-      taxComputationService.getAnnualTaxEstimates(userId, year, {
-        business,
-        taxProfile,
-        fixedAssetRows,
-      }),
-    ]);
-
-    for (const { taxType, amountDue } of annualAmountsFromComputation(
-      computation,
-    )) {
-      const periodMonth =
-        taxType === "CIT" ? CIT_PERIOD_MONTH : PIT_PERIOD_MONTH;
-      await upsertPayableRow({
-        userId,
-        taxType,
-        periodYear: year,
-        periodMonth,
-        amountDue,
-        filingDueDate: getAnnualFilingDueDate(taxType, year),
-      });
-    }
-
-    await removeOrphanMonthlyCitPitRows(userId, year);
-
-    return {
-      cit: annualEstimates.citEstimate.totalCitLiability,
-      pit: annualEstimates.pitEstimate.remainingPayable,
-    };
-  },
-
-  /** VAT / WHT / PAYE for one calendar month; refreshes annual CIT/PIT for the year. */
+  /** VAT / WHT / PAYE for one calendar month. */
   async syncPeriodPayables(userId: string, year: number, month: number) {
     const computation = await taxComputationService.getForPeriod(
       userId,
@@ -482,17 +257,21 @@ export const taxPayablesService = {
     for (const { taxType, amountDue } of monthlyAmountsFromComputation(
       computation,
     )) {
+      const filingDueDate =
+        taxType === "CIT"
+          ? getAnnualFilingDueDate("CIT", year)
+          : taxType === "PIT"
+            ? getAnnualFilingDueDate("PIT", year)
+            : getMonthlyFilingDueDate(year, month);
       await upsertPayableRow({
         userId,
         taxType,
         periodYear: year,
         periodMonth: month,
         amountDue,
-        filingDueDate: getMonthlyFilingDueDate(year, month),
+        filingDueDate,
       });
     }
-
-    await this.syncAnnualPayablesForYear(userId, year);
   },
 
   async ensurePayablesForUser(userId: string, monthsBack = 12) {
@@ -510,9 +289,6 @@ export const taxPayablesService = {
       periods.push({ year, month });
     }
     await this.syncPayablesForPeriods(userId, periods);
-    for (const y of calendarYearsFromBookPeriods(periods)) {
-      await this.syncAnnualPayablesForYear(userId, y);
-    }
   },
 
   async list(
@@ -546,33 +322,12 @@ export const taxPayablesService = {
         );
       } else {
         await this.syncPayablesForPeriods(userId, months);
-        const years = calendarYearsFromBookPeriods(months);
-        for (const y of years) {
-          await this.syncAnnualPayablesForYear(userId, y);
-        }
       }
       periodComputation = await taxComputationService.getForQuery(userId, {
         year: opts.periodYear,
         month: opts.periodMonth,
         range,
       });
-    } else if (opts?.dateFrom || opts?.dateTo) {
-      const bookPeriods = bookPeriodsOverlappingRange(
-        opts.dateFrom,
-        opts.dateTo,
-      );
-      await this.syncPayablesForPeriods(userId, bookPeriods);
-      for (const y of calendarYearsFromBookPeriods(bookPeriods)) {
-        await this.syncAnnualPayablesForYear(userId, y);
-      }
-      if (bookPeriods.length > 0) {
-        const anchor = bookPeriods[bookPeriods.length - 1]!;
-        periodComputation = await taxComputationService.getForQuery(userId, {
-          year: anchor.year,
-          month: anchor.month,
-          range: "month",
-        });
-      }
     } else {
       await this.ensurePayablesForUser(userId);
     }
@@ -594,58 +349,45 @@ export const taxPayablesService = {
     };
     if (filters?.status) where.status = filters.status;
 
-    const taxTypeFilter = filters?.taxType?.trim().toUpperCase() as
-      | TaxType
-      | undefined;
-
-    let filteredBookPeriods: Array<{ year: number; month: number }> = [];
-    let includeAnnualInList = false;
-
     if (opts?.periodYear != null && opts?.periodMonth != null) {
-      filteredBookPeriods = monthsInTaxRange(
+      const months = monthsInTaxRange(
         opts.periodYear,
         opts.periodMonth,
         range,
       );
-      includeAnnualInList = shouldListAnnualPayables(
-        filteredBookPeriods,
-        taxTypeFilter,
-      );
+      const calendarYears = [...new Set(months.map((m) => m.year))];
+      const taxTypeFilter = filters?.taxType?.trim().toUpperCase() as
+        | TaxType
+        | undefined;
 
-      if (filteredBookPeriods.length === 1) {
-        where.OR = buildPayablesWhereForBookPeriods({
-          periodYear: opts.periodYear,
-          periodMonth: opts.periodMonth,
-          taxType: taxTypeFilter,
-          includeAnnual: includeAnnualInList,
-        });
+      if (months.length === 1 && !taxTypeFilter) {
+        where.periodYear = opts.periodYear;
+        where.periodMonth = opts.periodMonth;
+      } else if (months.length === 1 && taxTypeFilter) {
+        where.periodYear = opts.periodYear;
+        where.periodMonth = opts.periodMonth;
+        where.taxType = taxTypeFilter;
       } else {
-        where.OR = buildPayablesWhereForBookPeriodList(
-          filteredBookPeriods,
-          taxTypeFilter,
-          includeAnnualInList,
-        );
-      }
-    } else if (opts?.dateFrom || opts?.dateTo) {
-      filteredBookPeriods = bookPeriodsOverlappingRange(
-        opts.dateFrom,
-        opts.dateTo,
-      );
-      includeAnnualInList = shouldListAnnualPayables(
-        filteredBookPeriods,
-        taxTypeFilter,
-      );
-      if (filteredBookPeriods.length > 0) {
-        where.OR = buildPayablesWhereForBookPeriodList(
-          filteredBookPeriods,
-          taxTypeFilter,
-          includeAnnualInList,
-        );
-      } else {
-        where.periodYear = -1;
+        where.OR = [
+          ...months.map((m) => ({
+            periodYear: m.year,
+            periodMonth: m.month,
+          })),
+        ];
+        if (taxTypeFilter) {
+          where.OR = where.OR.map((clause) => ({
+            ...clause,
+            taxType: { in: [taxTypeFilter] },
+          }));
+        }
       }
     } else {
       if (filters?.taxType) where.taxType = filters.taxType;
+      if (opts?.dateFrom || opts?.dateTo) {
+        where.filingDueDate = {};
+        if (opts.dateFrom) where.filingDueDate.gte = opts.dateFrom;
+        if (opts.dateTo) where.filingDueDate.lte = opts.dateTo;
+      }
     }
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
@@ -688,10 +430,6 @@ export const taxPayablesService = {
       ),
       paymentLink: getPaymentLink(p.id, p.paymentLink),
     }));
-    const annualEstimates = periodComputation
-      ? annualEstimatesFromComputation(periodComputation)
-      : null;
-
     return {
       taxpayerContext,
       taxPersonaGuidance,
@@ -701,17 +439,8 @@ export const taxPayablesService = {
           ? { year: opts.periodYear, month: opts.periodMonth }
           : null,
       period: periodComputation?.period ?? null,
-      annualPayablesIncludedInList: includeAnnualInList,
-      annualEstimates:
-        !includeAnnualInList &&
-        annualEstimates &&
-        (annualEstimates.cit > 0 || annualEstimates.pit > 0)
-          ? annualEstimates
-          : null,
       totals: periodComputation
-        ? totalsFromComputation(periodComputation, {
-            includeAnnualCitPit: includeAnnualInList,
-          })
+        ? totalsFromComputation(periodComputation)
         : null,
       data,
       total,
