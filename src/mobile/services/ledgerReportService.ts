@@ -4,12 +4,13 @@ import {
   CHART_BY_CODE,
   CHART_SECTION_ORDER,
   balanceToTrialSides,
+  dashboardUsesClosingBalance,
   resolveChartAccountCode,
   type ChartAccount,
 } from "../../constants/chartOfAccounts";
 import {
+  LEDGER_BOOKS_STATUSES,
   LEDGER_REFERENCE_TYPES,
-  LEDGER_STATUS,
 } from "../../constants/ledger";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import {
@@ -17,20 +18,22 @@ import {
   type LedgerPeriod,
 } from "../../utils/ledgerPeriodQuery";
 
+type TxMeta = {
+  id: string;
+  description: string;
+  transactionDate: Date;
+  referenceType: string;
+  referenceId: string | null;
+  reversalOfId: string | null;
+  status: string;
+};
+
 type RawEntry = {
   id: string;
   accountCode: string;
   debit: number;
   credit: number;
-  transaction: {
-    id: string;
-    description: string;
-    transactionDate: Date;
-    referenceType: string;
-    referenceId: string | null;
-    reversalOfId: string | null;
-    status: string;
-  };
+  transaction: TxMeta;
 };
 
 function decimal(n: unknown): number {
@@ -69,10 +72,10 @@ const SOURCE_TYPE_MAP: Record<string, string> = {
   [LEDGER_REFERENCE_TYPES.SALARY_ACCRUED]: "payroll",
   [LEDGER_REFERENCE_TYPES.SALARY_PAID]: "payroll",
   [LEDGER_REFERENCE_TYPES.VAT_REMITTED]: "tax",
+  [LEDGER_REFERENCE_TYPES.WHT_SUFFERED]: "tax",
   [LEDGER_REFERENCE_TYPES.CASH_OPENING]: "asset",
   [LEDGER_REFERENCE_TYPES.BANK_OPENING]: "asset",
   [LEDGER_REFERENCE_TYPES.RECEIVABLE]: "asset",
-  [LEDGER_REFERENCE_TYPES.REVERSAL]: "sale",
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -89,11 +92,17 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 function resolveSourceType(referenceType: string): string {
-  if (referenceType === LEDGER_REFERENCE_TYPES.REVERSAL) return "sale";
   return SOURCE_TYPE_MAP[referenceType] ?? "sale";
 }
 
-async function fetchNetPostedEntries(
+function isReversingJournal(tx: TxMeta): boolean {
+  return (
+    tx.referenceType === LEDGER_REFERENCE_TYPES.REVERSAL ||
+    tx.reversalOfId != null
+  );
+}
+
+async function fetchBookEntries(
   userId: string,
   opts?: { from?: Date; to?: Date },
 ): Promise<RawEntry[]> {
@@ -101,7 +110,7 @@ async function fetchNetPostedEntries(
     where: {
       transaction: {
         userId,
-        status: LEDGER_STATUS.POSTED,
+        status: { in: [...LEDGER_BOOKS_STATUSES] },
         ...(opts?.from || opts?.to
           ? {
               transactionDate: {
@@ -135,43 +144,6 @@ async function fetchNetPostedEntries(
   }));
 }
 
-async function fetchGeneralLedgerEntries(
-  userId: string,
-  from: Date,
-  to: Date,
-): Promise<RawEntry[]> {
-  const rows = await prisma.ledgerEntry.findMany({
-    where: {
-      transaction: {
-        userId,
-        status: { in: [LEDGER_STATUS.POSTED, LEDGER_STATUS.REVERSED] },
-        transactionDate: { gte: from, lte: to },
-      },
-    },
-    include: {
-      transaction: {
-        select: {
-          id: true,
-          description: true,
-          transactionDate: true,
-          referenceType: true,
-          referenceId: true,
-          reversalOfId: true,
-          status: true,
-        },
-      },
-    },
-    orderBy: [{ transaction: { transactionDate: "asc" } }, { id: "asc" }],
-  });
-  return rows.map((r) => ({
-    id: r.id,
-    accountCode: r.accountCode,
-    debit: decimal(r.debit),
-    credit: decimal(r.credit),
-    transaction: r.transaction,
-  }));
-}
-
 type ChartMovement = {
   chartCode: string;
   account: ChartAccount;
@@ -180,12 +152,9 @@ type ChartMovement = {
   periodCredit: number;
 };
 
-function aggregateToChart(
-  entries: RawEntry[],
-  accounts: ChartAccount[],
-): Map<string, ChartMovement> {
+function aggregateToChart(entries: RawEntry[]): Map<string, ChartMovement> {
   const map = new Map<string, ChartMovement>();
-  for (const acct of accounts) {
+  for (const acct of CHART_ACCOUNTS) {
     map.set(acct.code, {
       chartCode: acct.code,
       account: acct,
@@ -209,6 +178,28 @@ function aggregateToChart(
   return map;
 }
 
+function combineMovements(
+  closing: Map<string, ChartMovement>,
+  period: Map<string, ChartMovement>,
+  useClosing: (account: ChartAccount) => boolean,
+): Map<string, ChartMovement> {
+  const combined = new Map<string, ChartMovement>();
+  for (const acct of CHART_ACCOUNTS) {
+    const close = closing.get(acct.code)!;
+    const move = period.get(acct.code)!;
+    combined.set(acct.code, {
+      chartCode: acct.code,
+      account: acct,
+      netDebitMinusCredit: useClosing(acct)
+        ? close.netDebitMinusCredit
+        : move.netDebitMinusCredit,
+      periodDebit: move.periodDebit,
+      periodCredit: move.periodCredit,
+    });
+  }
+  return combined;
+}
+
 function buildTrialBalanceSections(movements: Map<string, ChartMovement>) {
   const sections = CHART_SECTION_ORDER.map((section) => {
     const lines = CHART_ACCOUNTS.filter((a) => a.sectionType === section.type)
@@ -225,9 +216,7 @@ function buildTrialBalanceSections(movements: Map<string, ChartMovement>) {
         };
       });
 
-    const debit = normalizeMoneyAmount(
-      lines.reduce((s, l) => s + l.debit, 0),
-    );
+    const debit = normalizeMoneyAmount(lines.reduce((s, l) => s + l.debit, 0));
     const credit = normalizeMoneyAmount(
       lines.reduce((s, l) => s + l.credit, 0),
     );
@@ -259,36 +248,43 @@ function periodPayload(period: LedgerPeriod) {
   };
 }
 
+async function originalSourceMap(
+  userId: string,
+  entries: RawEntry[],
+): Promise<Map<string, { referenceType: string; referenceId: string | null }>> {
+  const ids = [
+    ...new Set(
+      entries
+        .map((e) => e.transaction.reversalOfId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (ids.length === 0) return new Map();
+  const originals = await prisma.ledgerTransaction.findMany({
+    where: { userId, id: { in: ids } },
+    select: { id: true, referenceType: true, referenceId: true },
+  });
+  return new Map(
+    originals.map((o) => [
+      o.id,
+      { referenceType: o.referenceType, referenceId: o.referenceId },
+    ]),
+  );
+}
+
 export const ledgerReportService = {
   async getDashboard(userId: string) {
     const plWindow = dashboardPlPeriod();
-    const bsEntries = await fetchNetPostedEntries(userId, {
-      to: plWindow.end,
-    });
-    const plEntries = await fetchNetPostedEntries(userId, {
-      from: plWindow.start,
-      to: plWindow.end,
-    });
+    const [asAtEntries, ytdEntries] = await Promise.all([
+      fetchBookEntries(userId, { to: plWindow.end }),
+      fetchBookEntries(userId, { from: plWindow.start, to: plWindow.end }),
+    ]);
 
-    const bsMovements = aggregateToChart(bsEntries, CHART_ACCOUNTS);
-    const plMovements = aggregateToChart(plEntries, CHART_ACCOUNTS);
-
-    const combined = new Map<string, ChartMovement>();
-    for (const acct of CHART_ACCOUNTS) {
-      const bs = bsMovements.get(acct.code)!;
-      const pl = plMovements.get(acct.code)!;
-      combined.set(acct.code, {
-        chartCode: acct.code,
-        account: acct,
-        netDebitMinusCredit:
-          acct.reportClass === "balance_sheet"
-            ? bs.netDebitMinusCredit
-            : pl.netDebitMinusCredit,
-        periodDebit: pl.periodDebit,
-        periodCredit: pl.periodCredit,
-      });
-    }
-
+    const combined = combineMovements(
+      aggregateToChart(asAtEntries),
+      aggregateToChart(ytdEntries),
+      dashboardUsesClosingBalance,
+    );
     const { sections, totals } = buildTrialBalanceSections(combined);
     return {
       asAt: plWindow.asAt,
@@ -298,33 +294,16 @@ export const ledgerReportService = {
   },
 
   async getTrialBalance(userId: string, period: LedgerPeriod) {
-    const beforeStart = dayBefore(period.start);
-
     const [bsClosingEntries, plPeriodEntries] = await Promise.all([
-      fetchNetPostedEntries(userId, { to: period.end }),
-      fetchNetPostedEntries(userId, { from: period.start, to: period.end }),
+      fetchBookEntries(userId, { to: period.end }),
+      fetchBookEntries(userId, { from: period.start, to: period.end }),
     ]);
 
-    const bsMovements = aggregateToChart(bsClosingEntries, CHART_ACCOUNTS);
-    const plMovements = aggregateToChart(plPeriodEntries, CHART_ACCOUNTS);
-
-    const combined = new Map<string, ChartMovement>();
-    for (const acct of CHART_ACCOUNTS) {
-      const bs = bsMovements.get(acct.code)!;
-      const pl = plMovements.get(acct.code)!;
-      combined.set(acct.code, {
-        chartCode: acct.code,
-        account: acct,
-        netDebitMinusCredit:
-          acct.reportClass === "balance_sheet"
-            ? bs.netDebitMinusCredit
-            : pl.netDebitMinusCredit,
-        periodDebit: pl.periodDebit,
-        periodCredit: pl.periodCredit,
-      });
-    }
-
-    void beforeStart;
+    const combined = combineMovements(
+      aggregateToChart(bsClosingEntries),
+      aggregateToChart(plPeriodEntries),
+      (account) => account.reportClass === "balance_sheet",
+    );
     const { sections, totals } = buildTrialBalanceSections(combined);
     return {
       period: periodPayload(period),
@@ -335,17 +314,16 @@ export const ledgerReportService = {
 
   async getGeneralLedger(userId: string, period: LedgerPeriod) {
     const beforeStart = dayBefore(period.start);
-    const [openingEntries, periodEntries, glEntries] = await Promise.all([
-      fetchNetPostedEntries(userId, { to: beforeStart }),
-      fetchNetPostedEntries(userId, { from: period.start, to: period.end }),
-      fetchGeneralLedgerEntries(userId, period.start, period.end),
+    const [openingEntries, periodEntries] = await Promise.all([
+      fetchBookEntries(userId, { to: beforeStart }),
+      fetchBookEntries(userId, { from: period.start, to: period.end }),
     ]);
 
-    const openingMap = aggregateToChart(openingEntries, CHART_ACCOUNTS);
-    const periodMap = aggregateToChart(periodEntries, CHART_ACCOUNTS);
+    const openingMap = aggregateToChart(openingEntries);
+    const originals = await originalSourceMap(userId, periodEntries);
 
     const entriesByChart = new Map<string, RawEntry[]>();
-    for (const entry of glEntries) {
+    for (const entry of periodEntries) {
       const chartCode = resolveChartAccountCode(entry.accountCode);
       if (!chartCode || !CHART_BY_CODE.has(chartCode)) continue;
       const list = entriesByChart.get(chartCode) ?? [];
@@ -355,57 +333,65 @@ export const ledgerReportService = {
 
     const accounts = CHART_ACCOUNTS.filter((account) => {
       const opening = openingMap.get(account.code)!;
-      const movement = periodMap.get(account.code)!;
-      const hasEntries = (entriesByChart.get(account.code)?.length ?? 0) > 0;
-      if (account.reportClass === "profit_and_loss") {
-        return (
-          movement.periodDebit > 0 ||
-          movement.periodCredit > 0 ||
-          hasEntries
-        );
-      }
+      const listed = entriesByChart.get(account.code) ?? [];
+      const periodDebit = listed.reduce((s, e) => s + e.debit, 0);
+      const periodCredit = listed.reduce((s, e) => s + e.credit, 0);
+      const openingNet =
+        account.reportClass === "profit_and_loss"
+          ? 0
+          : opening.netDebitMinusCredit;
       return (
-        opening.netDebitMinusCredit !== 0 ||
-        movement.periodDebit > 0 ||
-        movement.periodCredit > 0 ||
-        hasEntries
+        openingNet !== 0 ||
+        periodDebit > 0 ||
+        periodCredit > 0 ||
+        listed.length > 0
       );
     })
       .sort((a, b) => a.code.localeCompare(b.code))
       .map((account) => {
+        const listed = (entriesByChart.get(account.code) ?? []).slice().sort(
+          (a, b) => {
+            const dt =
+              a.transaction.transactionDate.getTime() -
+              b.transaction.transactionDate.getTime();
+            if (dt !== 0) return dt;
+            return a.id.localeCompare(b.id);
+          },
+        );
+        const periodDebit = normalizeMoneyAmount(
+          listed.reduce((s, e) => s + e.debit, 0),
+        );
+        const periodCredit = normalizeMoneyAmount(
+          listed.reduce((s, e) => s + e.credit, 0),
+        );
         const openingNet =
           account.reportClass === "profit_and_loss"
             ? 0
             : openingMap.get(account.code)!.netDebitMinusCredit;
-        const periodDebit = periodMap.get(account.code)!.periodDebit;
-        const periodCredit = periodMap.get(account.code)!.periodCredit;
-        const closingNet =
-          account.reportClass === "profit_and_loss"
-            ? periodDebit - periodCredit
-            : openingNet + periodDebit - periodCredit;
-
+        const closingNet = openingNet + periodDebit - periodCredit;
         const openingSides = balanceToTrialSides(account, openingNet);
         const closingSides = balanceToTrialSides(account, closingNet);
 
-        const entries = (entriesByChart.get(account.code) ?? []).map((e) => {
-          const isReversal =
-            e.transaction.referenceType === LEDGER_REFERENCE_TYPES.REVERSAL ||
-            e.transaction.reversalOfId != null;
-          const sourceType = isReversal
-            ? resolveSourceType(
-                e.transaction.referenceType === LEDGER_REFERENCE_TYPES.REVERSAL
-                  ? LEDGER_REFERENCE_TYPES.REVERSAL
-                  : e.transaction.referenceType,
-              )
-            : resolveSourceType(e.transaction.referenceType);
+        const entries = listed.map((e) => {
+          const reversing = isReversingJournal(e.transaction);
+          const origin = e.transaction.reversalOfId
+            ? originals.get(e.transaction.reversalOfId)
+            : undefined;
+          const sourceType = resolveSourceType(
+            reversing && origin
+              ? origin.referenceType
+              : e.transaction.referenceType,
+          );
           return {
             id: e.id,
             date: formatYmd(e.transaction.transactionDate),
             description: e.transaction.description,
             source: SOURCE_LABEL[sourceType] ?? "Sale",
             sourceType,
-            sourceId: e.transaction.referenceId,
-            isReversal,
+            sourceId: reversing
+              ? (origin?.referenceId ?? e.transaction.referenceId)
+              : e.transaction.referenceId,
+            isReversal: reversing,
             debit: e.debit,
             credit: e.credit,
           };

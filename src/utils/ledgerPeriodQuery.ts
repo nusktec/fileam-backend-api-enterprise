@@ -50,12 +50,18 @@ export function parseLedgerPeriodQuery(query: {
 }): LedgerPeriod {
   const type = String(query.period ?? "").trim().toLowerCase();
   if (type !== "month" && type !== "year") {
-    throw new HttpReplyError(400, "Invalid period. Use month or year.");
+    throw new HttpReplyError(
+      400,
+      "Missing or invalid query (period, year, month), or a future period",
+    );
   }
 
   const year = Number(query.year);
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
-    throw new HttpReplyError(400, "Invalid year. Use YYYY.");
+    throw new HttpReplyError(
+      400,
+      "Missing or invalid query (period, year, month), or a future period",
+    );
   }
 
   let month: number | null = null;
@@ -64,7 +70,7 @@ export function parseLedgerPeriodQuery(query: {
     if (!Number.isInteger(month) || month < 1 || month > 12) {
       throw new HttpReplyError(
         400,
-        "Invalid month. Use 1–12 when period=month.",
+        "Missing or invalid query (period, year, month), or a future period",
       );
     }
   }
@@ -77,7 +83,10 @@ export function parseLedgerPeriodQuery(query: {
 
   const todayUtc = utcDate(today.year, today.month, today.day);
   if (start.getTime() > todayUtc.getTime()) {
-    throw new HttpReplyError(400, "Future periods are not allowed.");
+    throw new HttpReplyError(
+      400,
+      "Missing or invalid query (period, year, month), or a future period",
+    );
   }
 
   const isCurrentMonth =

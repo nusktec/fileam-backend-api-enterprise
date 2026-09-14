@@ -165,12 +165,10 @@ const INTERNAL_TO_CHART: Record<string, string> = {
   DEPRECIATION_EXPENSE: "6240",
   WHT_TAX_CREDIT: "8120",
   TAX_PAYABLE: "8150",
-  TRANSFER_CLEARING: "1400",
-  EXISTING_BUSINESS_FUNDS: "1400",
-  ASSET_SALE_PROCEEDS: "1110",
+  ASSET_SALE_PROCEEDS: "1140",
 };
 
-/** Map internal ledger account code to chart code. Returns null for equity (excluded). */
+/** Map internal ledger account code to chart code. Null = omit (equity or unknown — do not invent). */
 export function resolveChartAccountCode(internalCode: string): string | null {
   if (/^\d{4}$/.test(internalCode)) {
     return CHART_BY_CODE.has(internalCode) ? internalCode : null;
@@ -178,11 +176,22 @@ export function resolveChartAccountCode(internalCode: string): string | null {
   if (internalCode.startsWith("BANK:")) return "1120";
   if (
     internalCode.startsWith("OWNER_") ||
-    internalCode === "OTHER_EQUITY"
+    internalCode === "OTHER_EQUITY" ||
+    internalCode === "TRANSFER_CLEARING" ||
+    internalCode === "EXISTING_BUSINESS_FUNDS"
   ) {
     return null;
   }
-  return INTERNAL_TO_CHART[internalCode] ?? "6290";
+  return INTERNAL_TO_CHART[internalCode] ?? null;
+}
+
+/** Dashboard: BS sections close as at today; P&L + tax sections are YTD. */
+export function dashboardUsesClosingBalance(account: ChartAccount): boolean {
+  return (
+    account.sectionType === "asset" ||
+    account.sectionType === "contra_asset" ||
+    account.sectionType === "liability"
+  );
 }
 
 export function balanceToTrialSides(

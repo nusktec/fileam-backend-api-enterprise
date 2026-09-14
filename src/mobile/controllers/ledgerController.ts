@@ -10,14 +10,16 @@ import { generateLedgerReportPdf } from "../services/ledgerPdfService";
 
 function handleError(res: Response, error: unknown): void {
   if (error instanceof HttpReplyError) {
-    res
-      .status(error.statusCode)
-      .json(outJson(false, error.message, null));
+    res.status(error.statusCode).json({
+      status: false,
+      message: error.message,
+    });
     return;
   }
-  res
-    .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
-    .json(outJson(false, "Ledger request failed", null));
+    res.status(HttpStatusCode.INTERNAL_SERVER_ERROR).json({
+      status: false,
+      message: "Server failure",
+    });
 }
 
 export const getLedgerDashboard = async (req: IRequest, res: Response) => {

@@ -40,6 +40,12 @@ export const LEDGER_STATUS = {
   REVERSED: "REVERSED",
 } as const;
 
+/** Original + reversing journals both hit the books (LEDGER.pdf: do not omit reversed originals). */
+export const LEDGER_BOOKS_STATUSES = [
+  LEDGER_STATUS.POSTED,
+  LEDGER_STATUS.REVERSED,
+] as const;
+
 export const LEDGER_ACCOUNTS = {
   CASH_ON_HAND: "CASH_ON_HAND",
   PETTY_CASH: "PETTY_CASH",

@@ -109,10 +109,6 @@ export const cashBankService = {
     }
 
     const cashCode = await nextDisplayCode(CASH_COUNTER, "CASH");
-    const cashAccount = {
-      code: cashAccountCode(input.cashType),
-      name: CASH_TYPE_LABELS[input.cashType],
-    };
 
     const row = await prisma.$transaction(async (tx) => {
       const created = await tx.cashBalance.create({

@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../config/database";
 import {
+  LEDGER_BOOKS_STATUSES,
   LEDGER_REFERENCE_TYPES,
   LEDGER_STATUS,
   type LedgerEntryDraft,
@@ -94,7 +95,7 @@ export const ledgerService = {
         data: {
           userId,
           referenceType: LEDGER_REFERENCE_TYPES.REVERSAL,
-          referenceId: original.id,
+          referenceId: original.referenceId,
           description: reversalDescription,
           transactionDate,
           status: LEDGER_STATUS.POSTED,
@@ -128,7 +129,10 @@ export const ledgerService = {
   async getPostedBalances(userId: string) {
     const entries = await prisma.ledgerEntry.findMany({
       where: {
-        transaction: { userId, status: LEDGER_STATUS.POSTED },
+        transaction: {
+          userId,
+          status: { in: [...LEDGER_BOOKS_STATUSES] },
+        },
       },
       select: {
         accountCode: true,
