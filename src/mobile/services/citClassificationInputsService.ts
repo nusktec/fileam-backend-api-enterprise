@@ -9,6 +9,7 @@ import {
   type ClassificationValueSource,
 } from "../../constants/citClassificationInputs";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
+import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
 
 function decimalToNumber(
   d: { toNumber?: () => number } | number | null | undefined,
@@ -42,7 +43,7 @@ export async function getTrailingTwelveMonthTurnover(
     Date.UTC(asOf.getUTCFullYear(), asOf.getUTCMonth() - 11, 1, 0, 0, 0, 0),
   );
   const agg = await prisma.sale.aggregate({
-    where: { userId, saleDate: { gte: start, lte: end } },
+    where: liveSaleWhere(userId, { gte: start, lte: end }),
     _sum: { totalAmount: true },
   });
   const total = decimalToNumber(agg._sum.totalAmount);
@@ -57,7 +58,7 @@ export async function sumAnnualSalesTurnover(
   for (let month = 1; month <= 12; month++) {
     const { start, end } = monthDateRangeUtc(year, month);
     const agg = await prisma.sale.aggregate({
-      where: { userId, saleDate: { gte: start, lte: end } },
+      where: liveSaleWhere(userId, { gte: start, lte: end }),
       _sum: { totalAmount: true },
     });
     turnover += decimalToNumber(agg._sum.totalAmount);
@@ -73,9 +74,9 @@ export async function hasBookTransactions(
     const { start } = monthDateRangeUtc(opts.year, 1);
     const { end } = monthDateRangeUtc(opts.year, 12);
     const [sales, expenses] = await Promise.all([
-      prisma.sale.count({ where: { userId, saleDate: { gte: start, lte: end } } }),
+      prisma.sale.count({ where: liveSaleWhere(userId, { gte: start, lte: end }) }),
       prisma.expense.count({
-        where: { userId, expenseDate: { gte: start, lte: end } },
+        where: liveExpenseWhere(userId, { gte: start, lte: end }),
       }),
     ]);
     return sales > 0 || expenses > 0;

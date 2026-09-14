@@ -1,5 +1,10 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import {
+  isLiveBookStatus,
+  liveExpenseWhere,
+  liveSaleWhere,
+} from "../../utils/liveBookQuery";
 import { PERCENT, KPI_PERCENT_ROUNDING_FACTOR } from "../../constants/percentages";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -91,11 +96,11 @@ export async function getClientTransactions(
 export async function getClientFinancialSummary(userId: string) {
   const [salesSum, expensesSum] = await Promise.all([
     prisma.sale.aggregate({
-      where: { userId },
+      where: liveSaleWhere(userId),
       _sum: { totalAmount: true },
     }),
     prisma.expense.aggregate({
-      where: { userId },
+      where: liveExpenseWhere(userId),
       _sum: { totalAmount: true },
     }),
   ]);
@@ -111,16 +116,14 @@ export async function getClientFinancialSummary(userId: string) {
 export async function getClientExpenseBreakdown(userId: string, year?: number) {
   const y = year ?? new Date().getFullYear();
   const expenses = await prisma.expense.findMany({
-    where: {
-      userId,
-      expenseDate: {
-        gte: new Date(y, 0, 1),
-        lte: new Date(y, 11, 31),
-      },
-    },
+    where: liveExpenseWhere(userId, {
+      gte: new Date(y, 0, 1),
+      lte: new Date(y, 11, 31),
+    }),
   });
   const byCategory: Record<string, number> = {};
   for (const e of expenses) {
+    if (!isLiveBookStatus(e.status)) continue;
     const cat = e.category || "Other";
     byCategory[cat] = (byCategory[cat] ?? 0) + Number(e.totalAmount);
   }
@@ -132,17 +135,19 @@ export async function getClientExpenseBreakdown(userId: string, year?: number) {
 
 export async function getClientMonthlyCashFlow(userId: string, year: number) {
   const [sales, expenses] = await Promise.all([
-    prisma.sale.findMany({ where: { userId } }),
-    prisma.expense.findMany({ where: { userId } }),
+    prisma.sale.findMany({ where: liveSaleWhere(userId) }),
+    prisma.expense.findMany({ where: liveExpenseWhere(userId) }),
   ]);
   const byMonth: Record<number, number> = {};
   for (let m = 1; m <= 12; m++) byMonth[m] = 0;
   for (const s of sales) {
+    if (!isLiveBookStatus(s.status)) continue;
     const d = new Date(s.saleDate);
     if (d.getFullYear() === year)
       byMonth[d.getMonth() + 1] += decimalToNumber(s.totalAmount);
   }
   for (const e of expenses) {
+    if (!isLiveBookStatus(e.status)) continue;
     const d = new Date(e.expenseDate);
     if (d.getFullYear() === year)
       byMonth[d.getMonth() + 1] -= decimalToNumber(e.totalAmount);
@@ -165,10 +170,10 @@ export async function getClientPlBreakdown(userId: string, range: ClientPlRange)
 
   const [sales, expenses] = await Promise.all([
     prisma.sale.findMany({
-      where: { userId, saleDate: { gte: start, lte: end } },
+      where: liveSaleWhere(userId, { gte: start, lte: end }),
     }),
     prisma.expense.findMany({
-      where: { userId, expenseDate: { gte: start, lte: end } },
+      where: liveExpenseWhere(userId, { gte: start, lte: end }),
     }),
   ]);
 

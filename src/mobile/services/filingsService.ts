@@ -1,6 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
+import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -70,16 +71,15 @@ async function fetchPeriodEvidenceCompliance(
   missingExpensesWithoutReceipt: MissingEvidenceExpenseRow[];
 }> {
   const { start, end } = monthDateRangeUtc(year, month);
-  const saleDate = { gte: start, lte: end };
-  const expenseDate = { gte: start, lte: end };
+  const liveSalePeriod = liveSaleWhere(userId, { gte: start, lte: end });
+  const liveExpensePeriod = liveExpenseWhere(userId, { gte: start, lte: end });
   const gapWhere = {
-    userId,
-    saleDate,
+    ...liveSalePeriod,
     documentUrl: null,
     evidenceVaultId: null,
     receiptUrl: null,
   };
-  const expGapWhere = { userId, expenseDate, receiptUrl: null };
+  const expGapWhere = { ...liveExpensePeriod, receiptUrl: null };
   /** Rows returned under this cap; totals may be higher (`listTruncated` on API). */
   const listLimit = 100;
 
@@ -91,8 +91,8 @@ async function fetchPeriodEvidenceCompliance(
     missingSalesRows,
     missingExpenseRows,
   ] = await Promise.all([
-    prisma.sale.count({ where: { userId, saleDate } }),
-    prisma.expense.count({ where: { userId, expenseDate } }),
+    prisma.sale.count({ where: liveSalePeriod }),
+    prisma.expense.count({ where: liveExpensePeriod }),
     prisma.sale.count({ where: gapWhere }),
     prisma.expense.count({ where: expGapWhere }),
     prisma.sale.findMany({

@@ -6,6 +6,7 @@ import {
 } from "../../constants/percentages";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 import { taxComputationService } from "./taxComputationService";
+import { liveExpenseWhere } from "../../utils/liveBookQuery";
 import { computeEmployeeMonthlyGrossPay } from "./employeesService";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -225,7 +226,7 @@ export const analyticsService = {
     const [byCategory, salariesGross] = await Promise.all([
       prisma.expense.groupBy({
         by: ["category"],
-        where: { userId, expenseDate: { gte: start, lte: end } },
+        where: liveExpenseWhere(userId, { gte: start, lte: end }),
         /** Ex-VAT base — VAT is reported separately as Input VAT claimable. */
         _sum: { amount: true },
       }),

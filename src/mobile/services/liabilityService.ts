@@ -201,6 +201,9 @@ async function buildAccountsPayable(userId: string, asOfMs: number) {
 
   for (const e of expenses) {
     if (e.status === SALE_STATUS.CANCELLED) continue;
+    if (e.status === SALE_STATUS.VOIDED || e.status === SALE_STATUS.REVERSED) {
+      continue;
+    }
     if (isSalaryExpenseCategory(e.category)) continue;
     if (isCashPaymentType(e.paymentType)) continue;
 
@@ -478,6 +481,9 @@ async function buildSalariesPayable(userId: string, asOfMs: number) {
 
   for (const e of expenses) {
     if (isSalePaidStatus(e.status) || e.status === SALE_STATUS.CANCELLED) {
+      continue;
+    }
+    if (e.status === SALE_STATUS.VOIDED || e.status === SALE_STATUS.REVERSED) {
       continue;
     }
     const totalAmt = d(e.totalAmount);

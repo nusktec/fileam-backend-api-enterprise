@@ -125,18 +125,7 @@ export const cashBankService = {
         },
       });
 
-      await ledgerService.post({
-        userId,
-        referenceType: LEDGER_REFERENCE_TYPES.CASH_OPENING,
-        referenceId: created.id,
-        description: `Opening cash balance ${cashCode}`,
-        transactionDate: new Date(),
-        entries: openingBalanceEntries(
-          cashAccount,
-          "owner_capital_introduced",
-          amount,
-        ),
-      }, tx);
+      // LEDGER.pdf: opening cash that would credit capital is not posted until equity exists.
 
       return created;
     });
@@ -190,18 +179,24 @@ export const cashBankService = {
         },
       });
 
-      await ledgerService.post({
-        userId,
-        referenceType: LEDGER_REFERENCE_TYPES.BANK_OPENING,
-        referenceId: created.id,
-        description: `Opening bank balance ${bankCode}`,
-        transactionDate: balanceDate,
-        entries: openingBalanceEntries(
-          bankAccountLedger,
-          input.sourceOfOpeningBalance ?? "owner_capital_introduced",
-          openingBalance,
-        ),
-      }, tx);
+      const openingSource = input.sourceOfOpeningBalance ?? "owner_capital_introduced";
+      if (openingSource === "loan_proceeds") {
+        await ledgerService.post(
+          {
+            userId,
+            referenceType: LEDGER_REFERENCE_TYPES.BANK_OPENING,
+            referenceId: created.id,
+            description: `Opening bank balance ${bankCode}`,
+            transactionDate: balanceDate,
+            entries: openingBalanceEntries(
+              bankAccountLedger,
+              openingSource,
+              openingBalance,
+            ),
+          },
+          tx,
+        );
+      }
 
       return created;
     });

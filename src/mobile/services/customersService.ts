@@ -13,6 +13,7 @@ import {
   formatYmd,
   summarizeSalesForReceivable,
 } from "../../utils/transactionSummaryHelper";
+import { liveSaleWhere } from "../../utils/liveBookQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import {
   assertCustomerContactUniqueness,
@@ -67,7 +68,7 @@ function mapSaleRow(s: {
 
 async function customerSales(userId: string, customerCode: string) {
   return prisma.sale.findMany({
-    where: { userId, customerId: customerCode },
+    where: { ...liveSaleWhere(userId), customerId: customerCode },
     orderBy: [{ saleDate: "desc" }, { createdAt: "desc" }],
   });
 }

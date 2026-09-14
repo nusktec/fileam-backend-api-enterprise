@@ -85,13 +85,17 @@ export const ledgerService = {
       credit: Number(e.debit),
     }));
 
+    const reversalDescription = description.startsWith("Reversal ·")
+      ? description
+      : `Reversal · ${original.description}`;
+
     const run = async (tx: DbClient) => {
       const created = await tx.ledgerTransaction.create({
         data: {
           userId,
           referenceType: LEDGER_REFERENCE_TYPES.REVERSAL,
           referenceId: original.id,
-          description,
+          description: reversalDescription,
           transactionDate,
           status: LEDGER_STATUS.POSTED,
           reversalOfId: original.id,

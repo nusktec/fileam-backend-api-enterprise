@@ -6,6 +6,7 @@ import {
 } from "../../constants/percentages";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { taxPayablesService } from "./taxPayablesService";
+import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -29,11 +30,11 @@ export const financialOverviewService = {
 
     const [salesAgg, expensesAgg, payables] = await Promise.all([
       prisma.sale.aggregate({
-        where: { userId, saleDate: { gte: start, lte: end } },
+        where: liveSaleWhere(userId, { gte: start, lte: end }),
         _sum: { amount: true },
       }),
       prisma.expense.aggregate({
-        where: { userId, expenseDate: { gte: start, lte: end } },
+        where: liveExpenseWhere(userId, { gte: start, lte: end }),
         _sum: { amount: true },
       }),
       prisma.taxPayable.findMany({

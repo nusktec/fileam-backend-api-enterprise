@@ -5,6 +5,7 @@ import {
   resolveSaleInvoiceStatus,
   SALE_STATUS,
 } from "../constants/salePaymentRules";
+import { isLiveBookStatus } from "./liveBookQuery";
 import { normalizeMoneyAmount } from "./monetaryAmount";
 
 function d(v: Decimal | number | null | undefined): number {
@@ -66,6 +67,7 @@ export function summarizeSalesForReceivable(
   };
 
   for (const sale of sales) {
+    if (!isLiveBookStatus(sale.status)) continue;
     const total = d(sale.totalAmount);
     summary.totalSalesAmount = normalizeMoneyAmount(
       summary.totalSalesAmount + total,
@@ -128,6 +130,7 @@ export function summarizeExpensesForPayable(
   };
 
   for (const expense of expenses) {
+    if (!isLiveBookStatus(expense.status)) continue;
     const total = d(expense.totalAmount);
     summary.totalPurchaseAmount = normalizeMoneyAmount(
       summary.totalPurchaseAmount + total,

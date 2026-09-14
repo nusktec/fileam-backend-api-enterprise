@@ -31,6 +31,7 @@ import { PERCENT } from "../../constants/percentages";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
+import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
 import { evidenceVaultService } from "./evidenceVaultService";
 import { taxComputationService } from "./taxComputationService";
 import { sumPayeCreditForYear } from "./employersService";
@@ -86,11 +87,11 @@ async function getTradingProfitForYear(
     const { start, end } = monthDateRangeUtc(year, month);
     const [sales, expenses] = await Promise.all([
       prisma.sale.findMany({
-        where: { userId, saleDate: { gte: start, lte: end } },
+        where: liveSaleWhere(userId, { gte: start, lte: end }),
         select: { amount: true },
       }),
       prisma.expense.findMany({
-        where: { userId, expenseDate: { gte: start, lte: end } },
+        where: liveExpenseWhere(userId, { gte: start, lte: end }),
         select: { amount: true },
       }),
     ]);

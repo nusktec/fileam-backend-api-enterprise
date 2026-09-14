@@ -25,28 +25,11 @@ import {
   taxPeriodLabel,
   type TaxPeriodRange,
 } from "../../utils/taxPeriodQuery";
-import { SALE_STATUS } from "../../constants/salePaymentRules";
+import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
-}
-
-/** Live sales/expenses only — excludes voided and reversed. */
-function liveBookWhere(userId: string, dateRange: { gte: Date; lte: Date }) {
-  return {
-    userId,
-    saleDate: dateRange,
-    status: { notIn: [SALE_STATUS.VOIDED, SALE_STATUS.REVERSED] },
-  };
-}
-
-function liveExpenseWhere(userId: string, dateRange: { gte: Date; lte: Date }) {
-  return {
-    userId,
-    expenseDate: dateRange,
-    status: { notIn: [SALE_STATUS.VOIDED, SALE_STATUS.REVERSED] },
-  };
 }
 
 type MonthBooks = { income: number; expenses: number; netProfit: number; hasActivity: boolean };
@@ -61,7 +44,7 @@ async function getMonthBooks(
   const dateRange = { gte: start, lte: end };
   const [sales, expenses] = await Promise.all([
     prisma.sale.findMany({
-      where: liveBookWhere(userId, dateRange),
+      where: liveSaleWhere(userId, dateRange),
       select: { amount: true },
     }),
     prisma.expense.findMany({
@@ -215,7 +198,7 @@ export const taxComputationService = {
     const [sales, expenses, personaPayload, business, fixedAssetRows, taxProfile, classificationInputs, cumulativeProfit] =
       await Promise.all([
         prisma.sale.findMany({
-          where: liveBookWhere(userId, dateRange),
+          where: liveSaleWhere(userId, dateRange),
         }),
         prisma.expense.findMany({
           where: liveExpenseWhere(userId, dateRange),

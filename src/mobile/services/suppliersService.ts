@@ -13,6 +13,7 @@ import {
   formatYmd,
   summarizeExpensesForPayable,
 } from "../../utils/transactionSummaryHelper";
+import { liveExpenseWhere } from "../../utils/liveBookQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import {
   assertSupplierContactUniqueness,
@@ -67,7 +68,7 @@ function mapExpenseRow(e: {
 
 async function supplierExpenses(userId: string, supplierCode: string) {
   return prisma.expense.findMany({
-    where: { userId, supplierId: supplierCode },
+    where: { ...liveExpenseWhere(userId), supplierId: supplierCode },
     orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
   });
 }

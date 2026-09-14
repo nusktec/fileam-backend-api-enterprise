@@ -16,6 +16,8 @@ import { isFinalWhtPayerCategory, normalizePayerCategory } from "../../constants
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
+import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
+import { isUndoneStatus } from "../../constants/recordUndo";
 import { businessProfileMoneyToNumber } from "../../constants/businessProfile";
 import { assetsService } from "./assetsService";
 import { evidenceVaultService } from "./evidenceVaultService";
@@ -52,11 +54,11 @@ async function sumAnnualTurnoverAndProfit(
     const { start, end } = monthDateRangeUtc(year, month);
     const [sales, expenses] = await Promise.all([
       prisma.sale.findMany({
-        where: { userId, saleDate: { gte: start, lte: end } },
+        where: liveSaleWhere(userId, { gte: start, lte: end }),
         select: { amount: true, totalAmount: true },
       }),
       prisma.expense.findMany({
-        where: { userId, expenseDate: { gte: start, lte: end } },
+        where: liveExpenseWhere(userId, { gte: start, lte: end }),
         select: { amount: true },
       }),
     ]);
@@ -76,7 +78,7 @@ async function sumPayerWhtCredits(userId: string): Promise<number> {
   const payers = await prisma.payer.findMany({
     where: { userId },
     include: {
-      transactions: { where: { status: { not: "VOID" } } },
+      transactions: true,
     },
   });
   let total = 0;
@@ -85,7 +87,9 @@ async function sumPayerWhtCredits(userId: string): Promise<number> {
     if (isFinalWhtPayerCategory(category)) continue;
     if (!payer.whtApplicable) continue;
     const fees = normalizeMoneyAmount(
-      payer.transactions.reduce((s, t) => s + d(t.amount), 0),
+      payer.transactions
+        .filter((t) => !isUndoneStatus(t.status))
+        .reduce((s, t) => s + d(t.amount), 0),
     );
     const rate = d(payer.whtRate) || WHT_RATE_SERVICES_PERCENT;
     total += Math.round((fees * rate) / PERCENT);
