@@ -27,9 +27,6 @@ import { ledgerPostingService } from "../../services/ledgerPostingService";
 import { resolveStateIrsPortal } from "../../constants/stateIrs";
 import { resolveEmployeePeriodAmounts } from "./prospectiveTermsService";
 
-const PAYMENT_BASE_URL =
-  process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
-
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
   return Number(d);
@@ -739,24 +736,13 @@ export const payrollService = {
       url = await resolvePayePaymentUrl(userId);
     } else if (type === OBLIGATION_TYPE.NHF) {
       url = NHF_PAYMENT_URL;
-    } else if (type === OBLIGATION_TYPE.PENSION) {
-      url = PENSION_PAYMENT_URL;
     } else {
-      url =
-        row.paymentLink ??
-        `${PAYMENT_BASE_URL}/payroll/${type.toLowerCase()}/${key}/${row.id}`;
+      url = PENSION_PAYMENT_URL;
     }
-    if (
-      type === OBLIGATION_TYPE.PAYE ||
-      type === OBLIGATION_TYPE.NHF ||
-      type === OBLIGATION_TYPE.PENSION ||
-      !row.paymentLink
-    ) {
-      await prisma.payrollObligation.update({
-        where: { id: row.id },
-        data: { paymentLink: url },
-      });
-    }
+    await prisma.payrollObligation.update({
+      where: { id: row.id },
+      data: { paymentLink: url },
+    });
     return { url };
   },
 
