@@ -1,11 +1,17 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
-import { ASSET_STATUS } from "../../constants/assets";
+import { ASSET_STATUS, isAssetOnBooks } from "../../constants/assets";
 import { computeAssetDepreciation } from "../../constants/assetDepreciation";
+import {
+  isUndoneStatus,
+  mapUndoPayload,
+  RECORD_UNDO_STATUS,
+} from "../../constants/recordUndo";
 import {
   PRODUCTION_RECORD_STATUS,
   type UnitAttributionPeriodType,
 } from "../../constants/unitAttribution";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import {
@@ -47,7 +53,7 @@ function assertEligibleAsset(asset: {
   if (asset.status === ASSET_STATUS.SOLD || asset.status === ASSET_STATUS.DISPOSED) {
     throw new HttpReplyError(400, "Asset is sold or disposed");
   }
-  if (asset.status !== ASSET_STATUS.ACTIVE) {
+  if (!isAssetOnBooks(asset.status) || asset.status !== ASSET_STATUS.ACTIVE) {
     throw new HttpReplyError(400, "Asset must be ACTIVE");
   }
 }
@@ -129,39 +135,44 @@ async function buildSchedule(
   attributionCreatedAt: Date,
 ): Promise<SchedulePeriod[]> {
   const records = await prisma.unitAttributionProductionRecord.findMany({
-    where: { unitAttributionId: attributionId, status: PRODUCTION_RECORD_STATUS.RECORDED },
+    where: { unitAttributionId: attributionId },
     orderBy: { periodStart: "asc" },
   });
 
-  const recorded: SchedulePeriod[] = records.map((r) => ({
+  const persisted: SchedulePeriod[] = records.map((r) => ({
     id: r.id,
     periodLabel: r.periodLabel,
     periodStart: formatPeriodYmd(r.periodStart),
     periodEnd: formatPeriodYmd(r.periodEnd),
     units: r.unitsAttributed,
-    status: PRODUCTION_RECORD_STATUS.RECORDED,
+    status: r.status,
     depreciationAmount: normalizeMoneyAmount(
       r.unitsAttributed * depreciationPerUnit,
     ),
     rate: depreciationPerUnit,
+    undo: mapUndoPayload(r),
   }));
 
+  const liveRecorded = records.filter(
+    (r) => r.status === PRODUCTION_RECORD_STATUS.RECORDED,
+  );
+
   const open =
-    records.length > 0
+    liveRecorded.length > 0
       ? generateOpenPeriodsAfter(
           periodType,
-          records[records.length - 1]!.periodEnd,
+          liveRecorded[liveRecorded.length - 1]!.periodEnd,
           4,
           depreciationPerUnit,
-        )
+        ).map((p) => ({ ...p, undo: null }))
       : generateOpenPeriodsFrom(
           periodType,
           resolveInitialOpenPeriodStart(periodType, attributionCreatedAt),
           4,
           depreciationPerUnit,
-        );
+        ).map((p) => ({ ...p, undo: null }));
 
-  return [...recorded, ...open];
+  return [...persisted, ...open];
 }
 
 function mapListItem(
@@ -182,6 +193,8 @@ function mapListItem(
     skuCode: row.skuCode,
     unitOfMeasurement: row.unitOfMeasurement,
     periodType: row.periodType,
+    status: row.status,
+    undo: mapUndoPayload(row),
     asset: {
       id: row.asset.id,
       assetName: row.asset.assetName,
@@ -226,6 +239,8 @@ async function buildDetail(userId: string, id: string) {
     factoryPlantName: row.factoryPlantName,
     department: row.department,
     branchLocation: row.branchLocation,
+    status: row.status,
+    undo: mapUndoPayload(row),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     asset: mapAssetNested(row.asset, totals.depreciationPerUnit),
@@ -239,6 +254,24 @@ async function buildDetail(userId: string, id: string) {
     },
     schedule,
   };
+}
+
+function buildUnitAttributionListStatusFilter(
+  status?: string,
+): string | { notIn: string[] } {
+  const normalized = status?.trim() || "all";
+  if (normalized === "all") {
+    return {
+      notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+    };
+  }
+  if (normalized === RECORD_UNDO_STATUS.VOIDED || normalized === "Voided") {
+    return RECORD_UNDO_STATUS.VOIDED;
+  }
+  if (normalized === RECORD_UNDO_STATUS.REVERSED || normalized === "Reversed") {
+    return RECORD_UNDO_STATUS.REVERSED;
+  }
+  return normalized;
 }
 
 export const unitAttributionService = {
@@ -292,11 +325,17 @@ export const unitAttributionService = {
     return buildDetail(userId, row.id);
   },
 
-  async list(userId: string, page: number, limit: number) {
+  async list(userId: string, page: number, limit: number, status?: string) {
     const skip = (page - 1) * limit;
-    const [rows, totalRecords] = await Promise.all([
+    const normalizedStatus = status?.trim() || "all";
+    const baseWhere = { userId };
+    const listWhere = {
+      ...baseWhere,
+      status: buildUnitAttributionListStatusFilter(normalizedStatus),
+    };
+    const [rows, totalRecords, counts] = await Promise.all([
       prisma.unitAttribution.findMany({
-        where: { userId },
+        where: listWhere,
         include: {
           asset: {
             select: {
@@ -312,10 +351,32 @@ export const unitAttributionService = {
         skip,
         take: limit,
       }),
-      prisma.unitAttribution.count({ where: { userId } }),
+      prisma.unitAttribution.count({ where: listWhere }),
+      prisma.unitAttribution.groupBy({
+        by: ["status"],
+        where: baseWhere,
+        _count: true,
+      }),
     ]);
 
+    const dbCount = (s: string) =>
+      counts.find((c) => c.status === s)?._count ?? 0;
+    const liveAll = counts.reduce((sum, c) => {
+      if (
+        c.status === RECORD_UNDO_STATUS.VOIDED ||
+        c.status === RECORD_UNDO_STATUS.REVERSED
+      ) {
+        return sum;
+      }
+      return sum + c._count;
+    }, 0);
+
     return {
+      counts: {
+        all: liveAll,
+        voided: dbCount(RECORD_UNDO_STATUS.VOIDED),
+        reversed: dbCount(RECORD_UNDO_STATUS.REVERSED),
+      },
       items: rows.map(mapListItem),
       page,
       limit,
@@ -372,6 +433,12 @@ export const unitAttributionService = {
         include: { asset: true, records: true },
       });
       if (!row) throw new HttpReplyError(404, "Unit attribution not found");
+      if (isUndoneStatus(row.status)) {
+        throw new HttpReplyError(
+          409,
+          "This unit attribution has already been voided or reversed",
+        );
+      }
       assertEligibleAsset(row.asset);
 
       const periodType = row.periodType as UnitAttributionPeriodType;
@@ -402,7 +469,7 @@ export const unitAttributionService = {
       }
 
       const periodLabel = buildPeriodLabel(periodType, periodStart, periodEnd);
-      await tx.unitAttributionProductionRecord.create({
+      const created = await tx.unitAttributionProductionRecord.create({
         data: {
           unitAttributionId: id,
           periodStart,
@@ -418,6 +485,15 @@ export const unitAttributionService = {
           locationWarehouse: input.locationWarehouse?.trim() || null,
         },
       });
+
+      const totals = computeTotals(row.asset, recordedUnits + input.unitsAttributed);
+      await ledgerPostingService.postUnitOfProductionDepreciation(
+        userId,
+        created.id,
+        totals.depreciationPerUnit * input.unitsAttributed,
+        periodEnd,
+        tx,
+      );
 
       const newUnitProduced = recordedUnits + input.unitsAttributed;
       await tx.asset.update({
@@ -435,7 +511,14 @@ export async function listUnitsOfProductionEligibleAssets(userId: string) {
     where: {
       userId,
       depreciationMethod: { in: ["UNIT_OF_PRODUCTION", "UNITS_OF_PRODUCTION"] },
-      status: { notIn: [ASSET_STATUS.SOLD, ASSET_STATUS.DISPOSED] },
+      status: {
+        notIn: [
+          ASSET_STATUS.SOLD,
+          ASSET_STATUS.DISPOSED,
+          RECORD_UNDO_STATUS.VOIDED,
+          RECORD_UNDO_STATUS.REVERSED,
+        ],
+      },
     },
     orderBy: [{ assetName: "asc" }, { createdAt: "desc" }],
     select: {

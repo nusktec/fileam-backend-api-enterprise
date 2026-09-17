@@ -59,6 +59,11 @@ type ReceivableRow = {
   outstandingAmount: Decimal;
   dueDate: Date | null;
   payload: Prisma.JsonValue;
+  recordStatus?: string;
+  undoAt?: Date | null;
+  undoReason?: string | null;
+  reversingEntryId?: string | null;
+  reversingEntryDate?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -72,7 +77,8 @@ function payloadObject(payload: Prisma.JsonValue): Record<string, unknown> {
 
 function formatDetail(row: ReceivableRow) {
   const base = {
-    id: row.receivableCode,
+    id: row.id,
+    receivableCode: row.receivableCode,
     type: row.type,
     status: row.status,
     createdAt: row.createdAt.toISOString(),
@@ -169,7 +175,8 @@ function formatDetail(row: ReceivableRow) {
 
 function formatListItem(row: ReceivableRow) {
   const item: Record<string, unknown> = {
-    id: row.receivableCode,
+    id: row.id,
+    receivableCode: row.receivableCode,
     type: row.type,
     amount: d(row.grossAmount),
     amountReceived: d(row.amountReceived),
@@ -635,7 +642,7 @@ export const receivablesService = {
     ]);
 
     const all = await prisma.receivable.findMany({
-      where: { userId },
+      where: { userId, recordStatus: { notIn: ["voided", "reversed"] } },
       select: { type: true, outstandingAmount: true },
     });
 

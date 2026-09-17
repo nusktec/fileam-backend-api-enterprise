@@ -6,6 +6,11 @@ import {
   ASSET_SALE_UNDO_REASONS,
   ASSET_DISPOSAL_UNDO_REASONS,
   ASSET_TRANSFER_UNDO_REASONS,
+  ASSET_CASH_UNDO_REASONS,
+  ASSET_BANK_UNDO_REASONS,
+  ASSET_RECEIVABLE_UNDO_REASONS,
+  UNIT_ATTRIBUTION_UNDO_REASONS,
+  UNIT_ATTRIBUTION_RECORD_UNDO_REASONS,
   PAYER_UNDO_REASONS,
   PAYER_TRANSACTION_UNDO_REASONS,
   BENEFICIARY_UNDO_REASONS,
@@ -39,6 +44,26 @@ export const assetDisposalUndoValidation = undoReasonValidation(
 
 export const assetTransferUndoValidation = undoReasonValidation(
   ASSET_TRANSFER_UNDO_REASONS,
+);
+
+export const assetCashUndoValidation = undoReasonValidation(
+  ASSET_CASH_UNDO_REASONS,
+);
+
+export const assetBankUndoValidation = undoReasonValidation(
+  ASSET_BANK_UNDO_REASONS,
+);
+
+export const assetReceivableUndoValidation = undoReasonValidation(
+  ASSET_RECEIVABLE_UNDO_REASONS,
+);
+
+export const unitAttributionUndoValidation = undoReasonValidation(
+  UNIT_ATTRIBUTION_UNDO_REASONS,
+);
+
+export const unitAttributionRecordUndoValidation = undoReasonValidation(
+  UNIT_ATTRIBUTION_RECORD_UNDO_REASONS,
 );
 
 export const payerUndoValidation = undoReasonValidation(PAYER_UNDO_REASONS);

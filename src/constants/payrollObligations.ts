@@ -19,8 +19,10 @@ export type ObligationStatus =
 export const PAYE_COLLECTING_AUTHORITY_DEFAULT =
   "Lagos State Internal Revenue Service";
 export const NHF_COLLECTING_AUTHORITY = "Federal Mortgage Bank of Nigeria";
+export const NHF_PAYMENT_URL = "https://ibank.fmbn.gov.ng/";
 export const NHF_LEGAL_BASIS = "National Housing Fund Act";
 export const PENSION_REGULATORY_BASIS = "Pension Reform Act";
+export const PENSION_PAYMENT_URL = "https://www.pensioncentral.ng/";
 export const REMITTANCE_METHOD_DEFAULT = "Bank Transfer";
 
 /** YYYY-MM */

@@ -471,7 +471,7 @@ export async function reverseExpenseLedgerOnDelete(
   );
 }
 
-/** Reverse asset purchase posting on asset undo. */
+/** Reverse asset purchase posting on asset undo, including UOP / posted depreciation. */
 export async function reverseAssetPurchaseLedgerOnUndo(
   userId: string,
   assetId: string,
@@ -486,6 +486,144 @@ export async function reverseAssetPurchaseLedgerOnUndo(
     purchaseDate,
     db,
   );
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.DEPRECIATION,
+    assetId,
+    `Undo asset depreciation ${assetId}`,
+    purchaseDate,
+    db,
+  );
+  const records = await db.unitAttributionProductionRecord.findMany({
+    where: { unitAttribution: { userId, assetId } },
+    select: { id: true },
+  });
+  for (const record of records) {
+    await reverseByReference(
+      userId,
+      LEDGER_REFERENCE_TYPES.DEPRECIATION,
+      record.id,
+      `Undo production depreciation ${record.id}`,
+      purchaseDate,
+      db,
+    );
+  }
+}
+
+export async function reverseCashOpeningLedgerOnUndo(
+  userId: string,
+  cashId: string,
+  date: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.CASH_OPENING,
+    cashId,
+    `Undo cash opening ${cashId}`,
+    date,
+    db,
+  );
+}
+
+export async function reverseBankOpeningLedgerOnUndo(
+  userId: string,
+  bankId: string,
+  date: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.BANK_OPENING,
+    bankId,
+    `Undo bank opening ${bankId}`,
+    date,
+    db,
+  );
+}
+
+export async function reverseReceivableLedgerOnUndo(
+  userId: string,
+  receivableId: string,
+  date: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.RECEIVABLE,
+    receivableId,
+    `Undo receivable ${receivableId}`,
+    date,
+    db,
+  );
+}
+
+export async function reverseAssetSaleLedgerOnUndo(
+  userId: string,
+  saleId: string,
+  date: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.ASSET_SALE,
+    saleId,
+    `Undo asset sale ${saleId}`,
+    date,
+    db,
+  );
+}
+
+export async function reverseAssetDisposalLedgerOnUndo(
+  userId: string,
+  disposalId: string,
+  date: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.ASSET_DISPOSAL,
+    disposalId,
+    `Undo asset disposal ${disposalId}`,
+    date,
+    db,
+  );
+}
+
+export async function reverseDepreciationLedgerOnUndo(
+  userId: string,
+  recordId: string,
+  date: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  await reverseByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.DEPRECIATION,
+    recordId,
+    `Undo depreciation ${recordId}`,
+    date,
+    db,
+  );
+}
+
+export async function reverseAllLedgersForReferenceOnUndo(
+  userId: string,
+  referenceId: string,
+  description: string,
+  date: Date,
+  db: DbClient = prisma,
+): Promise<void> {
+  const rows = await db.ledgerTransaction.findMany({
+    where: {
+      userId,
+      referenceId,
+      status: LEDGER_STATUS.POSTED,
+      referenceType: { not: LEDGER_REFERENCE_TYPES.REVERSAL },
+    },
+  });
+  for (const row of rows) {
+    await ledgerService.reverse(userId, row.id, description, date, db);
+  }
 }
 
 /** Reverse payer recognition and invoice collections on transaction undo. */

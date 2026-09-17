@@ -7,6 +7,8 @@ import {
   createInvestmentIncomeReceivable,
   listReceivables,
   getReceivableById,
+  getReceivableUndoCheck,
+  undoReceivable,
 } from "../controllers/receivablesController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
@@ -18,6 +20,7 @@ import {
   taxRefundReceivableValidation,
   investmentIncomeReceivableValidation,
 } from "../../middlewares/validations/receivablesValidation";
+import { assetReceivableUndoValidation } from "../../middlewares/validations/recordUndoValidation";
 
 const router = express.Router();
 
@@ -55,6 +58,16 @@ router.post(
 );
 
 router.get("/", withPagination(), listReceivables);
+router.get(
+  "/:receivableId/undo",
+  getReceivableUndoCheck,
+);
+router.post(
+  "/:receivableId/undo",
+  express.json(),
+  assetReceivableUndoValidation,
+  undoReceivable,
+);
 router.get("/:receivableId", getReceivableById);
 
 export default router;

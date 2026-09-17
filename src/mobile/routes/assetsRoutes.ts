@@ -57,6 +57,8 @@ import {
   assetSaleUndoValidation,
   assetTransferUndoValidation,
   assetUndoValidation,
+  assetCashUndoValidation,
+  assetBankUndoValidation,
 } from "../../middlewares/validations/recordUndoValidation";
 import {
   uploadMultiple,
@@ -65,6 +67,10 @@ import {
 import {
   createCashBalance,
   createBankAccount,
+  getCashUndoCheck,
+  undoCashBalance,
+  getBankAccountUndoCheck,
+  undoBankAccount,
 } from "../controllers/cashBankController";
 import { listUnitsOfProductionEligible } from "../controllers/unitAttributionController";
 import {
@@ -94,6 +100,22 @@ router.post(
   express.json(),
   createBankAccountValidation,
   createBankAccount,
+);
+router.get("/cash/:id/undo", validateIdParam, getCashUndoCheck);
+router.post(
+  "/cash/:id/undo",
+  validateIdParam,
+  express.json(),
+  assetCashUndoValidation,
+  undoCashBalance,
+);
+router.get("/bank-accounts/:id/undo", validateIdParam, getBankAccountUndoCheck);
+router.post(
+  "/bank-accounts/:id/undo",
+  validateIdParam,
+  express.json(),
+  assetBankUndoValidation,
+  undoBankAccount,
 );
 
 /** Asset Reviews & reports (static paths before /:id) */

@@ -4,6 +4,7 @@ const allowedFolders = [
   "media",
   "images",
   "videos",
+  "audio",
   "documents",
   "menu-items",
   "categories",

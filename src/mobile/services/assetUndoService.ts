@@ -7,14 +7,15 @@ import {
   isAssetOnBooks,
 } from "../../constants/assets";
 import { LEDGER_REFERENCE_TYPES } from "../../constants/ledger";
+import { RECEIVABLE_TYPES } from "../../constants/receivables";
 import {
   RECORD_UNDO_ACTION,
   RECORD_UNDO_STATUS,
+  USER_ADDED_RECORD_STATUS,
   type AssetDisposalUndoReason,
   type AssetSaleUndoReason,
   type AssetTransferUndoReason,
   type AssetUndoReason,
-  mapUndoPayload,
   undoStatusFromAction,
 } from "../../constants/recordUndo";
 import {
@@ -23,7 +24,12 @@ import {
   recordHasLedgerImpact,
   resolveUndoAction,
 } from "../../services/recordUndoService";
-import { reverseAssetPurchaseLedgerOnUndo } from "../../services/ledgerSyncService";
+import {
+  reverseAllLedgersForReferenceOnUndo,
+  reverseAssetDisposalLedgerOnUndo,
+  reverseAssetPurchaseLedgerOnUndo,
+  reverseAssetSaleLedgerOnUndo,
+} from "../../services/ledgerSyncService";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { assetsService } from "./assetsService";
 
@@ -149,7 +155,12 @@ export const assetUndoService = {
     return { action: RECORD_UNDO_ACTION.REVERSE };
   },
 
-  async undoSale(userId: string, saleId: string, reason: AssetSaleUndoReason) {
+  async undoSale(
+    userId: string,
+    saleId: string,
+    reason: AssetSaleUndoReason | string,
+    opts?: { skipLinkedReceivable?: boolean },
+  ) {
     const sale = await prisma.assetSale.findFirst({
       where: { id: saleId, userId },
       include: { asset: true },
@@ -160,14 +171,21 @@ export const assetUndoService = {
     const undoAt = new Date();
 
     await prisma.$transaction(async (tx) => {
+      await reverseAssetSaleLedgerOnUndo(userId, sale.id, sale.saleDate, tx);
+      const entry = await findPrimaryReversingEntry(
+        userId,
+        LEDGER_REFERENCE_TYPES.ASSET_SALE,
+        sale.id,
+        tx,
+      );
       await tx.assetSale.update({
         where: { id: saleId },
         data: {
           status: ASSET_EVENT_STATUS.REVERSED,
           undoAt,
           undoReason: reason,
-          reversingEntryId: null,
-          reversingEntryDate: null,
+          reversingEntryId: entry?.id ?? null,
+          reversingEntryDate: entry?.transactionDate ?? undoAt,
         },
       });
       if (isAssetOnBooks(sale.asset.status) || sale.asset.status === ASSET_STATUS.SOLD) {
@@ -177,6 +195,24 @@ export const assetUndoService = {
         });
       }
     });
+
+    if (!opts?.skipLinkedReceivable) {
+      const linked = await prisma.receivable.findFirst({
+        where: {
+          userId,
+          assetId: sale.assetId,
+          type: RECEIVABLE_TYPES.FIXED_ASSET_SALE_ON_CREDIT,
+          recordStatus: USER_ADDED_RECORD_STATUS.LIVE,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      if (linked) {
+        const { receivableUndoService } = await import("./receivableUndoService");
+        await receivableUndoService.undo(userId, linked.id, reason, {
+          skipLinkedSale: true,
+        });
+      }
+    }
 
     const data = await assetsService.getSaleById(userId, saleId);
     return {
@@ -210,14 +246,26 @@ export const assetUndoService = {
     const undoAt = new Date();
 
     await prisma.$transaction(async (tx) => {
+      await reverseAssetDisposalLedgerOnUndo(
+        userId,
+        disposal.id,
+        disposal.disposalDate,
+        tx,
+      );
+      const entry = await findPrimaryReversingEntry(
+        userId,
+        LEDGER_REFERENCE_TYPES.ASSET_DISPOSAL,
+        disposal.id,
+        tx,
+      );
       await tx.assetDisposal.update({
         where: { id: disposalId },
         data: {
           status: ASSET_EVENT_STATUS.REVERSED,
           undoAt,
           undoReason: reason,
-          reversingEntryId: null,
-          reversingEntryDate: null,
+          reversingEntryId: entry?.id ?? null,
+          reversingEntryDate: entry?.transactionDate ?? undoAt,
         },
       });
       if (
@@ -299,12 +347,31 @@ export const assetUndoService = {
       let reversingEntryDate: Date | null = null;
 
       if (action === RECORD_UNDO_ACTION.REVERSE) {
-        const entry = await findPrimaryReversingEntry(
+        await reverseAllLedgersForReferenceOnUndo(
           userId,
-          LEDGER_REFERENCE_TYPES.ASSET_PURCHASE,
           transfer.id,
+          `Undo asset transfer ${transfer.id}`,
+          transfer.transferDate,
           tx,
         );
+        const originals = await tx.ledgerTransaction.findMany({
+          where: {
+            userId,
+            referenceId: transfer.id,
+            status: "REVERSED",
+          },
+          select: { id: true },
+        });
+        const entry = originals.length
+          ? await tx.ledgerTransaction.findFirst({
+              where: {
+                userId,
+                reversalOfId: { in: originals.map((o) => o.id) },
+                status: "POSTED",
+              },
+              orderBy: { createdAt: "asc" },
+            })
+          : null;
         reversingEntryId = entry?.id ?? null;
         reversingEntryDate = entry?.transactionDate ?? undoAt;
       }

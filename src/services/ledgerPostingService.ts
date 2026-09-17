@@ -785,4 +785,126 @@ export const ledgerPostingService = {
       db,
     );
   },
+
+  /** Asset sale — proceeds to bank, write off cost/accum. dep, gain or loss to P&L. */
+  async postAssetSale(
+    userId: string,
+    saleId: string,
+    input: {
+      cost: number;
+      accumulatedDepreciation: number;
+      salePrice: number;
+      saleDate: Date;
+    },
+    db: DbClient = prisma,
+  ) {
+    const cost = normalizeMoneyAmount(input.cost);
+    const accum = normalizeMoneyAmount(input.accumulatedDepreciation);
+    const proceeds = normalizeMoneyAmount(input.salePrice);
+    const bookValue = normalizeMoneyAmount(Math.max(0, cost - accum));
+    const gain = normalizeMoneyAmount(Math.max(0, proceeds - bookValue));
+    const loss = normalizeMoneyAmount(Math.max(0, bookValue - proceeds));
+    if (cost <= 0 && proceeds <= 0 && accum <= 0) return null;
+
+    const entries: LedgerEntryDraft[] = [];
+    if (proceeds > 0) {
+      entries.push(line(account(LEDGER_ACCOUNTS.BANK), proceeds, 0));
+    }
+    if (accum > 0) {
+      entries.push(
+        line(account(LEDGER_ACCOUNTS.ACCUMULATED_DEPRECIATION), accum, 0),
+      );
+    }
+    if (loss > 0) {
+      entries.push(line(account(LEDGER_ACCOUNTS.LOSS_ON_DISPOSAL), loss, 0));
+    }
+    if (cost > 0) {
+      entries.push(line(account(LEDGER_ACCOUNTS.FIXED_ASSET), 0, cost));
+    }
+    if (gain > 0) {
+      entries.push(line(account(LEDGER_ACCOUNTS.GAIN_ON_DISPOSAL), 0, gain));
+    }
+    if (entries.length < 2) return null;
+
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.ASSET_SALE,
+        referenceId: saleId,
+        description: `Asset sale ${saleId}`,
+        transactionDate: input.saleDate,
+        entries,
+      },
+      db,
+    );
+  },
+
+  /** Asset write-off — remove cost and accum. dep; remaining NBV is loss. */
+  async postAssetDisposal(
+    userId: string,
+    disposalId: string,
+    input: {
+      cost: number;
+      accumulatedDepreciation: number;
+      disposalDate: Date;
+    },
+    db: DbClient = prisma,
+  ) {
+    const cost = normalizeMoneyAmount(input.cost);
+    const accum = normalizeMoneyAmount(input.accumulatedDepreciation);
+    const bookValue = normalizeMoneyAmount(Math.max(0, cost - accum));
+    if (cost <= 0) return null;
+
+    const entries: LedgerEntryDraft[] = [];
+    if (accum > 0) {
+      entries.push(
+        line(account(LEDGER_ACCOUNTS.ACCUMULATED_DEPRECIATION), accum, 0),
+      );
+    }
+    if (bookValue > 0) {
+      entries.push(
+        line(account(LEDGER_ACCOUNTS.LOSS_ON_DISPOSAL), bookValue, 0),
+      );
+    }
+    entries.push(line(account(LEDGER_ACCOUNTS.FIXED_ASSET), 0, cost));
+
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.ASSET_DISPOSAL,
+        referenceId: disposalId,
+        description: `Asset disposal ${disposalId}`,
+        transactionDate: input.disposalDate,
+        entries,
+      },
+      db,
+    );
+  },
+
+  /** Units-of-production charge for a recorded period. */
+  async postUnitOfProductionDepreciation(
+    userId: string,
+    recordId: string,
+    amount: number,
+    periodEnd: Date,
+    db: DbClient = prisma,
+  ) {
+    const amt = normalizeMoneyAmount(amount);
+    if (amt <= 0) return null;
+
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.DEPRECIATION,
+        referenceId: recordId,
+        description: `Units-of-production depreciation ${recordId}`,
+        transactionDate: periodEnd,
+        entries: [
+          line(account(LEDGER_ACCOUNTS.DEPRECIATION_EXPENSE), amt, 0),
+          line(account(LEDGER_ACCOUNTS.ACCUMULATED_DEPRECIATION), 0, amt),
+        ],
+      },
+      db,
+    );
+  },
 };

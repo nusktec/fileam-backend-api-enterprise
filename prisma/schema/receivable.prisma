@@ -14,6 +14,12 @@ model Receivable {
   outstandingAmount Decimal  @map("outstanding_amount") @db.Decimal(14, 2)
   dueDate           DateTime? @map("due_date") @db.Date
   payload           Json     @default("{}")
+  /** live | voided | reversed — settlement stays in status */
+  recordStatus         String    @default("live") @map("record_status")
+  undoAt               DateTime? @map("undo_at")
+  undoReason           String?   @map("undo_reason")
+  reversingEntryId     String?   @map("reversing_entry_id")
+  reversingEntryDate   DateTime? @map("reversing_entry_date") @db.Date
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -22,5 +28,6 @@ model Receivable {
   @@unique([userId, receivableCode])
   @@index([userId, type])
   @@index([userId, status])
+  @@index([userId, recordStatus])
   @@map("receivables")
 }

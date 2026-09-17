@@ -10,6 +10,8 @@ import {
 import {
   NHF_COLLECTING_AUTHORITY,
   NHF_LEGAL_BASIS,
+  NHF_PAYMENT_URL,
+  PENSION_PAYMENT_URL,
   OBLIGATION_STATUS,
   OBLIGATION_TYPE,
   PAYE_COLLECTING_AUTHORITY_DEFAULT,
@@ -22,6 +24,7 @@ import {
 import { isContractorEmployment } from "../../constants/employmentTypes";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
+import { resolveStateIrsPortal } from "../../constants/stateIrs";
 import { resolveEmployeePeriodAmounts } from "./prospectiveTermsService";
 
 const PAYMENT_BASE_URL =
@@ -84,7 +87,7 @@ async function getOrCreateSettings(userId: string) {
   });
 }
 
-async function resolvePayeAuthority(userId: string): Promise<string> {
+async function resolvePayeState(userId: string): Promise<string | null> {
   const [user, business] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
@@ -96,10 +99,28 @@ async function resolvePayeAuthority(userId: string): Promise<string> {
     }),
   ]);
   const state = business?.stateOfResidence || user?.state;
-  if (state && String(state).trim()) {
-    return `${String(state).trim()} Internal Revenue Service`;
-  }
+  const trimmed = state ? String(state).trim() : "";
+  return trimmed || null;
+}
+
+async function resolvePayeAuthority(userId: string): Promise<string> {
+  const state = await resolvePayeState(userId);
+  const portal = resolveStateIrsPortal(state);
+  if (portal) return portal.authority;
+  if (state) return `${state} Internal Revenue Service`;
   return PAYE_COLLECTING_AUTHORITY_DEFAULT;
+}
+
+async function resolvePayePaymentUrl(userId: string): Promise<string> {
+  const state = await resolvePayeState(userId);
+  const portal = resolveStateIrsPortal(state);
+  if (!portal) {
+    throw new HttpReplyError(
+      400,
+      "Business state is required to generate a PAYE payment link. Set the business state of residence.",
+    );
+  }
+  return portal.url;
 }
 
 async function loadPeriodSnapshots(
@@ -713,10 +734,24 @@ export const payrollService = {
     if (row.status === OBLIGATION_STATUS.PAID) {
       throw new HttpReplyError(400, "This obligation is already marked PAID");
     }
-    const url =
-      row.paymentLink ??
-      `${PAYMENT_BASE_URL}/payroll/${type.toLowerCase()}/${key}/${row.id}`;
-    if (!row.paymentLink) {
+    let url: string;
+    if (type === OBLIGATION_TYPE.PAYE) {
+      url = await resolvePayePaymentUrl(userId);
+    } else if (type === OBLIGATION_TYPE.NHF) {
+      url = NHF_PAYMENT_URL;
+    } else if (type === OBLIGATION_TYPE.PENSION) {
+      url = PENSION_PAYMENT_URL;
+    } else {
+      url =
+        row.paymentLink ??
+        `${PAYMENT_BASE_URL}/payroll/${type.toLowerCase()}/${key}/${row.id}`;
+    }
+    if (
+      type === OBLIGATION_TYPE.PAYE ||
+      type === OBLIGATION_TYPE.NHF ||
+      type === OBLIGATION_TYPE.PENSION ||
+      !row.paymentLink
+    ) {
       await prisma.payrollObligation.update({
         where: { id: row.id },
         data: { paymentLink: url },

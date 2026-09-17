@@ -127,7 +127,8 @@ export const cashBankService = {
     });
 
     return {
-      id: row.cashCode,
+      id: row.id,
+      cashCode: row.cashCode,
       cashType: row.cashType,
       amount: d(row.amount),
       note: row.note,
@@ -198,7 +199,8 @@ export const cashBankService = {
     });
 
     return {
-      id: row.bankCode,
+      id: row.id,
+      bankCode: row.bankCode,
       bankName: row.bankName,
       accountName: row.accountName,
       accountNumber: row.accountNumber,

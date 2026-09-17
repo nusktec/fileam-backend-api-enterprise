@@ -5,6 +5,12 @@ model CashBalance {
   cashType   String   @map("cash_type")
   amount     Decimal  @db.Decimal(14, 2)
   note       String?
+  /** live | voided | reversed */
+  status               String    @default("live")
+  undoAt               DateTime? @map("undo_at")
+  undoReason           String?   @map("undo_reason")
+  reversingEntryId     String?   @map("reversing_entry_id")
+  reversingEntryDate   DateTime? @map("reversing_entry_date") @db.Date
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
@@ -12,6 +18,7 @@ model CashBalance {
 
   @@unique([userId, cashCode])
   @@index([userId])
+  @@index([userId, status])
   @@map("cash_balances")
 }
 
@@ -27,6 +34,12 @@ model BankAccount {
   sourceOfOpeningBalance String?  @map("source_of_opening_balance")
   openingBalance         Decimal  @map("opening_balance") @db.Decimal(14, 2)
   balanceDate            DateTime @map("balance_date") @db.Date
+  /** live | voided | reversed */
+  status                 String    @default("live")
+  undoAt                 DateTime? @map("undo_at")
+  undoReason             String?   @map("undo_reason")
+  reversingEntryId       String?   @map("reversing_entry_id")
+  reversingEntryDate     DateTime? @map("reversing_entry_date") @db.Date
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 
@@ -34,5 +47,6 @@ model BankAccount {
 
   @@unique([userId, bankCode])
   @@index([userId])
+  @@index([userId, status])
   @@map("bank_accounts")
 }

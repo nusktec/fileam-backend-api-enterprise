@@ -244,9 +244,14 @@ export type SchedulePeriod = {
   periodStart: string;
   periodEnd: string;
   units: number;
-  status: typeof PRODUCTION_RECORD_STATUS.RECORDED | typeof PRODUCTION_RECORD_STATUS.OPEN;
+  status: string;
   depreciationAmount: number | null;
   rate: number | null;
+  undo?: {
+    at: string;
+    reason: string | null;
+    reversingEntry: { id: string; date: string } | null;
+  } | null;
 };
 
 export function generateOpenPeriodsFrom(

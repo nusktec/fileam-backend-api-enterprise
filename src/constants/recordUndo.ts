@@ -120,6 +120,65 @@ export const ASSET_TRANSFER_UNDO_REASONS = [
 export type AssetTransferUndoReason =
   (typeof ASSET_TRANSFER_UNDO_REASONS)[number];
 
+export const ASSET_CASH_UNDO_REASONS = [
+  "Created by mistake",
+  "Duplicate cash",
+  "Wrong amount",
+  "Wrong cash type",
+  "Other",
+] as const;
+
+export type AssetCashUndoReason = (typeof ASSET_CASH_UNDO_REASONS)[number];
+
+export const ASSET_BANK_UNDO_REASONS = [
+  "Created by mistake",
+  "Duplicate account",
+  "Wrong opening balance",
+  "Wrong details",
+  "Other",
+] as const;
+
+export type AssetBankUndoReason = (typeof ASSET_BANK_UNDO_REASONS)[number];
+
+export const ASSET_RECEIVABLE_UNDO_REASONS = [
+  "Created by mistake",
+  "Duplicate receivable",
+  "Wrong amount",
+  "Wrong party",
+  "Wrong date",
+  "Other",
+] as const;
+
+export type AssetReceivableUndoReason =
+  (typeof ASSET_RECEIVABLE_UNDO_REASONS)[number];
+
+export const UNIT_ATTRIBUTION_UNDO_REASONS = [
+  "Created by mistake",
+  "Wrong asset",
+  "Wrong product",
+  "Other",
+] as const;
+
+export type UnitAttributionUndoReason =
+  (typeof UNIT_ATTRIBUTION_UNDO_REASONS)[number];
+
+export const UNIT_ATTRIBUTION_RECORD_UNDO_REASONS = [
+  "Created by mistake",
+  "Wrong units",
+  "Wrong period",
+  "Duplicate record",
+  "Other",
+] as const;
+
+export type UnitAttributionRecordUndoReason =
+  (typeof UNIT_ATTRIBUTION_RECORD_UNDO_REASONS)[number];
+
+export const USER_ADDED_RECORD_STATUS = {
+  LIVE: "live",
+  VOIDED: "voided",
+  REVERSED: "reversed",
+} as const;
+
 export const PAYER_UNDO_REASONS = [
   "Created by mistake",
   "Duplicate payer",

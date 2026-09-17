@@ -7,6 +7,8 @@ import { getAuthUserId } from "../../utils/authHelpers";
 import { PaginationRequest } from "../../middlewares/paginationMiddleware";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { receivablesService } from "../services/receivablesService";
+import { receivableUndoService } from "../services/receivableUndoService";
+import type { AssetReceivableUndoReason } from "../../constants/recordUndo";
 
 function replyError(res: Response, error: unknown): boolean {
   if (error instanceof HttpReplyError) {
@@ -183,5 +185,53 @@ export const getReceivableById = async (req: IRequest, res: Response) => {
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to get receivable", null));
+  }
+};
+
+export const getReceivableUndoCheck = async (req: IRequest, res: Response) => {
+  try {
+    const result = await receivableUndoService.getUndoCheck(
+      getAuthUserId(req),
+      paramId(req),
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Receivable not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Receivable undo check", result));
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to check receivable undo", null));
+  }
+};
+
+export const undoReceivable = async (req: IRequest, res: Response) => {
+  try {
+    const body = matchedData(req, { locations: ["body"] }) as { reason: string };
+    const result = await receivableUndoService.undo(
+      getAuthUserId(req),
+      paramId(req),
+      body.reason as AssetReceivableUndoReason,
+    );
+    if (!result) {
+      res
+        .status(HttpStatusCode.NOT_FOUND)
+        .json(outJson(false, "Receivable not found", null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Receivable undone", result));
+  } catch (error) {
+    if (replyError(res, error)) return;
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to undo receivable", null));
   }
 };

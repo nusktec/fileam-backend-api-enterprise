@@ -38,18 +38,21 @@ import {
 import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
 import { appendAssetHistory } from "./assetHistoryHelper";
 import { prepaymentsService } from "./prepaymentsService";
-import {
-  BANK_ACCOUNT_TYPE_LABELS,
-  CASH_TYPE_LABELS,
-} from "../../constants/cashBank";
 import { RECEIVABLE_TYPES } from "../../constants/receivables";
 import { cashBankService } from "./cashBankService";
 import { LEDGER_ACCOUNTS } from "../../constants/ledger";
 import { ledgerService } from "../../services/ledgerService";
 import {
   RECORD_UNDO_STATUS,
+  isUndoneStatus,
   mapUndoPayload,
 } from "../../constants/recordUndo";
+import {
+  isLiveUserAddedStatus,
+  mapCurrentAssetBankItem,
+  mapCurrentAssetCashItem,
+} from "./currentAssetUndoService";
+import { mapCurrentAssetReceivableItem } from "./receivableUndoService";
 
 export { computeAssetDepreciation, computeStraightLineDepreciation };
 
@@ -209,30 +212,20 @@ async function buildCurrentAssetsSnapshot(userId: string) {
   }));
   const systemDerivedArTotal = arTotal;
 
-  const userAddedArItems = receivableRows.map((r) => {
-    const outstanding = normalizeMoneyAmount(d(r.outstandingAmount));
-    const amount = normalizeMoneyAmount(d(r.grossAmount));
-    const amountReceived = normalizeMoneyAmount(d(r.amountReceived));
-    const dueDate = r.dueDate ? dateToIsoDate(r.dueDate) : null;
-    const item: Record<string, unknown> = {
-      id: r.receivableCode,
-      type: r.type,
-      amount,
-      amountReceived,
-      outstandingAmount: outstanding,
-      dueDate,
-      status: r.status,
-      source: "user" as const,
-    };
-    if (r.partyName) item.partyName = r.partyName;
-    if (r.supplierId) item.supplierId = r.supplierId;
-    if (r.supplierName) item.supplierName = r.supplierName;
-    return item;
-  });
+  const userAddedArItems = receivableRows.map((r) =>
+    mapCurrentAssetReceivableItem(r),
+  );
+  const liveUserAddedArItems = userAddedArItems.filter(
+    (r) => !isUndoneStatus(String(r.status)),
+  );
+
+  const liveReceivableRows = receivableRows.filter(
+    (r) => isLiveUserAddedStatus(r.recordStatus),
+  );
 
   const sumOutstandingByType = (type: string) =>
     normalizeMoneyAmount(
-      receivableRows
+      liveReceivableRows
         .filter((r) => r.type === type)
         .reduce((s, r) => s + d(r.outstandingAmount), 0),
     );
@@ -254,7 +247,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
   );
 
   const userAddedArTotal = normalizeMoneyAmount(
-    userAddedArItems.reduce(
+    liveUserAddedArItems.reduce(
       (s, r) => s + (r.outstandingAmount as number),
       0,
     ),
@@ -276,67 +269,65 @@ async function buildCurrentAssetsSnapshot(userId: string) {
 
   const prepayments = await prepaymentsService.activeBalances(userId);
 
-  const userCashItems = userCash.map((c) => ({
-    id: c.cashCode,
-    cashType: c.cashType,
-    title: CASH_TYPE_LABELS[c.cashType as keyof typeof CASH_TYPE_LABELS] ?? c.cashType,
-    subtitle: c.note ?? "User-added cash balance",
-    amount: normalizeMoneyAmount(Number(c.amount)),
-    source: "user" as const,
-  }));
+  const userCashItems = userCash.map((c) => mapCurrentAssetCashItem(c));
+  const liveUserCashItems = userCashItems.filter((c) =>
+    isLiveUserAddedStatus(c.status),
+  );
 
-  const userBankItems = userBanks.map((b) => ({
-    id: b.bankCode,
-    bankName: b.bankName,
-    accountType:
-      BANK_ACCOUNT_TYPE_LABELS[
-        b.accountType as keyof typeof BANK_ACCOUNT_TYPE_LABELS
-      ] ?? b.accountType,
-    accountNumber: b.accountNumber,
-    amount: normalizeMoneyAmount(
+  const userBankItems = userBanks.map((b) =>
+    mapCurrentAssetBankItem(
+      b,
       balanceByCode.get(`${LEDGER_ACCOUNTS.BANK}:${b.bankCode}`) ??
         Number(b.openingBalance),
     ),
-    source: "user" as const,
-  }));
+  );
+  const liveUserBankItems = userBankItems.filter((b) =>
+    isLiveUserAddedStatus(b.status),
+  );
 
   const userCashFromRegisters = normalizeMoneyAmount(
-    userCashItems.reduce((s, r) => s + r.amount, 0),
+    liveUserCashItems.reduce((s, r) => s + r.amount, 0),
   );
   const userBankFromRegisters = normalizeMoneyAmount(
-    userBankItems.reduce((s, r) => s + r.amount, 0),
+    liveUserBankItems.reduce((s, r) => s + r.amount, 0),
   );
 
+  const CASH_LEDGER_LABELS: Record<string, { title: string; subtitle: string }> =
+    {
+      [LEDGER_ACCOUNTS.CASH_ON_HAND]: {
+        title: "Cash on hand",
+        subtitle: "Ledger cash from sales, expenses, and collections",
+      },
+      [LEDGER_ACCOUNTS.PETTY_CASH]: {
+        title: "Petty cash",
+        subtitle: "Ledger petty cash balance",
+      },
+      [LEDGER_ACCOUNTS.OTHER_CASH]: {
+        title: "Other cash",
+        subtitle: "Ledger other cash balance",
+      },
+    };
+
+  const systemCashItems = ledgerBalances
+    .filter((row) => isCashLedgerCode(row.accountCode) && row.balance > 0)
+    .map((row) => {
+      const labels = CASH_LEDGER_LABELS[row.accountCode] ?? {
+        title: row.accountCode,
+        subtitle: "Ledger cash balance",
+      };
+      return {
+        id: `system-${row.accountCode.toLowerCase().replace(/_/g, "-")}`,
+        title: labels.title,
+        subtitle: labels.subtitle,
+        amount: normalizeMoneyAmount(row.balance),
+        source: "system" as const,
+      };
+    });
   const systemCashBalance = normalizeMoneyAmount(
-    Math.max(0, ledgerCashTotal - userCashFromRegisters),
+    systemCashItems.reduce((s, r) => s + r.amount, 0),
   );
-
-  const systemCashItems =
-    systemCashBalance > 0
-      ? [
-          {
-            id: "system-cash",
-            title: "Cash on hand",
-            subtitle: "Ledger cash balance from sales, expenses, and openings",
-            amount: systemCashBalance,
-            source: "system" as const,
-          },
-        ]
-      : ([] as Array<{
-          id: string;
-          title: string;
-          subtitle: string;
-          amount: number;
-          source: "system";
-        }>);
 
   const accountNumber = business?.bankAccount?.trim() || "Not set";
-  const aggregateBankBalance = normalizeMoneyAmount(
-    balanceByCode.get(LEDGER_ACCOUNTS.BANK) ?? 0,
-  );
-  const cardSettlementBalance = normalizeMoneyAmount(
-    balanceByCode.get(LEDGER_ACCOUNTS.CARD_SETTLEMENT) ?? 0,
-  );
 
   type SystemBankItem = {
     id: string;
@@ -347,28 +338,50 @@ async function buildCurrentAssetsSnapshot(userId: string) {
     source: "system";
   };
 
+  const userBankLedgerCodes = new Set(
+    userBanks.map((b) => `${LEDGER_ACCOUNTS.BANK}:${b.bankCode}`),
+  );
+
   const systemBankItems: SystemBankItem[] = [];
 
-  if (aggregateBankBalance > 0) {
-    systemBankItems.push({
-      id: "system-bank",
-      bankName: business?.name?.trim()
-        ? `${business.name.trim()} — primary`
-        : "Primary bank account",
-      accountType: "Current",
-      accountNumber,
-      amount: aggregateBankBalance,
-      source: "system",
-    });
-  }
+  for (const row of ledgerBalances) {
+    if (!isBankLedgerCode(row.accountCode)) continue;
+    if (userBankLedgerCodes.has(row.accountCode)) continue;
+    const amount = normalizeMoneyAmount(row.balance);
+    if (amount <= 0) continue;
 
-  if (cardSettlementBalance > 0) {
+    if (row.accountCode === LEDGER_ACCOUNTS.CARD_SETTLEMENT) {
+      systemBankItems.push({
+        id: "card-settlement",
+        bankName: "Card settlement",
+        accountType: "Current",
+        accountNumber: "Card processor balance",
+        amount,
+        source: "system",
+      });
+      continue;
+    }
+
+    if (row.accountCode === LEDGER_ACCOUNTS.BANK) {
+      systemBankItems.push({
+        id: "system-bank",
+        bankName: business?.name?.trim()
+          ? `${business.name.trim()} — primary`
+          : "Primary bank account",
+        accountType: "Current",
+        accountNumber,
+        amount,
+        source: "system",
+      });
+      continue;
+    }
+
     systemBankItems.push({
-      id: "card-settlement",
-      bankName: "Card settlement",
+      id: `system-${row.accountCode.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      bankName: row.accountCode,
       accountType: "Current",
-      accountNumber: "Card processor balance",
-      amount: cardSettlementBalance,
+      accountNumber: row.accountCode,
+      amount,
       source: "system",
     });
   }
@@ -378,7 +391,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
   );
 
   const cash = {
-    total: normalizeMoneyAmount(ledgerCashTotal),
+    total: normalizeMoneyAmount(systemCashBalance + userCashFromRegisters),
     systemDerived: {
       total: systemCashBalance,
       items: systemCashItems,
@@ -391,7 +404,7 @@ async function buildCurrentAssetsSnapshot(userId: string) {
   };
 
   const bankBalances = {
-    total: normalizeMoneyAmount(ledgerBankTotal),
+    total: normalizeMoneyAmount(systemBankBalance + userBankFromRegisters),
     systemDerived: {
       total: systemBankBalance,
       items: systemBankItems,
@@ -633,12 +646,10 @@ async function findOwnedTransfer(
 
 function buildAssetListStatusFilter(
   status?: string,
-): string | { notIn: string[] } {
-  const normalized = status?.trim() || "all";
-  if (normalized === "all") {
-    return {
-      notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
-    };
+): string | { notIn: string[] } | undefined {
+  const normalized = status?.trim();
+  if (!normalized || normalized === "all") {
+    return undefined;
   }
   if (
     normalized === RECORD_UNDO_STATUS.VOIDED ||
@@ -787,6 +798,9 @@ export const assetsService = {
           userId,
           assignToConsultant: true,
           consultantReviewStatus: { in: [...CONSULTANT_REVIEW_OPEN_STATUSES] },
+          status: {
+            notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+          },
         },
       }),
       buildCurrentAssetsSnapshot(userId),
@@ -1091,7 +1105,6 @@ export const assetsService = {
   ) {
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 20), 100);
-    const normalizedStatus = opts?.status?.trim() || "all";
     const baseWhere: {
       userId: string;
       assetType?: string;
@@ -1104,9 +1117,10 @@ export const assetsService = {
         notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
       },
     };
+    const statusFilter = buildAssetListStatusFilter(opts?.status);
     const listWhere = {
       ...baseWhere,
-      status: buildAssetListStatusFilter(normalizedStatus),
+      ...(statusFilter != null ? { status: statusFilter } : {}),
     };
 
     const [rows, total, pendingReviews, liveRows, counts] = await Promise.all([
@@ -1143,16 +1157,7 @@ export const assetsService = {
 
     const dbCount = (s: string) =>
       counts.find((c) => c.status === s)?._count ?? 0;
-    const liveAll =
-      counts.reduce((s, c) => {
-        if (
-          c.status === RECORD_UNDO_STATUS.VOIDED ||
-          c.status === RECORD_UNDO_STATUS.REVERSED
-        ) {
-          return s;
-        }
-        return s + c._count;
-      }, 0);
+    const totalAll = counts.reduce((s, c) => s + c._count, 0);
 
     return {
       summary: {
@@ -1161,7 +1166,7 @@ export const assetsService = {
         pendingReviews,
       },
       counts: {
-        all: liveAll,
+        all: totalAll,
         voided: dbCount(RECORD_UNDO_STATUS.VOIDED),
         reversed: dbCount(RECORD_UNDO_STATUS.REVERSED),
       },
@@ -1193,6 +1198,9 @@ export const assetsService = {
           userId,
           assignToConsultant: true,
           consultantReviewStatus: { in: [...CONSULTANT_REVIEW_OPEN_STATUSES] },
+          status: {
+            notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+          },
         },
       }),
       buildCurrentAssetsSnapshot(userId),
@@ -1742,6 +1750,17 @@ export const assetsService = {
           gainLossAmount: dec(gainLossAmount),
         },
       });
+      await ledgerPostingService.postAssetSale(
+        userId,
+        row.id,
+        {
+          cost: d(asset.purchaseCost),
+          accumulatedDepreciation: dep.accumulatedDepreciation,
+          salePrice: data.salePrice,
+          saleDate,
+        },
+        tx,
+      );
       await tx.asset.update({
         where: { id: asset.id },
         data: { status: ASSET_STATUS.SOLD },
@@ -1914,6 +1933,16 @@ export const assetsService = {
           bookValueAtDisposal: dec(dep.bookValue),
         },
       });
+      await ledgerPostingService.postAssetDisposal(
+        userId,
+        row.id,
+        {
+          cost: d(asset.purchaseCost),
+          accumulatedDepreciation: dep.accumulatedDepreciation,
+          disposalDate,
+        },
+        tx,
+      );
       await tx.asset.update({
         where: { id: asset.id },
         data: { status: ASSET_STATUS.DISPOSED },
