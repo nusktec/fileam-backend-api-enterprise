@@ -39,6 +39,14 @@ model Expense {
   isDeductible  Boolean  @default(false) @map("is_deductible")
   /** Set when expense was capitalised to a registered asset — blocks undo. */
   convertedToAssetId String? @map("converted_to_asset_id")
+  /** local | import | unknown */
+  purchaseOrigin String @default("unknown") @map("purchase_origin")
+  /** goods | inventory_item | service | fixed_asset */
+  purchaseKind  String  @default("service") @map("purchase_kind")
+  /** vatable | zero_rated | exempt */
+  vatTag        String? @map("vat_tag")
+  /** Optional link when the expense was synced from an inventory purchase. */
+  inventoryItemId String? @map("inventory_item_id")
   undoAt        DateTime? @map("undo_at")
   undoReason    String?   @map("undo_reason")
   reversingEntryId String? @map("reversing_entry_id")
@@ -49,5 +57,7 @@ model Expense {
   user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdBy  User?  @relation("ExpenseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
+  @@index([inventoryItemId])
+  @@index([convertedToAssetId])
   @@map("expenses")
 }

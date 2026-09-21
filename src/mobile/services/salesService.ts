@@ -42,6 +42,7 @@ import {
   mapUndoPayload,
   RECORD_UNDO_STATUS,
 } from "../../constants/recordUndo";
+import { inferVatTag, parseVatTag } from "../../constants/purchaseDescriptors";
 
 const BULK_CREATE_MAX = 100;
 
@@ -201,6 +202,9 @@ function mapSaleSummary(sale: {
   invoiceAmountPaid?: unknown;
   category?: string | null;
   settlementBankCode?: string | null;
+  vatInclusive?: boolean;
+  vatableIncome?: boolean;
+  vatTag?: string | null;
 }) {
   const invoiceAmountPaid = coerceInvoiceAmountPaid(sale.invoiceAmountPaid);
   const totalAmount = decimalToNumber(sale.totalAmount);
@@ -238,7 +242,24 @@ function mapSaleSummary(sale: {
       ? sale.paymentConfirmedAt.toISOString()
       : null,
     settlementBankCode: sale.settlementBankCode ?? null,
+    vatTag: inferVatTag({
+      vatTag: sale.vatTag,
+      vatInclusive: sale.vatInclusive,
+      vatableIncome: sale.vatableIncome,
+      vatAmount: sale.vatAmount,
+    }),
   };
+}
+
+function parseSaleVatTag(value: unknown): string | undefined {
+  try {
+    return parseVatTag(value);
+  } catch (err) {
+    throw new HttpReplyError(
+      400,
+      err instanceof Error ? err.message : "Invalid vatTag",
+    );
+  }
 }
 
 function assertSaleEditable(status: string): void {
@@ -470,6 +491,7 @@ export const salesService = {
       vatableIncome: boolean;
       vatInclusive?: boolean;
       serviceIncome: boolean;
+      vatTag?: string;
       createdById?: string;
     },
   ) {
@@ -539,6 +561,12 @@ export const salesService = {
           status,
           settlementBankCode,
           receiptUrl: nullableTrimmed(data.receiptUrl),
+          vatTag: inferVatTag({
+            vatTag: parseSaleVatTag(data.vatTag),
+            vatInclusive,
+            vatableIncome,
+            vatAmount,
+          }),
         },
       });
     });
@@ -572,6 +600,7 @@ export const salesService = {
       vatableIncome?: boolean;
       vatInclusive?: boolean;
       serviceIncome?: boolean;
+      vatTag?: string;
     }>,
     createdById?: string,
   ) {
@@ -650,6 +679,12 @@ export const salesService = {
         vatableIncome,
         vatInclusive,
         serviceIncome: raw.serviceIncome !== false,
+        vatTag: inferVatTag({
+          vatTag: parseSaleVatTag(raw.vatTag),
+          vatInclusive,
+          vatableIncome,
+          vatAmount: resolved.vatAmount,
+        }),
         status,
         bankCode: raw.bankCode?.trim() || null,
       };
@@ -696,6 +731,7 @@ export const salesService = {
               status: row.status,
               settlementBankCode,
               receiptUrl: row.receiptUrl,
+              vatTag: row.vatTag,
             },
           }),
         );
@@ -746,6 +782,7 @@ export const salesService = {
       vatableIncome: boolean;
       vatInclusive: boolean;
       serviceIncome: boolean;
+      vatTag?: string;
       status: string;
     }>,
   ) {
@@ -802,6 +839,15 @@ export const salesService = {
     if (data.vatableIncome != null) updateData.vatableIncome = data.vatableIncome;
     if (data.vatInclusive != null) updateData.vatInclusive = data.vatInclusive;
     if (data.serviceIncome != null) updateData.serviceIncome = data.serviceIncome;
+    if (data.vatTag !== undefined) {
+      updateData.vatTag =
+        parseSaleVatTag(data.vatTag) ??
+        inferVatTag({
+          vatInclusive: data.vatInclusive ?? sale.vatInclusive,
+          vatableIncome: data.vatableIncome ?? sale.vatableIncome,
+          vatAmount: sale.vatAmount,
+        });
+    }
 
     const touchesFinancial =
       data.amount != null ||

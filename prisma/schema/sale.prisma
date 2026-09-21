@@ -43,6 +43,10 @@ model Sale {
   paymentConfirmedAt DateTime? @map("payment_confirmed_at")
   /** Linked inventory sale when created from inventory sell. */
   inventorySaleId String? @unique @map("inventory_sale_id")
+  /** Linked asset sale when synced from /assets sale. */
+  assetSaleId    String? @unique @map("asset_sale_id")
+  /** vatable | zero_rated | exempt */
+  vatTag         String? @map("vat_tag")
   undoAt         DateTime? @map("undo_at")
   undoReason     String?   @map("undo_reason")
   reversingEntryId String? @map("reversing_entry_id")

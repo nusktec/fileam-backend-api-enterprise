@@ -1,6 +1,11 @@
 import { check } from "express-validator";
 import { handleValidation } from "../errorHandler";
 import { EXPENSE_CLASSES } from "../../constants/expenseClass";
+import {
+  PURCHASE_KINDS,
+  PURCHASE_ORIGINS,
+  VAT_TAGS,
+} from "../../constants/purchaseDescriptors";
 import { optionalMonetaryAmount } from "./monetaryAmountValidation";
 import { optionalInvoiceAmountPaidValidation } from "./invoiceAmountPaidValidation";
 
@@ -47,5 +52,19 @@ export const updateExpenseValidation = [
       `class must be one of: ${EXPENSE_CLASSES.join(", ")} when provided`,
     ),
   check("isDeductible").optional().isBoolean(),
+  check("purchaseOrigin")
+    .optional()
+    .isIn([...PURCHASE_ORIGINS])
+    .withMessage(
+      `purchaseOrigin must be one of: ${PURCHASE_ORIGINS.join(", ")}`,
+    ),
+  check("purchaseKind")
+    .optional()
+    .isIn([...PURCHASE_KINDS])
+    .withMessage(`purchaseKind must be one of: ${PURCHASE_KINDS.join(", ")}`),
+  check("vatTag")
+    .optional()
+    .isIn([...VAT_TAGS])
+    .withMessage(`vatTag must be one of: ${VAT_TAGS.join(", ")}`),
   handleValidation,
 ];

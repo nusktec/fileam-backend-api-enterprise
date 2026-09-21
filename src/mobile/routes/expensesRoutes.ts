@@ -1,6 +1,7 @@
 import express from "express";
 import {
   listExpenses,
+  getExpensesSummary,
   getExpenseById,
   getExpenseDetails,
   createExpense,
@@ -30,6 +31,7 @@ const router = express.Router();
 router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/", withPagination("expenseDate"), listExpensesValidation, listExpenses);
+router.get("/summary", getExpensesSummary);
 router.post(
   "/bulk",
   (

@@ -163,6 +163,7 @@ export const createSale = async (
       vatableIncome: Boolean(vatableIncome),
       vatInclusive: Boolean(vatInclusive),
       serviceIncome: serviceIncome !== false,
+      vatTag: b.vatTag != null ? String(b.vatTag) : undefined,
     });
     if (!sale) {
       res
@@ -215,6 +216,7 @@ export const bulkCreateSales = async (
           vatableIncome: Boolean(raw.vatableIncome),
           vatInclusive: Boolean(raw.vatInclusive),
           serviceIncome: raw.serviceIncome !== false,
+          vatTag: raw.vatTag != null ? String(raw.vatTag) : undefined,
           customerName: customerFields.customerName ?? undefined,
           customerId: customerFields.customerId ?? undefined,
           itemName:
@@ -321,6 +323,8 @@ export const updateSale = async (req: IRequest, res: Response): Promise<void> =>
         body.serviceIncome !== undefined
           ? Boolean(body.serviceIncome)
           : undefined,
+      vatTag:
+        body.vatTag !== undefined ? String(body.vatTag) : undefined,
       status: body.status as string | undefined,
     });
     if (!updated) {

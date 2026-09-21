@@ -5,6 +5,7 @@ import {
   optionalBulkInvoiceAmountPaidValidation,
   optionalInvoiceAmountPaidValidation,
 } from "./invoiceAmountPaidValidation";
+import { VAT_TAGS } from "../../constants/purchaseDescriptors";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
 
@@ -60,6 +61,10 @@ export const createSaleValidation = [
     .optional()
     .isBoolean()
     .withMessage("serviceIncome must be boolean"),
+  check("vatTag")
+    .optional()
+    .isIn([...VAT_TAGS])
+    .withMessage(`vatTag must be one of: ${VAT_TAGS.join(", ")}`),
   handleValidation,
 ];
 
@@ -101,6 +106,10 @@ export const bulkCreateSalesValidation = [
   check("items.*.vatableIncome").optional().isBoolean(),
   check("items.*.vatInclusive").optional().isBoolean(),
   check("items.*.serviceIncome").optional().isBoolean(),
+  check("items.*.vatTag")
+    .optional()
+    .isIn([...VAT_TAGS])
+    .withMessage(`Each vatTag must be one of: ${VAT_TAGS.join(", ")}`),
   body("items").custom((items) => {
     if (!Array.isArray(items)) return true;
     for (let i = 0; i < items.length; i++) {

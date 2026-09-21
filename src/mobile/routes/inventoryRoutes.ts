@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getInventoryOverview,
+  getInventoryPeriodSummary,
   getInventoryAlerts,
   listInventoryMovements,
   listInventorySales,
@@ -28,12 +29,18 @@ import {
   validateUpdateInventoryItem,
   validateInventorySaleUndo,
 } from "../../middlewares/validations/inventoryValidation";
+import { inventoryPeriodSummaryValidation } from "../../middlewares/validations/inventoryPeriodSummaryValidation";
 
 const router = express.Router();
 
 router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/overview", getInventoryOverview);
+router.get(
+  "/summary",
+  inventoryPeriodSummaryValidation,
+  getInventoryPeriodSummary,
+);
 router.get("/alerts", getInventoryAlerts);
 router.get("/movements", withPagination(), listInventoryMovements);
 router.get("/sales", withPagination(), listInventorySales);

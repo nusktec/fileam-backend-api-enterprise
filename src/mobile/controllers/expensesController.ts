@@ -74,6 +74,23 @@ export const listExpenses = async (
   }
 };
 
+export const getExpensesSummary = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = await expensesService.categorySummary(userId);
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Expense category summary", data));
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to retrieve expense summary", null));
+  }
+};
+
 export const getExpenseById = async (
   req: IRequest,
   res: Response,
@@ -194,6 +211,11 @@ export const createExpense = async (
       class: normalizeExpenseClass(b.class),
       isDeductible:
         b.isDeductible !== undefined ? Boolean(b.isDeductible) : undefined,
+      purchaseOrigin:
+        b.purchaseOrigin != null ? String(b.purchaseOrigin) : undefined,
+      purchaseKind:
+        b.purchaseKind != null ? String(b.purchaseKind) : undefined,
+      vatTag: b.vatTag != null ? String(b.vatTag) : undefined,
       supplierName: supplierFields.supplierName ?? undefined,
       supplierId: supplierFields.supplierId ?? undefined,
     });
@@ -254,6 +276,13 @@ export const bulkCreateExpenses = async (
             raw.isDeductible !== undefined
               ? Boolean(raw.isDeductible)
               : undefined,
+          purchaseOrigin:
+            raw.purchaseOrigin != null
+              ? String(raw.purchaseOrigin)
+              : undefined,
+          purchaseKind:
+            raw.purchaseKind != null ? String(raw.purchaseKind) : undefined,
+          vatTag: raw.vatTag != null ? String(raw.vatTag) : undefined,
           supplierName: supplierFields.supplierName ?? undefined,
           supplierId: supplierFields.supplierId ?? undefined,
         };
@@ -334,6 +363,16 @@ export const updateExpense = async (
         body.isDeductible !== undefined
           ? Boolean(body.isDeductible)
           : undefined,
+      purchaseOrigin:
+        body.purchaseOrigin !== undefined
+          ? String(body.purchaseOrigin)
+          : undefined,
+      purchaseKind:
+        body.purchaseKind !== undefined
+          ? String(body.purchaseKind)
+          : undefined,
+      vatTag:
+        body.vatTag !== undefined ? String(body.vatTag) : undefined,
     });
     if (!updated) {
       res

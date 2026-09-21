@@ -13,6 +13,11 @@ import {
   DISPOSAL_REASONS,
   TRANSFER_TYPES,
 } from "../constants/assets";
+import {
+  PURCHASE_KINDS,
+  PURCHASE_ORIGINS,
+  VAT_TAGS,
+} from "../constants/purchaseDescriptors";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"] as const;
 
@@ -33,6 +38,9 @@ export interface AllTypes {
   depreciationMethods: string[];
   disposalReasons: string[];
   transferTypes: string[];
+  purchaseOrigins: string[];
+  purchaseKinds: string[];
+  vatTags: string[];
 }
 
 export const contactsAndTypesService = {
@@ -54,6 +62,9 @@ export const contactsAndTypesService = {
       depreciationMethods: [...DEPRECIATION_METHODS],
       disposalReasons: [...DISPOSAL_REASONS],
       transferTypes: [...TRANSFER_TYPES],
+      purchaseOrigins: [...PURCHASE_ORIGINS],
+      purchaseKinds: [...PURCHASE_KINDS],
+      vatTags: [...VAT_TAGS],
     };
   },
 

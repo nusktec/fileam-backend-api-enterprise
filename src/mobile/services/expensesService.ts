@@ -51,6 +51,14 @@ import {
   RECORD_UNDO_STATUS,
 } from "../../constants/recordUndo";
 import { resolveSettlementBankCode } from "../../utils/settlementBank";
+import {
+  DEFAULT_PURCHASE_KIND,
+  DEFAULT_PURCHASE_ORIGIN,
+  inferVatTag,
+  parsePurchaseKind,
+  parsePurchaseOrigin,
+  parseVatTag,
+} from "../../constants/purchaseDescriptors";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 const BULK_CREATE_MAX = 100;
@@ -164,6 +172,20 @@ function toExpenseLedgerRow(expense: {
   };
 }
 
+function parseExpenseDescriptor<T>(
+  parse: (value: unknown) => T | undefined,
+  value: unknown,
+): T | undefined {
+  try {
+    return parse(value);
+  } catch (err) {
+    throw new HttpReplyError(
+      400,
+      err instanceof Error ? err.message : "Invalid expense descriptor",
+    );
+  }
+}
+
 function mapExpenseListItem(e: {
   id: string;
   expenseNumber: string;
@@ -185,6 +207,9 @@ function mapExpenseListItem(e: {
   isDeductible?: boolean;
   settlementBankCode?: string | null;
   paymentConfirmedAt?: Date | null;
+  purchaseOrigin?: string | null;
+  purchaseKind?: string | null;
+  vatTag?: string | null;
 }) {
   const invoiceAmountPaid = coerceInvoiceAmountPaid(e.invoiceAmountPaid);
   const amount = decimalToNumber(e.totalAmount);
@@ -207,8 +232,14 @@ function mapExpenseListItem(e: {
     vatAmount: e.vatAmount != null ? decimalToNumber(e.vatAmount) : null,
     /** Gross total (base + VAT when applicable) */
     amount,
-    vatTag: e.vatInclusive,
     vatInclusive: e.vatInclusive,
+    vatTag: inferVatTag({
+      vatTag: e.vatTag,
+      vatInclusive: e.vatInclusive,
+      vatAmount: e.vatAmount,
+    }),
+    purchaseOrigin: e.purchaseOrigin ?? DEFAULT_PURCHASE_ORIGIN,
+    purchaseKind: e.purchaseKind ?? DEFAULT_PURCHASE_KIND,
     paymentType: e.paymentType,
     invoiceDueDate: e.invoiceDueDate,
     invoiceAmountPaid,
@@ -420,7 +451,56 @@ export const expensesService = {
       supplierId: expense.supplierId ?? null,
       class: mapExpenseClassField(expense.expenseClass),
       isDeductible: expense.isDeductible,
+      vatTag: inferVatTag({
+        vatTag: expense.vatTag,
+        vatInclusive: expense.vatInclusive,
+        vatAmount: expense.vatAmount,
+      }),
+      purchaseOrigin: expense.purchaseOrigin ?? DEFAULT_PURCHASE_ORIGIN,
+      purchaseKind: expense.purchaseKind ?? DEFAULT_PURCHASE_KIND,
       undo: mapUndoPayload(expense),
+    };
+  },
+
+  async categorySummary(userId: string) {
+    const liveWhere = {
+      userId,
+      status: {
+        notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
+      },
+    };
+    const [summary, byCategory] = await Promise.all([
+      prisma.expense.aggregate({
+        where: liveWhere,
+        _sum: { amount: true, vatAmount: true, totalAmount: true },
+      }),
+      prisma.expense.groupBy({
+        by: ["category"],
+        where: liveWhere,
+        _sum: { amount: true, totalAmount: true },
+        _count: true,
+      }),
+    ]);
+    const totalExpenses = decimalToNumber(summary._sum.amount);
+    const categories = byCategory
+      .map((c) => ({
+        category: c.category,
+        amount: decimalToNumber(c._sum.amount),
+        amountIncludingVat: decimalToNumber(c._sum.totalAmount),
+        count: c._count,
+        percentageOfTotal:
+          totalExpenses > 0
+            ? (decimalToNumber(c._sum.amount) / totalExpenses) * PERCENT
+            : 0,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+    return {
+      summary: {
+        totalExpenses,
+        vatClaimable: decimalToNumber(summary._sum.vatAmount),
+        totalExpensesIncludingVat: decimalToNumber(summary._sum.totalAmount),
+      },
+      categories,
     };
   },
 
@@ -444,6 +524,9 @@ export const expensesService = {
       createdById?: string;
       class?: ExpenseClass | null;
       isDeductible?: boolean;
+      purchaseOrigin?: string;
+      purchaseKind?: string;
+      vatTag?: string;
     },
   ) {
     const { base, vatAmount, totalAmount } = resolveExpenseAmounts({
@@ -486,6 +569,17 @@ export const expensesService = {
         : "OPEX";
     const expenseClass = resolveExpenseClassInput(data.class);
     const isDeductible = Boolean(data.isDeductible);
+    const purchaseOrigin =
+      parseExpenseDescriptor(parsePurchaseOrigin, data.purchaseOrigin) ??
+      DEFAULT_PURCHASE_ORIGIN;
+    const purchaseKind =
+      parseExpenseDescriptor(parsePurchaseKind, data.purchaseKind) ??
+      DEFAULT_PURCHASE_KIND;
+    const vatTag = inferVatTag({
+      vatTag: parseExpenseDescriptor(parseVatTag, data.vatTag),
+      vatInclusive: data.vatInclusive,
+      vatAmount,
+    });
 
     const expense = await prisma.expense.create({
       data: {
@@ -510,6 +604,9 @@ export const expensesService = {
         settlementBankCode,
         expenseClass,
         isDeductible,
+        purchaseOrigin,
+        purchaseKind,
+        vatTag,
       },
     });
 
@@ -530,8 +627,10 @@ export const expensesService = {
       vatAmount:
         expense.vatAmount != null ? decimalToNumber(expense.vatAmount) : null,
       amount: decimalToNumber(expense.totalAmount),
-      vatTag: expense.vatInclusive,
       vatInclusive: expense.vatInclusive,
+      vatTag: expense.vatTag ?? vatTag,
+      purchaseOrigin: expense.purchaseOrigin,
+      purchaseKind: expense.purchaseKind,
       paymentType: expense.paymentType,
       invoiceDueDate: expense.invoiceDueDate,
       invoiceAmountPaid: coerceInvoiceAmountPaid(expense.invoiceAmountPaid),
@@ -562,6 +661,9 @@ export const expensesService = {
       bankCode?: string | null;
       class?: ExpenseClass | null;
       isDeductible?: boolean;
+      purchaseOrigin?: string;
+      purchaseKind?: string;
+      vatTag?: string;
     }>,
     createdById?: string,
   ) {
@@ -639,6 +741,17 @@ export const expensesService = {
           `items[${index}].class`,
         ),
         isDeductible: Boolean(raw.isDeductible),
+        purchaseOrigin:
+          parseExpenseDescriptor(parsePurchaseOrigin, raw.purchaseOrigin) ??
+          DEFAULT_PURCHASE_ORIGIN,
+        purchaseKind:
+          parseExpenseDescriptor(parsePurchaseKind, raw.purchaseKind) ??
+          DEFAULT_PURCHASE_KIND,
+        vatTag: inferVatTag({
+          vatTag: parseExpenseDescriptor(parseVatTag, raw.vatTag),
+          vatInclusive: Boolean(raw.vatInclusive),
+          vatAmount: resolved.vatAmount,
+        }),
         expenseDate: toCalendarDate(raw.date),
         vatInclusive: Boolean(raw.vatInclusive),
         receiptUrl: raw.receiptUrl ?? null,
@@ -695,6 +808,9 @@ export const expensesService = {
               settlementBankCode,
               expenseClass: row.expenseClass,
               isDeductible: row.isDeductible,
+              purchaseOrigin: row.purchaseOrigin,
+              purchaseKind: row.purchaseKind,
+              vatTag: row.vatTag,
             },
           }),
         );
@@ -762,6 +878,9 @@ export const expensesService = {
       bankCode?: string | null;
       class: ExpenseClass | null;
       isDeductible: boolean;
+      purchaseOrigin?: string;
+      purchaseKind?: string;
+      vatTag?: string;
     }>,
   ) {
     const expense = await prisma.expense.findFirst({
@@ -816,6 +935,25 @@ export const expensesService = {
     }
     if (data.isDeductible !== undefined) {
       updateData.isDeductible = Boolean(data.isDeductible);
+    }
+    if (data.purchaseOrigin !== undefined) {
+      updateData.purchaseOrigin =
+        parseExpenseDescriptor(parsePurchaseOrigin, data.purchaseOrigin) ??
+        DEFAULT_PURCHASE_ORIGIN;
+    }
+    if (data.purchaseKind !== undefined) {
+      updateData.purchaseKind =
+        parseExpenseDescriptor(parsePurchaseKind, data.purchaseKind) ??
+        DEFAULT_PURCHASE_KIND;
+    }
+    if (data.vatTag !== undefined) {
+      updateData.vatTag =
+        parseExpenseDescriptor(parseVatTag, data.vatTag) ??
+        inferVatTag({
+          vatInclusive: data.vatInclusive ?? expense.vatInclusive,
+          vatAmount:
+            data.vatAmount !== undefined ? data.vatAmount : expense.vatAmount,
+        });
     }
 
     const touchesFinancial =

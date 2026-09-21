@@ -38,6 +38,10 @@ import {
 import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
 import { appendAssetHistory } from "./assetHistoryHelper";
 import { prepaymentsService } from "./prepaymentsService";
+import {
+  syncPurchaseToExpense,
+  syncSaleRecord,
+} from "./moduleSyncService";
 import { RECEIVABLE_TYPES } from "../../constants/receivables";
 import { cashBankService } from "./cashBankService";
 import { LEDGER_ACCOUNTS } from "../../constants/ledger";
@@ -920,6 +924,17 @@ export const assetsService = {
       data.purchaseCost,
       purchaseDate,
     );
+    await syncPurchaseToExpense(userId, {
+      amount: data.purchaseCost,
+      description: `Asset purchase: ${asset.assetName}`,
+      category: asset.assetType,
+      expenseType: "CAPEX",
+      expenseDate: purchaseDate,
+      supplierName: asset.vendor,
+      purchaseKind: "fixed_asset",
+      vatTag: "exempt",
+      convertedToAssetId: asset.id,
+    });
     return mapAssetRow(asset);
   },
 
@@ -1773,6 +1788,19 @@ export const assetsService = {
         data: { status: TRANSFER_STATUSES[2] },
       });
       return row;
+    });
+
+    await syncSaleRecord(userId, {
+      amount: data.salePrice,
+      description: `Asset sale: ${asset.assetName}`,
+      category: "Asset Sale",
+      itemName: asset.assetName,
+      customerName: data.buyer.trim(),
+      saleDate,
+      paymentType: "Cash",
+      assetSaleId: sale.id,
+      vatTag: "exempt",
+      serviceIncome: false,
     });
 
     return {

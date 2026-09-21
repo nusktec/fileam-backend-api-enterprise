@@ -30,13 +30,20 @@ import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
 import { resolveSettlementBankCode } from "../../utils/settlementBank";
-import { calendarPeriodFromDate } from "../../utils/dateRangeQuery";
+import { calendarPeriodFromDate, toCalendarDate } from "../../utils/dateRangeQuery";
 import { taxPayablesService } from "./taxPayablesService";
 import { mapUndoPayload } from "../../constants/recordUndo";
+import {
+  formatMoneyString,
+  inferVatTag,
+} from "../../constants/purchaseDescriptors";
 import {
   inventorySaleUndoService,
   type InventorySaleDetail,
 } from "./inventorySaleUndoService";
+import {
+  syncPurchaseToExpense,
+} from "./moduleSyncService";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 
@@ -200,6 +207,11 @@ async function createLinkedSaleInTx(
       serviceIncome: input.serviceIncome,
       status,
       settlementBankCode,
+      vatTag: inferVatTag({
+        vatInclusive,
+        vatableIncome,
+        vatAmount,
+      }),
     },
   });
   return {
@@ -250,6 +262,10 @@ async function createLinkedExpenseInTx(
         invoiceAmountPaidFromSingle(Number(input.totalAmount), PAYMENT_TYPE_CASH),
       ),
       status: initialSaleStatusForPaymentType(PAYMENT_TYPE_CASH),
+      purchaseOrigin: "unknown",
+      purchaseKind: "inventory_item",
+      vatTag: "exempt",
+      expenseType: "COGS",
     },
   });
   return {
@@ -344,6 +360,51 @@ async function assertUniqueInventoryName(
       "An inventory item with this name already exists",
     );
   }
+}
+
+type InventoryStatementBucket =
+  | "rawMaterials"
+  | "workInProgress"
+  | "finishedGoods";
+
+function inventoryStatementBucket(category: string): InventoryStatementBucket {
+  const c = category.trim().toLowerCase();
+  if (/raw\s*material|\brm\b/.test(c)) return "rawMaterials";
+  if (/work\s*in\s*progress|\bwip\b|in[-\s]?progress/.test(c)) {
+    return "workInProgress";
+  }
+  return "finishedGoods";
+}
+
+function quantityAtExclusive(
+  movements: Array<{
+    inventoryItemId: string;
+    createdAt: Date;
+    quantityAfter: Decimal;
+  }>,
+  itemId: string,
+  exclusiveEnd: Date,
+): number {
+  let latestAt = -1;
+  let qty = 0;
+  for (const m of movements) {
+    if (m.inventoryItemId !== itemId) continue;
+    const t = m.createdAt.getTime();
+    if (t >= exclusiveEnd.getTime()) continue;
+    if (t >= latestAt) {
+      latestAt = t;
+      qty = d(m.quantityAfter);
+    }
+  }
+  return qty < 0 ? 0 : qty;
+}
+
+function emptyStatementBuckets() {
+  return {
+    rawMaterials: 0,
+    workInProgress: 0,
+    finishedGoods: 0,
+  };
 }
 
 export const inventoryService = {
@@ -489,6 +550,87 @@ export const inventoryService = {
         averageMarginPct:
           Math.round(averageMarginPct * PERCENT_TWO_DECIMAL_ROUND) /
           PERCENT_TWO_DECIMAL_ROUND,
+      },
+    };
+  },
+
+  async periodSummary(userId: string, start: string, end: string) {
+    let from: Date;
+    let to: Date;
+    try {
+      from = toCalendarDate(start);
+      to = toCalendarDate(end);
+    } catch {
+      throw new HttpReplyError(400, "start and end must be valid dates (YYYY-MM-DD)");
+    }
+    if (from.getTime() > to.getTime()) {
+      throw new HttpReplyError(400, "start must be on or before end");
+    }
+    const openingCutoff = from;
+    const closingCutoff = new Date(
+      Date.UTC(
+        to.getUTCFullYear(),
+        to.getUTCMonth(),
+        to.getUTCDate() + 1,
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
+
+    const [items, movements] = await Promise.all([
+      prisma.inventoryItem.findMany({
+        where: { userId },
+        select: {
+          id: true,
+          category: true,
+          purchaseCost: true,
+        },
+      }),
+      prisma.inventoryMovement.findMany({
+        where: { userId, createdAt: { lt: closingCutoff } },
+        select: {
+          inventoryItemId: true,
+          createdAt: true,
+          quantityAfter: true,
+        },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+
+    const opening = emptyStatementBuckets();
+    const closing = emptyStatementBuckets();
+    for (const item of items) {
+      const bucket = inventoryStatementBucket(item.category);
+      const cost = d(item.purchaseCost);
+      opening[bucket] += quantityAtExclusive(movements, item.id, openingCutoff) * cost;
+      closing[bucket] += quantityAtExclusive(movements, item.id, closingCutoff) * cost;
+    }
+
+    const toMoney = (n: number) => formatMoneyString(normalizeMoneyAmount(n));
+    const openingTotal =
+      opening.rawMaterials + opening.workInProgress + opening.finishedGoods;
+    const closingTotal =
+      closing.rawMaterials + closing.workInProgress + closing.finishedGoods;
+
+    return {
+      period: {
+        from: from.toISOString().slice(0, 10),
+        to: to.toISOString().slice(0, 10),
+      },
+      currency: "NGN",
+      opening: {
+        rawMaterials: toMoney(opening.rawMaterials),
+        workInProgress: toMoney(opening.workInProgress),
+        finishedGoods: toMoney(opening.finishedGoods),
+        total: toMoney(openingTotal),
+      },
+      closing: {
+        rawMaterials: toMoney(closing.rawMaterials),
+        workInProgress: toMoney(closing.workInProgress),
+        finishedGoods: toMoney(closing.finishedGoods),
+        total: toMoney(closingTotal),
       },
     };
   },
@@ -770,6 +912,24 @@ export const inventoryService = {
       });
     });
 
+    const item = await prisma.inventoryItem.findFirst({
+      where: { id: itemId, userId, ...activeInventoryWhere },
+    });
+    if (item) {
+      await syncPurchaseToExpense(userId, {
+        amount: d(item.purchaseCost) * qty,
+        description: `Inventory restock: ${item.name} (${qty} units)`,
+        category: item.category,
+        expenseType: "COGS",
+        expenseDate: new Date(),
+        supplierName: item.supplierName,
+        supplierId: item.supplierId,
+        purchaseKind: "inventory_item",
+        vatTag: "exempt",
+        inventoryItemId: item.id,
+      });
+    }
+
     return inventoryService.getItemDetail(userId, itemId);
   },
 
@@ -947,6 +1107,21 @@ export const inventoryService = {
       return row;
     });
 
+    if (opening > 0) {
+      await syncPurchaseToExpense(userId, {
+        amount: data.purchaseCost * opening,
+        description: `Inventory opening stock: ${item.name}`,
+        category: item.category,
+        expenseType: "COGS",
+        expenseDate: item.createdAt,
+        supplierName: item.supplierName,
+        supplierId: item.supplierId,
+        purchaseKind: "inventory_item",
+        vatTag: "exempt",
+        inventoryItemId: item.id,
+      });
+    }
+
     return inventoryService.getItemDetail(userId, item.id);
   },
 
@@ -1060,7 +1235,7 @@ export const inventoryService = {
   ) {
     if (!data.lines?.length) throw new Error("lines required");
 
-    const { invSaleId, linkedSale } = await prisma.$transaction(async (tx) => {
+    const { invSaleId, linkedSale, postSaleLedger } = await prisma.$transaction(async (tx) => {
       let totalAmount = new Decimal(0);
       const lineRows: Array<{
         inventoryItemId: string;
@@ -1141,7 +1316,7 @@ export const inventoryService = {
 
       let linkedSale: Awaited<ReturnType<typeof createLinkedSaleInTx>> | null =
         null;
-      if (data.createSalesInvoice) {
+      {
         const dateStr =
           data.saleDate?.trim() || soldAt.toISOString().split("T")[0];
         const saleDate = new Date(`${dateStr}T12:00:00.000Z`);
@@ -1177,10 +1352,10 @@ export const inventoryService = {
         });
       }
 
-      return { invSaleId: invSale.id, linkedSale };
+      return { invSaleId: invSale.id, linkedSale, postSaleLedger: data.createSalesInvoice === true };
     });
 
-    if (linkedSale?.id) {
+    if (linkedSale?.id && postSaleLedger) {
       await finalizeLinkedSaleLedger(userId, linkedSale.id);
     }
 

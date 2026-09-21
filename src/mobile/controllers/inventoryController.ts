@@ -26,6 +26,29 @@ export const getInventoryOverview = async (
   }
 };
 
+export const getInventoryPeriodSummary = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const start = String(req.query.start ?? "");
+    const end = String(req.query.end ?? "");
+    const data = await inventoryService.periodSummary(userId, start, end);
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Inventory period summary", data));
+  } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json(outJson(false, error.message, null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to load inventory summary", null));
+  }
+};
+
 export const getInventoryAlerts = async (
   req: IRequest,
   res: Response,

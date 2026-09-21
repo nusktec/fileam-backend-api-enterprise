@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment & ledger (payment_and_account_movement_logic.pdf): Cash -> PAID on create, posts to Cash; Transfer/Card -> IN_PROGRESS on create (AR/AP only, no bank movement); confirm via PATCH .../payment-status with {\"status\":\"PAID\",\"bankCode\":\"...\"} (bankCode optional — omit to post to aggregate BANK ledger; when provided must be a registered bank account). Card without bankCode -> CARD_SETTLEMENT. Transfer without bankCode -> BANK. settlementBankCode returned on sales/expenses when set. invoiceAmountPaid = { total, items:[{amount,paymentType,bankCode?}] } — bankCode optional on all line types. Bulk sales/expenses: default Transfer -> PAID on create (posts to Bank). Single create: Cash -> PAID; Transfer/Card -> IN_PROGRESS; Invoice -> Pending. PATCH update syncs ledger (reverses confirm/collections when needed). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nTax filings (mobile): 12-step workspace on tax_payables — GET/PUT /filings/{vat|wht|pit|cit}/workspace, confirm-computation, validate (TaxGPT), generate-documents, package; POST /filings/{id}/complete (step 12). Pending workspaces appear in GET /filings with completionPercent from currentStep/12. PIT/CIT: POST /pit|cit/draft for reliefs/adjustments; calculation honours draft + frozen snapshot. VAT: inputVatBroughtForward from prior month credit; WHT schedule from beneficiary PAYMENT rows. Submit all types accepts submissionReference. Reports: PIT Return Summary, CIT Return Summary added. VAT/WHT monthly; PIT annual (due 31 Mar); CIT annual NTA 2025 (due 30 Jun, periodMonth=12). Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents — phone and TIN unique per user (409 DUPLICATE_CONTACT on duplicate). Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents — same phone/TIN uniqueness rules. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nPAYE (Universal Nigeria PAYE Formula 2026): AGI = 12×(basic+housing+transport+meal+otherAllowances+otherTaxableIncome); pension 8% on basic+housing+transport; NHF 2.5% of basic; NHIS monthly×12; rent relief MIN(20%×annualRent, ₦500k); otherAllowableDeductions (annual). Tax dashboard PAYE sums /employees first; employmentGrossSalaryMonthly is legacy fallback only.\n\nBusiness profile & tax eligibility: GET/PUT /mobile/user/business-profile — sector, totalFixedAssets, annualGrossTurnover (NGN JSON numbers), professionalService (boolean|null) or providesProfessionalServices (YES|NO|NOT_SURE), primaryBusinessActivity; partial PUT (omitted keys unchanged, JSON null clears). GET /mobile/user/tax-eligibility-profile — CIT/VAT classifications. CIT small/large inputs: fixed assets from registered assets on books when present, else signup totalFixedAssets; turnover from signup annualGrossTurnover until business is 12+ months old with sales/expense transactions, then trailing-12-month sales (eligibility) or annual sales for filing year (CIT calculation). taxEligibility.inputs.turnoverSource: profile | books | transactions. Onboarding POST …/step/business-details accepts same optional LTD/tax fields. Tax computation cit/vat blocks include citClassification and vatClassification from eligibility engine.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment & ledger (payment_and_account_movement_logic.pdf): Cash -> PAID on create, posts to Cash; Transfer/Card -> IN_PROGRESS on create (AR/AP only, no bank movement); confirm via PATCH .../payment-status with {\"status\":\"PAID\",\"bankCode\":\"...\"} (bankCode optional — omit to post to aggregate BANK ledger; when provided must be a registered bank account). Card without bankCode -> CARD_SETTLEMENT. Transfer without bankCode -> BANK. settlementBankCode returned on sales/expenses when set. invoiceAmountPaid = { total, items:[{amount,paymentType,bankCode?}] } — bankCode optional on all line types. Bulk sales/expenses: default Transfer -> PAID on create (posts to Bank). Single create: Cash -> PAID; Transfer/Card -> IN_PROGRESS; Invoice -> Pending. PATCH update syncs ledger (reverses confirm/collections when needed). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nPurchase / VAT tags (optional, additive): expenses accept purchaseOrigin (local|import|unknown, default unknown), purchaseKind (goods|inventory_item|service|fixed_asset, default service), vatTag (vatable|zero_rated|exempt). Sales accept vatTag. vatInclusive remains the boolean; vatTag on list/detail is the classification string (inferred vatable/exempt when omitted). GET /mobile/expenses/summary returns a full category breakdown (expanding list topCategories). GET /mobile/inventory/summary?start=YYYY-MM-DD&end=YYYY-MM-DD returns opening/closing rawMaterials, workInProgress, finishedGoods, total as decimal strings (NGN). Asset purchase/sale and inventory add/restock/sell sync into /expenses and /sales without a second cash/bank journal when the source already posted.\n\nTax filings (mobile): 12-step workspace on tax_payables — GET/PUT /filings/{vat|wht|pit|cit}/workspace, confirm-computation, validate (TaxGPT), generate-documents, package; POST /filings/{id}/complete (step 12). Pending workspaces appear in GET /filings with completionPercent from currentStep/12. PIT/CIT: POST /pit|cit/draft for reliefs/adjustments; calculation honours draft + frozen snapshot. VAT: inputVatBroughtForward from prior month credit; WHT schedule from beneficiary PAYMENT rows. Submit all types accepts submissionReference. Reports: PIT Return Summary, CIT Return Summary added. VAT/WHT monthly; PIT annual (due 31 Mar); CIT annual NTA 2025 (due 30 Jun, periodMonth=12). Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents — phone and TIN unique per user (409 DUPLICATE_CONTACT on duplicate). Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents — same phone/TIN uniqueness rules. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nPAYE (Universal Nigeria PAYE Formula 2026): AGI = 12×(basic+housing+transport+meal+otherAllowances+otherTaxableIncome); pension 8% on basic+housing+transport; NHF 2.5% of basic; NHIS monthly×12; rent relief MIN(20%×annualRent, ₦500k); otherAllowableDeductions (annual). Tax dashboard PAYE sums /employees first; employmentGrossSalaryMonthly is legacy fallback only.\n\nBusiness profile & tax eligibility: GET/PUT /mobile/user/business-profile — sector, totalFixedAssets, annualGrossTurnover (NGN JSON numbers), professionalService (boolean|null) or providesProfessionalServices (YES|NO|NOT_SURE), primaryBusinessActivity; partial PUT (omitted keys unchanged, JSON null clears). GET /mobile/user/tax-eligibility-profile — CIT/VAT classifications. CIT small/large inputs: fixed assets from registered assets on books when present, else signup totalFixedAssets; turnover from signup annualGrossTurnover until business is 12+ months old with sales/expense transactions, then trailing-12-month sales (eligibility) or annual sales for filing year (CIT calculation). taxEligibility.inputs.turnoverSource: profile | books | transactions. Onboarding POST …/step/business-details accepts same optional LTD/tax fields. Tax computation cit/vat blocks include citClassification and vatClassification from eligibility engine.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -158,6 +158,16 @@
     {
       "key": "listDateTo",
       "value": ""
+    },
+    {
+      "key": "inventoryPeriodStart",
+      "value": "2026-08-01",
+      "description": "Inclusive start (YYYY-MM-DD) for GET /mobile/inventory/summary"
+    },
+    {
+      "key": "inventoryPeriodEnd",
+      "value": "2026-08-31",
+      "description": "Inclusive end (YYYY-MM-DD) for GET /mobile/inventory/summary"
     },
     {
       "key": "bookPeriod",
@@ -587,7 +597,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/contacts-and-types",
-                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, …). Duplicate of User * → Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
+                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, purchaseOrigins, purchaseKinds, vatTags, …). Duplicate of User * → Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
               }
             },
             {
@@ -812,7 +822,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/contacts-and-types",
-                "description": "contacts[] + types including expenseCategories, expenseTypes (suggested OPEX, COGS, CAPEX, Tax), saleCategories, paymentTypes, employmentTypes. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
+                "description": "contacts[] + types including expenseCategories, expenseTypes (suggested OPEX, COGS, CAPEX, Tax), saleCategories, paymentTypes, employmentTypes, purchaseOrigins (local|import|unknown), purchaseKinds (goods|inventory_item|service|fixed_asset), vatTags (vatable|zero_rated|exempt). Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
               }
             },
             {
@@ -1248,7 +1258,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20&status=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Paginated sales. Each row includes totalAmount, invoiceAmountPaid, amountPaid, outstandingBalance (totalAmount − paid), and computed status. summary.totalIncome is ex-VAT (amount); summary.vatCollected is Output VAT. counts: paid, pending, partial, overdue, inProgress, cancelled. Filter status=all|PAID|IN_PROGRESS|Pending|Partial|Overdue|CANCELLED."
+                "description": "Paginated sales. Each row includes totalAmount, invoiceAmountPaid, amountPaid, outstandingBalance (totalAmount − paid), computed status, and vatTag (vatable|zero_rated|exempt). summary.totalIncome is ex-VAT (amount); summary.vatCollected is Output VAT. counts: paid, pending, partial, overdue, inProgress, cancelled. Filter status=all|PAID|IN_PROGRESS|Pending|Partial|Overdue|CANCELLED. Asset sales and inventory sells also appear here when synced."
               },
               "event": [
                 {
@@ -1288,7 +1298,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Includes status (computed for Invoice sales), paymentType, totalAmount, invoiceAmountPaid, amountPaid, outstandingBalance (= totalAmount − amountPaid), settlementBankCode, paymentConfirmedAt (ISO or null)."
+                "description": "Includes status (computed for Invoice sales), paymentType, totalAmount, invoiceAmountPaid, amountPaid, outstandingBalance (= totalAmount − amountPaid), vatTag (vatable|zero_rated|exempt), vatInclusive, vatableIncome, settlementBankCode, paymentConfirmedAt (ISO or null)."
               }
             },
             {
@@ -1333,10 +1343,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Cash → invoiceAmountPaid.total = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top. Prefer customer:{id,name} from Customer Directory when {{customerId}} is set.",
+                "description": "Cash → invoiceAmountPaid.total = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top. Optional vatTag: vatable|zero_rated|exempt (inferred from VAT flags when omitted). Prefer customer:{id,name} from Customer Directory when {{customerId}} is set.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customer\": {\n    \"id\": \"{{customerId}}\",\n    \"name\": \"John Doe\"\n  }\n}"
+                  "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"vatTag\": \"exempt\",\n  \"serviceIncome\": false,\n  \"customer\": {\n    \"id\": \"{{customerId}}\",\n    \"name\": \"John Doe\"\n  }\n}"
                 }
               },
               "event": [
@@ -1365,7 +1375,7 @@
                 "description": "Card -> status IN_PROGRESS (AR only until confirm). Optional bankCode on create presets settlement account for confirm. Confirm: PATCH /sales/:id/payment-status with status PAID and optional bankCode (Card falls back to CARD_SETTLEMENT ledger if omitted).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Consulting fee\",\n  \"amount\": 3000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Card\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": true,\n  \"customerName\": \"Acme Ltd\",\n  \"itemName\": \"Advisory package\"\n}"
+                  "raw": "{\n  \"description\": \"Consulting fee\",\n  \"amount\": 3000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Card\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"vatTag\": \"vatable\",\n  \"serviceIncome\": true,\n  \"customerName\": \"Acme Ltd\",\n  \"itemName\": \"Advisory package\"\n}"
                 }
               },
               "event": [
@@ -1394,7 +1404,7 @@
                 "description": "Transfer -> IN_PROGRESS (full amount in AR until confirm). Optional bankCode — posts to BANK:{bankCode} when set, else aggregate BANK on confirm.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Bank transfer sale\",\n  \"amount\": 50000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Transfer\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customerName\": \"XYZ Ventures\"\n}"
+                  "raw": "{\n  \"description\": \"Bank transfer sale\",\n  \"amount\": 50000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Transfer\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"vatTag\": \"zero_rated\",\n  \"serviceIncome\": false,\n  \"customerName\": \"XYZ Ventures\"\n}"
                 }
               },
               "event": [
@@ -1423,7 +1433,7 @@
                 "description": "Invoice → status calculated: Pending, Partial, PAID, or Overdue from invoiceAmountPaid.total vs totalAmount + invoiceDueDate. After partial payments, GET sale and download-invoice show amountPaid and outstandingBalance.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Invoice billed sale\",\n  \"amount\": 75000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": true,\n  \"vatInclusive\": false,\n  \"serviceIncome\": true,\n  \"customerName\": \"ABC Limited\",\n  \"customerId\": \"cust-001\"\n}"
+                  "raw": "{\n  \"description\": \"Invoice billed sale\",\n  \"amount\": 75000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": true,\n  \"vatInclusive\": false,\n  \"vatTag\": \"vatable\",\n  \"serviceIncome\": true,\n  \"customerName\": \"ABC Limited\",\n  \"customerId\": \"cust-001\"\n}"
                 }
               },
               "event": [
@@ -1449,10 +1459,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/bulk",
-                "description": "Bulk create: default Transfer -> PAID (posts to Bank). Explicit Cash -> PAID. Card -> IN_PROGRESS. Invoice rows keep calculated status. Optional bankCode per Transfer item. Max 100 items.",
+                "description": "Bulk create: default Transfer -> PAID (posts to Bank). Explicit Cash -> PAID. Card -> IN_PROGRESS. Invoice rows keep calculated status. Optional bankCode and vatTag per item. Max 100 items.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive) — PAID\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk cash sale — PAID on create\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive) — PAID\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"vatTag\": \"vatable\",\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk cash sale — PAID on create\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"vatTag\": \"exempt\",\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
                 }
               }
             },
@@ -1494,10 +1504,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Partial update; ledger sync in same transaction. Transfer invoice lines: bankCode optional (defaults to aggregate BANK or sale settlementBankCode).",
+                "description": "Partial update; ledger sync in same transaction. Transfer invoice lines: bankCode optional (defaults to aggregate BANK or sale settlementBankCode). Optional vatTag: vatable|zero_rated|exempt.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"invoiceAmountPaid\": {\n    \"total\": 20000,\n    \"items\": [\n      {\n        \"amount\": 20000,\n        \"paymentType\": \"Transfer\",\n        \"bankCode\": \"{{bankCode}}\"\n      }\n    ]\n  },\n  \"vatInclusive\": false,\n  \"vatableIncome\": true\n}"
+                  "raw": "{\n  \"description\": \"Updated sale description\",\n  \"amount\": 52000,\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"invoiceAmountPaid\": {\n    \"total\": 20000,\n    \"items\": [\n      {\n        \"amount\": 20000,\n        \"paymentType\": \"Transfer\",\n        \"bankCode\": \"{{bankCode}}\"\n      }\n    ]\n  },\n  \"vatInclusive\": false,\n  \"vatableIncome\": true,\n  \"vatTag\": \"vatable\"\n}"
                 }
               }
             },
@@ -1553,7 +1563,7 @@
               }
             }
           ],
-          "description": "Mobile sales / income. bankCode optional everywhere: Transfer confirm -> BANK or BANK:{bankCode}; Card -> CARD_SETTLEMENT or mapped bank. settlementBankCode stored when bankCode provided."
+          "description": "Mobile sales / income. Optional vatTag (vatable|zero_rated|exempt). bankCode optional everywhere: Transfer confirm -> BANK or BANK:{bankCode}; Card -> CARD_SETTLEMENT or mapped bank. settlementBankCode stored when bankCode provided. Inventory sell and asset sale also sync rows here."
         },
         {
           "name": "Expenses *",
@@ -1574,7 +1584,15 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Each expense row includes expenseType (any string)."
+                "description": "Each expense row includes expenseType, purchaseOrigin (local|import|unknown), purchaseKind (goods|inventory_item|service|fixed_asset), vatTag (vatable|zero_rated|exempt), and vatInclusive. topCategories is a truncated view — use GET /expenses/summary for the full breakdown. Asset purchases and inventory add/restock also appear here when synced."
+              }
+            },
+            {
+              "name": "Expense category summary *",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/summary",
+                "description": "Complete category breakdown of live expenses (voided/reversed excluded). Returns summary { totalExpenses, vatClaimable, totalExpensesIncludingVat } plus categories[] with category, amount, amountIncludingVat, count, percentageOfTotal — expanding list topCategories."
               }
             },
             {
@@ -1582,7 +1600,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Includes expenseType, baseAmount, vatAmount, total, supplier fields, settlementBankCode, paymentConfirmedAt."
+                "description": "Includes expenseType, purchaseOrigin, purchaseKind, vatTag, vatInclusive, baseAmount, vatAmount, total, supplier fields, settlementBankCode, paymentConfirmedAt."
               }
             },
             {
@@ -1611,10 +1629,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false,\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Supplies\"\n  }\n}"
+                  "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"purchaseOrigin\": \"local\",\n  \"purchaseKind\": \"goods\",\n  \"vatTag\": \"exempt\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false,\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Supplies\"\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Transfer -> IN_PROGRESS (AP until confirm). Optional bankCode — confirm posts to BANK or BANK:{bankCode}."
+                "description": "Transfer -> IN_PROGRESS (AP until confirm). Optional bankCode — confirm posts to BANK or BANK:{bankCode}. Optional purchaseOrigin (local|import|unknown), purchaseKind (goods|inventory_item|service|fixed_asset), vatTag (vatable|zero_rated|exempt)."
               }
             },
             {
@@ -1631,7 +1649,7 @@
                 "description": "Invoice -> status calculated: Pending (nothing paid), Partial, PAID, or Overdue from invoiceAmountPaid.total + invoiceDueDate.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Vendor bill\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"invoiceAmountPaid\": {\n    \"total\": 0,\n    \"items\": []\n  },\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"vatInclusive\": false\n}"
+                  "raw": "{\n  \"description\": \"Vendor bill\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-07\",\n  \"invoiceAmountPaid\": {\n    \"total\": 0,\n    \"items\": []\n  },\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"vatInclusive\": false,\n  \"purchaseOrigin\": \"import\",\n  \"purchaseKind\": \"inventory_item\",\n  \"vatTag\": \"zero_rated\"\n}"
                 }
               }
             },
@@ -1647,7 +1665,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Google Ads\",\n  \"amount\": 25000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Marketing\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Cash\",\n  \"vatInclusive\": true\n}"
+                  "raw": "{\n  \"description\": \"Google Ads\",\n  \"amount\": 25000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Marketing\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Cash\",\n  \"vatInclusive\": true,\n  \"purchaseOrigin\": \"local\",\n  \"purchaseKind\": \"service\",\n  \"vatTag\": \"vatable\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
                 "description": "Cash -> status PAID with invoiceAmountPaid covering the total. vatInclusive amount is gross (Base = Total / 1.075)."
@@ -1664,10 +1682,10 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/bulk",
-                "description": "Bulk create: default Transfer -> PAID (posts to Bank). Explicit Cash -> PAID. Card -> IN_PROGRESS. Invoice rows keep calculated status. Max 100 items.",
+                "description": "Bulk create: default Transfer -> PAID (posts to Bank). Explicit Cash -> PAID. Card -> IN_PROGRESS. Invoice rows keep calculated status. Optional purchaseOrigin, purchaseKind, vatTag per item. Max 100 items.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer expense (VAT inclusive) — PAID\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatInclusive\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Ads — Cash PAID\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false\n    },\n    {\n      \"description\": \"Vendor invoice (calculated status)\",\n      \"amount\": 30000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-15\",\n      \"invoiceAmountPaid\": {\n        \"total\": 5000,\n        \"items\": [\n          {\n            \"amount\": 5000,\n            \"paymentType\": \"Transfer\",\n            \"bankCode\": \"{{bankCode}}\"\n          }\n        ]\n      },\n      \"vatInclusive\": false\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer expense (VAT inclusive) — PAID\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatInclusive\": true,\n      \"purchaseOrigin\": \"local\",\n      \"purchaseKind\": \"service\",\n      \"vatTag\": \"vatable\",\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Ads — Cash PAID\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false,\n      \"purchaseOrigin\": \"unknown\",\n      \"purchaseKind\": \"service\",\n      \"vatTag\": \"exempt\"\n    },\n    {\n      \"description\": \"Vendor invoice (calculated status)\",\n      \"amount\": 30000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-15\",\n      \"invoiceAmountPaid\": {\n        \"total\": 5000,\n        \"items\": [\n          {\n            \"amount\": 5000,\n            \"paymentType\": \"Transfer\",\n            \"bankCode\": \"{{bankCode}}\"\n          }\n        ]\n      },\n      \"vatInclusive\": false,\n      \"purchaseOrigin\": \"import\",\n      \"purchaseKind\": \"goods\",\n      \"vatTag\": \"zero_rated\"\n    }\n  ]\n}"
                 }
               }
             },
@@ -1683,10 +1701,10 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 6000,\n        \"paymentType\": \"Transfer\",\n        \"bankCode\": \"{{bankCode}}\"\n      },\n      {\n        \"amount\": 4000,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"vatInclusive\": false\n}"
+                  "raw": "{\n  \"description\": \"Google Ads (updated)\",\n  \"amount\": 26000,\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-03-15\",\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 6000,\n        \"paymentType\": \"Transfer\",\n        \"bankCode\": \"{{bankCode}}\"\n      },\n      {\n        \"amount\": 4000,\n        \"paymentType\": \"Card\"\n      }\n    ]\n  },\n  \"vatInclusive\": false,\n  \"purchaseOrigin\": \"local\",\n  \"purchaseKind\": \"service\",\n  \"vatTag\": \"exempt\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/{{expenseId}}",
-                "description": "Partial update with ledger sync. bankCode optional on Transfer/Card invoice lines."
+                "description": "Partial update with ledger sync. bankCode optional on Transfer/Card invoice lines. Optional purchaseOrigin, purchaseKind, vatTag."
               }
             },
             {
@@ -1744,7 +1762,7 @@
               }
             }
           ],
-          "description": "Expenses. bankCode optional: Transfer -> BANK or BANK:{bankCode}; Card -> CARD_SETTLEMENT or mapped bank."
+          "description": "Expenses. Optional purchaseOrigin (local|import|unknown), purchaseKind (goods|inventory_item|service|fixed_asset), vatTag (vatable|zero_rated|exempt). bankCode optional: Transfer -> BANK or BANK:{bankCode}; Card -> CARD_SETTLEMENT or mapped bank. GET /summary is a full category breakdown. Asset/inventory purchases sync here without a second ledger post."
         },
         {
           "name": "Inventory *",
@@ -1755,6 +1773,14 @@
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/overview",
                 "description": "totalStockValue, lowStockAlertCount, lowStockItems, topSelling (units last 120d), slowMoving (no sale 45d+ after 45d grace for new products), movingLowPreview (velocity, same grace), stats: potentialRevenue, stockCost, potentialProfit, averageMarginPct."
+              }
+            },
+            {
+              "name": "Period summary (opening / closing) *",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/summary?start={{inventoryPeriodStart}}&end={{inventoryPeriodEnd}}",
+                "description": "Historical inventory for a period. Required query: start, end (YYYY-MM-DD, inclusive). Response: period { from, to }, currency NGN, opening and closing each with rawMaterials, workInProgress, finishedGoods, total as decimal strings (e.g. \"400000.00\"). Category names matching raw material / WIP map to those buckets; all other items are finishedGoods. Valued at current purchaseCost × reconstructed quantity from movements."
               }
             },
             {
@@ -1805,7 +1831,7 @@
                   "raw": "{\n  \"lines\": [\n    {\n      \"inventoryItemId\": \"{{inventoryItemId}}\",\n      \"quantity\": 1\n    }\n  ],\n  \"customer\": {\n    \"id\": \"{{customerId}}\",\n    \"name\": \"John Doe\"\n  },\n  \"createSalesInvoice\": true,\n  \"paymentType\": \"Invoice\",\n  \"saleDate\": \"2026-07-24\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": true,\n  \"serviceIncome\": false,\n  \"saleCategory\": \"Product Sales\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Creates linked Sale with invoiceDueDate. Use customer:{id,name} from Customer Directory. VAT-inclusive uses Base = Total/1.075."
+                "description": "Creates a Sale on /sales (always). createSalesInvoice: true also posts sale recognition to the ledger (same as before). Use customer:{id,name} from Customer Directory. VAT-inclusive uses Base = Total/1.075."
               }
             },
             {
@@ -1823,7 +1849,7 @@
                   "raw": "{\"lines\":[{\"inventoryItemId\":\"{{inventoryItemId}}\",\"quantity\":1}],\"customerName\":\"Walk-in\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Omits createSalesInvoice — only inventory_sale + movements; no row in mobile /sales."
+                "description": "Omits createSalesInvoice. Still writes a /sales row for the inventory sale (sync) but does not post sale recognition. Stock movement is unchanged."
               }
             },
             {
@@ -1852,7 +1878,7 @@
                   "raw": "{\"name\":\"Widget A\",\"category\":\"Electronics\",\"purchaseCost\":5000,\"sellingPrice\":8500,\"openingQuantity\":100,\"lowStockAlertLevel\":10,\"supplierName\":\"Wholesale Co\",\"supplierId\":\"sup-inv-1\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items",
-                "description": "Duplicate name (case-insensitive) per user returns 409: An inventory item with this name already exists."
+                "description": "Duplicate name (case-insensitive) per user returns 409: An inventory item with this name already exists. Opening quantity > 0 also syncs a COGS expense (purchaseKind inventory_item, vatTag exempt) on /expenses without a cash/bank journal. Use category names like \"Raw Materials\" or \"WIP\" for inventory/summary buckets; others map to finishedGoods."
               }
             },
             {
@@ -1924,7 +1950,7 @@
                   "raw": "{\"quantity\":25,\"note\":\"Purchase order PO-1024\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/restock",
-                "description": "Adds quantity. Movement type RESTOCK. Returns updated item detail."
+                "description": "Adds quantity. Movement type RESTOCK. Returns updated item detail. Also syncs a COGS expense (qty × purchaseCost, purchaseKind inventory_item) on /expenses without a cash/bank journal."
               }
             },
             {
@@ -2109,7 +2135,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets",
-                "description": "POST /mobile/assets. depreciationMethod required. residualValue required and must be < purchaseCost. Example body is REDUCING_BALANCE; see sibling requests for other methods.",
+                "description": "POST /mobile/assets. depreciationMethod required. residualValue required and must be < purchaseCost. Example body is REDUCING_BALANCE; see sibling requests for other methods. Also syncs a CAPEX expense (purchaseKind fixed_asset, vatTag exempt, convertedToAssetId set) on /expenses without a second ledger post.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assetType\": \"COMPUTER_IT\",\n  \"assetName\": \"MacBook Pro M4\",\n  \"purchaseDate\": \"2026-07-09\",\n  \"purchaseCost\": 2500000,\n  \"vendor\": \"Apple Store\",\n  \"evidenceUrl\": \"https://example.com/invoice.pdf\",\n  \"depreciationMethod\": \"REDUCING_BALANCE\",\n  \"usefulLife\": 5,\n  \"depreciationRate\": 20,\n  \"residualValue\": 250000,\n  \"serialNumber\": \"MBP-2026-001\",\n  \"assetLocation\": \"Head Office\",\n  \"additionalNote\": \"Assigned to the engineering department.\",\n  \"assignToConsultant\": false\n}"
@@ -2322,7 +2348,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/sales",
-                "description": "Required: assetId, saleDate, salePrice, buyer. Server computes bookValue, gainLossType (GAIN|LOSS|BREAK_EVEN), gainLossAmount. Marks asset SOLD.",
+                "description": "Required: assetId, saleDate, salePrice, buyer. Server computes bookValue, gainLossType (GAIN|LOSS|BREAK_EVEN), gainLossAmount. Marks asset SOLD. Also syncs a /sales row (vatTag exempt) without a second sale journal — asset sale journals already posted.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"assetId\": \"{{assetId}}\", \"saleDate\": \"2026-07-09\", \"salePrice\": 9500000, \"buyer\": \"ABC Logistics Ltd\"}"
@@ -4470,7 +4496,7 @@
                 "description": "Uses customer:{id,name} validated against Customer Directory. Rejects if customer.id not found.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Directory-linked sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-08-18\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false,\n  \"customer\": {\n    \"id\": \"{{customerId}}\",\n    \"name\": \"John Doe\"\n  }\n}"
+                  "raw": "{\n  \"description\": \"Directory-linked sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-08-18\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"vatTag\": \"exempt\",\n  \"serviceIncome\": false,\n  \"customer\": {\n    \"id\": \"{{customerId}}\",\n    \"name\": \"John Doe\"\n  }\n}"
                 }
               },
               "event": [
@@ -4499,7 +4525,7 @@
                 "description": "Uses supplier:{id,name} validated against Supplier Directory.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"description\": \"Directory-linked expense\",\n  \"amount\": 15000,\n  \"category\": \"Tools & Software\",\n  \"date\": \"2026-08-18\",\n  \"vatInclusive\": false,\n  \"paymentType\": \"Transfer\",\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Supplies\"\n  }\n}"
+                  "raw": "{\n  \"description\": \"Directory-linked expense\",\n  \"amount\": 15000,\n  \"category\": \"Tools & Software\",\n  \"date\": \"2026-08-18\",\n  \"vatInclusive\": false,\n  \"paymentType\": \"Transfer\",\n  \"purchaseOrigin\": \"local\",\n  \"purchaseKind\": \"service\",\n  \"vatTag\": \"exempt\",\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Supplies\"\n  }\n}"
                 }
               },
               "event": [
@@ -4526,7 +4552,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/sell",
-                "description": "Inventory sell with customer:{id,name}. Same Customer Directory ID carried to linked Sale when createSalesInvoice is true.",
+                "description": "Inventory sell with customer:{id,name}. Always syncs a /sales row; createSalesInvoice true also posts sale recognition. Same Customer Directory ID carried to linked Sale.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"lines\": [{\"inventoryItemId\": \"{{inventoryItemId}}\", \"quantity\": 1}],\n  \"customer\": {\"id\": \"{{customerId}}\", \"name\": \"John Doe\"},\n  \"createSalesInvoice\": true,\n  \"paymentType\": \"Cash\",\n  \"saleDate\": \"2026-08-18\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"serviceIncome\": false\n}"
@@ -7481,7 +7507,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/contacts-and-types",
-                "description": "Enterprise lookup types including expenseCategories and expenseTypes (suggested OPEX, COGS, CAPEX, Tax). Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
+                "description": "Enterprise lookup types including expenseCategories and expenseTypes (suggested OPEX, COGS, CAPEX, Tax), purchaseOrigins, purchaseKinds, vatTags. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
               }
             },
             {

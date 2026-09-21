@@ -2,6 +2,7 @@ import { check, body } from "express-validator";
 import { handleValidation } from "../errorHandler";
 import { optionalMonetaryAmount } from "./monetaryAmountValidation";
 import { optionalInvoiceAmountPaidValidation } from "./invoiceAmountPaidValidation";
+import { VAT_TAGS } from "../../constants/purchaseDescriptors";
 
 const PAYMENT_TYPES = ["Cash", "Transfer", "Invoice", "Card"];
 
@@ -43,6 +44,10 @@ export const updateSaleValidation = [
     return true;
   }),
   check("serviceIncome").optional().isBoolean(),
+  check("vatTag")
+    .optional()
+    .isIn([...VAT_TAGS])
+    .withMessage(`vatTag must be one of: ${VAT_TAGS.join(", ")}`),
   check("status")
     .optional()
     .isIn([
