@@ -18,6 +18,10 @@ export const validateAddInventoryItem = [
     .withMessage("lowStockAlertLevel must be non-negative"),
   check("supplierName").optional().trim().isString(),
   check("supplierId").optional().trim().isString(),
+  check("acquisitionCost")
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage("acquisitionCost must be a non-negative number"),
   handleValidation,
 ];
 
@@ -118,6 +122,10 @@ export const validateInventoryAdjustment = [
     .isString()
     .isLength({ min: 1, max: 255 })
     .withMessage("expenseCategory must be 1–255 characters when provided"),
+  check("acquisitionCost")
+    .optional()
+    .isFloat({ min: 0 })
+    .withMessage("acquisitionCost must be a non-negative number"),
   handleValidation,
 ];
 

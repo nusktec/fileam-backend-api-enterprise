@@ -1,16 +1,18 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
-import { taxComputationService } from "./taxComputationService";
+import { computeVatFigures } from "./vatWhtOverviewService";
+import { monthLabelFromKey } from "../../utils/lagosCalendar";
 import { FILING_TIMELINE_EVENTS } from "../../constants/filings";
 import { WORKSPACE_TIMELINE_EVENTS } from "../../constants/filingWorkspace";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
-import { getVatInputBroughtForward, copyCarryForwardOnSubmit } from "./filingCarryForwardService";
+import { copyCarryForwardOnSubmit } from "./filingCarryForwardService";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 export const vatFilingService = {
   async getCalculation(userId: string, year: number, month: number) {
-    const [computation, draft, existing, priorCredit] = await Promise.all([
-      taxComputationService.getForPeriod(userId, year, month),
+    const periodKey = `${year}-${String(month).padStart(2, "0")}`;
+    const [figures, draft, existing] = await Promise.all([
+      computeVatFigures(userId, periodKey),
       prisma.filingDraft.findUnique({
         where: {
           userId_taxType_periodYear_periodMonth: {
@@ -31,8 +33,13 @@ export const vatFilingService = {
           },
         },
       }),
-      getVatInputBroughtForward(userId, year, month),
     ]);
+
+    const period = {
+      year,
+      month,
+      label: monthLabelFromKey(periodKey),
+    };
 
     if (existing?.frozen && existing.computation) {
       const frozen = existing.computation as {
@@ -42,7 +49,7 @@ export const vatFilingService = {
         inputVatBroughtForward?: number;
       };
       return {
-        period: computation.period,
+        period,
         stateOfOperation:
           existing.stateOfOperation ?? draft?.stateOfOperation ?? null,
         vatRegistrationNumber:
@@ -63,29 +70,26 @@ export const vatFilingService = {
       };
     }
 
-    const inputVatBroughtForward = priorCredit.inputVatBroughtForward;
-    const inputVatClaimable = normalizeMoneyAmount(
-      computation.vat.inputVatClaimable + inputVatBroughtForward,
-    );
-    const netVatPayable = normalizeMoneyAmount(
-      computation.vat.outputVat - inputVatClaimable,
-    );
-
     return {
-      period: computation.period,
+      period,
       stateOfOperation: draft?.stateOfOperation ?? null,
       vatRegistrationNumber: draft?.vatRegistrationNumber ?? null,
-      outputVat: computation.vat.outputVat,
-      inputVatClaimable,
-      netVatPayable,
-      inputVatBroughtForward,
+      vatableSales: figures.vatableSales,
+      nonVatableSales: figures.nonVatableSales,
+      totalSales: figures.totalSales,
+      outputVat: figures.outputVat,
+      inputVatClaimable: figures.inputVatClaimable,
+      netVatPayable: figures.netVatPayable,
+      salesInvoiceCount: figures.salesInvoiceCount,
+      purchaseInvoiceCount: figures.purchaseInvoiceCount,
+      rate: figures.rate,
       alreadyFiled: existing?.submittedAt != null,
       filingId: existing?.submittedAt != null ? existing.id : null,
-      nilReturn: netVatPayable === 0,
+      nilReturn: figures.netVatPayable === 0,
       breakdown: {
-        outputVat: computation.vat.outputVat,
-        inputVatClaimable,
-        netVatPayable,
+        outputVat: figures.outputVat,
+        inputVatClaimable: figures.inputVatClaimable,
+        netVatPayable: figures.netVatPayable,
       },
     };
   },

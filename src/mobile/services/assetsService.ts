@@ -23,6 +23,7 @@ import {
 import { PERCENT } from "../../constants/percentages";
 import { computeInventoryLineValue } from "../../constants/inventory";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import { lagosYear } from "../../utils/lagosCalendar";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
 import {
   assertMonetaryAmountInRange,
@@ -38,6 +39,8 @@ import {
 import { coerceInvoiceAmountPaid } from "../../constants/invoiceAmountPaid";
 import { appendAssetHistory } from "./assetHistoryHelper";
 import { prepaymentsService } from "./prepaymentsService";
+import { CAPITAL_ALLOWANCE_TABLE_I } from "../../constants/capitalAllowance";
+import { capitalAllowanceService } from "./capitalAllowanceService";
 import {
   syncPurchaseToExpense,
   syncSaleRecord,
@@ -738,6 +741,8 @@ function mapAssetRow(
     undoReason?: string | null;
     reversingEntryId?: string | null;
     reversingEntryDate?: Date | null;
+    expenditureType?: string | null;
+    businessUsePercent?: { toNumber?: () => number } | number | string | null;
     createdAt: Date;
     updatedAt: Date;
   },
@@ -785,6 +790,18 @@ function mapAssetRow(
     assignedConsultantId: asset.assignedConsultantId ?? null,
     consultantReviewStatus: asset.consultantReviewStatus,
     status: asset.status,
+    expenditureType: asset.expenditureType ?? null,
+    expenditureTypeLabel: asset.expenditureType
+      ? capitalAllowanceService.expenditureTypeLabel(
+          asset.expenditureType,
+          CAPITAL_ALLOWANCE_TABLE_I.map((r) => ({
+            id: r.expenditureType,
+            label: r.expenditureTypeLabel,
+          })),
+        )
+      : null,
+    businessUsePercent:
+      asset.businessUsePercent != null ? d(asset.businessUsePercent as never) : null,
     undo: mapUndoPayload(asset),
     createdAt: asset.createdAt.toISOString(),
     updatedAt: asset.updatedAt.toISOString(),
@@ -846,6 +863,8 @@ export const assetsService = {
       assetLocation?: string;
       additionalNote?: string;
       assignToConsultant?: boolean;
+      expenditureType: string;
+      businessUsePercent: number;
     },
   ) {
     assertMonetaryAmountInRange(data.purchaseCost, "purchaseCost");
@@ -895,6 +914,8 @@ export const assetsService = {
           assetLocation: data.assetLocation?.trim() || null,
           additionalNote: data.additionalNote?.trim() || null,
           assignToConsultant,
+          expenditureType: data.expenditureType,
+          businessUsePercent: dec(data.businessUsePercent),
           consultantReviewStatus: assignToConsultant
             ? CONSULTANT_REVIEW_STATUS.AWAITING
             : null,
@@ -1204,7 +1225,7 @@ export const assetsService = {
   },
 
   async dashboard(userId: string) {
-    const [assets, pendingReviews, current] = await Promise.all([
+    const [assets, pendingReviews, current, ca] = await Promise.all([
       prisma.asset.findMany({
         where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
       }),
@@ -1219,6 +1240,7 @@ export const assetsService = {
         },
       }),
       buildCurrentAssetsSnapshot(userId),
+      capitalAllowanceService.getSchedule(userId, lagosYear()),
     ]);
 
     const now = new Date();
@@ -1268,7 +1290,7 @@ export const assetsService = {
       plImpact: {
         annualDepreciationCharge: normalizeMoneyAmount(annualDepreciation),
         softwareAmortization: normalizeMoneyAmount(softwareAmortization),
-        capitalAllowance: 0,
+        capitalAllowance: ca.summary.totalAllowance,
         netTaxBenefit: 0,
       },
     };

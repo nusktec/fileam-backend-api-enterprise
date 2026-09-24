@@ -28,6 +28,10 @@ model Asset {
   consultantReviewStatus String?  @map("consultant_review_status")
   /** ACTIVE | SOLD | DISPOSED | voided | reversed */
   status                 String   @default("ACTIVE")
+  /** Statutory Table I id. Null only for assets created before this field. */
+  expenditureType        String?  @map("expenditure_type")
+  /** 0-100. Null only for assets created before this field. */
+  businessUsePercent     Decimal? @map("business_use_percent") @db.Decimal(5, 2)
   undoAt                 DateTime? @map("undo_at")
   undoReason             String?   @map("undo_reason")
   reversingEntryId       String?   @map("reversing_entry_id")

@@ -4,13 +4,14 @@ import {
   amountsMatch,
   citDueDateForYear,
   citYearEndForYear,
-  computeCapitalAllowanceForAsset,
   computeCitFromSnapshot,
   CIT_PERIOD_MONTH,
   isCitYearOpenForFiling,
   isProfessionalServicesBusiness,
+  type CitAllowanceRow,
   type CitComputationSnapshot,
 } from "../../constants/citFiling";
+import { capitalAllowanceService } from "./capitalAllowanceService";
 import { PERCENT, WHT_RATE_SERVICES_PERCENT } from "../../constants/percentages";
 import { isFinalWhtPayerCategory, normalizePayerCategory } from "../../constants/pitFiling";
 import { HttpReplyError } from "../../utils/httpReplyError";
@@ -97,28 +98,23 @@ async function sumPayerWhtCredits(userId: string): Promise<number> {
   return normalizeMoneyAmount(total);
 }
 
-async function buildCapitalAllowanceSchedule(userId: string, year: number) {
-  const rows = await prisma.asset.findMany({
-    where: { userId },
-    orderBy: { purchaseDate: "asc" },
-  });
-  const allowances = [];
-  for (const row of rows) {
-    const allowance = computeCapitalAllowanceForAsset(
-      {
-        id: row.id,
-        name: row.assetName,
-        assetType: row.assetType,
-        cost: d(row.purchaseCost),
-        purchaseDate: row.purchaseDate.toISOString().slice(0, 10),
-        status: row.status,
-      },
-      year,
-    );
-    if (allowance) allowances.push(allowance);
+async function capitalAllowancesForCit(userId: string, year: number): Promise<{
+  available: number;
+  allowances: CitAllowanceRow[];
+}> {
+  const schedule = await capitalAllowanceService.getSchedule(userId, year);
+  if (schedule.use.tax !== "CIT") {
+    return { available: 0, allowances: [] };
   }
-  const available = allowances.reduce((s, a) => s + a.claimedThisYear, 0);
-  return { allowances, available };
+  const allowances: CitAllowanceRow[] = schedule.assets.map((row) => ({
+    id: row.assetId,
+    name: row.name,
+    category: row.expenditureTypeLabel,
+    cost: row.qualifyingCost,
+    annualRate: row.annualRate,
+    claimedThisYear: row.totalAllowance,
+  }));
+  return { available: schedule.summary.totalAllowance, allowances };
 }
 
 function validateSubmitBody(
@@ -260,7 +256,7 @@ export const citFilingService = {
     ] = await Promise.all([
       sumAnnualTurnoverAndProfit(userId, year),
       assetsService.dashboard(userId),
-      buildCapitalAllowanceSchedule(userId, year),
+      capitalAllowancesForCit(userId, year),
       sumPayerWhtCredits(userId),
       userService.getBusinessProfile(userId),
       prisma.business.findFirst({ where: { userId } }),
@@ -353,13 +349,7 @@ export const citFilingService = {
       (dashboard.plImpact.annualDepreciationCharge ||
         dashboard.summary.annualDepreciation ||
         0);
-    const caFromSchedule = caSchedule.available > 0
-      ? caSchedule.available
-      : taxComp.cit.capitalAllowances ||
-        dashboard.plImpact.capitalAllowance ||
-        0;
-    const capitalAllowancesAvailable =
-      caFromSchedule + (carry?.unutilizedCapitalAllowances ?? 0);
+    const capitalAllowancesAvailable = caSchedule.available;
     const defaultLoss = carry?.unrelievedLoss ?? taxComp.cit.lossCarryForward ?? 0;
     const defaultWht =
       Math.max(booksWht, payerWht) + (carry?.unutilizedWhtCredits ?? 0);

@@ -7,6 +7,8 @@ model InventoryMovement {
   quantityAfter   Decimal  @map("quantity_after") @db.Decimal(14, 2)
   inventorySaleId String?  @map("inventory_sale_id")
   note            String?
+  /** Extra cost of this inbound receipt (freight, delivery). Not per unit. */
+  acquisitionCost Decimal  @default(0) @map("acquisition_cost") @db.Decimal(14, 2)
   createdAt       DateTime @default(now()) @map("created_at")
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)

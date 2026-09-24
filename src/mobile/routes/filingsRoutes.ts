@@ -6,11 +6,13 @@ import {
   getFilingVaultLink,
 } from "../controllers/filingsController";
 import {
+  getVatOverview,
   getVatCalculation,
   createOrUpdateVatDraft,
   submitVatFiling,
 } from "../controllers/vatFilingController";
 import {
+  getWhtOverview,
   getWhtSchedule,
   createOrUpdateWhtDraft,
   submitWhtFiling,
@@ -25,6 +27,10 @@ import {
   submitCitFiling,
   saveCitDraft,
 } from "../controllers/citFilingController";
+import {
+  listCitReports,
+  downloadCitReportFile,
+} from "../controllers/citReportsController";
 import { getMobileTaxFilingConstants } from "../controllers/taxFilingConstantsController";
 import {
   getUnifiedTaxFilingPreview,
@@ -104,11 +110,13 @@ router.get(
 router.get(`/${WORKSPACE_TAX_PARAM}/workspace/package`, getFilingWorkspacePackage);
 
 // VAT (must be before /:id)
+router.get("/vat/overview", getVatOverview);
 router.get("/vat/calculation", getVatCalculation);
 router.post("/vat/draft", express.json(), createOrUpdateVatDraft);
 router.post("/vat/submit", express.json(), submitVatFiling);
 
 // WHT (must be before /:id)
+router.get("/wht/overview", getWhtOverview);
 router.get("/wht/schedule", getWhtSchedule);
 router.post("/wht/draft", express.json(), createOrUpdateWhtDraft);
 router.post("/wht/submit", express.json(), submitWhtFiling);
@@ -122,6 +130,8 @@ router.post("/pit/submit", express.json(), validatePitSubmitBody, submitPitFilin
 router.get("/cit/calculation", validateCitCalculationQuery, getCitCalculation);
 router.post("/cit/draft", express.json(), saveCitDraft);
 router.post("/cit/submit", express.json(), validateCitSubmitBody, submitCitFiling);
+router.get("/cit/reports/files/:reportId", downloadCitReportFile);
+router.get("/cit/reports", listCitReports);
 
 // Filings list and detail
 router.get("/", withPagination(), listFilings);

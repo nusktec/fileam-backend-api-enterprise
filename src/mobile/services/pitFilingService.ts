@@ -36,6 +36,7 @@ import { evidenceVaultService } from "./evidenceVaultService";
 import { taxComputationService } from "./taxComputationService";
 import { sumPayeCreditForYear } from "./employersService";
 import { copyCarryForwardOnSubmit } from "./filingCarryForwardService";
+import { capitalAllowanceService } from "./capitalAllowanceService";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
 
 function d(v: Decimal | number | null | undefined): number {
@@ -444,6 +445,7 @@ function validateSubmitBody(body: Record<string, unknown>): void {
 
   const recomputed = computePitFromSnapshot({
     tradingProfit: Number(computation.tradingProfit),
+    capitalAllowance: Number(computation.capitalAllowance ?? 0),
     otherBusinessIncome: Number(computation.otherBusinessIncome),
     otherPersonalIncome: Number(computation.otherPersonalIncome),
     payerFees: Number(computation.payerFees),
@@ -539,8 +541,21 @@ export const pitFilingService = {
         ? normalizeMoneyAmount(pensionOverride)
         : normalizeMoneyAmount(inputs.pensionContribution + extraPension);
 
+    const caSchedule = await capitalAllowanceService.getSchedule(userId, year);
+    const tradeProfitBeforeAllowance = merged.tradingProfit;
+    const capitalAllowanceAvailable =
+      caSchedule.use.tax === "PIT" ? caSchedule.summary.totalAllowance : 0;
+    const capitalAllowance = Math.min(
+      capitalAllowanceAvailable,
+      Math.max(0, tradeProfitBeforeAllowance),
+    );
+    const tradingProfit = normalizeMoneyAmount(
+      tradeProfitBeforeAllowance - capitalAllowance,
+    );
+
     const snapshot = computePitFromSnapshot({
-      tradingProfit: merged.tradingProfit,
+      tradingProfit,
+      capitalAllowance,
       otherBusinessIncome: merged.otherBusinessIncome,
       otherPersonalIncome: merged.otherPersonalIncome,
       payerFees: merged.payerFeesIncludedInSales ? 0 : inputs.payerFees,
@@ -575,16 +590,16 @@ export const pitFilingService = {
       computation,
       bands: bands as PitBandResult[],
       draftApplied: draftInputs != null,
-      inputs: {
-        tradingProfit: inputs.tradingProfit,
-        employmentTaxable: inputs.employmentTaxable,
-        employmentExempt: inputs.employmentExempt,
-        payerFeesRecorded: inputs.payerFeesRecorded,
-        payerFeesIncludedInSales: merged.payerFeesIncludedInSales,
-        payeCredits: inputs.payeCredits,
-        employerWhtCredits: inputs.employerWhtCredits,
-        payerWhtCredits: inputs.payerWhtCredits,
-      },
+        inputs: {
+          tradingProfit,
+          employmentTaxable: inputs.employmentTaxable,
+          employmentExempt: inputs.employmentExempt,
+          payerFeesRecorded: inputs.payerFeesRecorded,
+          payerFeesIncludedInSales: merged.payerFeesIncludedInSales,
+          payeCredits: inputs.payeCredits,
+          employerWhtCredits: inputs.employerWhtCredits,
+          payerWhtCredits: inputs.payerWhtCredits,
+        },
     };
   },
 

@@ -1,0 +1,26 @@
+model CapitalAllowanceConfig {
+  id                         String    @id @default(uuid())
+  regimeId                   String    @map("regime_id")
+  taxJurisdiction            String    @map("tax_jurisdiction")
+  taxLaw                     String    @map("tax_law")
+  name                       String
+  shortName                  String    @map("short_name")
+  effectiveFrom              DateTime  @map("effective_from") @db.Date
+  effectiveTo                DateTime? @map("effective_to") @db.Date
+  capitalAllowanceClass      String    @map("capital_allowance_class")
+  expenditureType            String    @map("expenditure_type")
+  expenditureTypeLabel       String    @map("expenditure_type_label")
+  annualRate                 Decimal   @map("annual_rate") @db.Decimal(8, 4)
+  calculationMethod          String    @map("calculation_method")
+  initialAllowanceApplicable Boolean   @map("initial_allowance_applicable")
+  initialRate                Decimal   @map("initial_rate") @db.Decimal(8, 4)
+  residualRate               Decimal   @map("residual_rate") @db.Decimal(8, 4)
+  qualifying                 Boolean   @default(true)
+  status                     String    @default("ACTIVE")
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
+
+  @@unique([expenditureType, effectiveFrom])
+  @@index([status, effectiveFrom])
+  @@map("capital_allowance_config")
+}

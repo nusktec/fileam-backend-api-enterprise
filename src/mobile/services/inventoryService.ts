@@ -27,6 +27,13 @@ import {
   invoiceAmountPaidToJson,
 } from "../../constants/invoiceAmountPaid";
 import { HttpReplyError } from "../../utils/httpReplyError";
+import {
+  EMPTY_INVENTORY_COGS,
+  parseInventoryCogsPeriod,
+  type InventoryCogs,
+  type InventoryCogsPeriod,
+} from "../../constants/inventoryCogs";
+import { lagosDateParts, lagosTodayYmd } from "../../utils/lagosCalendar";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
 import { resolveSettlementBankCode } from "../../utils/settlementBank";
@@ -51,6 +58,117 @@ const activeInventoryWhere = { deletedAt: null } as const;
 
 /** 1 + VAT rate (e.g. 1.075) — Base = Total / divisor for VAT-inclusive. */
 const VAT_INCLUSIVE_DIVISOR = 1 + VAT_RATE_PERCENT / PERCENT;
+
+function roundCogs(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function cogsPeriodBounds(period: InventoryCogsPeriod): {
+  startYmd: string | null;
+  endYmd: string;
+} {
+  const today = lagosTodayYmd();
+  const { year, month } = lagosDateParts();
+  if (period === "today") return { startYmd: today, endYmd: today };
+  if (period === "month") {
+    return {
+      startYmd: `${year}-${String(month).padStart(2, "0")}-01`,
+      endYmd: today,
+    };
+  }
+  if (period === "year") return { startYmd: `${year}-01-01`, endYmd: today };
+  return { startYmd: null, endYmd: today };
+}
+
+function computeItemCogs(
+  purchaseCost: number,
+  movements: Array<{
+    type: string;
+    quantityDelta: { toNumber?: () => number } | number;
+    acquisitionCost?: { toNumber?: () => number } | number | null;
+    createdAt: Date;
+  }>,
+  period: InventoryCogsPeriod,
+): InventoryCogs {
+  const { startYmd, endYmd } = cogsPeriodBounds(period);
+  const ordered = [...movements].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+  const layers: { qty: number; unit: number }[] = [];
+  let openingInventory = 0;
+  let purchases = 0;
+  let directAcquisitionCosts = 0;
+  let activity = false;
+  let openingCaptured = startYmd == null;
+
+  const layerValue = () =>
+    roundCogs(layers.reduce((s, layer) => s + layer.qty * layer.unit, 0));
+
+  const consume = (qty: number) => {
+    let remaining = Math.abs(qty);
+    for (const layer of layers) {
+      if (remaining <= 0) break;
+      const take = Math.min(layer.qty, remaining);
+      layer.qty = roundCogs(layer.qty - take);
+      remaining = roundCogs(remaining - take);
+    }
+  };
+
+  for (const movement of ordered) {
+    const ymd = lagosTodayYmd(movement.createdAt);
+    if (!openingCaptured && startYmd && ymd >= startYmd) {
+      openingInventory = layerValue();
+      openingCaptured = true;
+    }
+    if (ymd > endYmd) break;
+
+    const inPeriod = startYmd == null || (ymd >= startYmd && ymd <= endYmd);
+    const qty = Math.abs(d(movement.quantityDelta as never));
+    const acq = d((movement.acquisitionCost ?? 0) as never);
+    const inbound =
+      movement.type === INVENTORY_MOVEMENT_TYPES.OPENING ||
+      movement.type === INVENTORY_MOVEMENT_TYPES.RESTOCK ||
+      movement.type === INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_IN;
+
+    if (inPeriod) activity = true;
+
+    if (inbound) {
+      if (inPeriod) {
+        if (movement.type !== INVENTORY_MOVEMENT_TYPES.OPENING) {
+          purchases = roundCogs(purchases + qty * purchaseCost);
+        }
+        if (
+          movement.type === INVENTORY_MOVEMENT_TYPES.OPENING ||
+          movement.type === INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_IN
+        ) {
+          directAcquisitionCosts = roundCogs(directAcquisitionCosts + acq);
+        }
+      }
+      if (qty > 0) {
+        layers.push({
+          qty,
+          unit: roundCogs((qty * purchaseCost + acq) / qty),
+        });
+      }
+    } else {
+      consume(qty);
+    }
+  }
+
+  if (!openingCaptured) openingInventory = layerValue();
+  const closingInventory = layerValue();
+  if (!activity) return { ...EMPTY_INVENTORY_COGS };
+
+  return {
+    openingInventory: roundCogs(openingInventory),
+    purchases: roundCogs(purchases),
+    directAcquisitionCosts: roundCogs(directAcquisitionCosts),
+    closingInventory: roundCogs(closingInventory),
+    costOfGoodsSold: roundCogs(
+      openingInventory + purchases + directAcquisitionCosts - closingInventory,
+    ),
+  };
+}
 
 /** Only Cash settles on create for inventory-linked sales; Transfer/Card → IN_PROGRESS. */
 function isInventoryLinkedSaleSettledOnCreate(paymentType: string): boolean {
@@ -408,7 +526,7 @@ function emptyStatementBuckets() {
 }
 
 export const inventoryService = {
-  async overview(userId: string) {
+  async overview(userId: string, period: InventoryCogsPeriod = "today") {
     const items = await prisma.inventoryItem.findMany({
       where: { userId, ...activeInventoryWhere },
     });
@@ -536,6 +654,39 @@ export const inventoryService = {
         ? (marginNumerator / marginDenominator) * PERCENT
         : 0;
 
+    const itemIds = items.map((it) => it.id);
+    const allMovements =
+      itemIds.length === 0
+        ? []
+        : await prisma.inventoryMovement.findMany({
+            where: { userId, inventoryItemId: { in: itemIds } },
+            orderBy: { createdAt: "asc" },
+          });
+    const movementsByItem = new Map<string, typeof allMovements>();
+    for (const row of allMovements) {
+      const list = movementsByItem.get(row.inventoryItemId) ?? [];
+      list.push(row);
+      movementsByItem.set(row.inventoryItemId, list);
+    }
+    const cogs = items.reduce(
+      (acc, it) => {
+        const itemCogs = computeItemCogs(
+          d(it.purchaseCost),
+          movementsByItem.get(it.id) ?? [],
+          period,
+        );
+        acc.openingInventory = roundCogs(acc.openingInventory + itemCogs.openingInventory);
+        acc.purchases = roundCogs(acc.purchases + itemCogs.purchases);
+        acc.directAcquisitionCosts = roundCogs(
+          acc.directAcquisitionCosts + itemCogs.directAcquisitionCosts,
+        );
+        acc.closingInventory = roundCogs(acc.closingInventory + itemCogs.closingInventory);
+        acc.costOfGoodsSold = roundCogs(acc.costOfGoodsSold + itemCogs.costOfGoodsSold);
+        return acc;
+      },
+      { ...EMPTY_INVENTORY_COGS },
+    );
+
     return {
       totalStockValue: stockCost,
       lowStockAlertCount: lowStockItems.length,
@@ -551,6 +702,7 @@ export const inventoryService = {
           Math.round(averageMarginPct * PERCENT_TWO_DECIMAL_ROUND) /
           PERCENT_TWO_DECIMAL_ROUND,
       },
+      cogs,
     };
   },
 
@@ -772,7 +924,7 @@ export const inventoryService = {
     };
   },
 
-  async getItemDetail(userId: string, itemId: string) {
+  async getItemDetail(userId: string, itemId: string, period: InventoryCogsPeriod = "today") {
     const it = await prisma.inventoryItem.findFirst({
       where: { id: itemId, userId, ...activeInventoryWhere },
     });
@@ -790,6 +942,11 @@ export const inventoryService = {
       orderBy: { createdAt: "desc" },
       take: 25,
     });
+    const allMovements = await prisma.inventoryMovement.findMany({
+      where: { inventoryItemId: itemId, userId },
+      orderBy: { createdAt: "asc" },
+    });
+    const cogs = computeItemCogs(cost, allMovements, period);
 
     return {
       id: it.id,
@@ -823,6 +980,7 @@ export const inventoryService = {
         createdAt: m.createdAt.toISOString(),
         inventorySaleId: m.inventorySaleId,
       })),
+      cogs,
     };
   },
 
@@ -950,6 +1108,7 @@ export const inventoryService = {
       saleCategory?: string;
       expenseCategory?: string;
       bankCode?: string | null;
+      acquisitionCost?: number;
     },
   ) {
     const qty = data.quantity;
@@ -983,6 +1142,9 @@ export const inventoryService = {
             quantityDelta: dec(delta),
             quantityAfter: dec(newQty),
             note: data.note?.trim() || null,
+            acquisitionCost: dec(
+              data.direction === "in" ? data.acquisitionCost ?? 0 : 0,
+            ),
           },
         });
 
@@ -1073,6 +1235,7 @@ export const inventoryService = {
       lowStockAlertLevel: number;
       supplierName?: string;
       supplierId?: string;
+      acquisitionCost?: number;
     },
   ) {
     const opening = data.openingQuantity;
@@ -1102,6 +1265,7 @@ export const inventoryService = {
           quantityDelta: dec(opening),
           quantityAfter: dec(opening),
           note: "Opening stock",
+          acquisitionCost: dec(data.acquisitionCost ?? 0),
         },
       });
       return row;

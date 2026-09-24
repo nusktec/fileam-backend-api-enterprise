@@ -4,8 +4,9 @@ import { WORKSPACE_TIMELINE_EVENTS } from "../../constants/filingWorkspace";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
 import { VAT_FILING_DAY } from "../../constants/taxPayable";
 import { HttpReplyError } from "../../utils/httpReplyError";
-import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import { computeWhtFigures } from "./vatWhtOverviewService";
+import { monthLabelFromKey, nextMonthKey } from "../../utils/lagosCalendar";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -16,47 +17,6 @@ function getFilingDueDate(year: number, month: number): Date {
   const nextMonth = month === 12 ? 1 : month + 1;
   const nextYear = month === 12 ? year + 1 : year;
   return new Date(nextYear, nextMonth - 1, VAT_FILING_DAY);
-}
-
-async function buildBeneficiarySchedule(
-  userId: string,
-  periodYear: number,
-  periodMonth: number,
-) {
-  const { start, end } = monthDateRangeUtc(periodYear, periodMonth);
-  const startStr = start.toISOString().slice(0, 10);
-  const endStr = end.toISOString().slice(0, 10);
-
-  const payments = await prisma.beneficiaryTransaction.findMany({
-    where: {
-      entryType: "PAYMENT",
-      status: { not: "VOID" },
-      date: { gte: startStr, lte: endStr },
-      beneficiary: { userId },
-      whtAmount: { gt: 0 },
-    },
-    include: {
-      beneficiary: {
-        select: {
-          id: true,
-          name: true,
-          entityType: true,
-          residency: true,
-        },
-      },
-    },
-    orderBy: [{ date: "asc" }, { createdAt: "asc" }],
-  });
-
-  return payments.map((p) => ({
-    supplierId: p.beneficiaryId,
-    supplierName: p.beneficiary.name,
-    description: p.description,
-    category: p.whtClass,
-    grossAmount: decimalToNumber(p.grossAmount),
-    whtRate: decimalToNumber(p.whtRate),
-    whtDeducted: normalizeMoneyAmount(decimalToNumber(p.whtAmount)),
-  }));
 }
 
 export const whtFilingService = {
@@ -104,40 +64,25 @@ export const whtFilingService = {
       };
     }
 
-    let vendors = await buildBeneficiarySchedule(
-      userId,
-      periodYear,
-      periodMonth,
-    );
-
-    if (vendors.length === 0) {
-      const legacy = await prisma.vendorPayment.findMany({
-        where: { userId, periodYear, periodMonth },
-        orderBy: { vendorName: "asc" },
-      });
-      vendors = legacy.map((v) => ({
-        supplierId: v.id,
-        supplierName: v.vendorName,
-        description: v.description,
-        category: v.category,
-        grossAmount: decimalToNumber(v.grossAmount),
-        whtRate: decimalToNumber(v.whtRate),
-        whtDeducted: decimalToNumber(v.whtDeducted),
-      }));
-    }
-
-    const totalWht = vendors.reduce((s, l) => s + l.whtDeducted, 0);
-    const dueDate = getFilingDueDate(periodYear, periodMonth);
+    const periodKey = `${periodYear}-${String(periodMonth).padStart(2, "0")}`;
+    const figures = await computeWhtFigures(userId, periodKey);
+    const dueNext = nextMonthKey(periodKey);
+    const dueDate = `${dueNext}-${String(VAT_FILING_DAY).padStart(2, "0")}`;
     return {
       periodYear,
       periodMonth,
-      periodLabel: `${new Date(periodYear, periodMonth - 1).toLocaleString("default", { month: "long" })} ${periodYear}`,
-      whtType: vendors.length > 0 ? "MIXED" : (_whtType ?? "MIXED"),
-      vendors,
-      totalWht: normalizeMoneyAmount(totalWht),
+      periodLabel: monthLabelFromKey(periodKey),
+      whtType: figures.whtType,
+      vendors: figures.vendors,
+      totalWht: figures.totalWht,
+      totalGross: figures.totalGross,
+      corporateAmount: figures.corporateAmount,
+      individualAmount: figures.individualAmount,
       dueDate,
+      filingStatus:
+        existing?.submittedAt || existing?.status === "paid" ? "Filed" : "Pending",
       alreadyFiled: existing?.submittedAt != null,
-      nrsTotal: normalizeMoneyAmount(totalWht),
+      nrsTotal: figures.totalWht,
       stateTotal: 0,
     };
   },

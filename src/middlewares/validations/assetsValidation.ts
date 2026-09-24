@@ -7,6 +7,7 @@ import {
   TRANSFER_TYPES,
   normalizeDepreciationMethod,
 } from "../../constants/assets";
+import { EXPENDITURE_TYPES } from "../../constants/capitalAllowance";
 import {
   optionalMonetaryAmount,
   requiredMonetaryAmount,
@@ -123,6 +124,21 @@ export const validateCreateAsset = [
   check("assetLocation").optional().trim().isString(),
   check("additionalNote").optional().trim().isString(),
   check("assignToConsultant").optional().isBoolean().toBoolean(),
+  check("expenditureType")
+    .trim()
+    .notEmpty()
+    .withMessage("expenditureType is required")
+    .bail()
+    .isIn([...EXPENDITURE_TYPES])
+    .withMessage(
+      `expenditureType must be one of: ${EXPENDITURE_TYPES.join(", ")}`,
+    ),
+  check("businessUsePercent")
+    .exists({ values: "null" })
+    .withMessage("businessUsePercent is required")
+    .bail()
+    .isFloat({ min: 0, max: 100 })
+    .withMessage("businessUsePercent must be between 0 and 100"),
   body().custom((value) =>
     assertDepreciationFieldsForMethod(value, { requireMethod: true }),
   ),

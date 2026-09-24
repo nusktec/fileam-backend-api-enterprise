@@ -28,6 +28,7 @@ export const validatePitSubmitBody = [
   body("tin").isString().trim().notEmpty(),
   body("computation").isObject(),
   body("computation.tradingProfit").isFloat(),
+  body("computation.capitalAllowance").isFloat({ min: 0 }),
   body("computation.otherBusinessIncome").isFloat({ min: 0 }),
   body("computation.otherPersonalIncome").isFloat({ min: 0 }),
   body("computation.payerFees").isFloat({ min: 0 }),

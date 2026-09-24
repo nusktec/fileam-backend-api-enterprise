@@ -2,6 +2,7 @@ import { prisma } from "../../config/database";
 import { Decimal } from "@prisma/client/runtime/library";
 import {
   PERCENT,
+  VAT_RATE_PERCENT,
   WHT_RATE_SERVICES_PERCENT,
   VAT_TURNOVER_THRESHOLD_NGN,
   CIT_TURNOVER_THRESHOLD_NGN,
@@ -230,10 +231,10 @@ export const taxComputationService = {
       (s, x) => s + decimalToNumber(x.amount),
       0,
     );
-    const outputVat = sales.reduce(
-      (s, x) => s + decimalToNumber(x.vatAmount),
-      0,
-    );
+    const vatableSales = sales
+      .filter((x) => x.vatableIncome === true)
+      .reduce((s, x) => s + decimalToNumber(x.amount), 0);
+    const outputVat = Math.round((vatableSales * VAT_RATE_PERCENT) / PERCENT * 100) / 100;
     const serviceIncome = sales
       .filter((x) => x.serviceIncome)
       .reduce((s, x) => s + decimalToNumber(x.amount), 0);
@@ -249,7 +250,7 @@ export const taxComputationService = {
     const netProfit = totalIncome - totalExpenses;
 
     /** Net VAT Payable = Output VAT − Input VAT (claimable). */
-    const netVatPayable = outputVat - inputVatClaimable;
+    const netVatPayable = Math.max(0, outputVat - inputVatClaimable);
     const estimatedWhtDeducted =
       (serviceIncome * WHT_RATE_SERVICES_PERCENT) / PERCENT;
     const monthlyProfit = netProfit;

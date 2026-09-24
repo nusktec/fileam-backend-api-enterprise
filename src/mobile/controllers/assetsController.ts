@@ -7,6 +7,7 @@ import { getAuthUserId } from "../../utils/authHelpers";
 import { PaginationRequest } from "../../middlewares/paginationMiddleware";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { assetsService } from "../services/assetsService";
+import { capitalAllowanceService } from "../services/capitalAllowanceService";
 import { assetUndoService } from "../services/assetUndoService";
 import type {
   AssetDisposalUndoReason,
@@ -71,12 +72,16 @@ export const createAsset = async (
       assetLocation?: string;
       additionalNote?: string;
       assignToConsultant?: boolean;
+      expenditureType?: string;
+      businessUsePercent?: number;
     };
     const asset = await assetsService.create(userId, {
       ...data,
       purchaseCost: Number(data.purchaseCost),
       usefulLife:
         data.usefulLife != null ? Number(data.usefulLife) : undefined,
+      expenditureType: String(data.expenditureType),
+      businessUsePercent: Number(data.businessUsePercent),
       depreciationRate:
         data.depreciationRate != null ? Number(data.depreciationRate) : undefined,
       residualValue: Number(data.residualValue),
@@ -257,6 +262,55 @@ export const getAssetsDashboard = async (
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to load assets dashboard", null));
+  }
+};
+
+export const getExpenditureTypes = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    getAuthUserId(req);
+    const data = await capitalAllowanceService.listExpenditureTypes();
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Expenditure types retrieved", data));
+  } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json(outJson(false, error.message, null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to load expenditure types", null));
+  }
+};
+
+export const getCapitalAllowance = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const year = Number(req.query.year);
+    if (!Number.isInteger(year)) {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "year is required", null));
+      return;
+    }
+    const data = await capitalAllowanceService.getSchedule(userId, year);
+    res
+      .status(HttpStatusCode.OK)
+      .json(outJson(true, "Capital allowance schedule", data));
+  } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json(outJson(false, error.message, null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to load capital allowance", null));
   }
 };
 

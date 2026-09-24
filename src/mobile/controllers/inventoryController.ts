@@ -7,6 +7,7 @@ import { getAuthUserId } from "../../utils/authHelpers";
 import { PaginationRequest } from "../../middlewares/paginationMiddleware";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { inventoryService } from "../services/inventoryService";
+import { parseInventoryCogsPeriod } from "../../constants/inventoryCogs";
 import { resolveCustomerFields } from "../../utils/directoryResolver";
 
 export const getInventoryOverview = async (
@@ -15,7 +16,16 @@ export const getInventoryOverview = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const data = await inventoryService.overview(userId);
+    let period;
+    try {
+      period = parseInventoryCogsPeriod(req.query.period);
+    } catch {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "period must be today, month, year, or all_time", null));
+      return;
+    }
+    const data = await inventoryService.overview(userId, period);
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Inventory overview", data));
@@ -269,6 +279,7 @@ export const addInventoryItem = async (
       lowStockAlertLevel: number;
       supplierName?: string;
       supplierId?: string;
+      acquisitionCost?: number;
     };
     const detail = await inventoryService.addItem(userId, {
       name: data.name,
@@ -279,6 +290,8 @@ export const addInventoryItem = async (
       lowStockAlertLevel: Number(data.lowStockAlertLevel),
       supplierName: data.supplierName,
       supplierId: data.supplierId,
+      acquisitionCost:
+        data.acquisitionCost != null ? Number(data.acquisitionCost) : 0,
     });
     res
       .status(HttpStatusCode.CREATED)
@@ -331,7 +344,16 @@ export const getInventoryItemDetail = async (
   try {
     const userId = getAuthUserId(req);
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-    const detail = await inventoryService.getItemDetail(userId, id!);
+    let period;
+    try {
+      period = parseInventoryCogsPeriod(req.query.period);
+    } catch {
+      res
+        .status(HttpStatusCode.BAD_REQUEST)
+        .json(outJson(false, "period must be today, month, year, or all_time", null));
+      return;
+    }
+    const detail = await inventoryService.getItemDetail(userId, id!, period);
     if (!detail) {
       res
         .status(HttpStatusCode.NOT_FOUND)
@@ -406,6 +428,7 @@ export const adjustInventoryItem = async (
       saleCategory?: string;
       expenseCategory?: string;
       bankCode?: string | null;
+      acquisitionCost?: number;
     };
     const detail = await inventoryService.adjustment(userId, id!, {
       direction: data.direction,
@@ -421,6 +444,8 @@ export const adjustInventoryItem = async (
       serviceIncome: data.serviceIncome,
       saleCategory: data.saleCategory,
       expenseCategory: data.expenseCategory,
+      acquisitionCost:
+        data.acquisitionCost != null ? Number(data.acquisitionCost) : 0,
     });
     if (!detail) {
       res

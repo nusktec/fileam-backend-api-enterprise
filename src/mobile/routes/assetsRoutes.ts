@@ -9,6 +9,8 @@ import {
   getCurrentAssets,
   getNonCurrentAssets,
   getDepreciationAmortization,
+  getExpenditureTypes,
+  getCapitalAllowance,
   createAssetTransfer,
   listAssetTransfers,
   updateAssetTransfer,
@@ -84,6 +86,8 @@ router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/summary", getAssetsSummary);
 router.get("/dashboard", getAssetsDashboard);
+router.get("/expenditure-types", getExpenditureTypes);
+router.get("/capital-allowance", getCapitalAllowance);
 router.get("/current-assets", getCurrentAssets);
 router.get("/non-current-assets", getNonCurrentAssets);
 router.get("/depreciation-amortization", getDepreciationAmortization);

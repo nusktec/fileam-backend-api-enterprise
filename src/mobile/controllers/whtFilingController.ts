@@ -4,16 +4,30 @@ import { HttpStatusCode } from "../../interfaces/system";
 import { IRequest } from "../../interfaces/CustomRequest";
 import { getAuthUserId } from "../../utils/authHelpers";
 import { whtFilingService } from "../services/whtFilingService";
+import { vatWhtOverviewService } from "../services/vatWhtOverviewService";
+import { HttpReplyError } from "../../utils/httpReplyError";
 
-function parsePeriod(period?: string): { year: number; month: number } | null {
-  if (!period || typeof period !== "string") return null;
-  const match = period.match(/^(\d{4})-(\d{1,2})$/);
-  if (!match) return null;
-  const year = parseInt(match[1], 10);
-  const month = parseInt(match[2], 10);
-  if (month < 1 || month > 12) return null;
-  return { year, month };
-}
+export const getWhtOverview = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = await vatWhtOverviewService.getWhtOverview(
+      userId,
+      req.query.period,
+    );
+    res.status(HttpStatusCode.OK).json(outJson(true, "WHT overview", data));
+  } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json(outJson(false, error.message, null));
+      return;
+    }
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to get WHT overview", null));
+  }
+};
 
 export const getWhtSchedule = async (
   req: IRequest,
@@ -21,35 +35,20 @@ export const getWhtSchedule = async (
 ): Promise<void> => {
   try {
     const userId = getAuthUserId(req);
-    const period = req.query.period as string | undefined;
-    const whtType = req.query.whtType as string | undefined;
-    const parsed =
-      parsePeriod(period) ??
+    const period =
+      (req.query.period as string | undefined) ??
       (req.query.year && req.query.month
-        ? { year: Number(req.query.year), month: Number(req.query.month) }
-        : null);
-    if (!parsed || !parsed.year || !parsed.month || parsed.month < 1 || parsed.month > 12) {
-      res
-        .status(HttpStatusCode.BAD_REQUEST)
-        .json(
-          outJson(
-            false,
-            "Query period (e.g. 2025-1) or year and month required",
-            null,
-          ),
-        );
-      return;
-    }
-    const data = await whtFilingService.getSchedule(
-      userId,
-      parsed.year,
-      parsed.month,
-      whtType,
-    );
+        ? `${req.query.year}-${String(req.query.month).padStart(2, "0")}`
+        : undefined);
+    const data = await vatWhtOverviewService.getWhtSchedule(userId, period);
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "WHT schedule retrieved", data));
   } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json(outJson(false, error.message, null));
+      return;
+    }
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to get WHT schedule", null));
