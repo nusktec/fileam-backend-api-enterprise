@@ -134,7 +134,11 @@ function computeItemCogs(
 
     if (inbound) {
       if (inPeriod) {
-        if (movement.type !== INVENTORY_MOVEMENT_TYPES.OPENING) {
+        if (movement.type === INVENTORY_MOVEMENT_TYPES.OPENING) {
+          if (startYmd != null) {
+            openingInventory = roundCogs(openingInventory + qty * purchaseCost);
+          }
+        } else {
           purchases = roundCogs(purchases + qty * purchaseCost);
         }
         if (
@@ -157,7 +161,16 @@ function computeItemCogs(
 
   if (!openingCaptured) openingInventory = layerValue();
   const closingInventory = layerValue();
-  if (!activity) return { ...EMPTY_INVENTORY_COGS };
+  if (!activity) {
+    if (startYmd == null) return { ...EMPTY_INVENTORY_COGS };
+    return {
+      openingInventory: roundCogs(openingInventory),
+      purchases: 0,
+      directAcquisitionCosts: 0,
+      closingInventory: roundCogs(closingInventory),
+      costOfGoodsSold: roundCogs(openingInventory - closingInventory),
+    };
+  }
 
   return {
     openingInventory: roundCogs(openingInventory),

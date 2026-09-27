@@ -1,7 +1,13 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
+import { isContractorEmployment } from "../../constants/employmentTypes";
+import { isEmployeeActiveInPayrollPeriod } from "../../constants/payrollObligations";
 import { isUndoneStatus } from "../../constants/recordUndo";
-import { VAT_RATE_PERCENT } from "../../constants/percentages";
+import {
+  PERCENT,
+  VAT_RATE_PERCENT,
+  WHT_RATE_SERVICES_PERCENT,
+} from "../../constants/percentages";
 import {
   TAX_AUTHORITY,
   TAX_PORTAL_NAME,
@@ -15,15 +21,16 @@ import {
 } from "../../constants/vatWhtOverview";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
+import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import { resolveEmployeePeriodAmounts } from "./prospectiveTermsService";
 import {
   compareMonthKeys,
+  currentMonthKey,
   dueDateLabelFromYmd,
   lagosTodayYmd,
-  monthKeyFromDate,
   monthLabelFromKey,
   nextMonthKey,
-  openFilingMonthKey,
   previousMonthKey,
 } from "../../utils/lagosCalendar";
 import { VAT_FILING_DAY } from "../../constants/taxPayable";
@@ -38,10 +45,11 @@ function round2(value: number): number {
 }
 
 function parsePeriodKey(period: unknown): string {
-  if (period == null || typeof period !== "string") {
+  const raw = Array.isArray(period) ? period[0] : period;
+  if (raw == null || typeof raw !== "string") {
     throw new HttpReplyError(400, "period is required (YYYY-MM)");
   }
-  const match = period.trim().match(/^(\d{4})-(\d{1,2})$/);
+  const match = raw.trim().match(/^(\d{4})-(\d{1,2})$/);
   if (!match) {
     throw new HttpReplyError(400, "period must be YYYY-MM");
   }
@@ -53,10 +61,15 @@ function parsePeriodKey(period: unknown): string {
   return `${year}-${String(month).padStart(2, "0")}`;
 }
 
-function assertPeriodOpen(periodKey: string): void {
-  const open = openFilingMonthKey();
-  if (compareMonthKeys(periodKey, open) > 0) {
-    throw new HttpReplyError(400, "period cannot be after the open filing month");
+/**
+ * VAT/WHT viewable periods (Africa/Lagos calendar):
+ * previous months → allowed; current month → allowed (in-progress MTD);
+ * future months → rejected.
+ */
+function assertPeriodViewable(periodKey: string): void {
+  const current = currentMonthKey();
+  if (compareMonthKeys(periodKey, current) > 0) {
+    throw new HttpReplyError(400, "period cannot be after the current month");
   }
 }
 
@@ -67,7 +80,7 @@ function dueDateYmd(periodKey: string): string {
 
 function calendarKeys(): string[] {
   const keys: string[] = [];
-  let cursor = openFilingMonthKey();
+  let cursor = currentMonthKey();
   for (let i = 0; i < 6; i++) {
     keys.push(cursor);
     cursor = previousMonthKey(cursor);
@@ -148,28 +161,29 @@ async function loadPayable(
 }
 
 export async function computeVatFigures(userId: string, periodKey: string) {
-  const sales = await prisma.sale.findMany({
-    where: liveSaleWhere(userId),
-    select: {
-      amount: true,
-      vatAmount: true,
-      vatableIncome: true,
-      saleDate: true,
-    },
-  });
-  const expenses = await prisma.expense.findMany({
-    where: liveExpenseWhere(userId),
-    select: {
-      vatAmount: true,
-      vatInclusive: true,
-      expenseDate: true,
-    },
-  });
+  const { year, month } = splitPeriod(periodKey);
+  const { start, end } = monthDateRangeUtc(year, month);
+  const dateRange = { gte: start, lte: end };
 
-  const periodSales = sales.filter((s) => monthKeyFromDate(s.saleDate) === periodKey);
-  const periodExpenses = expenses.filter(
-    (e) => monthKeyFromDate(e.expenseDate) === periodKey,
-  );
+  const [periodSales, periodExpenses] = await Promise.all([
+    prisma.sale.findMany({
+      where: liveSaleWhere(userId, dateRange),
+      select: {
+        amount: true,
+        vatAmount: true,
+        vatableIncome: true,
+        saleDate: true,
+      },
+    }),
+    prisma.expense.findMany({
+      where: liveExpenseWhere(userId, dateRange),
+      select: {
+        vatAmount: true,
+        vatInclusive: true,
+        expenseDate: true,
+      },
+    }),
+  ]);
 
   const vatableSales = round2(
     periodSales
@@ -219,59 +233,193 @@ function entityFields(entityType: string, residency: string) {
   return { entity, entityLabel };
 }
 
-async function loadWhtPayments(userId: string, periodKey: string) {
-  const payments = await prisma.beneficiaryTransaction.findMany({
-    where: {
-      entryType: "PAYMENT",
-      status: { not: "VOID" },
-      beneficiary: { userId, voided: false },
-      whtAmount: { gt: 0 },
-    },
-    include: {
-      beneficiary: {
-        select: {
-          id: true,
-          name: true,
-          entityType: true,
-          residency: true,
+function matchesPeriodKey(dateStr: string, periodKey: string): boolean {
+  const match = dateStr.trim().match(/^(\d{4})-(\d{1,2})/);
+  if (!match) return false;
+  const key = `${match[1]}-${String(Number(match[2])).padStart(2, "0")}`;
+  return key === periodKey;
+}
+
+type WhtPayeeRow = {
+  id: string;
+  name: string;
+  entity: string;
+  entityLabel: string;
+  classId: string;
+  classLabel: string;
+  rate: number;
+  gross: number;
+  wht: number;
+  remittanceStatus: "pending" | "remitted";
+  supplierId: string;
+  description: string;
+};
+
+function toWhtPayee(input: {
+  id: string;
+  name: string;
+  entityType: string;
+  residency: string;
+  whtClass: string;
+  rate: number;
+  gross: number;
+  wht: number;
+  remittanceStatus: "pending" | "remitted";
+  supplierId: string;
+  description: string;
+}): WhtPayeeRow | null {
+  const wht = normalizeMoneyAmount(input.wht);
+  const gross = round2(input.gross);
+  if (wht <= 0) return null;
+  const classId = toWhtClassId(input.whtClass);
+  const { entity, entityLabel } = entityFields(
+    input.entityType,
+    input.residency,
+  );
+  return {
+    id: input.id,
+    name: input.name,
+    entity,
+    entityLabel,
+    classId,
+    classLabel: whtClassLabel(classId),
+    rate: input.rate,
+    gross,
+    wht,
+    remittanceStatus: input.remittanceStatus,
+    supplierId: input.supplierId,
+    description: input.description,
+  };
+}
+
+async function loadWhtPayees(
+  userId: string,
+  periodKey: string,
+): Promise<WhtPayeeRow[]> {
+  const { year, month } = splitPeriod(periodKey);
+  const [transactions, vendorPayments, employees] = await Promise.all([
+    prisma.beneficiaryTransaction.findMany({
+      where: {
+        beneficiary: { userId, voided: false },
+        OR: [{ whtAmount: { gt: 0 } }, { whtRate: { gt: 0 } }],
+      },
+      include: {
+        beneficiary: {
+          select: {
+            id: true,
+            name: true,
+            entityType: true,
+            residency: true,
+          },
         },
       },
-    },
-  });
+    }),
+    prisma.vendorPayment.findMany({
+      where: {
+        userId,
+        periodYear: year,
+        periodMonth: month,
+        OR: [{ whtDeducted: { gt: 0 } }, { whtRate: { gt: 0 } }],
+      },
+    }),
+    prisma.employee.findMany({ where: { userId } }),
+  ]);
 
-  return payments
-    .filter((p) => !isUndoneStatus(p.status))
-    .filter((p) => {
-      const key = p.date.length >= 7 ? p.date.slice(0, 7) : "";
-      return key === periodKey;
+  const payees: WhtPayeeRow[] = [];
+
+  for (const txn of transactions) {
+    if (isUndoneStatus(txn.status)) continue;
+    if (!matchesPeriodKey(txn.date, periodKey)) continue;
+    if (txn.entryType === "INVOICE" && txn.invoiceStatus === "PAID") continue;
+    if (txn.entryType !== "PAYMENT" && txn.entryType !== "INVOICE") continue;
+    const rate = d(txn.whtRate);
+    const gross = d(txn.grossAmount);
+    const wht =
+      d(txn.whtAmount) > 0
+        ? d(txn.whtAmount)
+        : round2((gross * rate) / PERCENT);
+    const row = toWhtPayee({
+      id: txn.id,
+      name: txn.beneficiary.name,
+      entityType: txn.beneficiary.entityType,
+      residency: txn.beneficiary.residency,
+      whtClass: txn.whtClass,
+      rate,
+      gross,
+      wht,
+      remittanceStatus: txn.status === "REMITTED" ? "remitted" : "pending",
+      supplierId: txn.beneficiaryId,
+      description: txn.description,
     });
+    if (row) payees.push(row);
+  }
+
+  for (const vendor of vendorPayments) {
+    const rate = d(vendor.whtRate);
+    const gross = d(vendor.grossAmount);
+    const wht =
+      d(vendor.whtDeducted) > 0
+        ? d(vendor.whtDeducted)
+        : round2((gross * rate) / PERCENT);
+    const row = toWhtPayee({
+      id: vendor.id,
+      name: vendor.vendorName,
+      entityType: "CORPORATE",
+      residency: "RESIDENT",
+      whtClass: vendor.category,
+      rate,
+      gross,
+      wht,
+      remittanceStatus: "pending",
+      supplierId: vendor.id,
+      description: vendor.description,
+    });
+    if (row) payees.push(row);
+  }
+
+  const includedNames = new Set(
+    payees.map((p) => p.name.trim().toLowerCase()).filter(Boolean),
+  );
+
+  for (const employee of employees) {
+    if (!isContractorEmployment(employee.employmentType)) continue;
+    if (!isEmployeeActiveInPayrollPeriod(employee.startDate, periodKey)) {
+      continue;
+    }
+    if (includedNames.has(employee.fullName.trim().toLowerCase())) continue;
+    const amounts = await resolveEmployeePeriodAmounts(
+      userId,
+      employee.id,
+      periodKey,
+      false,
+      employee.startDate,
+    );
+    if (!amounts || amounts.gross <= 0) continue;
+    const rate = WHT_RATE_SERVICES_PERCENT;
+    const row = toWhtPayee({
+      id: employee.id,
+      name: employee.fullName,
+      entityType: "INDIVIDUAL",
+      residency: "RESIDENT",
+      whtClass: "PROFESSIONAL_FEES",
+      rate,
+      gross: amounts.gross,
+      wht: (amounts.gross * rate) / PERCENT,
+      remittanceStatus: "pending",
+      supplierId: employee.id,
+      description: "Contractor WHT (professional fees)",
+    });
+    if (row) {
+      payees.push(row);
+      includedNames.add(employee.fullName.trim().toLowerCase());
+    }
+  }
+
+  return payees.sort((a, b) => b.wht - a.wht);
 }
 
 export async function computeWhtFigures(userId: string, periodKey: string) {
-  const payments = await loadWhtPayments(userId, periodKey);
-  const payees = payments
-    .map((p) => {
-      const { entity, entityLabel } = entityFields(
-        p.beneficiary.entityType,
-        p.beneficiary.residency,
-      );
-      const classId = toWhtClassId(p.whtClass);
-      return {
-        id: p.id,
-        name: p.beneficiary.name,
-        entity,
-        entityLabel,
-        classId,
-        classLabel: whtClassLabel(classId),
-        rate: d(p.whtRate),
-        gross: round2(d(p.grossAmount)),
-        wht: normalizeMoneyAmount(d(p.whtAmount)),
-        remittanceStatus: "pending" as const,
-        supplierId: p.beneficiaryId,
-        description: p.description,
-      };
-    })
-    .sort((a, b) => b.wht - a.wht);
+  const payees = await loadWhtPayees(userId, periodKey);
 
   const classMap = new Map<
     string,
@@ -315,8 +463,16 @@ export async function computeWhtFigures(userId: string, periodKey: string) {
   );
   const companyPayees = payees.filter((p) => p.entity === "corporate").length;
   const individualPayees = payees.filter((p) => p.entity === "individual").length;
-  const pendingAmount = totalWht;
-  const remittedAmount = 0;
+  const pendingAmount = round2(
+    payees
+      .filter((p) => p.remittanceStatus !== "remitted")
+      .reduce((s, p) => s + p.wht, 0),
+  );
+  const remittedAmount = round2(
+    payees
+      .filter((p) => p.remittanceStatus === "remitted")
+      .reduce((s, p) => s + p.wht, 0),
+  );
   const hasCorp = companyPayees > 0;
   const hasInd = individualPayees > 0;
   let whtType = "mixed";
@@ -352,7 +508,7 @@ export async function computeWhtFigures(userId: string, periodKey: string) {
 export const vatWhtOverviewService = {
   parseAndGuardPeriod(period: unknown): string {
     const key = parsePeriodKey(period);
-    assertPeriodOpen(key);
+    assertPeriodViewable(key);
     return key;
   },
 

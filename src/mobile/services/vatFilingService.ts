@@ -1,6 +1,6 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
-import { computeVatFigures } from "./vatWhtOverviewService";
+import { computeVatFigures, vatWhtOverviewService } from "./vatWhtOverviewService";
 import { monthLabelFromKey } from "../../utils/lagosCalendar";
 import { FILING_TIMELINE_EVENTS } from "../../constants/filings";
 import { WORKSPACE_TIMELINE_EVENTS } from "../../constants/filingWorkspace";
@@ -10,7 +10,9 @@ import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 export const vatFilingService = {
   async getCalculation(userId: string, year: number, month: number) {
-    const periodKey = `${year}-${String(month).padStart(2, "0")}`;
+    const periodKey = vatWhtOverviewService.parseAndGuardPeriod(
+      `${year}-${String(month).padStart(2, "0")}`,
+    );
     const [figures, draft, existing] = await Promise.all([
       computeVatFigures(userId, periodKey),
       prisma.filingDraft.findUnique({

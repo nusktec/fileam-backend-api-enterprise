@@ -5,6 +5,13 @@
  * s.201: small company turnover ≤ ₦100m AND fixed assets ≤ ₦250m.
  */
 
+import {
+  CAPITAL_ALLOWANCE_EFFECTIVE_FROM,
+  CAPITAL_ALLOWANCE_RESIDUAL_RATE,
+  CAPITAL_ALLOWANCE_TABLE_I,
+  expenditureTypeForAsset,
+  yearOfUseLabel,
+} from "./capitalAllowance";
 import { PERCENT } from "./percentages";
 
 export const CIT_PERIOD_MONTH = 12;
@@ -56,6 +63,18 @@ export type CitAllowanceRow = {
   cost: number;
   annualRate: number;
   claimedThisYear: number;
+  assetType?: string | null;
+  datePutIntoUse?: string;
+  taxYear?: number;
+  yearOfUse?: number;
+  yearOfUseLabel?: string;
+  qualifyingCost?: number;
+  businessUsePercent?: number;
+  openingTwdv?: number;
+  closingTwdv?: number;
+  residualValue?: number;
+  isAcquisitionYear?: boolean;
+  source?: "books" | "brought_forward";
 };
 
 export type CitAdjustmentsInput = {
@@ -176,42 +195,122 @@ export function capitalAllowanceRateForAssetType(assetType: string): {
   );
 }
 
+function tableIForExpenditure(expenditureType: string) {
+  return CAPITAL_ALLOWANCE_TABLE_I.find(
+    (row) => row.expenditureType === expenditureType && row.qualifying,
+  );
+}
+
+function assetDateYmd(purchaseDate: string | Date): string {
+  if (typeof purchaseDate === "string") return purchaseDate.trim().slice(0, 10);
+  const year = purchaseDate.getUTCFullYear();
+  const month = String(purchaseDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(purchaseDate.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Capital allowance for one on-books asset in a CIT tax year.
+ * Uses NTA 2025 Table I when an expenditure type (or asset-type mapping) exists;
+ * otherwise the CIT asset-type rate. Land and assets acquired after the year are excluded.
+ */
 export function computeCapitalAllowanceForAsset(
   asset: {
     id: string;
     name: string;
     assetType: string;
     cost: number;
-    purchaseDate: string;
+    purchaseDate: string | Date;
     status: string;
+    expenditureType?: string | null;
+    businessUsePercent?: number | null;
   },
   taxYear: number,
 ): CitAllowanceRow | null {
   const status = asset.status.trim().toUpperCase();
   if (status === "SOLD" || status === "DISPOSED") return null;
+  if (status === "VOIDED" || status === "REVERSED" || status === "VOID") {
+    return null;
+  }
+
   const cost = Math.max(0, asset.cost);
   if (cost <= 0) return null;
+  if (asset.assetType.trim().toUpperCase() === "LAND") return null;
 
-  const { rate, category } = capitalAllowanceRateForAssetType(asset.assetType);
-  if (rate <= 0) return null;
+  const datePutIntoUse = assetDateYmd(asset.purchaseDate);
+  const purchaseYear = Number(datePutIntoUse.slice(0, 4));
+  if (!Number.isInteger(purchaseYear) || purchaseYear > taxYear) return null;
 
-  const purchaseYear = parseInt(asset.purchaseDate.slice(0, 4), 10);
-  const yearsHeld = taxYear - purchaseYear;
-  if (yearsHeld < 0) return null;
+  const businessUsePercent = Math.min(
+    100,
+    Math.max(
+      0,
+      asset.businessUsePercent == null ? 100 : asset.businessUsePercent,
+    ),
+  );
+  const qualifyingCost = roundCitNaira((cost * businessUsePercent) / PERCENT);
+  if (qualifyingCost <= 0) return null;
 
-  const annualOnCost = roundCitNaira(cost * rate);
-  const cumulativePrior = annualOnCost * yearsHeld;
-  const residueStart = Math.max(0, cost - cumulativePrior);
-  if (residueStart === 0) return null;
+  const expenditureType = expenditureTypeForAsset(
+    asset.expenditureType,
+    asset.assetType,
+  );
+  const tableI = expenditureType
+    ? tableIForExpenditure(expenditureType)
+    : undefined;
+  const mapped = capitalAllowanceRateForAssetType(asset.assetType);
+  const annualRate = tableI?.annualRate ?? mapped.rate;
+  const category = tableI?.expenditureTypeLabel ?? mapped.category;
+  if (annualRate <= 0) return null;
 
-  const claimedThisYear = Math.min(annualOnCost, residueStart);
+  const ntaStartYear = Number(CAPITAL_ALLOWANCE_EFFECTIVE_FROM.slice(0, 4));
+  const firstAllowanceYear =
+    taxYear >= ntaStartYear ? Math.max(purchaseYear, ntaStartYear) : purchaseYear;
+  if (taxYear < firstAllowanceYear) return null;
+
+  const residualRate = tableI ? CAPITAL_ALLOWANCE_RESIDUAL_RATE : 0;
+  const residualValue = roundCitNaira(qualifyingCost * residualRate);
+  const uncappedAnnual = roundCitNaira(qualifyingCost * annualRate);
+
+  let openingTwdv = qualifyingCost;
+  let annualAllowance = 0;
+  let closingTwdv = qualifyingCost;
+  for (let year = firstAllowanceYear; year <= taxYear; year++) {
+    openingTwdv = year === firstAllowanceYear ? qualifyingCost : closingTwdv;
+    if (openingTwdv <= residualValue) {
+      annualAllowance = 0;
+      closingTwdv = openingTwdv;
+    } else {
+      annualAllowance = Math.min(
+        uncappedAnnual,
+        Math.max(0, openingTwdv - residualValue),
+      );
+      closingTwdv = Math.max(residualValue, openingTwdv - annualAllowance);
+    }
+  }
+
+  if (annualAllowance <= 0) return null;
+
+  const yearOfUse = taxYear - firstAllowanceYear + 1;
   return {
     id: asset.id,
     name: asset.name,
     category,
-    cost,
-    annualRate: rate,
-    claimedThisYear,
+    cost: qualifyingCost,
+    annualRate,
+    claimedThisYear: annualAllowance,
+    assetType: asset.assetType,
+    datePutIntoUse,
+    taxYear,
+    yearOfUse,
+    yearOfUseLabel: yearOfUseLabel(yearOfUse),
+    qualifyingCost,
+    businessUsePercent,
+    openingTwdv,
+    closingTwdv,
+    residualValue,
+    isAcquisitionYear: taxYear === purchaseYear,
+    source: "books",
   };
 }
 

@@ -36,8 +36,9 @@ export const PIT_STATE_OF_RESIDENCE_VALUES = STATE_OF_EMPLOYMENT_VALUES;
 
 export type PitComputationSnapshot = {
   tradingProfit: number;
-  /** Trade deduction this year. Not a relief. 0 when none or when use.tax is not PIT. */
+  /** Trade deduction this year. Restricted to trading profit; not a personal relief. */
   capitalAllowance: number;
+  unutilizedCapitalAllowance: number;
   otherBusinessIncome: number;
   otherPersonalIncome: number;
   payerFees: number;
@@ -175,9 +176,18 @@ export function computePitFromSnapshot(
     | "pitLiability"
     | "remainingPayable"
     | "capitalAllowance"
-  > & { capitalAllowance?: number },
+    | "unutilizedCapitalAllowance"
+  > & { capitalAllowance?: number; capitalAllowanceAvailable?: number },
 ): PitComputationSnapshot & { bands: PitBandResult[] } {
   const capitalAllowance = Math.max(0, snapshot.capitalAllowance ?? 0);
+  const capitalAllowanceAvailable = Math.max(
+    0,
+    snapshot.capitalAllowanceAvailable ?? capitalAllowance,
+  );
+  const unutilizedCapitalAllowance = Math.max(
+    0,
+    capitalAllowanceAvailable - capitalAllowance,
+  );
   const grossIncome = computeGrossIncome({
     tradingProfit: snapshot.tradingProfit,
     otherBusinessIncome: snapshot.otherBusinessIncome,
@@ -210,6 +220,7 @@ export function computePitFromSnapshot(
   return {
     ...snapshot,
     capitalAllowance,
+    unutilizedCapitalAllowance,
     grossIncome,
     rentRelief,
     totalReliefs,

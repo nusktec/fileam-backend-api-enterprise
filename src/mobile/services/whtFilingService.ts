@@ -5,7 +5,7 @@ import { completionPercentFromStep } from "../../constants/filingWorkspace";
 import { VAT_FILING_DAY } from "../../constants/taxPayable";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
-import { computeWhtFigures } from "./vatWhtOverviewService";
+import { computeWhtFigures, vatWhtOverviewService } from "./vatWhtOverviewService";
 import { monthLabelFromKey, nextMonthKey } from "../../utils/lagosCalendar";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -26,6 +26,9 @@ export const whtFilingService = {
     periodMonth: number,
     _whtType?: string,
   ) {
+    vatWhtOverviewService.parseAndGuardPeriod(
+      `${periodYear}-${String(periodMonth).padStart(2, "0")}`,
+    );
     const existing = await prisma.taxPayable.findUnique({
       where: {
         userId_taxType_periodYear_periodMonth: {

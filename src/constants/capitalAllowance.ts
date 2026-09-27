@@ -44,6 +44,29 @@ export function isExpenditureType(value: string): value is ExpenditureType {
   return (EXPENDITURE_TYPES as readonly string[]).includes(value);
 }
 
+/** Schedule fallback for assets created before expenditureType existed. */
+export const ASSET_TYPE_TO_EXPENDITURE_TYPE: Partial<
+  Record<string, ExpenditureType>
+> = {
+  VEHICLE: "MOTOR_VEHICLE",
+  SOFTWARE_LICENSES: "SOFTWARE",
+  OTHER_ASSET: "OTHER_CAPITAL",
+  COMPUTER_IT: "OTHER_EQUIPMENT",
+  MACHINERY: "PLANT",
+  FURNITURE: "FURNITURE_FITTINGS",
+  BUILDING: "BUILDING",
+};
+
+export function expenditureTypeForAsset(
+  expenditureType: string | null | undefined,
+  assetType: string,
+): ExpenditureType | null {
+  if (expenditureType && isExpenditureType(expenditureType)) {
+    return expenditureType;
+  }
+  return ASSET_TYPE_TO_EXPENDITURE_TYPE[assetType.trim().toUpperCase()] ?? null;
+}
+
 export type CapitalAllowanceConfigSeed = {
   expenditureType: ExpenditureType;
   expenditureTypeLabel: string;

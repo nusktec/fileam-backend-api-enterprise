@@ -289,8 +289,21 @@ export async function getPitMonthlyEstimateFromBooks(
 /** Dashboard / tax-computation — same core inputs as filing (no draft overrides). */
 export async function getPitAnnualEstimateForYear(userId: string, year: number) {
   const inputs = await aggregatePitInputs(userId, year);
+  const booksCa = await capitalAllowanceService.getBooksAllowancesForYear(
+    userId,
+    year,
+  );
+  const capitalAllowance = Math.min(
+    booksCa.available,
+    Math.max(0, inputs.tradingProfit),
+  );
+  const tradingProfit = normalizeMoneyAmount(
+    inputs.tradingProfit - capitalAllowance,
+  );
   const snapshot = computePitFromSnapshot({
-    tradingProfit: inputs.tradingProfit,
+    tradingProfit,
+    capitalAllowance,
+    capitalAllowanceAvailable: booksCa.available,
     otherBusinessIncome: inputs.otherBusinessIncome,
     otherPersonalIncome: inputs.otherPersonalIncome,
     payerFees: inputs.payerFeesIncludedInSales ? 0 : inputs.payerFees,
@@ -541,12 +554,13 @@ export const pitFilingService = {
         ? normalizeMoneyAmount(pensionOverride)
         : normalizeMoneyAmount(inputs.pensionContribution + extraPension);
 
-    const caSchedule = await capitalAllowanceService.getSchedule(userId, year);
+    const booksCa = await capitalAllowanceService.getBooksAllowancesForYear(
+      userId,
+      year,
+    );
     const tradeProfitBeforeAllowance = merged.tradingProfit;
-    const capitalAllowanceAvailable =
-      caSchedule.use.tax === "PIT" ? caSchedule.summary.totalAllowance : 0;
     const capitalAllowance = Math.min(
-      capitalAllowanceAvailable,
+      booksCa.available,
       Math.max(0, tradeProfitBeforeAllowance),
     );
     const tradingProfit = normalizeMoneyAmount(
@@ -556,6 +570,7 @@ export const pitFilingService = {
     const snapshot = computePitFromSnapshot({
       tradingProfit,
       capitalAllowance,
+      capitalAllowanceAvailable: booksCa.available,
       otherBusinessIncome: merged.otherBusinessIncome,
       otherPersonalIncome: merged.otherPersonalIncome,
       payerFees: merged.payerFeesIncludedInSales ? 0 : inputs.payerFees,
@@ -592,6 +607,9 @@ export const pitFilingService = {
       draftApplied: draftInputs != null,
         inputs: {
           tradingProfit,
+          tradingProfitBeforeAllowance: tradeProfitBeforeAllowance,
+          capitalAllowance,
+          capitalAllowanceAvailable: booksCa.available,
           employmentTaxable: inputs.employmentTaxable,
           employmentExempt: inputs.employmentExempt,
           payerFeesRecorded: inputs.payerFeesRecorded,

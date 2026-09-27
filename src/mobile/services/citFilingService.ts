@@ -11,7 +11,6 @@ import {
   type CitAllowanceRow,
   type CitComputationSnapshot,
 } from "../../constants/citFiling";
-import { capitalAllowanceService } from "./capitalAllowanceService";
 import { PERCENT, WHT_RATE_SERVICES_PERCENT } from "../../constants/percentages";
 import { isFinalWhtPayerCategory, normalizePayerCategory } from "../../constants/pitFiling";
 import { HttpReplyError } from "../../utils/httpReplyError";
@@ -21,6 +20,7 @@ import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
 import { isUndoneStatus } from "../../constants/recordUndo";
 import { businessProfileMoneyToNumber } from "../../constants/businessProfile";
 import { assetsService } from "./assetsService";
+import { capitalAllowanceService } from "./capitalAllowanceService";
 import { evidenceVaultService } from "./evidenceVaultService";
 import { taxComputationService } from "./taxComputationService";
 import { userService } from "./userService";
@@ -101,20 +101,9 @@ async function sumPayerWhtCredits(userId: string): Promise<number> {
 async function capitalAllowancesForCit(userId: string, year: number): Promise<{
   available: number;
   allowances: CitAllowanceRow[];
+  booksFixedAssets: number;
 }> {
-  const schedule = await capitalAllowanceService.getSchedule(userId, year);
-  if (schedule.use.tax !== "CIT") {
-    return { available: 0, allowances: [] };
-  }
-  const allowances: CitAllowanceRow[] = schedule.assets.map((row) => ({
-    id: row.assetId,
-    name: row.name,
-    category: row.expenditureTypeLabel,
-    cost: row.qualifyingCost,
-    annualRate: row.annualRate,
-    claimedThisYear: row.totalAllowance,
-  }));
-  return { available: schedule.summary.totalAllowance, allowances };
+  return capitalAllowanceService.getBooksAllowancesForYear(userId, year);
 }
 
 function validateSubmitBody(
@@ -349,7 +338,29 @@ export const citFilingService = {
       (dashboard.plImpact.annualDepreciationCharge ||
         dashboard.summary.annualDepreciation ||
         0);
-    const capitalAllowancesAvailable = caSchedule.available;
+    const broughtForwardCa = Math.max(
+      0,
+      carry?.unutilizedCapitalAllowances ?? 0,
+    );
+    const capitalAllowancesAvailable = normalizeMoneyAmount(
+      caSchedule.available + broughtForwardCa,
+    );
+    const allowances =
+      broughtForwardCa > 0
+        ? [
+            {
+              id: "unutilized-bf",
+              name: "Unutilized capital allowances brought forward",
+              category: "Brought forward",
+              cost: broughtForwardCa,
+              annualRate: 0,
+              claimedThisYear: broughtForwardCa,
+              taxYear: year,
+              source: "brought_forward" as const,
+            },
+            ...caSchedule.allowances,
+          ]
+        : caSchedule.allowances;
     const defaultLoss = carry?.unrelievedLoss ?? taxComp.cit.lossCarryForward ?? 0;
     const defaultWht =
       Math.max(booksWht, payerWht) + (carry?.unutilizedWhtCredits ?? 0);
@@ -374,7 +385,7 @@ export const citFilingService = {
       businessType: business?.businessType ?? profile?.businessType ?? null,
       sector: business?.sector ?? profile?.sector ?? null,
       providesProfessionalServices: providesProfessional,
-      allowances: caSchedule.allowances,
+      allowances,
     });
 
     return {
@@ -406,9 +417,11 @@ export const citFilingService = {
           business?.totalFixedAssets,
         ),
         booksTurnover: books.turnover,
+        booksFixedAssets: caSchedule.booksFixedAssets,
         accountingProfit,
         depreciation,
         capitalAllowancesAvailable,
+        capitalAllowancesBroughtForward: broughtForwardCa,
         booksLossCarryForward: taxComp.cit.lossCarryForward ?? 0,
         payerWhtCredits: payerWht,
         booksWhtCredits: booksWht,

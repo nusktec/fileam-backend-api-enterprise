@@ -1,5 +1,6 @@
 import { prisma } from "../../config/database";
-import { ASSET_STATUS } from "../../constants/assets";
+import { ASSET_ON_BOOKS_STATUSES } from "../../constants/assets";
+import { computeCapitalAllowanceForAsset } from "../../constants/citFiling";
 import {
   CAPITAL_ALLOWANCE_CLASS_LABELS,
   CAPITAL_ALLOWANCE_EFFECTIVE_FROM,
@@ -11,11 +12,13 @@ import {
   CAPITAL_ALLOWANCE_TABLE_I,
   type CapitalAllowanceClass,
   type CapitalAllowanceTaxFlow,
+  expenditureTypeForAsset,
   roundCapitalAllowanceNaira,
   yearOfUseLabel,
 } from "../../constants/capitalAllowance";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { lagosTodayYmd, lagosYear } from "../../utils/lagosCalendar";
+import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 function d(value: { toNumber?: () => number } | number | string | null | undefined): number {
   if (value == null) return 0;
@@ -118,6 +121,43 @@ export const capitalAllowanceService = {
     return types.find((t) => t.id === id)?.label ?? null;
   },
 
+  async getBooksAllowancesForYear(userId: string, year: number) {
+    const booksAssets = await prisma.asset.findMany({
+      where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
+      orderBy: [{ purchaseDate: "asc" }, { assetName: "asc" }],
+    });
+
+    const booksFixedAssets = normalizeMoneyAmount(
+      booksAssets.reduce((sum, asset) => sum + d(asset.purchaseCost), 0),
+    );
+
+    const allowances = booksAssets
+      .map((asset) =>
+        computeCapitalAllowanceForAsset(
+          {
+            id: asset.assetCode,
+            name: asset.assetName,
+            assetType: asset.assetType,
+            cost: d(asset.purchaseCost),
+            purchaseDate: asset.purchaseDate,
+            status: asset.status,
+            expenditureType: asset.expenditureType,
+            businessUsePercent:
+              asset.businessUsePercent == null
+                ? null
+                : d(asset.businessUsePercent),
+          },
+          year,
+        ),
+      )
+      .filter((row): row is NonNullable<typeof row> => row != null);
+
+    const available = normalizeMoneyAmount(
+      allowances.reduce((sum, row) => sum + row.claimedThisYear, 0),
+    );
+    return { available, allowances, booksFixedAssets };
+  },
+
   async getSchedule(userId: string, year: number) {
     if (!Number.isInteger(year) || year < 1000 || year > 9999) {
       throw new HttpReplyError(400, "year must be a valid YYYY integer");
@@ -136,7 +176,7 @@ export const capitalAllowanceService = {
     const [configRows, assets, user] = await Promise.all([
       loadRegimeRows(startDate),
       prisma.asset.findMany({
-        where: { userId, status: ASSET_STATUS.ACTIVE },
+        where: { userId, status: { in: [...ASSET_ON_BOOKS_STATUSES] } },
         orderBy: [{ purchaseDate: "asc" }, { assetName: "asc" }],
       }),
       prisma.user.findUnique({
@@ -208,12 +248,22 @@ export const capitalAllowanceService = {
 
     for (const asset of assets) {
       if (asset.assetType === "LAND") continue;
-      if (!asset.expenditureType) continue;
-      const config = configByType.get(asset.expenditureType);
+      const expenditureType = expenditureTypeForAsset(
+        asset.expenditureType,
+        asset.assetType,
+      );
+      if (!expenditureType) continue;
+      const config = configByType.get(expenditureType);
       if (!config) continue;
       const purchaseCost = d(asset.purchaseCost);
       if (purchaseCost <= 0) continue;
-      const businessUsePercent = Math.min(100, Math.max(0, d(asset.businessUsePercent)));
+      const businessUsePercent = Math.min(
+        100,
+        Math.max(
+          0,
+          asset.businessUsePercent == null ? 100 : d(asset.businessUsePercent),
+        ),
+      );
       const qualifyingCost = roundCapitalAllowanceNaira(
         (purchaseCost * businessUsePercent) / 100,
       );
@@ -255,7 +305,7 @@ export const capitalAllowanceService = {
         assetType: asset.assetType,
         assetClass,
         assetClassLabel: CAPITAL_ALLOWANCE_CLASS_LABELS[assetClass] ?? assetClass,
-        expenditureType: asset.expenditureType,
+        expenditureType,
         expenditureTypeLabel: config.expenditureTypeLabel,
         datePutIntoUse: putIntoUse,
         yearOfUse,
