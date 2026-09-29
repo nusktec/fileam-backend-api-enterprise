@@ -94,30 +94,20 @@ function computeItemCogs(
   const ordered = [...movements].sort(
     (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
   );
-  const layers: { qty: number; unit: number }[] = [];
+
+  let qtyOnHand = 0;
+  let carryingCost = 0;
   let openingInventory = 0;
   let purchases = 0;
   let directAcquisitionCosts = 0;
-  let activity = false;
   let openingCaptured = startYmd == null;
 
-  const layerValue = () =>
-    roundCogs(layers.reduce((s, layer) => s + layer.qty * layer.unit, 0));
-
-  const consume = (qty: number) => {
-    let remaining = Math.abs(qty);
-    for (const layer of layers) {
-      if (remaining <= 0) break;
-      const take = Math.min(layer.qty, remaining);
-      layer.qty = roundCogs(layer.qty - take);
-      remaining = roundCogs(remaining - take);
-    }
-  };
+  const unitCost = () => (qtyOnHand > 0 ? carryingCost / qtyOnHand : 0);
 
   for (const movement of ordered) {
     const ymd = lagosTodayYmd(movement.createdAt);
     if (!openingCaptured && startYmd && ymd >= startYmd) {
-      openingInventory = layerValue();
+      openingInventory = roundCogs(carryingCost);
       openingCaptured = true;
     }
     if (ymd > endYmd) break;
@@ -130,53 +120,35 @@ function computeItemCogs(
       movement.type === INVENTORY_MOVEMENT_TYPES.RESTOCK ||
       movement.type === INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_IN;
 
-    if (inPeriod) activity = true;
-
     if (inbound) {
       if (inPeriod) {
-        if (movement.type === INVENTORY_MOVEMENT_TYPES.OPENING) {
-          if (startYmd != null) {
-            openingInventory = roundCogs(openingInventory + qty * purchaseCost);
-          }
-        } else {
-          purchases = roundCogs(purchases + qty * purchaseCost);
-        }
-        if (
-          movement.type === INVENTORY_MOVEMENT_TYPES.OPENING ||
-          movement.type === INVENTORY_MOVEMENT_TYPES.ADJUSTMENT_IN
-        ) {
-          directAcquisitionCosts = roundCogs(directAcquisitionCosts + acq);
-        }
+        purchases = roundCogs(purchases + qty * purchaseCost);
+        directAcquisitionCosts = roundCogs(directAcquisitionCosts + acq);
       }
       if (qty > 0) {
-        layers.push({
-          qty,
-          unit: roundCogs((qty * purchaseCost + acq) / qty),
-        });
+        qtyOnHand = roundCogs(qtyOnHand + qty);
+        carryingCost = roundCogs(carryingCost + qty * purchaseCost + acq);
       }
-    } else {
-      consume(qty);
+    } else if (qty > 0) {
+      const take = Math.min(qtyOnHand, qty);
+      const costOut = roundCogs(take * unitCost());
+      qtyOnHand = roundCogs(qtyOnHand - take);
+      carryingCost = roundCogs(Math.max(0, carryingCost - costOut));
+      if (qtyOnHand <= 0) {
+        qtyOnHand = 0;
+        carryingCost = 0;
+      }
     }
   }
 
-  if (!openingCaptured) openingInventory = layerValue();
-  const closingInventory = layerValue();
-  if (!activity) {
-    if (startYmd == null) return { ...EMPTY_INVENTORY_COGS };
-    return {
-      openingInventory: roundCogs(openingInventory),
-      purchases: 0,
-      directAcquisitionCosts: 0,
-      closingInventory: roundCogs(closingInventory),
-      costOfGoodsSold: roundCogs(openingInventory - closingInventory),
-    };
-  }
+  if (!openingCaptured) openingInventory = roundCogs(carryingCost);
+  const closingInventory = roundCogs(carryingCost);
 
   return {
     openingInventory: roundCogs(openingInventory),
     purchases: roundCogs(purchases),
     directAcquisitionCosts: roundCogs(directAcquisitionCosts),
-    closingInventory: roundCogs(closingInventory),
+    closingInventory,
     costOfGoodsSold: roundCogs(
       openingInventory + purchases + directAcquisitionCosts - closingInventory,
     ),
@@ -1283,21 +1255,6 @@ export const inventoryService = {
       });
       return row;
     });
-
-    if (opening > 0) {
-      await syncPurchaseToExpense(userId, {
-        amount: data.purchaseCost * opening,
-        description: `Inventory opening stock: ${item.name}`,
-        category: item.category,
-        expenseType: "COGS",
-        expenseDate: item.createdAt,
-        supplierName: item.supplierName,
-        supplierId: item.supplierId,
-        purchaseKind: "inventory_item",
-        vatTag: "exempt",
-        inventoryItemId: item.id,
-      });
-    }
 
     return inventoryService.getItemDetail(userId, item.id);
   },

@@ -14,11 +14,14 @@ import {
   monthsInTaxRange,
   type TaxPeriodRange,
 } from "../../utils/taxPeriodQuery";
+import { computeVatFigures, computeWhtFigures } from "./vatWhtOverviewService";
+import { citFilingService } from "./citFilingService";
+import { pitFilingService } from "./pitFilingService";
+import { payrollService } from "./payrollService";
+import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
 const PAYMENT_BASE_URL =
   process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
-
-const MONTHLY_SYNC_TAX_TYPES: TaxType[] = ["VAT", "WHT", "PAYE", "CIT", "PIT"];
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -84,58 +87,65 @@ type PeriodComputation = Awaited<
   ReturnType<typeof taxComputationService.getForQuery>
 >;
 
-/** All tax types — per book month (CIT/PIT from that month's activity). */
-function monthlyAmountsFromComputation(
-  computation: PeriodComputation,
-): Array<{ taxType: TaxType; amountDue: number }> {
-  const flags = computation.taxPersonaGuidance.applicableTaxes;
+function periodKeyForFigures(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+/**
+ * Payable amounts copied from the filing endpoints for the same tax and period.
+ * VAT netVatPayable, WHT totalWht, CIT citPayable, PIT remainingPayable, PAYE amountDue.
+ */
+async function filingAmountsForPeriod(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<Array<{ taxType: TaxType; amountDue: number }>> {
+  const periodKey = periodKeyForFigures(year, month);
+  const [vat, wht, citPayable, pitPayable, payeDue] = await Promise.all([
+    computeVatFigures(userId, periodKey)
+      .then((f) => normalizeMoneyAmount(f.netVatPayable))
+      .catch(() => 0),
+    computeWhtFigures(userId, periodKey)
+      .then((f) => normalizeMoneyAmount(f.totalWht))
+      .catch(() => 0),
+    citFilingService
+      .getCalculation(userId, year)
+      .then((r) => normalizeMoneyAmount(r.computation.citPayable))
+      .catch(() => 0),
+    pitFilingService
+      .getCalculation(userId, year)
+      .then((r) =>
+        normalizeMoneyAmount(
+          (r.computation as { remainingPayable?: number }).remainingPayable ?? 0,
+        ),
+      )
+      .catch(() => 0),
+    payrollService
+      .getPayee(userId, periodKey)
+      .then((r) => normalizeMoneyAmount(r.summary.amountDue))
+      .catch(() => 0),
+  ]);
+
   return [
-    {
-      taxType: "VAT",
-      amountDue: flags.vat
-        ? Math.max(0, computation.vat.periodAmount)
-        : 0,
-    },
-    {
-      taxType: "WHT",
-      amountDue: flags.wht
-        ? Math.max(0, computation.wht.periodAmount)
-        : 0,
-    },
-    {
-      taxType: "PAYE",
-      amountDue:
-        flags.paye && computation.paye.applicable
-          ? Math.max(0, computation.paye.periodAmount)
-          : 0,
-    },
-    {
-      taxType: "CIT",
-      amountDue: flags.cit
-        ? Math.max(0, computation.cit.periodAmount)
-        : 0,
-    },
-    {
-      taxType: "PIT",
-      amountDue: flags.pit
-        ? Math.max(0, computation.pit.periodAmount)
-        : 0,
-    },
+    { taxType: "VAT", amountDue: vat },
+    { taxType: "WHT", amountDue: wht },
+    { taxType: "PAYE", amountDue: payeDue },
+    { taxType: "CIT", amountDue: citPayable },
+    { taxType: "PIT", amountDue: pitPayable },
   ];
 }
 
-export function totalsFromComputation(computation: PeriodComputation) {
-  const flags = computation.taxPersonaGuidance.applicableTaxes;
-  const vat = flags.vat ? Math.max(0, computation.vat.periodAmount) : 0;
-  const wht = flags.wht ? Math.max(0, computation.wht.periodAmount) : 0;
-  const paye =
-    flags.paye && computation.paye.applicable
-      ? Math.max(0, computation.paye.periodAmount)
-      : 0;
-  const cit = flags.cit ? Math.max(0, computation.cit.periodAmount) : 0;
-  const pit = flags.pit ? Math.max(0, computation.pit.periodAmount) : 0;
-  const total = vat + wht + cit + pit + paye;
-  return { vat, wht, cit, pit, paye, total };
+export function totalsFromFilingAmounts(
+  rows: Array<{ taxType: TaxType; amountDue: number }>,
+) {
+  const pick = (t: TaxType) =>
+    rows.find((r) => r.taxType === t)?.amountDue ?? 0;
+  const vat = pick("VAT");
+  const wht = pick("WHT");
+  const paye = pick("PAYE");
+  const cit = pick("CIT");
+  const pit = pick("PIT");
+  return { vat, wht, cit, pit, paye, total: vat + wht + cit + pit + paye };
 }
 
 async function upsertPayableRow(input: {
@@ -248,15 +258,9 @@ export const taxPayablesService = {
 
   /** VAT / WHT / PAYE for one calendar month. */
   async syncPeriodPayables(userId: string, year: number, month: number) {
-    const computation = await taxComputationService.getForPeriod(
-      userId,
-      year,
-      month,
-    );
+    const amounts = await filingAmountsForPeriod(userId, year, month);
 
-    for (const { taxType, amountDue } of monthlyAmountsFromComputation(
-      computation,
-    )) {
+    for (const { taxType, amountDue } of amounts) {
       const filingDueDate =
         taxType === "CIT"
           ? getAnnualFilingDueDate("CIT", year)
@@ -307,6 +311,7 @@ export const taxPayablesService = {
   ) {
     const range = opts?.range ?? "month";
     let periodComputation: PeriodComputation | null = null;
+    let filingTotals: ReturnType<typeof totalsFromFilingAmounts> | null = null;
 
     if (opts?.periodYear != null && opts?.periodMonth != null) {
       const months = monthsInTaxRange(
@@ -315,11 +320,28 @@ export const taxPayablesService = {
         range,
       );
       if (range === "month" && months.length === 1) {
-        await this.syncPeriodPayables(
+        const amounts = await filingAmountsForPeriod(
           userId,
           opts.periodYear,
           opts.periodMonth,
         );
+        filingTotals = totalsFromFilingAmounts(amounts);
+        for (const { taxType, amountDue } of amounts) {
+          const filingDueDate =
+            taxType === "CIT"
+              ? getAnnualFilingDueDate("CIT", opts.periodYear)
+              : taxType === "PIT"
+                ? getAnnualFilingDueDate("PIT", opts.periodYear)
+                : getMonthlyFilingDueDate(opts.periodYear, opts.periodMonth);
+          await upsertPayableRow({
+            userId,
+            taxType,
+            periodYear: opts.periodYear,
+            periodMonth: opts.periodMonth,
+            amountDue,
+            filingDueDate,
+          });
+        }
       } else {
         await this.syncPayablesForPeriods(userId, months);
       }
@@ -355,7 +377,6 @@ export const taxPayablesService = {
         opts.periodMonth,
         range,
       );
-      const calendarYears = [...new Set(months.map((m) => m.year))];
       const taxTypeFilter = filters?.taxType?.trim().toUpperCase() as
         | TaxType
         | undefined;
@@ -439,9 +460,7 @@ export const taxPayablesService = {
           ? { year: opts.periodYear, month: opts.periodMonth }
           : null,
       period: periodComputation?.period ?? null,
-      totals: periodComputation
-        ? totalsFromComputation(periodComputation)
-        : null,
+      totals: filingTotals,
       data,
       total,
       page,

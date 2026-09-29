@@ -17,6 +17,14 @@ import {
   dashboardPlPeriod,
   type LedgerPeriod,
 } from "../../utils/ledgerPeriodQuery";
+import {
+  displayRecordNumber,
+  expensePaymentDescription,
+  expenseRecognitionDescription,
+  reversalForDescription,
+  saleCollectionDescription,
+  saleRecognitionDescription,
+} from "../../utils/ledgerEntryDescription";
 
 type TxMeta = {
   id: string;
@@ -274,6 +282,171 @@ async function originalSourceMap(
   );
 }
 
+function primaryRef(referenceId: string | null | undefined): string | null {
+  if (!referenceId) return null;
+  return referenceId.split(":")[0] ?? null;
+}
+
+async function loadRecordLabels(
+  userId: string,
+  ids: string[],
+): Promise<{
+  sales: Map<string, string>;
+  expenses: Map<string, string>;
+  assets: Map<string, string>;
+  payers: Map<string, string>;
+  payerTxns: Map<string, string>;
+  beneficiaries: Map<string, string>;
+  beneficiaryTxns: Map<string, string>;
+  liabilities: Map<string, string>;
+  inventory: Map<string, string>;
+}> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const empty = {
+    sales: new Map<string, string>(),
+    expenses: new Map<string, string>(),
+    assets: new Map<string, string>(),
+    payers: new Map<string, string>(),
+    payerTxns: new Map<string, string>(),
+    beneficiaries: new Map<string, string>(),
+    beneficiaryTxns: new Map<string, string>(),
+    liabilities: new Map<string, string>(),
+    inventory: new Map<string, string>(),
+  };
+  if (unique.length === 0) return empty;
+
+  const [
+    sales,
+    expenses,
+    assets,
+    payers,
+    payerTxns,
+    beneficiaries,
+    beneficiaryTxns,
+    liabilities,
+    inventory,
+  ] = await Promise.all([
+    prisma.sale.findMany({
+      where: { userId, id: { in: unique } },
+      select: { id: true, invoiceNumber: true },
+    }),
+    prisma.expense.findMany({
+      where: { userId, id: { in: unique } },
+      select: { id: true, expenseNumber: true },
+    }),
+    prisma.asset.findMany({
+      where: { userId, id: { in: unique } },
+      select: { id: true, assetCode: true, assetName: true },
+    }),
+    prisma.payer.findMany({
+      where: { userId, id: { in: unique } },
+      select: { id: true, name: true },
+    }),
+    prisma.payerTransaction.findMany({
+      where: { id: { in: unique }, payer: { userId } },
+      select: { id: true, payer: { select: { name: true } } },
+    }),
+    prisma.beneficiary.findMany({
+      where: { userId, id: { in: unique } },
+      select: { id: true, name: true },
+    }),
+    prisma.beneficiaryTransaction.findMany({
+      where: { id: { in: unique }, beneficiary: { userId } },
+      select: { id: true, beneficiary: { select: { name: true } } },
+    }),
+    prisma.registeredLiability.findMany({
+      where: { userId, id: { in: unique } },
+      select: { id: true, liabilityCode: true, name: true },
+    }),
+    prisma.inventoryItem.findMany({
+      where: { userId, id: { in: unique } },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  return {
+    sales: new Map(sales.map((s) => [s.id, s.invoiceNumber])),
+    expenses: new Map(expenses.map((e) => [e.id, e.expenseNumber])),
+    assets: new Map(
+      assets.map((a) => [a.id, a.assetCode || a.assetName]),
+    ),
+    payers: new Map(payers.map((p) => [p.id, p.name])),
+    payerTxns: new Map(payerTxns.map((t) => [t.id, t.payer.name])),
+    beneficiaries: new Map(beneficiaries.map((b) => [b.id, b.name])),
+    beneficiaryTxns: new Map(
+      beneficiaryTxns.map((t) => [t.id, t.beneficiary.name]),
+    ),
+    liabilities: new Map(
+      liabilities.map((l) => [l.id, l.liabilityCode || l.name]),
+    ),
+    inventory: new Map(inventory.map((i) => [i.id, i.name])),
+  };
+}
+
+function ledgerDescriptionForEntry(
+  sourceType: string,
+  referenceType: string,
+  referenceId: string | null,
+  isReversal: boolean,
+  labels: Awaited<ReturnType<typeof loadRecordLabels>>,
+): string | null {
+  const id = primaryRef(referenceId);
+  if (!id) return null;
+
+  const saleNo = labels.sales.get(id);
+  const expNo = labels.expenses.get(id);
+  const assetNo = labels.assets.get(id);
+  const payerName = labels.payerTxns.get(id) ?? labels.payers.get(id);
+  const benName =
+    labels.beneficiaryTxns.get(id) ?? labels.beneficiaries.get(id);
+  const liabName = labels.liabilities.get(id);
+  const invName = labels.inventory.get(id);
+
+  if (sourceType === "sale" && saleNo) {
+    if (isReversal) return reversalForDescription("sale", saleNo);
+    if (referenceType.includes("COLLECTION")) {
+      return saleCollectionDescription(saleNo);
+    }
+    return saleRecognitionDescription(saleNo);
+  }
+  if (sourceType === "expense" && expNo) {
+    if (isReversal) return reversalForDescription("expense", expNo);
+    if (referenceType.includes("PAYMENT")) {
+      return expensePaymentDescription(expNo);
+    }
+    return expenseRecognitionDescription(expNo);
+  }
+  if (sourceType === "asset" && assetNo) {
+    if (isReversal) return reversalForDescription("asset", assetNo);
+    return `Asset purchase — ${assetNo}`;
+  }
+  if (sourceType === "payer" && payerName) {
+    if (isReversal) return reversalForDescription("payer", payerName);
+    return `Payer income — ${payerName}`;
+  }
+  if (sourceType === "beneficiary" && benName) {
+    if (isReversal) return reversalForDescription("beneficiary", benName);
+    return `Beneficiary payment — ${benName}`;
+  }
+  if (sourceType === "liability" && liabName) {
+    if (isReversal) return reversalForDescription("liability", liabName);
+    return `Liability — ${liabName}`;
+  }
+  if (sourceType === "inventory" && invName) {
+    if (isReversal) return reversalForDescription("inventory", invName);
+    return `Inventory — ${invName}`;
+  }
+  if (sourceType === "payroll") {
+    if (isReversal) return reversalForDescription("payroll", id);
+    return `Payroll accrual — ${displayRecordNumber(id)}`;
+  }
+  if (sourceType === "tax") {
+    if (isReversal) return reversalForDescription("tax", id);
+    return `Tax payment — ${displayRecordNumber(id)}`;
+  }
+  return null;
+}
+
 export const ledgerReportService = {
   async getDashboard(userId: string) {
     const plWindow = dashboardPlPeriod();
@@ -323,6 +496,18 @@ export const ledgerReportService = {
 
     const openingMap = aggregateToChart(openingEntries);
     const originals = await originalSourceMap(userId, periodEntries);
+    const labelIds = periodEntries.flatMap((e) => {
+      const reversing = isReversingJournal(e.transaction);
+      const origin = e.transaction.reversalOfId
+        ? originals.get(e.transaction.reversalOfId)
+        : undefined;
+      const refId = reversing
+        ? (origin?.referenceId ?? e.transaction.referenceId)
+        : e.transaction.referenceId;
+      const id = primaryRef(refId);
+      return id ? [id] : [];
+    });
+    const labels = await loadRecordLabels(userId, labelIds);
 
     const entriesByChart = new Map<string, RawEntry[]>();
     for (const entry of periodEntries) {
@@ -384,15 +569,25 @@ export const ledgerReportService = {
               ? origin.referenceType
               : e.transaction.referenceType,
           );
+          const sourceId = reversing
+            ? (origin?.referenceId ?? e.transaction.referenceId)
+            : e.transaction.referenceId;
+          const described = ledgerDescriptionForEntry(
+            sourceType,
+            reversing && origin
+              ? origin.referenceType
+              : e.transaction.referenceType,
+            sourceId,
+            reversing,
+            labels,
+          );
           return {
             id: e.id,
             date: formatYmd(e.transaction.transactionDate),
-            description: e.transaction.description,
+            description: described ?? e.transaction.description,
             source: SOURCE_LABEL[sourceType] ?? "Sale",
             sourceType,
-            sourceId: reversing
-              ? (origin?.referenceId ?? e.transaction.referenceId)
-              : e.transaction.referenceId,
+            sourceId,
             isReversal: reversing,
             debit: e.debit,
             credit: e.credit,

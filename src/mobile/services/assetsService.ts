@@ -42,7 +42,6 @@ import { prepaymentsService } from "./prepaymentsService";
 import { CAPITAL_ALLOWANCE_TABLE_I } from "../../constants/capitalAllowance";
 import { capitalAllowanceService } from "./capitalAllowanceService";
 import {
-  syncPurchaseToExpense,
   syncSaleRecord,
 } from "./moduleSyncService";
 import { RECEIVABLE_TYPES } from "../../constants/receivables";
@@ -945,17 +944,6 @@ export const assetsService = {
       data.purchaseCost,
       purchaseDate,
     );
-    await syncPurchaseToExpense(userId, {
-      amount: data.purchaseCost,
-      description: `Asset purchase: ${asset.assetName}`,
-      category: asset.assetType,
-      expenseType: "CAPEX",
-      expenseDate: purchaseDate,
-      supplierName: asset.vendor,
-      purchaseKind: "fixed_asset",
-      vatTag: "exempt",
-      convertedToAssetId: asset.id,
-    });
     return mapAssetRow(asset);
   },
 

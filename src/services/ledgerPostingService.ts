@@ -29,6 +29,13 @@ import {
 } from "../utils/bankLedgerAccount";
 import { isTransferPaymentType } from "../constants/salePaymentRules";
 import { HttpReplyError } from "../utils/httpReplyError";
+import {
+  displayRecordNumber,
+  expensePaymentDescription,
+  expenseRecognitionDescription,
+  saleCollectionDescription,
+  saleRecognitionDescription,
+} from "../utils/ledgerEntryDescription";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
@@ -71,6 +78,32 @@ async function resolvePaymentAssetAccount(
     null,
     "VALIDATION_ERROR",
   );
+}
+
+function primaryReferenceId(referenceId: string): string {
+  return referenceId.split(":")[0] ?? referenceId;
+}
+
+async function saleInvoiceNumber(
+  saleId: string,
+  db: DbClient,
+): Promise<string> {
+  const row = await db.sale.findUnique({
+    where: { id: saleId },
+    select: { invoiceNumber: true },
+  });
+  return row?.invoiceNumber ?? saleId;
+}
+
+async function expenseNumberLabel(
+  expenseId: string,
+  db: DbClient,
+): Promise<string> {
+  const row = await db.expense.findUnique({
+    where: { id: expenseId },
+    select: { expenseNumber: true },
+  });
+  return row?.expenseNumber ?? expenseId;
 }
 
 async function postOnce(
@@ -187,12 +220,13 @@ export const ledgerPostingService = {
     });
     if (entries.length === 0 || totalAmount <= 0) return null;
 
+    const invoiceNumber = await saleInvoiceNumber(sale.id, db);
     const tx = await postOnce(
       {
         userId,
         referenceType: LEDGER_REFERENCE_TYPES.SALE_RECOGNITION,
         referenceId: sale.id,
-        description: `Sale recognition ${sale.id}`,
+        description: saleRecognitionDescription(invoiceNumber),
         transactionDate: sale.saleDate,
         entries,
       },
@@ -210,7 +244,7 @@ export const ledgerPostingService = {
             userId,
             referenceType: LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
             referenceId: `${sale.id}:inv:${i}`,
-            description: `Sale collection ${sale.id}`,
+            description: saleCollectionDescription(invoiceNumber),
             transactionDate: sale.saleDate,
             entries: [
               line(
@@ -255,12 +289,16 @@ export const ledgerPostingService = {
       db,
     );
 
+    const invoiceNumber = await saleInvoiceNumber(
+      primaryReferenceId(saleId),
+      db,
+    );
     return postOnce(
       {
         userId,
         referenceType: LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
         referenceId: `${saleId}:${suffix}`,
-        description: `Sale collection ${saleId}`,
+        description: saleCollectionDescription(invoiceNumber),
         transactionDate,
         entries: [
           line(asset, amt, 0),
@@ -324,12 +362,13 @@ export const ledgerPostingService = {
           line(paymentAsset!, 0, total),
         ];
 
+    const expenseNo = await expenseNumberLabel(expense.id, db);
     const tx = await postOnce(
       {
         userId,
         referenceType: LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
         referenceId: expense.id,
-        description: `Expense recognition ${expense.id}`,
+        description: expenseRecognitionDescription(expenseNo),
         transactionDate: expense.expenseDate,
         entries,
       },
@@ -347,7 +386,7 @@ export const ledgerPostingService = {
             userId,
             referenceType: LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
             referenceId: `${expense.id}:inv:${i}`,
-            description: `Expense payment ${expense.id}`,
+            description: expensePaymentDescription(expenseNo),
             transactionDate: expense.expenseDate,
             entries: [
               line(account(LEDGER_ACCOUNTS.ACCOUNTS_PAYABLE), item.amount, 0),
@@ -392,12 +431,16 @@ export const ledgerPostingService = {
       db,
     );
 
+    const expenseNo = await expenseNumberLabel(
+      primaryReferenceId(expenseId),
+      db,
+    );
     return postOnce(
       {
         userId,
         referenceType: LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
         referenceId: `${expenseId}:${suffix}`,
-        description: `Expense payment ${expenseId}`,
+        description: expensePaymentDescription(expenseNo),
         transactionDate,
         entries: [
           line(account(LEDGER_ACCOUNTS.ACCOUNTS_PAYABLE), amt, 0),
@@ -660,12 +703,17 @@ export const ledgerPostingService = {
     const amt = normalizeMoneyAmount(cost);
     if (amt <= 0) return null;
 
+    const row = await db.asset.findUnique({
+      where: { id: assetId },
+      select: { assetCode: true, assetName: true },
+    });
+    const label = row?.assetCode || row?.assetName || assetId;
     return postOnce(
       {
         userId,
         referenceType: LEDGER_REFERENCE_TYPES.ASSET_PURCHASE,
         referenceId: assetId,
-        description: `Asset purchase ${assetId}`,
+        description: `Asset purchase — ${label}`,
         transactionDate: purchaseDate,
         entries: [
           line(account(LEDGER_ACCOUNTS.FIXED_ASSET), amt, 0),
