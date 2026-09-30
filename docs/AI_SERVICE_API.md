@@ -105,3 +105,24 @@ Fetch a single vault document by composite id.
 - If a stored `documentUrl` exists → JSON `{ url }`.
 - Else if a PDF can be generated → binary PDF stream.
 - Else → 404.
+
+### GET /tax-statements
+
+Persona tax statement for a calendar year of assessment. Read-only. Does not change filings, records, or tax-payables.
+
+**Query params:**
+
+| Param        | Required | Description |
+|--------------|----------|-------------|
+| `incomeType` | Yes      | `PAYEE` \| `REMOTE_WORKER` \| `GIG_WORKER` \| `TRADER` \| `SOLOPRENEUR` |
+| `year`       | Yes      | Integer calendar year (`2026` → 1 Jan 2026 through 31 Dec 2026) |
+
+**Example:**
+
+```bash
+curl -X GET "http://localhost:5000/api/v1/ai/tax-statements?incomeType=PAYEE&year=2026" \
+  -H "X-Client-Id: <userId>" \
+  -H "X-Api-Secret: <AI_SERVICE_SECRET>"
+```
+
+Response `data` includes `incomeType`, `year`, `periodStart`, `periodEnd`, `currency`, then template lines (`incomeStatement` for PAYEE, `profitAndLoss` for the others) and `taxComputation`. Solopreneur also returns `legalStructure` and `liabilityTax`. Amounts are whole naira. Every template line is present, including zeros.

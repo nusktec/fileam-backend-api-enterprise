@@ -152,6 +152,16 @@
       "value": ""
     },
     {
+      "key": "taxStatementYear",
+      "value": "2026",
+      "description": "Calendar year of assessment for GET /ai/tax-statements (1 Jan–31 Dec)"
+    },
+    {
+      "key": "taxStatementIncomeType",
+      "value": "PAYEE",
+      "description": "PAYEE | REMOTE_WORKER | GIG_WORKER | TRADER | SOLOPRENEUR"
+    },
+    {
       "key": "listDateFrom",
       "value": ""
     },
@@ -7922,9 +7932,123 @@
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents/{{evidenceVaultDocId}}/download",
             "description": "Returns { url } when stored; otherwise streams generated PDF when possible."
           }
+        },
+        {
+          "name": "Tax statements",
+          "item": [
+            {
+              "name": "Get tax statement (by variables)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Client-Id",
+                    "value": "{{aiClientId}}"
+                  },
+                  {
+                    "key": "X-Api-Secret",
+                    "value": "{{aiServiceSecret}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/tax-statements?incomeType={{taxStatementIncomeType}}&year={{taxStatementYear}}",
+                "description": "Read-only persona tax statement. incomeType: PAYEE | REMOTE_WORKER | GIG_WORKER | TRADER | SOLOPRENEUR. year is the calendar year of assessment (1 Jan–31 Dec). Envelope { status, message, data }. Does not change filings or records."
+              }
+            },
+            {
+              "name": "Get tax statement - PAYEE",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Client-Id",
+                    "value": "{{aiClientId}}"
+                  },
+                  {
+                    "key": "X-Api-Secret",
+                    "value": "{{aiServiceSecret}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/tax-statements?incomeType=PAYEE&year={{taxStatementYear}}",
+                "description": "PAYEE template: 12 income-statement lines + 11 tax lines. Employment + other income. No sales/expenses/capital allowance."
+              }
+            },
+            {
+              "name": "Get tax statement - REMOTE_WORKER",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Client-Id",
+                    "value": "{{aiClientId}}"
+                  },
+                  {
+                    "key": "X-Api-Secret",
+                    "value": "{{aiServiceSecret}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/tax-statements?incomeType=REMOTE_WORKER&year={{taxStatementYear}}",
+                "description": "Remote Worker template: employment + business P&L + PIT. Capital allowance capped at business profit when use.tax is PIT."
+              }
+            },
+            {
+              "name": "Get tax statement - GIG_WORKER",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Client-Id",
+                    "value": "{{aiClientId}}"
+                  },
+                  {
+                    "key": "X-Api-Secret",
+                    "value": "{{aiServiceSecret}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/tax-statements?incomeType=GIG_WORKER&year={{taxStatementYear}}",
+                "description": "Gig Worker template: gig P&L + PIT. Platform/Gig Revenue and Other Gig Income stay 0 unless stored categories exist."
+              }
+            },
+            {
+              "name": "Get tax statement - TRADER",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Client-Id",
+                    "value": "{{aiClientId}}"
+                  },
+                  {
+                    "key": "X-Api-Secret",
+                    "value": "{{aiServiceSecret}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/tax-statements?incomeType=TRADER&year={{taxStatementYear}}",
+                "description": "Trader template: trading P&L + COGS (current Lagos year only) + PIT. Not CIT."
+              }
+            },
+            {
+              "name": "Get tax statement - SOLOPRENEUR",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "X-Client-Id",
+                    "value": "{{aiClientId}}"
+                  },
+                  {
+                    "key": "X-Api-Secret",
+                    "value": "{{aiServiceSecret}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/tax-statements?incomeType=SOLOPRENEUR&year={{taxStatementYear}}",
+                "description": "Solopreneur template: full P&L (two Profit Before Tax lines). legalStructure and liabilityTax (PIT vs CIT) from solopreneurRegistration."
+              }
+            }
+          ],
+          "description": "GET /ai/tax-statements. Headers: X-Client-Id, X-Api-Secret. Same year as GET /filings/pit/calculation?year=."
         }
       ],
-      "description": "Server-to-server AI API. Headers: X-Client-Id (user id), X-Api-Secret (AI_SERVICE_SECRET). GET/PATCH /records (sales|expenses|filings). Evidence vault: GET /evidence-vault/documents (totalDocuments + hyphenated categories), /:id, /:id/download."
+      "description": "Server-to-server AI API. Headers: X-Client-Id (user id), X-Api-Secret (AI_SERVICE_SECRET). GET/PATCH /records (sales|expenses|filings). Evidence vault: GET /evidence-vault/documents (totalDocuments + hyphenated categories), /:id, /:id/download. Tax statements: GET /tax-statements?incomeType=&year= (PAYEE, REMOTE_WORKER, GIG_WORKER, TRADER, SOLOPRENEUR). Read-only; does not change filings."
     }
   ]
 }
