@@ -652,7 +652,7 @@ export const employersService = {
 
     await insertEmployerTerms(employer.id, body.startDate.slice(0, 7), employer);
 
-    return mapEmployerRow(employer, 0);
+    return mapEmployerRow(employer, 0, true);
   },
 
   async list(
@@ -690,7 +690,7 @@ export const employersService = {
         taxTreatment,
         year,
       );
-      const mapped = mapEmployerRow(row, payeCredit);
+      const mapped = mapEmployerRow(row, payeCredit, true);
       employers.push(mapped);
       totalAnnualIncome = normalizeMoneyAmount(
         totalAnnualIncome + (mapped.annualIncome as number),

@@ -19,6 +19,7 @@ import { citFilingService } from "./citFilingService";
 import { pitFilingService } from "./pitFilingService";
 import { payrollService } from "./payrollService";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import { collapseAnnualTaxPayables } from "./collapseAnnualTaxPayables";
 
 const PAYMENT_BASE_URL =
   process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
@@ -261,6 +262,9 @@ export const taxPayablesService = {
     const amounts = await filingAmountsForPeriod(userId, year, month);
 
     for (const { taxType, amountDue } of amounts) {
+      if ((taxType === "PIT" || taxType === "CIT") && month !== 12) {
+        continue;
+      }
       const filingDueDate =
         taxType === "CIT"
           ? getAnnualFilingDueDate("CIT", year)
@@ -327,6 +331,12 @@ export const taxPayablesService = {
         );
         filingTotals = totalsFromFilingAmounts(amounts);
         for (const { taxType, amountDue } of amounts) {
+          if (
+            (taxType === "PIT" || taxType === "CIT") &&
+            opts.periodMonth !== 12
+          ) {
+            continue;
+          }
           const filingDueDate =
             taxType === "CIT"
               ? getAnnualFilingDueDate("CIT", opts.periodYear)
@@ -353,6 +363,8 @@ export const taxPayablesService = {
     } else {
       await this.ensurePayablesForUser(userId);
     }
+
+    await collapseAnnualTaxPayables(userId);
 
     const where: {
       userId: string;
@@ -410,6 +422,12 @@ export const taxPayablesService = {
         if (opts.dateTo) where.filingDueDate.lte = opts.dateTo;
       }
     }
+
+    const taxTypeFilterList = filters?.taxType?.trim().toUpperCase();
+    if (taxTypeFilterList === "PIT" || taxTypeFilterList === "CIT") {
+      where.periodMonth = 12;
+    }
+
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);
     const order = opts?.sortOrder === "ASC" ? "asc" : "desc";

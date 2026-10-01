@@ -121,6 +121,8 @@ export function isFinalWhtPayerCategory(category: string): boolean {
 
 export type PitIncomeInputs = {
   tradingProfit: number;
+  /** Deducted once on the gross-income line. Not a personal relief. */
+  capitalAllowance?: number;
   otherBusinessIncome: number;
   otherPersonalIncome: number;
   payerFees: number;
@@ -142,8 +144,10 @@ export function computeGrossIncome(input: PitIncomeInputs): number {
   const payerFees = input.payerFeesIncludedInSales
     ? 0
     : Math.max(0, input.payerFees);
+  const capitalAllowance = Math.max(0, input.capitalAllowance ?? 0);
   return (
-    input.tradingProfit +
+    input.tradingProfit -
+    capitalAllowance +
     Math.max(0, input.otherBusinessIncome) +
     Math.max(0, input.otherPersonalIncome) +
     payerFees
@@ -190,6 +194,7 @@ export function computePitFromSnapshot(
   );
   const grossIncome = computeGrossIncome({
     tradingProfit: snapshot.tradingProfit,
+    capitalAllowance,
     otherBusinessIncome: snapshot.otherBusinessIncome,
     otherPersonalIncome: snapshot.otherPersonalIncome,
     payerFees: snapshot.payerFees,

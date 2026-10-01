@@ -3,6 +3,7 @@ import { prisma } from "../../config/database";
 import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
+import { collapseAnnualTaxPayables } from "./collapseAnnualTaxPayables";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -358,6 +359,7 @@ export const filingsService = {
       filingDueDate?: { gte?: Date; lte?: Date };
       periodYear?: number;
       periodMonth?: number;
+      AND?: Array<Record<string, unknown>>;
     } = { userId };
     if (filters?.taxType) where.taxType = filters.taxType;
     if (filters?.dbStatus && filters.dbStatus !== "all") {
@@ -370,6 +372,22 @@ export const filingsService = {
       where.filingDueDate = {};
       if (opts.dateFrom) where.filingDueDate.gte = opts.dateFrom;
       if (opts.dateTo) where.filingDueDate.lte = opts.dateTo;
+    }
+
+    await collapseAnnualTaxPayables(userId);
+
+    const taxTypeFilter = filters?.taxType?.trim().toUpperCase();
+    if (taxTypeFilter === "PIT" || taxTypeFilter === "CIT") {
+      where.periodMonth = 12;
+    } else if (!taxTypeFilter) {
+      where.AND = [
+        {
+          OR: [
+            { taxType: { notIn: ["PIT", "CIT"] } },
+            { taxType: { in: ["PIT", "CIT"] }, periodMonth: 12 },
+          ],
+        },
+      ];
     }
     const page = opts?.page ?? 1;
     const limit = Math.min(Math.max(1, opts?.limit ?? 10), 100);

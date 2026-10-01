@@ -297,11 +297,8 @@ export async function getPitAnnualEstimateForYear(userId: string, year: number) 
     booksCa.available,
     Math.max(0, inputs.tradingProfit),
   );
-  const tradingProfit = normalizeMoneyAmount(
-    inputs.tradingProfit - capitalAllowance,
-  );
   const snapshot = computePitFromSnapshot({
-    tradingProfit,
+    tradingProfit: inputs.tradingProfit,
     capitalAllowance,
     capitalAllowanceAvailable: booksCa.available,
     otherBusinessIncome: inputs.otherBusinessIncome,
@@ -563,12 +560,9 @@ export const pitFilingService = {
       booksCa.available,
       Math.max(0, tradeProfitBeforeAllowance),
     );
-    const tradingProfit = normalizeMoneyAmount(
-      tradeProfitBeforeAllowance - capitalAllowance,
-    );
 
     const snapshot = computePitFromSnapshot({
-      tradingProfit,
+      tradingProfit: tradeProfitBeforeAllowance,
       capitalAllowance,
       capitalAllowanceAvailable: booksCa.available,
       otherBusinessIncome: merged.otherBusinessIncome,
@@ -606,7 +600,7 @@ export const pitFilingService = {
       bands: bands as PitBandResult[],
       draftApplied: draftInputs != null,
         inputs: {
-          tradingProfit,
+          tradingProfit: tradeProfitBeforeAllowance,
           tradingProfitBeforeAllowance: tradeProfitBeforeAllowance,
           capitalAllowance,
           capitalAllowanceAvailable: booksCa.available,

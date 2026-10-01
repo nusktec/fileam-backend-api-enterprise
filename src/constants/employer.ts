@@ -1,7 +1,7 @@
 import { PERCENT, WHT_RATE_SERVICES_PERCENT } from "./percentages";
-import { computeAnnualPaye } from "./payroll";
 import {
   PIT_PROGRESSIVE_BRACKETS,
+  computeProgressivePitFromChargeableIncome,
 } from "./pitTaxSchedule";
 
 export const EMPLOYER_TYPES = [
@@ -336,16 +336,12 @@ export function computeEmployerTaxComputation(
     incomeKind === "EMPLOYMENT" &&
     annualGross / 12 <= NATIONAL_MINIMUM_WAGE_MONTHLY_NGN;
 
-  const annualBasic = computeAnnualBasicSalary(profile);
-  const payeCalc = minimumWageExempt
-    ? null
-    : computeAnnualPaye(annualGross, {
-        pensionContributionAnnual: employeePension,
-        basicAnnual: annualBasic,
-        nhfApplicable: incomeKind === "EMPLOYMENT",
-      });
-  const chargeableIncome = payeCalc?.chargeableIncome ?? 0;
-  const pitPayable = payeCalc?.annualPaye ?? 0;
+  const chargeableIncome = minimumWageExempt
+    ? 0
+    : Math.max(0, annualGross - employeePension);
+  const pitPayable = minimumWageExempt
+    ? 0
+    : computeProgressivePitFromChargeableIncome(chargeableIncome);
 
   const bands: Array<{ label: string; tax: number }> = [];
   let prevLimit = 0;
