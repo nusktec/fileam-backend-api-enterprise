@@ -187,10 +187,14 @@ async function upsertPayableRow(input: {
       )
     : 0;
   const hasSubmission = existing ? isFilingCompliant(existing) : false;
-  if (
-    hasSubmission &&
-    (input.taxType === "PIT" || input.taxType === "CIT")
-  ) {
+  const keepSubmitted =
+    existing != null &&
+    (existing.submittedAt != null || existing.status === "submitted");
+  const keepPaid =
+    hasSubmission ||
+    existing?.status === "paid" ||
+    existing?.status === "overpaid";
+  if (keepPaid && (input.taxType === "PIT" || input.taxType === "CIT")) {
     return;
   }
 
@@ -198,14 +202,19 @@ async function upsertPayableRow(input: {
     if (
       existing &&
       totalPaid === 0 &&
-      !hasSubmission &&
+      !keepPaid &&
+      !keepSubmitted &&
       existing.status === "pending"
     ) {
       await prisma.taxPayable.delete({ where: { id: existing.id } });
     } else if (existing) {
       const penalties = decimalToNumber(existing.penalties);
       const totalPayable = input.amountDue + penalties;
-      const status = derivePayableStatus(totalPayable, totalPaid);
+      const status = keepPaid
+        ? existing.status
+        : keepSubmitted
+          ? "submitted"
+          : derivePayableStatus(totalPayable, totalPaid);
       await prisma.taxPayable.update({
         where: { id: existing.id },
         data: {
@@ -220,7 +229,11 @@ async function upsertPayableRow(input: {
 
   const penalties = existing ? decimalToNumber(existing.penalties) : 0;
   const totalPayable = input.amountDue + penalties;
-  const status = derivePayableStatus(totalPayable, totalPaid);
+  const status = keepPaid
+    ? existing!.status
+    : keepSubmitted
+      ? "submitted"
+      : derivePayableStatus(totalPayable, totalPaid);
 
   await prisma.taxPayable.upsert({
     where: {

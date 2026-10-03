@@ -8,7 +8,7 @@ export const COMPLIANT_STEP = 12;
 export const SUBMIT_REFERENCE_STEP = 8;
 export const AFTER_SUBMIT_STEP = 9;
 
-export type FilingHubStatus = "pending" | "overdue" | "paid";
+export type FilingHubStatus = "pending" | "submitted" | "overdue" | "paid";
 export type OverviewFilingStatus = "Pending" | "Overdue" | "Filed";
 
 export function parseCompletedSteps(value: unknown): number[] {
@@ -63,11 +63,19 @@ export function yearNotOpenMessage(periodYear: number): string {
 
 export function deriveHubFilingStatus(row: {
   status: string;
+  submittedAt?: Date | string | null;
   completedSteps?: unknown;
   filingDueDate: Date;
   today?: Date;
 }): FilingHubStatus {
-  if (isFilingCompliant(row)) return "paid";
+  if (
+    isFilingCompliant(row) ||
+    row.status === "paid" ||
+    row.status === "overpaid"
+  ) {
+    return "paid";
+  }
+  if (row.submittedAt) return "submitted";
   const today = row.today ? new Date(row.today) : new Date();
   today.setHours(0, 0, 0, 0);
   const due = new Date(row.filingDueDate);
@@ -90,7 +98,7 @@ export function overviewFilingStatusFromRow(
 }
 
 /**
- * Rows closed at step 8 under the old spec: submitted/paid without step 12.
+ * Paid without step 12 was closed too early. Keep submitted rows as submitted.
  * Keep the workspace step the user had reached.
  */
 export async function reopenPrematurelyClosedFilings(
@@ -100,7 +108,7 @@ export async function reopenPrematurelyClosedFilings(
     where: {
       userId,
       taxType: { in: [...FILING_HUB_TAX_TYPES] },
-      status: { in: ["paid", "submitted", "overpaid"] },
+      status: { in: ["paid", "overpaid"] },
     },
     select: { id: true, status: true, completedSteps: true },
   });
@@ -111,7 +119,7 @@ export async function reopenPrematurelyClosedFilings(
   await prisma.taxPayable.updateMany({
     where: { id: { in: ids } },
     data: {
-      status: "pending",
+      status: "submitted",
       paymentStatus: "unpaid",
     },
   });
@@ -121,14 +129,14 @@ export function step8WorkspacePatch(existing?: {
   currentStep?: number;
   completedSteps?: Prisma.JsonValue | null;
 }): {
-  status: "pending";
+  status: "submitted";
   paymentStatus: "unpaid";
   currentStep: number;
   completedSteps: number[];
 } {
   const current = existing?.currentStep ?? 1;
   return {
-    status: "pending",
+    status: "submitted",
     paymentStatus: "unpaid",
     currentStep: Math.max(current, AFTER_SUBMIT_STEP),
     completedSteps: withCompletedStep(

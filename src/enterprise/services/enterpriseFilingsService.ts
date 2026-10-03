@@ -5,7 +5,6 @@ import { filingTaxTypeService } from "./filingTaxTypeService";
 import { filingsService } from "../../mobile/services/filingsService";
 import {
   deriveHubFilingStatus,
-  FILING_HUB_TAX_TYPES,
   isFilingCompliant,
 } from "../../constants/filingStatusRules";
 
@@ -56,10 +55,7 @@ export async function getFilingsSummary(linkedUserId: string) {
     if (isFilingCompliant(p) || p.status === "paid" || totalPaid >= totalPayable) {
       submitted++;
       if (submittedDays === 0 || days < submittedDays) submittedDays = Math.abs(days);
-    } else if (
-      p.submittedAt &&
-      !(FILING_HUB_TAX_TYPES as readonly string[]).includes(p.taxType.trim().toUpperCase())
-    ) {
+    } else if (p.submittedAt) {
       submitted++;
       if (submittedDays === 0 || days < submittedDays) submittedDays = Math.abs(days);
     } else if (due < today) {
@@ -98,10 +94,6 @@ export function deriveConsultantFilingDisplayStatus(p: {
   payments: { amountPaid: Decimal }[];
   completedSteps?: unknown;
 }): ConsultantFilingDisplayStatus {
-  const tax = (p.taxType ?? "").trim().toUpperCase();
-  if ((FILING_HUB_TAX_TYPES as readonly string[]).includes(tax)) {
-    return deriveHubFilingStatus(p);
-  }
   const totalPayable = decimalToNumber(p.totalPayable);
   const totalPaid = p.payments.reduce(
     (s, r) => s + decimalToNumber(r.amountPaid),
@@ -109,13 +101,7 @@ export function deriveConsultantFilingDisplayStatus(p: {
   );
   if (p.status === "paid" || p.status === "overpaid") return "paid";
   if (totalPayable > 0 && totalPaid >= totalPayable) return "paid";
-  if (p.submittedAt) return "submitted";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(p.filingDueDate);
-  due.setHours(0, 0, 0, 0);
-  if (due < today) return "overdue";
-  return "pending";
+  return deriveHubFilingStatus(p);
 }
 
 export type FilingsStatusCounts = {

@@ -670,7 +670,7 @@ export const pitFilingService = {
 
     return {
       id: taxPayable.id,
-      status: "pending",
+      status: "submitted",
       submissionDate: recordedAt,
       completionPercent: completionPercentFromStep(step8.currentStep),
     };

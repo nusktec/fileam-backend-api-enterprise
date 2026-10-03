@@ -303,7 +303,7 @@ export const vatFilingService = {
       submissionDate: recordedAt,
       period: `${params.periodYear}-${String(params.periodMonth).padStart(2, "0")}`,
       amount: params.amount,
-      status: "pending",
+      status: "submitted",
       completionPercent: completionPercentFromStep(step8.currentStep),
     };
   },

@@ -292,7 +292,7 @@ export const whtFilingService = {
       submissionDate: recordedAt,
       period: `${params.periodYear}-${String(params.periodMonth).padStart(2, "0")}`,
       amount: recalculated,
-      status: "pending",
+      status: "submitted",
       completionPercent: completionPercentFromStep(step8.currentStep),
     };
   },

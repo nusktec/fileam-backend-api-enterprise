@@ -23,12 +23,10 @@ import { monthlyFilingDueDateUtc } from "../../constants/taxPayable";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import {
-  AFTER_SUBMIT_STEP,
   COMPLIANT_STEP,
   deriveHubFilingStatus,
   isFilingCompliant,
   reopenPrematurelyClosedFilings,
-  withCompletedStep,
 } from "../../constants/filingStatusRules";
 import { citFilingService } from "./citFilingService";
 import {
@@ -73,9 +71,10 @@ function resolveDueDate(
 
 function deriveWorkspaceStatus(row: {
   status: string;
+  submittedAt?: Date | string | null;
   completedSteps: unknown;
   filingDueDate: Date;
-}): "pending" | "overdue" | "paid" {
+}): "pending" | "submitted" | "overdue" | "paid" {
   return deriveHubFilingStatus(row);
 }
 
@@ -187,7 +186,13 @@ function mapWorkspaceRow(
     periodYear: row.periodYear,
     periodMonth: row.periodMonth,
     status,
-    completionPercent: completionPercentFromStep(row.currentStep),
+    completionPercent:
+      isFilingCompliant(row) ||
+      row.status === "paid" ||
+      row.status === "overpaid" ||
+      row.currentStep >= COMPLIANT_STEP
+        ? 100
+        : completionPercentFromStep(row.currentStep),
     amount,
     dueDate: row.filingDueDate.toISOString().slice(0, 10),
     frozen: row.frozen,
@@ -776,9 +781,9 @@ export const filingWorkspaceService = {
     updateData.status = "paid";
     updateData.paymentStatus = "paid";
     updateData.currentStep = COMPLIANT_STEP;
-    updateData.completedSteps = withCompletedStep(
-      row.completedSteps,
-      COMPLIANT_STEP,
+    updateData.completedSteps = Array.from(
+      { length: COMPLIANT_STEP },
+      (_, i) => i + 1,
     );
 
     const updated = await prisma.taxPayable.update({

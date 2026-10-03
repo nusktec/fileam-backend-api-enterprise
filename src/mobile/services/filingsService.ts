@@ -6,7 +6,7 @@ import { completionPercentFromStep } from "../../constants/filingWorkspace";
 import { collapseAnnualTaxPayables } from "./collapseAnnualTaxPayables";
 import {
   deriveHubFilingStatus,
-  FILING_HUB_TAX_TYPES,
+  isFilingCompliant,
   reopenPrematurelyClosedFilings,
 } from "../../constants/filingStatusRules";
 
@@ -179,6 +179,7 @@ async function getWhtScheduleLineCountForPeriod(
 function buildFilingCompletion(
   p: {
     taxType: string;
+    status?: string;
     totalPayable: Decimal | null;
     documentUrl: string | null;
     evidenceVaultId: string | null;
@@ -187,6 +188,7 @@ function buildFilingCompletion(
     vatRegistrationNumber: string | null;
     submittedAt: Date | null;
     currentStep?: number;
+    completedSteps?: unknown;
   },
   period: PeriodRecordCompliance,
   whtLineCount: number | null,
@@ -198,6 +200,17 @@ function buildFilingCompletion(
     items: FilingCompletionItem[];
   };
 } {
+  const complete =
+    p.status === "paid" ||
+    p.status === "overpaid" ||
+    (p.currentStep != null && p.currentStep >= 12) ||
+    isFilingCompliant({ status: p.status, completedSteps: p.completedSteps });
+  if (complete) {
+    return {
+      completionPercent: 100,
+      completion: { met: 12, total: 12, items: [] },
+    };
+  }
   if (p.currentStep != null && p.currentStep >= 1) {
     const stepPercent = completionPercentFromStep(p.currentStep);
     return {
@@ -327,20 +340,10 @@ function deriveDisplayStatus(payable: {
   totalPaid: number;
   completedSteps?: unknown;
 }): FilingDisplayStatus {
-  const tax = (payable.taxType ?? "").trim().toUpperCase();
-  if ((FILING_HUB_TAX_TYPES as readonly string[]).includes(tax)) {
-    return deriveHubFilingStatus(payable);
-  }
   if (payable.status === "paid" || payable.status === "overpaid") return "paid";
   if (payable.totalPaid >= payable.totalPayable && payable.totalPayable > 0)
     return "paid";
-  if (payable.submittedAt) return "submitted";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(payable.filingDueDate);
-  due.setHours(0, 0, 0, 0);
-  if (due < today) return "overdue";
-  return "pending";
+  return deriveHubFilingStatus(payable);
 }
 
 export const filingsService = {
@@ -539,6 +542,7 @@ export const filingsService = {
       const { completionPercent, completion } = buildFilingCompletion(
         {
           taxType: p.taxType,
+          status: p.status,
           totalPayable: p.totalPayable,
           documentUrl: p.documentUrl,
           evidenceVaultId: p.evidenceVaultId,
@@ -547,6 +551,7 @@ export const filingsService = {
           vatRegistrationNumber,
           submittedAt: p.submittedAt,
           currentStep: p.currentStep,
+          completedSteps: p.completedSteps,
         },
         periodRecordCompliance,
         whtLineCount,
@@ -681,6 +686,7 @@ export const filingsService = {
     const { completionPercent, completion } = buildFilingCompletion(
       {
         taxType: p.taxType,
+        status: p.status,
         totalPayable: p.totalPayable,
         documentUrl: p.documentUrl,
         evidenceVaultId: p.evidenceVaultId,
@@ -689,6 +695,7 @@ export const filingsService = {
         vatRegistrationNumber,
         submittedAt: p.submittedAt,
         currentStep: p.currentStep,
+        completedSteps: p.completedSteps,
       },
       periodRecordCompliance,
       whtLineCount,

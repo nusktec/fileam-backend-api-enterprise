@@ -27,7 +27,7 @@ export const genericTaxFilingService = {
         ? params.dueDate
         : new Date(params.dueDate);
     const submittedAt = new Date();
-    const status = params.paymentStatus === "paid" ? "paid" : "pending";
+    const status = params.paymentStatus === "paid" ? "paid" : "submitted";
 
     const taxPayable = await prisma.taxPayable.upsert({
       where: {
