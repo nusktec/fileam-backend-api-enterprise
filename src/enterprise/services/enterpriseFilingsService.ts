@@ -3,6 +3,11 @@ import { prisma } from "../../config/database";
 import { genericTaxFilingService } from "../../services/genericTaxFilingService";
 import { filingTaxTypeService } from "./filingTaxTypeService";
 import { filingsService } from "../../mobile/services/filingsService";
+import {
+  deriveHubFilingStatus,
+  FILING_HUB_TAX_TYPES,
+  isFilingCompliant,
+} from "../../constants/filingStatusRules";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -48,10 +53,13 @@ export async function getFilingsSummary(linkedUserId: string) {
     due.setHours(0, 0, 0, 0);
     const days = daysUntil(p.filingDueDate);
 
-    if (p.status === "paid" || totalPaid >= totalPayable) {
+    if (isFilingCompliant(p) || p.status === "paid" || totalPaid >= totalPayable) {
       submitted++;
       if (submittedDays === 0 || days < submittedDays) submittedDays = Math.abs(days);
-    } else if (p.submittedAt) {
+    } else if (
+      p.submittedAt &&
+      !(FILING_HUB_TAX_TYPES as readonly string[]).includes(p.taxType.trim().toUpperCase())
+    ) {
       submitted++;
       if (submittedDays === 0 || days < submittedDays) submittedDays = Math.abs(days);
     } else if (due < today) {
@@ -82,12 +90,18 @@ export type ConsultantFilingDisplayStatus =
   | "pending";
 
 export function deriveConsultantFilingDisplayStatus(p: {
+  taxType?: string;
   status: string;
   submittedAt: Date | null;
   filingDueDate: Date;
   totalPayable: Decimal | null;
   payments: { amountPaid: Decimal }[];
+  completedSteps?: unknown;
 }): ConsultantFilingDisplayStatus {
+  const tax = (p.taxType ?? "").trim().toUpperCase();
+  if ((FILING_HUB_TAX_TYPES as readonly string[]).includes(tax)) {
+    return deriveHubFilingStatus(p);
+  }
   const totalPayable = decimalToNumber(p.totalPayable);
   const totalPaid = p.payments.reduce(
     (s, r) => s + decimalToNumber(r.amountPaid),
@@ -285,6 +299,7 @@ export async function createFiling(
     evidenceVaultId?: string;
     stateOfOperation?: string;
     vatRegistrationNumber?: string;
+    submissionReference?: string;
   },
 ) {
   const taxType = data.taxType.trim().toUpperCase();
@@ -309,6 +324,7 @@ export async function createFiling(
       evidenceVaultId: data.evidenceVaultId,
       stateOfOperation: data.stateOfOperation,
       vatRegistrationNumber: data.vatRegistrationNumber,
+      submissionReference: data.submissionReference,
     });
   }
 
@@ -323,6 +339,35 @@ export async function createFiling(
       receiptUrl: data.receiptUrl,
       documentUrl: data.documentUrl,
       evidenceVaultId: data.evidenceVaultId,
+      submissionReference: data.submissionReference,
+    });
+  }
+
+  if (taxType === "CIT") {
+    const { citFilingService } = await import("../../mobile/services/citFilingService");
+    return citFilingService.submit(linkedUserId, {
+      periodYear: data.periodYear,
+      periodMonth: data.periodMonth,
+      amount: data.amount,
+      dueDate: dueDate.toISOString().slice(0, 10),
+      receiptUrl: data.receiptUrl,
+      documentUrl: data.documentUrl,
+      evidenceVaultId: data.evidenceVaultId,
+      submissionReference: data.submissionReference,
+    });
+  }
+
+  if (taxType === "PIT") {
+    const { pitFilingService } = await import("../../mobile/services/pitFilingService");
+    return pitFilingService.submit(linkedUserId, {
+      periodYear: data.periodYear,
+      periodMonth: data.periodMonth,
+      amount: data.amount,
+      dueDate: dueDate.toISOString().slice(0, 10),
+      receiptUrl: data.receiptUrl,
+      documentUrl: data.documentUrl,
+      evidenceVaultId: data.evidenceVaultId,
+      submissionReference: data.submissionReference,
     });
   }
 

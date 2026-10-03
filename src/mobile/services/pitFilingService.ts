@@ -12,8 +12,6 @@ import {
   type EmployerType,
 } from "../../constants/employer";
 import {
-  amountsMatch,
-  assertRentClaimComplete,
   computePitFromSnapshot,
   isFinalWhtPayerCategory,
   isPitYearOpenForFiling,
@@ -21,7 +19,6 @@ import {
   PIT_DEFAULT_WHT_RATE_PERCENT,
   PIT_MINIMUM_WAGE_MONTHLY_NGN,
   PIT_PERIOD_MONTH,
-  PIT_STATE_OF_RESIDENCE_VALUES,
   pitDueDateForYear,
   type PitBandResult,
   type PitComputationSnapshot,
@@ -38,6 +35,13 @@ import { sumPayeCreditForYear } from "./employersService";
 import { copyCarryForwardOnSubmit } from "./filingCarryForwardService";
 import { capitalAllowanceService } from "./capitalAllowanceService";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
+import {
+  isFilingCompliant,
+  reopenPrematurelyClosedFilings,
+  requireSubmissionReference,
+  step8WorkspacePatch,
+  yearNotOpenMessage,
+} from "../../constants/filingStatusRules";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -381,33 +385,9 @@ async function loadProfileTinAndState(userId: string): Promise<{
 function validateSubmitBody(body: Record<string, unknown>): void {
   const periodYear = Number(body.periodYear);
   const periodMonth = Number(body.periodMonth);
-  const tin = String(body.tin ?? "").trim();
-  const stateOfResidence = String(body.stateOfResidence ?? "").trim();
   const dueDate = String(body.dueDate ?? "");
-  const amount = Number(body.amount);
   const computation = body.computation as PitComputationSnapshot | undefined;
 
-  if (!tin) {
-    throw new HttpReplyError(
-      400,
-      "Add your TIN and state of residence before filing.",
-      null,
-      "VALIDATION_ERROR",
-    );
-  }
-  if (
-    !stateOfResidence ||
-    !PIT_STATE_OF_RESIDENCE_VALUES.includes(
-      stateOfResidence as (typeof PIT_STATE_OF_RESIDENCE_VALUES)[number],
-    )
-  ) {
-    throw new HttpReplyError(
-      400,
-      "Add your TIN and state of residence before filing.",
-      null,
-      "VALIDATION_ERROR",
-    );
-  }
   if (periodMonth !== PIT_PERIOD_MONTH) {
     throw new HttpReplyError(
       400,
@@ -417,7 +397,7 @@ function validateSubmitBody(body: Record<string, unknown>): void {
     );
   }
   const expectedDue = pitDueDateForYear(periodYear);
-  if (dueDate !== expectedDue) {
+  if (dueDate && dueDate !== expectedDue) {
     throw new HttpReplyError(
       400,
       `dueDate must be ${expectedDue}.`,
@@ -428,65 +408,13 @@ function validateSubmitBody(body: Record<string, unknown>): void {
   if (!isPitYearOpenForFiling(periodYear)) {
     throw new HttpReplyError(
       400,
-      `The ${periodYear + 1} return can be filed from 1 January ${periodYear + 1}.`,
+      yearNotOpenMessage(periodYear),
       null,
       "YEAR_NOT_OPEN",
     );
   }
-  if (!computation || typeof computation !== "object") {
-    throw new HttpReplyError(
-      400,
-      "computation is required.",
-      null,
-      "VALIDATION_ERROR",
-    );
-  }
-
-  try {
-    assertRentClaimComplete(computation);
-  } catch {
-    throw new HttpReplyError(
-      400,
-      "Landlord name, contact, address and rent period are required to claim rent relief.",
-      null,
-      "RENT_CLAIM_INCOMPLETE",
-    );
-  }
-
-  const recomputed = computePitFromSnapshot({
-    tradingProfit: Number(computation.tradingProfit),
-    capitalAllowance: Number(computation.capitalAllowance ?? 0),
-    otherBusinessIncome: Number(computation.otherBusinessIncome),
-    otherPersonalIncome: Number(computation.otherPersonalIncome),
-    payerFees: Number(computation.payerFees),
-    payerFeesIncludedInSales: Boolean(computation.payerFeesIncludedInSales),
-    pensionContribution: Number(computation.pensionContribution),
-    nhfContribution: Number(computation.nhfContribution),
-    nhisContribution: Number(computation.nhisContribution),
-    annualRent: Number(computation.annualRent),
-    rentPeriodStart: computation.rentPeriodStart ?? null,
-    rentPeriodEnd: computation.rentPeriodEnd ?? null,
-    landlordName: computation.landlordName ?? null,
-    landlordContact: computation.landlordContact ?? null,
-    propertyAddress: computation.propertyAddress ?? null,
-    lifeAssurance: Number(computation.lifeAssurance),
-    mortgageInterest: Number(computation.mortgageInterest),
-    qualifyingMedicalExpenses: Number(computation.qualifyingMedicalExpenses ?? 0),
-    payeCredits: Number(computation.payeCredits),
-    whtCredits: Number(computation.whtCredits),
-    minimumWageExempt: Boolean(computation.minimumWageExempt),
-  });
-
-  if (
-    !amountsMatch(recomputed.remainingPayable, amount) ||
-    !amountsMatch(recomputed.remainingPayable, computation.remainingPayable)
-  ) {
-    throw new HttpReplyError(
-      400,
-      "PIT amount does not match the computation.",
-      null,
-      "VALIDATION_ERROR",
-    );
+  if (computation && typeof computation === "object") {
+    return;
   }
 }
 
@@ -520,8 +448,8 @@ export const pitFilingService = {
         year,
         dueDate: pitDueDateForYear(year),
         yearOpenForFiling: isPitYearOpenForFiling(year),
-        alreadyFiled: existing.submittedAt != null,
-        filingId: existing.submittedAt != null ? existing.id : null,
+        alreadyFiled: isFilingCompliant(existing),
+        filingId: existing.id,
         tin: profile.tin,
         stateOfResidence: profile.stateOfResidence,
         computation,
@@ -592,8 +520,8 @@ export const pitFilingService = {
       year,
       dueDate: pitDueDateForYear(year),
       yearOpenForFiling: isPitYearOpenForFiling(year),
-      alreadyFiled: existing?.submittedAt != null,
-      filingId: existing?.submittedAt != null ? existing.id : null,
+      alreadyFiled: existing ? isFilingCompliant(existing) : false,
+      filingId: existing?.id ?? null,
       tin: profile.tin,
       stateOfResidence: profile.stateOfResidence,
       computation,
@@ -620,18 +548,24 @@ export const pitFilingService = {
     body: Record<string, unknown>,
   ): Promise<{ id: string; status: string; submissionDate: Date; completionPercent?: number }> {
     validateSubmitBody(body);
+    await reopenPrematurelyClosedFilings(userId);
 
     const periodYear = Number(body.periodYear);
-    const amount = Number(body.amount);
-    const tin = String(body.tin).trim();
-    const stateOfResidence = String(body.stateOfResidence).trim();
-    const dueDate = new Date(String(body.dueDate));
-    const paymentStatus =
-      body.paymentStatus === "paid" ? "paid" : "unpaid";
+    const amount = Number.isFinite(Number(body.amount))
+      ? Number(body.amount)
+      : 0;
+    const tin = String(body.tin ?? "").trim();
+    const stateOfResidence = String(body.stateOfResidence ?? "").trim();
+    const dueDate = body.dueDate
+      ? new Date(String(body.dueDate))
+      : new Date(pitDueDateForYear(periodYear));
     const evidenceVaultId =
       body.evidenceVaultId != null && String(body.evidenceVaultId).trim() !== ""
         ? String(body.evidenceVaultId)
         : null;
+    const submissionReference = requireSubmissionReference(
+      body.submissionReference,
+    );
 
     if (evidenceVaultId) {
       const doc = await evidenceVaultService.getDocumentById(
@@ -658,27 +592,12 @@ export const pitFilingService = {
         },
       },
     });
-    if (existing?.submittedAt != null) {
-      throw new HttpReplyError(
-        409,
-        `PIT return already recorded for ${periodYear}.`,
-        null,
-        "DUPLICATE_FILING",
-      );
-    }
+    const step8 = step8WorkspacePatch(existing ?? undefined);
 
-    const computation = body.computation as PitComputationSnapshot;
-    const submittedAt = new Date();
-    const payableStatus =
-      amount <= 0 || paymentStatus === "paid" ? "paid" : "pending";
-    const storedPaymentStatus =
-      amount <= 0 || paymentStatus === "paid" ? "paid" : "unpaid";
-
-    const submissionReference =
-      body.submissionReference != null
-        ? String(body.submissionReference).trim()
-        : "";
-    const completedSteps = Array.from({ length: 8 }, (_, i) => i + 1);
+    const computation = (body.computation ?? {}) as PitComputationSnapshot;
+    const recordedAt = new Date();
+    const payableStatus = step8.status;
+    const storedPaymentStatus = step8.paymentStatus;
 
     const taxPayable = await prisma.taxPayable.upsert({
       where: {
@@ -700,7 +619,7 @@ export const pitFilingService = {
         filingDueDate: dueDate,
         status: payableStatus,
         paymentStatus: storedPaymentStatus,
-        submittedAt,
+        submittedAt: recordedAt,
         tin,
         stateOfResidence,
         computation: computation as object,
@@ -708,11 +627,9 @@ export const pitFilingService = {
           body.documentUrl != null ? String(body.documentUrl) : null,
         evidenceVaultId,
         receiptUrl: body.receiptUrl != null ? String(body.receiptUrl) : null,
-        submissionReference: submissionReference || null,
-        currentStep: 8,
-        completedSteps,
-        frozen: true,
-        frozenAt: submittedAt,
+        submissionReference,
+        currentStep: step8.currentStep,
+        completedSteps: step8.completedSteps,
       },
       update: {
         amountDue: new Decimal(amount),
@@ -720,7 +637,7 @@ export const pitFilingService = {
         filingDueDate: dueDate,
         status: payableStatus,
         paymentStatus: storedPaymentStatus,
-        submittedAt,
+        submittedAt: recordedAt,
         tin,
         stateOfResidence,
         computation: computation as object,
@@ -728,11 +645,9 @@ export const pitFilingService = {
           body.documentUrl != null ? String(body.documentUrl) : null,
         evidenceVaultId,
         receiptUrl: body.receiptUrl != null ? String(body.receiptUrl) : null,
-        submissionReference: submissionReference || null,
-        currentStep: 8,
-        completedSteps,
-        frozen: true,
-        frozenAt: submittedAt,
+        submissionReference,
+        currentStep: step8.currentStep,
+        completedSteps: step8.completedSteps,
       },
     });
 
@@ -749,15 +664,15 @@ export const pitFilingService = {
         taxPayableId: taxPayable.id,
         event: "SUBMITTED",
         description: "PIT annual return recorded",
-        eventDate: submittedAt,
+        eventDate: recordedAt,
       },
     });
 
     return {
       id: taxPayable.id,
-      status: "submitted",
-      submissionDate: submittedAt,
-      completionPercent: completionPercentFromStep(8),
+      status: "pending",
+      submissionDate: recordedAt,
+      completionPercent: completionPercentFromStep(step8.currentStep),
     };
   },
 

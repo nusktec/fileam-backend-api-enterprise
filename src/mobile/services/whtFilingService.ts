@@ -2,11 +2,18 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { WORKSPACE_TIMELINE_EVENTS } from "../../constants/filingWorkspace";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
+import {
+  isFilingCompliant,
+  overviewFilingStatusFromRow,
+  reopenPrematurelyClosedFilings,
+  requireSubmissionReference,
+  step8WorkspacePatch,
+} from "../../constants/filingStatusRules";
 import { VAT_FILING_DAY } from "../../constants/taxPayable";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { computeWhtFigures, vatWhtOverviewService } from "./vatWhtOverviewService";
-import { monthLabelFromKey, nextMonthKey } from "../../utils/lagosCalendar";
+import { monthLabelFromKey, nextMonthKey, lagosTodayYmd } from "../../utils/lagosCalendar";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -63,7 +70,8 @@ export const whtFilingService = {
         totalWht: frozen.totalWht ?? decimalToNumber(existing.totalPayable),
         dueDate: getFilingDueDate(periodYear, periodMonth),
         frozen: true,
-        alreadyFiled: existing.submittedAt != null,
+        alreadyFiled: isFilingCompliant(existing),
+        filingId: existing.id,
       };
     }
 
@@ -82,9 +90,15 @@ export const whtFilingService = {
       corporateAmount: figures.corporateAmount,
       individualAmount: figures.individualAmount,
       dueDate,
-      filingStatus:
-        existing?.submittedAt || existing?.status === "paid" ? "Filed" : "Pending",
-      alreadyFiled: existing?.submittedAt != null,
+      filingStatus: overviewFilingStatusFromRow(
+        existing
+          ? { status: existing.status, completedSteps: existing.completedSteps }
+          : null,
+        dueDate,
+        lagosTodayYmd(),
+      ),
+      alreadyFiled: existing ? isFilingCompliant(existing) : false,
+      filingId: existing?.id ?? null,
       nrsTotal: figures.totalWht,
       stateTotal: 0,
     };
@@ -185,28 +199,33 @@ export const whtFilingService = {
       submissionReference?: string;
     },
   ) {
+    await reopenPrematurelyClosedFilings(userId);
+    const submissionReference = requireSubmissionReference(
+      params.submissionReference,
+    );
     const schedule = await this.getSchedule(
       userId,
       params.periodYear,
       params.periodMonth,
     );
     const recalculated = normalizeMoneyAmount(schedule.totalWht);
-    if (Math.abs(recalculated - params.totalWht) > 1) {
-      throw new HttpReplyError(
-        400,
-        "WHT total does not match schedule.",
-        null,
-        "AMOUNT_MISMATCH",
-      );
-    }
 
     const filingDueDate =
       params.dueDate instanceof Date
         ? params.dueDate
         : new Date(params.dueDate);
-    const submittedAt = new Date();
-    const status = params.paymentStatus === "paid" ? "paid" : "pending";
-    const completedSteps = Array.from({ length: 8 }, (_, i) => i + 1);
+    const recordedAt = new Date();
+    const existing = await prisma.taxPayable.findUnique({
+      where: {
+        userId_taxType_periodYear_periodMonth: {
+          userId,
+          taxType: "WHT",
+          periodYear: params.periodYear,
+          periodMonth: params.periodMonth,
+        },
+      },
+    });
+    const step8 = step8WorkspacePatch(existing ?? undefined);
 
     const taxPayable = await prisma.taxPayable.upsert({
       where: {
@@ -226,38 +245,36 @@ export const whtFilingService = {
         penalties: new Decimal(0),
         totalPayable: new Decimal(recalculated),
         filingDueDate,
-        status,
-        submittedAt,
+        status: step8.status,
+        paymentStatus: step8.paymentStatus,
+        submittedAt: recordedAt,
         documentUrl: params.documentUrl ?? null,
         evidenceVaultId: params.evidenceVaultId ?? null,
         receiptUrl: params.receiptUrl ?? null,
-        submissionReference: params.submissionReference ?? null,
+        submissionReference,
         computation: {
           totalWht: recalculated,
           vendors: schedule.vendors,
         },
-        currentStep: 8,
-        completedSteps,
-        frozen: true,
-        frozenAt: submittedAt,
+        currentStep: step8.currentStep,
+        completedSteps: step8.completedSteps,
       },
       update: {
         amountDue: new Decimal(recalculated),
         totalPayable: new Decimal(recalculated),
-        submittedAt,
+        submittedAt: recordedAt,
         documentUrl: params.documentUrl ?? undefined,
         evidenceVaultId: params.evidenceVaultId ?? undefined,
         receiptUrl: params.receiptUrl ?? undefined,
-        status,
-        submissionReference: params.submissionReference ?? undefined,
+        status: step8.status,
+        paymentStatus: step8.paymentStatus,
+        submissionReference,
         computation: {
           totalWht: recalculated,
           vendors: schedule.vendors,
         },
-        currentStep: 8,
-        completedSteps,
-        frozen: true,
-        frozenAt: submittedAt,
+        currentStep: step8.currentStep,
+        completedSteps: step8.completedSteps,
       },
     });
 
@@ -266,17 +283,17 @@ export const whtFilingService = {
         taxPayableId: taxPayable.id,
         event: WORKSPACE_TIMELINE_EVENTS.SUBMITTED,
         description: "WHT return recorded",
-        eventDate: submittedAt,
+        eventDate: recordedAt,
       },
     });
 
     return {
       id: taxPayable.id,
-      submissionDate: submittedAt,
+      submissionDate: recordedAt,
       period: `${params.periodYear}-${String(params.periodMonth).padStart(2, "0")}`,
       amount: recalculated,
-      status: "submitted",
-      completionPercent: completionPercentFromStep(8),
+      status: "pending",
+      completionPercent: completionPercentFromStep(step8.currentStep),
     };
   },
 };

@@ -1,7 +1,6 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import {
-  amountsMatch,
   citDueDateForYear,
   citYearEndForYear,
   computeCitFromSnapshot,
@@ -26,6 +25,13 @@ import { taxComputationService } from "./taxComputationService";
 import { userService } from "./userService";
 import type { CitDraftInputs } from "../../constants/filingWorkspace";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
+import {
+  isFilingCompliant,
+  reopenPrematurelyClosedFilings,
+  requireSubmissionReference,
+  step8WorkspacePatch,
+  yearNotOpenMessage,
+} from "../../constants/filingStatusRules";
 import {
   copyCarryForwardOnSubmit,
   getCitPriorYearCarry,
@@ -106,129 +112,16 @@ async function capitalAllowancesForCit(userId: string, year: number): Promise<{
   return capitalAllowanceService.getBooksAllowancesForYear(userId, year);
 }
 
-function validateSubmitBody(
-  body: Record<string, unknown>,
-  business?: {
-    businessType: string | null;
-    sector: string | null;
-    providesProfessionalServices: string | null;
-    primaryBusinessActivity: string | null;
-  } | null,
-): CitComputationSnapshot {
+function validateSubmitBody(body: Record<string, unknown>): void {
   const periodYear = Number(body.periodYear);
-  const rcNumber = String(body.rcNumber ?? "").trim();
-  const tin = String(body.tin ?? "").trim();
-  const dueDate = String(body.dueDate ?? "");
-  const amount = Number(body.amount);
-  const computation = body.computation as CitComputationSnapshot | undefined;
-
-  if (!rcNumber || !tin) {
-    throw new HttpReplyError(
-      400,
-      "Add your RC number and TIN before filing.",
-      null,
-      "VALIDATION_ERROR",
-    );
-  }
-  if (Number(body.periodMonth) !== CIT_PERIOD_MONTH) {
-    throw new HttpReplyError(
-      400,
-      "CIT filings must use periodMonth 12.",
-      null,
-      "VALIDATION_ERROR",
-    );
-  }
-  const expectedDue = citDueDateForYear(periodYear);
-  if (dueDate !== expectedDue) {
-    throw new HttpReplyError(
-      400,
-      `dueDate must be ${expectedDue}.`,
-      null,
-      "VALIDATION_ERROR",
-    );
-  }
   if (!isCitYearOpenForFiling(periodYear)) {
     throw new HttpReplyError(
       400,
-      `The ${periodYear + 1} return can be filed from 1 January ${periodYear + 1}.`,
+      yearNotOpenMessage(periodYear),
       null,
       "YEAR_NOT_OPEN",
     );
   }
-  if (!computation || typeof computation !== "object") {
-    throw new HttpReplyError(
-      400,
-      "computation is required.",
-      null,
-      "VALIDATION_ERROR",
-    );
-  }
-
-  const recomputed = computeCitFromSnapshot({
-    year: periodYear,
-    turnover: Number(computation.turnover),
-    fixedAssets: Number(computation.fixedAssets),
-    accountingProfit: Number(computation.accountingProfit),
-    depreciation: Number(computation.depreciation),
-    fines: Number(computation.fines),
-    directorsPersonal: Number(computation.directorsPersonal),
-    otherNonAllowable: Number(computation.otherNonAllowable),
-    frankedDividends: Number(computation.frankedDividends),
-    chargeableGains: Number(computation.chargeableGains),
-    lossCarryForward: Number(computation.lossCarryForward),
-    capitalAllowancesAvailable: Number(computation.capitalAllowancesAvailable),
-    whtCredits: Number(computation.whtCredits),
-    rcNumber,
-    tin,
-    companyName: String(computation.companyName ?? body.companyName ?? ""),
-    businessType: business?.businessType ?? null,
-    sector: business?.sector ?? null,
-    providesProfessionalServices: business
-      ? resolveProvidesProfessionalServices({
-          providesProfessionalServices: normalizeProvidesProfessionalServices(
-            business.providesProfessionalServices,
-          ),
-          primaryBusinessActivity: normalizePrimaryBusinessActivity(
-            business.primaryBusinessActivity,
-          ),
-          businessType: business.businessType,
-          sector: business.sector,
-        })
-      : undefined,
-    allowances: computation.allowances ?? [],
-  });
-
-  if (
-    recomputed.isSmallCompany !== Boolean(computation.isSmallCompany) ||
-    recomputed.taxClassCode !== computation.taxClassCode
-  ) {
-    throw new HttpReplyError(
-      400,
-      "Company classification does not match turnover and fixed assets.",
-      null,
-      "VALIDATION_ERROR",
-    );
-  }
-
-  if (
-    !amountsMatch(recomputed.citPayable, amount) ||
-    !amountsMatch(recomputed.citPayable, computation.citPayable)
-  ) {
-    throw new HttpReplyError(
-      400,
-      "CIT amount does not match the computation.",
-      null,
-      "AMOUNT_MISMATCH",
-    );
-  }
-
-  return {
-    ...recomputed,
-    rcNumber,
-    tin,
-    companyName: String(computation.companyName ?? ""),
-    allowances: computation.allowances ?? recomputed.allowances,
-  };
 }
 
 export const citFilingService = {
@@ -269,8 +162,8 @@ export const citFilingService = {
         dueDate: citDueDateForYear(year),
         yearEnd: citYearEndForYear(year),
         yearOpenForFiling: isCitYearOpenForFiling(year),
-        alreadyFiled: existing.submittedAt != null,
-        filingId: existing.submittedAt != null ? existing.id : null,
+        alreadyFiled: isFilingCompliant(existing),
+        filingId: existing.id,
         tin: profile?.tin ?? null,
         rcNumber: profile?.rcNumber ?? null,
         companyName: profile?.businessName ?? null,
@@ -393,8 +286,8 @@ export const citFilingService = {
       dueDate: citDueDateForYear(year),
       yearEnd: citYearEndForYear(year),
       yearOpenForFiling: isCitYearOpenForFiling(year),
-      alreadyFiled: existing?.submittedAt != null,
-      filingId: existing?.submittedAt != null ? existing.id : null,
+      alreadyFiled: existing ? isFilingCompliant(existing) : false,
+      filingId: existing?.id ?? null,
       tin: profile?.tin ?? null,
       rcNumber: profile?.rcNumber ?? null,
       companyName: profile?.businessName ?? null,
@@ -433,17 +326,25 @@ export const citFilingService = {
     userId: string,
     body: Record<string, unknown>,
   ): Promise<{ id: string; status: string; submissionDate: Date; completionPercent?: number }> {
+    validateSubmitBody(body);
+    await reopenPrematurelyClosedFilings(userId);
+
     const periodYear = Number(body.periodYear);
-    const amount = Number(body.amount);
-    const rcNumber = String(body.rcNumber).trim();
-    const tin = String(body.tin).trim();
-    const dueDate = new Date(String(body.dueDate));
-    const paymentStatus =
-      body.paymentStatus === "paid" ? "paid" : "unpaid";
+    const amount = Number.isFinite(Number(body.amount))
+      ? Number(body.amount)
+      : 0;
+    const rcNumber = String(body.rcNumber ?? "").trim();
+    const tin = String(body.tin ?? "").trim();
+    const dueDate = body.dueDate
+      ? new Date(String(body.dueDate))
+      : new Date(citDueDateForYear(periodYear));
     const evidenceVaultId =
       body.evidenceVaultId != null && String(body.evidenceVaultId).trim() !== ""
         ? String(body.evidenceVaultId)
         : null;
+    const submissionReference = requireSubmissionReference(
+      body.submissionReference,
+    );
 
     if (evidenceVaultId) {
       const doc = await evidenceVaultService.getDocumentById(
@@ -470,40 +371,12 @@ export const citFilingService = {
         },
       },
     });
-    if (existing?.submittedAt != null) {
-      throw new HttpReplyError(
-        409,
-        `CIT return already recorded for ${periodYear}.`,
-        null,
-        "DUPLICATE_FILING",
-      );
-    }
+    const step8 = step8WorkspacePatch(existing ?? undefined);
+    const computation = (body.computation ?? {}) as CitComputationSnapshot;
 
-    const business = await prisma.business.findFirst({ where: { userId } });
-    const rawComputation = body.computation as CitComputationSnapshot;
-    const computation = validateSubmitBody(
-      {
-        ...body,
-        computation: {
-          ...rawComputation,
-          rcNumber,
-          tin,
-        },
-      },
-      business,
-    );
-
-    const submittedAt = new Date();
-    const payableStatus =
-      amount <= 0 || paymentStatus === "paid" ? "paid" : "pending";
-    const storedPaymentStatus =
-      amount <= 0 || paymentStatus === "paid" ? "paid" : "unpaid";
-
-    const submissionReference =
-      body.submissionReference != null
-        ? String(body.submissionReference).trim()
-        : "";
-    const completedSteps = Array.from({ length: 8 }, (_, i) => i + 1);
+    const recordedAt = new Date();
+    const payableStatus = step8.status;
+    const storedPaymentStatus = step8.paymentStatus;
 
     const taxPayable = await prisma.taxPayable.upsert({
       where: {
@@ -525,7 +398,7 @@ export const citFilingService = {
         filingDueDate: dueDate,
         status: payableStatus,
         paymentStatus: storedPaymentStatus,
-        submittedAt,
+        submittedAt: recordedAt,
         tin,
         rcNumber,
         companyName: computation.companyName || null,
@@ -534,11 +407,9 @@ export const citFilingService = {
           body.documentUrl != null ? String(body.documentUrl) : null,
         evidenceVaultId,
         receiptUrl: body.receiptUrl != null ? String(body.receiptUrl) : null,
-        submissionReference: submissionReference || null,
-        currentStep: 8,
-        completedSteps,
-        frozen: true,
-        frozenAt: submittedAt,
+        submissionReference,
+        currentStep: step8.currentStep,
+        completedSteps: step8.completedSteps,
       },
       update: {
         amountDue: new Decimal(amount),
@@ -546,7 +417,7 @@ export const citFilingService = {
         filingDueDate: dueDate,
         status: payableStatus,
         paymentStatus: storedPaymentStatus,
-        submittedAt,
+        submittedAt: recordedAt,
         tin,
         rcNumber,
         companyName: computation.companyName || null,
@@ -555,11 +426,9 @@ export const citFilingService = {
           body.documentUrl != null ? String(body.documentUrl) : null,
         evidenceVaultId,
         receiptUrl: body.receiptUrl != null ? String(body.receiptUrl) : null,
-        submissionReference: submissionReference || null,
-        currentStep: 8,
-        completedSteps,
-        frozen: true,
-        frozenAt: submittedAt,
+        submissionReference,
+        currentStep: step8.currentStep,
+        completedSteps: step8.completedSteps,
       },
     });
 
@@ -576,15 +445,15 @@ export const citFilingService = {
         taxPayableId: taxPayable.id,
         event: "SUBMITTED",
         description: "CIT annual return recorded",
-        eventDate: submittedAt,
+        eventDate: recordedAt,
       },
     });
 
     return {
       id: taxPayable.id,
-      status: "submitted",
-      submissionDate: submittedAt,
-      completionPercent: completionPercentFromStep(8),
+      status: "pending",
+      submissionDate: recordedAt,
+      completionPercent: completionPercentFromStep(step8.currentStep),
     };
   },
 

@@ -33,6 +33,7 @@ import {
   nextMonthKey,
   previousMonthKey,
 } from "../../utils/lagosCalendar";
+import { isFilingCompliant, overviewFilingStatusFromRow } from "../../constants/filingStatusRules";
 import { VAT_FILING_DAY } from "../../constants/taxPayable";
 
 function d(v: Decimal | number | null | undefined): number {
@@ -91,23 +92,19 @@ function calendarKeys(): string[] {
 function overviewFilingStatus(row: {
   submittedAt: Date | null;
   status: string;
+  completedSteps?: unknown;
 } | null, dueYmd: string): "Pending" | "Overdue" | "Filed" {
-  if (row?.submittedAt || row?.status === "paid" || row?.status === "overpaid") {
-    return "Filed";
-  }
-  const today = lagosTodayYmd();
-  if (dueYmd < today) return "Overdue";
-  return "Pending";
+  return overviewFilingStatusFromRow(row, dueYmd, lagosTodayYmd());
 }
 
 function workspaceMeta(row: {
   currentStep: number;
   submittedAt: Date | null;
   status: string;
+  completedSteps?: unknown;
 } | null): { workspaceStep: number; workspaceTitle: string; workspaceTotal: number } {
   let step = row?.currentStep ?? 1;
-  if (row?.status === "paid" || row?.status === "overpaid") step = 12;
-  else if (row?.submittedAt) step = Math.max(step, 8);
+  if (row && isFilingCompliant(row)) step = 12;
   step = Math.min(12, Math.max(1, step));
   return {
     workspaceStep: step,

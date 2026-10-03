@@ -58,9 +58,12 @@ function creditAccountForSource(
 ): { code: string; name: string } {
   switch (source ?? "owner_capital_introduced") {
     case "owner_capital_introduced":
+    case "existing_business_funds":
+    case "other":
+    default:
       return {
-        code: LEDGER_ACCOUNTS.OWNER_CAPITAL,
-        name: "Owner Capital",
+        code: LEDGER_ACCOUNTS.OPENING_BALANCE,
+        name: "Opening Balance",
       };
     case "loan_proceeds":
       return {
@@ -71,17 +74,6 @@ function creditAccountForSource(
       return {
         code: LEDGER_ACCOUNTS.TRANSFER_CLEARING,
         name: "Transfer Clearing",
-      };
-    case "existing_business_funds":
-      return {
-        code: LEDGER_ACCOUNTS.EXISTING_BUSINESS_FUNDS,
-        name: "Existing Business Funds",
-      };
-    case "other":
-    default:
-      return {
-        code: LEDGER_ACCOUNTS.OTHER_EQUITY,
-        name: "Other Equity / Suspense",
       };
   }
 }
@@ -121,7 +113,30 @@ export const cashBankService = {
         },
       });
 
-      // LEDGER.pdf: opening cash that would credit capital is not posted until equity exists.
+      await ledgerService.post(
+        {
+          userId,
+          referenceType: LEDGER_REFERENCE_TYPES.CASH_OPENING,
+          referenceId: created.id,
+          description: `Opening cash ${cashCode}`,
+          transactionDate: new Date(),
+          entries: [
+            {
+              accountCode: cashAccountCode(input.cashType),
+              accountName: CASH_TYPE_LABELS[input.cashType],
+              debit: amount,
+              credit: 0,
+            },
+            {
+              accountCode: LEDGER_ACCOUNTS.OPENING_BALANCE,
+              accountName: "Opening Balance",
+              debit: 0,
+              credit: amount,
+            },
+          ],
+        },
+        tx,
+      );
 
       return created;
     });
@@ -177,7 +192,7 @@ export const cashBankService = {
       });
 
       const openingSource = input.sourceOfOpeningBalance ?? "owner_capital_introduced";
-      if (openingSource === "loan_proceeds") {
+      if (openingSource !== "transfer_from_another_business_account") {
         await ledgerService.post(
           {
             userId,

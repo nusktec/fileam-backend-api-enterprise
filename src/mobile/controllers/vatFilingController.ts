@@ -100,20 +100,29 @@ export const submitVatFiling = async (
       evidenceVaultId,
       stateOfOperation,
       vatRegistrationNumber,
+      submissionReference,
     } = req.body ?? {};
-    if (periodYear == null || periodMonth == null || amount == null) {
+    if (periodYear == null || periodMonth == null) {
       res
         .status(HttpStatusCode.BAD_REQUEST)
-        .json(
-          outJson(false, "periodYear, periodMonth and amount required", null),
-        );
+        .json(outJson(false, "periodYear and periodMonth required", null));
       return;
+    }
+    let vatAmount =
+      amount == null || amount === "" ? NaN : Number(amount);
+    if (!Number.isFinite(vatAmount)) {
+      const calc = await vatFilingService.getCalculation(
+        userId,
+        Number(periodYear),
+        Number(periodMonth),
+      );
+      vatAmount = Number(calc.netVatPayable ?? 0);
     }
     const paid = paymentStatus === "paid" || paymentStatus === "Paid";
     const data = await vatFilingService.submit(userId, {
       periodYear: Number(periodYear),
       periodMonth: Number(periodMonth),
-      amount: Number(amount),
+      amount: vatAmount,
       dueDate: dueDate
         ? new Date(dueDate)
         : new Date(Number(periodYear), Number(periodMonth), 21),
@@ -123,11 +132,16 @@ export const submitVatFiling = async (
       evidenceVaultId,
       stateOfOperation,
       vatRegistrationNumber,
+      submissionReference,
     });
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "VAT filing submitted", data));
   } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json(outJson(false, error.message, null));
+      return;
+    }
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to submit VAT filing", null));

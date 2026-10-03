@@ -1,6 +1,8 @@
 import { filingTaxTypeService } from "../../enterprise/services/filingTaxTypeService";
 import { vatFilingService } from "./vatFilingService";
 import { whtFilingService } from "./whtFilingService";
+import { citFilingService } from "./citFilingService";
+import { pitFilingService } from "./pitFilingService";
 import { genericTaxFilingService } from "../../services/genericTaxFilingService";
 
 export type UnifiedSubmitBody = {
@@ -15,6 +17,8 @@ export type UnifiedSubmitBody = {
   evidenceVaultId?: unknown;
   stateOfOperation?: unknown;
   vatRegistrationNumber?: unknown;
+  submissionReference?: unknown;
+  [key: string]: unknown;
 };
 
 export async function submitUnifiedTaxFilingForUser(
@@ -47,6 +51,7 @@ export async function submitUnifiedTaxFilingForUser(
     evidenceVaultId,
     stateOfOperation,
     vatRegistrationNumber,
+    submissionReference,
   } = body;
 
   if (periodYear == null || periodMonth == null) {
@@ -63,13 +68,15 @@ export async function submitUnifiedTaxFilingForUser(
   const due = dueDate ? new Date(String(dueDate)) : new Date(py, pm, 21);
 
   if (taxType === "VAT") {
-    if (amount == null) {
-      return { ok: false, status: 400, message: "amount is required for VAT" };
+    let vatAmount = amount == null ? NaN : Number(amount);
+    if (!Number.isFinite(vatAmount)) {
+      const calc = await vatFilingService.getCalculation(userId, py, pm);
+      vatAmount = Number(calc.netVatPayable ?? 0);
     }
     const data = await vatFilingService.submit(userId, {
       periodYear: py,
       periodMonth: pm,
-      amount: Number(amount),
+      amount: vatAmount,
       dueDate: due,
       paymentStatus: paid ? "paid" : "not_paid",
       receiptUrl: receiptUrl as string | undefined,
@@ -77,19 +84,17 @@ export async function submitUnifiedTaxFilingForUser(
       evidenceVaultId: evidenceVaultId as string | undefined,
       stateOfOperation: stateOfOperation as string | undefined,
       vatRegistrationNumber: vatRegistrationNumber as string | undefined,
+      submissionReference: submissionReference as string | undefined,
     });
     return { ok: true, taxType, data };
   }
 
   if (taxType === "WHT") {
-    const whtAmount =
+    let whtAmount =
       totalWht != null ? Number(totalWht) : amount != null ? Number(amount) : NaN;
-    if (Number.isNaN(whtAmount)) {
-      return {
-        ok: false,
-        status: 400,
-        message: "totalWht or amount is required for WHT (total WHT due)",
-      };
+    if (!Number.isFinite(whtAmount)) {
+      const sched = await whtFilingService.getSchedule(userId, py, pm);
+      whtAmount = Number(sched.totalWht ?? 0);
     }
     const data = await whtFilingService.submit(userId, {
       periodYear: py,
@@ -100,7 +105,24 @@ export async function submitUnifiedTaxFilingForUser(
       receiptUrl: receiptUrl as string | undefined,
       documentUrl: documentUrl as string | undefined,
       evidenceVaultId: evidenceVaultId as string | undefined,
+      submissionReference: submissionReference as string | undefined,
     });
+    return { ok: true, taxType, data };
+  }
+
+  if (taxType === "CIT") {
+    const data = await citFilingService.submit(
+      userId,
+      body as Record<string, unknown>,
+    );
+    return { ok: true, taxType, data };
+  }
+
+  if (taxType === "PIT") {
+    const data = await pitFilingService.submit(
+      userId,
+      body as Record<string, unknown>,
+    );
     return { ok: true, taxType, data };
   }
 

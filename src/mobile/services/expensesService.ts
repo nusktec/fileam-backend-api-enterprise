@@ -40,7 +40,7 @@ import {
 import { taxPayablesService } from "./taxPayablesService";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
-import { syncExpenseLedgerAfterUpdate, reverseExpenseLedgerOnDelete } from "../../services/ledgerSyncService";
+import { syncExpenseLedgerAfterUpdate, removeExpenseLedgerOnDelete } from "../../services/ledgerSyncService";
 import {
   assertInvoiceNotOverpaid,
   assertInvoicePaymentsAppendOnly,
@@ -157,6 +157,11 @@ function toExpenseLedgerRow(expense: {
   paymentType: string;
   status: string;
   totalAmount: Decimal;
+  amount?: Decimal;
+  vatAmount?: Decimal | null;
+  category?: string | null;
+  expenseType?: string | null;
+  purchaseKind?: string | null;
   invoiceAmountPaid: unknown;
   expenseDate: Date;
   settlementBankCode?: string | null;
@@ -166,6 +171,11 @@ function toExpenseLedgerRow(expense: {
     paymentType: expense.paymentType,
     status: expense.status,
     totalAmount: expense.totalAmount,
+    amount: expense.amount,
+    vatAmount: expense.vatAmount ?? null,
+    category: expense.category ?? null,
+    expenseType: expense.expenseType ?? null,
+    purchaseKind: expense.purchaseKind ?? null,
     invoiceAmountPaid: expense.invoiceAmountPaid,
     expenseDate: expense.expenseDate,
     settlementBankCode: expense.settlementBankCode ?? null,
@@ -1203,7 +1213,7 @@ export const expensesService = {
     const period = calendarPeriodFromDate(expense.expenseDate);
 
     const deleted = await prisma.$transaction(async (tx) => {
-      await reverseExpenseLedgerOnDelete(
+      await removeExpenseLedgerOnDelete(
         userId,
         toExpenseLedgerRow(expense),
         tx,

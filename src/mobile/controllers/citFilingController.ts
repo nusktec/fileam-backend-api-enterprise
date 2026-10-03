@@ -51,7 +51,7 @@ export const submitCitFiling = async (req: IRequest, res: Response) => {
     const body = matchedData(req, { locations: ["body"], includeOptionals: true });
     const data = await citFilingService.submit(
       userId,
-      body as Record<string, unknown>,
+      { ...(req.body ?? {}), ...body } as Record<string, unknown>,
     );
     res.status(200).json({ data });
   } catch (error) {

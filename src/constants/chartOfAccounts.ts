@@ -84,6 +84,8 @@ export const CHART_ACCOUNTS: ChartAccount[] = [
   { code: "2140", name: "PAYE Payable", sectionType: "liability", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
   { code: "2150", name: "Pension Payable", sectionType: "liability", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
   { code: "2160", name: "WHT Payable", sectionType: "liability", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
+  { code: "2165", name: "NHF Payable", sectionType: "liability", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
+  { code: "2168", name: "Interest Payable", sectionType: "liability", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
   { code: "2170", name: "VAT Payable", sectionType: "liability", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
   { code: "2180", name: "Short-Term Loan Liability", sectionType: "liability", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
   { code: "2190", name: "Other Current Liabilities", sectionType: "liability", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
@@ -124,6 +126,7 @@ export const CHART_ACCOUNTS: ChartAccount[] = [
   { code: "6240", name: "Depreciation Expense", sectionType: "expense", lineType: "expense", reportClass: "profit_and_loss", normalDebit: bsDebit },
   { code: "6250", name: "Amortisation Expense", sectionType: "expense", lineType: "expense", reportClass: "profit_and_loss", normalDebit: bsDebit },
   { code: "6260", name: "Bad Debt Expense", sectionType: "expense", lineType: "expense", reportClass: "profit_and_loss", normalDebit: bsDebit },
+  { code: "6270", name: "Inventory Loss", sectionType: "expense", lineType: "expense", reportClass: "profit_and_loss", normalDebit: bsDebit },
   { code: "6290", name: "Other Operating Expenses", sectionType: "expense", lineType: "expense", reportClass: "profit_and_loss", normalDebit: bsDebit },
   { code: "7110", name: "Loan Interest Expense", sectionType: "finance_cost", lineType: "expense", reportClass: "profit_and_loss", normalDebit: bsDebit },
   { code: "7120", name: "Bank Charges", sectionType: "finance_cost", lineType: "expense", reportClass: "profit_and_loss", normalDebit: bsDebit },
@@ -132,6 +135,8 @@ export const CHART_ACCOUNTS: ChartAccount[] = [
   { code: "8120", name: "WHT Tax Credit Receivable", sectionType: "tax", lineType: "asset", reportClass: "balance_sheet", normalDebit: bsDebit },
   { code: "8150", name: "Income Tax Payable", sectionType: "tax", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
   { code: "8160", name: "Income Tax Expense", sectionType: "tax", lineType: "expense", reportClass: "profit_and_loss", normalDebit: bsDebit },
+  { code: "8170", name: "Company Income Tax Payable", sectionType: "tax", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
+  { code: "8180", name: "Personal Income Tax Payable", sectionType: "tax", lineType: "liability", reportClass: "balance_sheet", normalDebit: bsCredit },
 ];
 
 export const CHART_BY_CODE = new Map(CHART_ACCOUNTS.map((a) => [a.code, a]));
@@ -159,6 +164,27 @@ const INTERNAL_TO_CHART: Record<string, string> = {
   LOAN_LIABILITY: "2180",
   SALES_REVENUE: "4110",
   INVESTMENT_INCOME: "4210",
+  INVENTORY: "1200",
+  PREPAYMENTS: "1300",
+  COGS: "5110",
+  INVENTORY_LOSS: "6270",
+  NHF_PAYABLE: "2165",
+  INTEREST_PAYABLE: "2168",
+  EMPLOYER_PENSION_EXPENSE: "6120",
+  RENT_EXPENSE: "6130",
+  INSURANCE_EXPENSE: "6210",
+  PROFESSIONAL_FEES: "6180",
+  OTHER_INCOME: "4290",
+  INTEREST_INCOME: "4220",
+  DIVIDEND_INCOME: "4230",
+  SERVICE_REVENUE: "4120",
+  CONSULTING_FEES: "4130",
+  COMMISSION_INCOME: "4140",
+  RENTAL_INCOME: "4150",
+  CIT_PAYABLE: "8170",
+  PIT_PAYABLE: "8180",
+  TAX_EXPENSE: "8160",
+  OPENING_BALANCE: "2190",
   EXPENSE: "6290",
   SALARY_EXPENSE: "6110",
   FINANCE_COST: "7110",
@@ -179,11 +205,11 @@ export function resolveChartAccountCode(internalCode: string): string | null {
   if (
     internalCode.startsWith("OWNER_") ||
     internalCode === "OTHER_EQUITY" ||
-    internalCode === "TRANSFER_CLEARING" ||
-    internalCode === "EXISTING_BUSINESS_FUNDS"
+    internalCode === "TRANSFER_CLEARING"
   ) {
     return null;
   }
+  if (internalCode === "EXISTING_BUSINESS_FUNDS") return "2190";
   return INTERNAL_TO_CHART[internalCode] ?? null;
 }
 

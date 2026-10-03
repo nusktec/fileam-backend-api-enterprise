@@ -1,6 +1,7 @@
 import express from "express";
 import {
   listPayables,
+  getOwedTaxes,
   getPayableById,
   initiatePayment,
 } from "../controllers/taxPayablesController";
@@ -14,6 +15,7 @@ const router = express.Router();
 router.use(authenticate(), requireOnboardingComplete);
 
 router.get("/", withPagination(), listPayables);
+router.get("/owed", getOwedTaxes);
 router.get("/:id", validateIdParam, getPayableById);
 router.post(
   "/:id/initiate-payment",

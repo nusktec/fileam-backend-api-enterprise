@@ -125,6 +125,44 @@ export const ledgerService = {
     return prisma.$transaction(async (tx) => run(tx));
   },
 
+  /**
+   * Remove posted journals for a live PATCH or DELETE.
+   * Postings PDF: patch replaces; delete removes the journal (do not reverse).
+   */
+  async deletePostedByReference(
+    userId: string,
+    referenceType: string,
+    referenceId: string,
+    db: DbClient = prisma,
+  ): Promise<number> {
+    const result = await db.ledgerTransaction.deleteMany({
+      where: {
+        userId,
+        referenceType,
+        referenceId,
+        status: LEDGER_STATUS.POSTED,
+      },
+    });
+    return result.count;
+  },
+
+  async deletePostedByReferencePrefix(
+    userId: string,
+    referenceType: string,
+    referenceIdPrefix: string,
+    db: DbClient = prisma,
+  ): Promise<number> {
+    const result = await db.ledgerTransaction.deleteMany({
+      where: {
+        userId,
+        referenceType,
+        status: LEDGER_STATUS.POSTED,
+        referenceId: { startsWith: referenceIdPrefix },
+      },
+    });
+    return result.count;
+  },
+
   /** Net balance per account from posted ledger lines (debit − credit, asset-normal). */
   async getPostedBalances(userId: string) {
     const entries = await prisma.ledgerEntry.findMany({

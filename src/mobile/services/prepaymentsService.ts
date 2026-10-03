@@ -7,6 +7,15 @@ import { resolveSupplierDirectory } from "../../utils/directoryResolver";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { formatYmd } from "../../utils/transactionSummaryHelper";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import { ledgerPostingService } from "../../services/ledgerPostingService";
+import { LEDGER_ACCOUNTS } from "../../constants/ledger";
+
+function prepaymentExpenseAccount(expenseType: string): string {
+  const t = expenseType.trim().toLowerCase();
+  if (t.includes("rent") || t.includes("lease")) return LEDGER_ACCOUNTS.RENT_EXPENSE;
+  if (t.includes("insurance")) return LEDGER_ACCOUNTS.INSURANCE_EXPENSE;
+  return LEDGER_ACCOUNTS.EXPENSE;
+}
 
 const PREPAYMENT_COUNTER = "prepayment_code";
 const SCHEDULE_COUNTER = "prepayment_schedule_code";
@@ -273,6 +282,15 @@ async function processDueRecognitions(
           status: newRemaining <= 0.001 ? "FULLY_RECOGNIZED" : "ACTIVE",
         },
       });
+
+      await ledgerPostingService.postPrepaymentRecognition(
+        userId,
+        locked.id,
+        amount,
+        locked.recognitionDate,
+        prepaymentExpenseAccount(prep.expenseType),
+        tx,
+      );
     });
   }
 }
@@ -393,6 +411,12 @@ export const prepaymentsService = {
     });
 
     await processDueRecognitions(userId, row.id);
+    await ledgerPostingService.postPrepaymentPaid(
+      userId,
+      row.id,
+      totalAmount,
+      paymentDate,
+    );
     const refreshed = await findPrepayment(userId, row.prepaymentCode);
     return mapListItem(refreshed!);
   },
@@ -682,6 +706,7 @@ export const prepaymentsService = {
       throw new HttpReplyError(400, "Prepayment cannot be cancelled");
     }
 
+    const remaining = d(row.remainingBalance);
     await prisma.$transaction([
       prisma.prepaymentScheduleItem.updateMany({
         where: { prepaymentId: row.id, status: "SCHEDULED" },
@@ -697,6 +722,15 @@ export const prepaymentsService = {
         },
       }),
     ]);
+
+    const refunded = /refund/i.test(data.reason);
+    await ledgerPostingService.postPrepaymentCancel(
+      userId,
+      row.id,
+      remaining,
+      new Date(),
+      refunded,
+    );
 
     return mapListItem(
       (await findPrepayment(userId, row.prepaymentCode))!,

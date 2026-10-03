@@ -22,6 +22,14 @@ import {
 import { monthlyFilingDueDateUtc } from "../../constants/taxPayable";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import {
+  AFTER_SUBMIT_STEP,
+  COMPLIANT_STEP,
+  deriveHubFilingStatus,
+  isFilingCompliant,
+  reopenPrematurelyClosedFilings,
+  withCompletedStep,
+} from "../../constants/filingStatusRules";
 import { citFilingService } from "./citFilingService";
 import {
   generateFilingDocuments,
@@ -65,19 +73,10 @@ function resolveDueDate(
 
 function deriveWorkspaceStatus(row: {
   status: string;
-  submittedAt: Date | null;
+  completedSteps: unknown;
   filingDueDate: Date;
-}): "pending" | "submitted" | "paid" | "overdue" {
-  if (row.status === "paid" || row.status === "overpaid") return "paid";
-  if (row.submittedAt) {
-    return row.status === "paid" ? "paid" : "submitted";
-  }
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = new Date(row.filingDueDate);
-  due.setHours(0, 0, 0, 0);
-  if (due < today) return "overdue";
-  return "pending";
+}): "pending" | "overdue" | "paid" {
+  return deriveHubFilingStatus(row);
 }
 
 async function appendTimeline(
@@ -208,7 +207,7 @@ function mapWorkspaceRow(
     documents: mapDocuments(row),
     draftInputs,
     computation,
-    readOnly: readOnly || row.submittedAt != null,
+    readOnly: readOnly || isFilingCompliant(row),
     submittedAt: row.submittedAt?.toISOString(),
     submittedDate: row.submittedAt?.toISOString(),
   };
@@ -264,8 +263,9 @@ export const filingWorkspaceService = {
     let periodMonth = query.periodMonth ?? defaults.periodMonth;
     if (taxType === "PIT" || taxType === "CIT") periodMonth = 12;
 
+    await reopenPrematurelyClosedFilings(userId);
     let row = await findWorkspace(userId, taxType, periodYear, periodMonth);
-    if (row?.submittedAt) {
+    if (row && isFilingCompliant(row)) {
       return mapWorkspaceRow(row, true);
     }
 
@@ -315,29 +315,18 @@ export const filingWorkspaceService = {
     }
 
     const existing = await loadWorkspaceRow(id, userId);
-    if (existing.submittedAt) {
+    if (isFilingCompliant(existing)) {
       throw new HttpReplyError(
         400,
-        "Submitted filings cannot be edited.",
+        "Compliant filings cannot be edited.",
         null,
         "VALIDATION_ERROR",
       );
     }
 
-    const completedSteps = parseJsonArray<number>(existing.completedSteps);
-    const submittedStepDone = completedSteps.includes(8);
-
     const updateData: Record<string, unknown> = {};
 
     if (body.periodYear != null || body.periodMonth != null) {
-      if (submittedStepDone) {
-        throw new HttpReplyError(
-          400,
-          "Cannot change period after submit.",
-          null,
-          "VALIDATION_ERROR",
-        );
-      }
       const taxType = existing.taxType.trim().toUpperCase() as WorkspaceTaxType;
       const year = Number(body.periodYear ?? existing.periodYear);
       let month = Number(body.periodMonth ?? existing.periodMonth);
@@ -412,10 +401,10 @@ export const filingWorkspaceService = {
     if (!row) {
       throw new HttpReplyError(404, "Workspace not found.", null, "NOT_FOUND");
     }
-    if (row.submittedAt) {
+    if (isFilingCompliant(row)) {
       throw new HttpReplyError(
         400,
-        "Computation is already locked on a submitted return.",
+        "Computation is already locked on a compliant return.",
         null,
         "VALIDATION_ERROR",
       );
@@ -756,13 +745,8 @@ export const filingWorkspaceService = {
     },
   ) {
     const row = await loadWorkspaceRow(filingId, userId);
-    if (!row.submittedAt) {
-      throw new HttpReplyError(
-        400,
-        "Submit the return before marking compliant.",
-        null,
-        "VALIDATION_ERROR",
-      );
+    if (isFilingCompliant(row)) {
+      return mapWorkspaceRow(row);
     }
 
     const amount = d(row.totalPayable);
@@ -783,7 +767,7 @@ export const filingWorkspaceService = {
     if (amount > 0 && (!rrr || !receipt)) {
       throw new HttpReplyError(
         400,
-        "Upload payment evidence before marking this period compliant.",
+        "rrr and paymentReceiptUrl are required when the amount is above 0.",
         null,
         "VALIDATION_ERROR",
       );
@@ -791,8 +775,11 @@ export const filingWorkspaceService = {
 
     updateData.status = "paid";
     updateData.paymentStatus = "paid";
-    updateData.currentStep = 12;
-    updateData.completedSteps = Array.from({ length: 12 }, (_, i) => i + 1);
+    updateData.currentStep = COMPLIANT_STEP;
+    updateData.completedSteps = withCompletedStep(
+      row.completedSteps,
+      COMPLIANT_STEP,
+    );
 
     const updated = await prisma.taxPayable.update({
       where: { id: filingId },

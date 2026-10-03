@@ -48,9 +48,6 @@ import {
   inventorySaleUndoService,
   type InventorySaleDetail,
 } from "./inventorySaleUndoService";
-import {
-  syncPurchaseToExpense,
-} from "./moduleSyncService";
 
 const EXPENSE_COUNTER_ID = "expense_number";
 
@@ -1033,7 +1030,7 @@ export const inventoryService = {
     const qty = data.quantity;
     if (qty <= 0) throw new Error("quantity must be positive");
 
-    await prisma.$transaction(async (tx) => {
+    const { movementId, unitCost } = await prisma.$transaction(async (tx) => {
       const item = await tx.inventoryItem.findFirst({
         where: { id: itemId, userId, ...activeInventoryWhere },
       });
@@ -1043,7 +1040,7 @@ export const inventoryService = {
         where: { id: itemId },
         data: { quantity: dec(newQty) },
       });
-      await tx.inventoryMovement.create({
+      const movement = await tx.inventoryMovement.create({
         data: {
           userId,
           inventoryItemId: itemId,
@@ -1053,25 +1050,16 @@ export const inventoryService = {
           note: data.note?.trim() || null,
         },
       });
+      return { movementId: movement.id, unitCost: d(item.purchaseCost) };
     });
 
-    const item = await prisma.inventoryItem.findFirst({
-      where: { id: itemId, userId, ...activeInventoryWhere },
-    });
-    if (item) {
-      await syncPurchaseToExpense(userId, {
-        amount: d(item.purchaseCost) * qty,
-        description: `Inventory restock: ${item.name} (${qty} units)`,
-        category: item.category,
-        expenseType: "COGS",
-        expenseDate: new Date(),
-        supplierName: item.supplierName,
-        supplierId: item.supplierId,
-        purchaseKind: "inventory_item",
-        vatTag: "exempt",
-        inventoryItemId: item.id,
-      });
-    }
+    await ledgerPostingService.postInventoryStockIn(
+      userId,
+      movementId,
+      unitCost * qty,
+      new Date(),
+      false,
+    );
 
     return inventoryService.getItemDetail(userId, itemId);
   },
@@ -1102,7 +1090,8 @@ export const inventoryService = {
       throw new Error("direction must be in or out");
     }
 
-    const { linkedSale, linkedExpense } = await prisma.$transaction(
+    const { linkedSale, linkedExpense, movementId, stockAmount, bookDate, direction } =
+      await prisma.$transaction(
       async (tx) => {
         const item = await tx.inventoryItem.findFirst({
           where: { id: itemId, userId, ...activeInventoryWhere },
@@ -1116,7 +1105,7 @@ export const inventoryService = {
           where: { id: itemId },
           data: { quantity: dec(newQty) },
         });
-        await tx.inventoryMovement.create({
+        const movement = await tx.inventoryMovement.create({
           data: {
             userId,
             inventoryItemId: itemId,
@@ -1187,15 +1176,39 @@ export const inventoryService = {
           }
         }
 
-        return { linkedSale, linkedExpense };
+        return {
+          linkedSale,
+          linkedExpense,
+          movementId: movement.id,
+          stockAmount: normalizeMoneyAmount(
+            d(costTotal) +
+              (data.direction === "in" ? data.acquisitionCost ?? 0 : 0),
+          ),
+          bookDate,
+          direction: data.direction,
+        };
       },
     );
 
+    if (direction === "in") {
+      await ledgerPostingService.postInventoryStockIn(
+        userId,
+        movementId,
+        stockAmount,
+        bookDate,
+        false,
+      );
+    } else {
+      await ledgerPostingService.postInventoryStockOut(
+        userId,
+        movementId,
+        stockAmount,
+        bookDate,
+      );
+    }
+
     if (linkedSale?.id) {
       await finalizeLinkedSaleLedger(userId, linkedSale.id);
-    }
-    if (linkedExpense?.id) {
-      await finalizeLinkedExpenseLedger(userId, linkedExpense.id);
     }
 
     const detail = await inventoryService.getItemDetail(userId, itemId);
@@ -1255,6 +1268,16 @@ export const inventoryService = {
       });
       return row;
     });
+
+    const openingValue = normalizeMoneyAmount(
+      data.purchaseCost * opening + (data.acquisitionCost ?? 0),
+    );
+    await ledgerPostingService.postInventoryOpening(
+      userId,
+      item.id,
+      openingValue,
+      new Date(),
+    );
 
     return inventoryService.getItemDetail(userId, item.id);
   },
@@ -1369,7 +1392,7 @@ export const inventoryService = {
   ) {
     if (!data.lines?.length) throw new Error("lines required");
 
-    const { invSaleId, linkedSale, postSaleLedger } = await prisma.$transaction(async (tx) => {
+    const { invSaleId, linkedSale, postSaleLedger, cogsAmount } = await prisma.$transaction(async (tx) => {
       let totalAmount = new Decimal(0);
       const lineRows: Array<{
         inventoryItemId: string;
@@ -1486,12 +1509,27 @@ export const inventoryService = {
         });
       }
 
-      return { invSaleId: invSale.id, linkedSale, postSaleLedger: data.createSalesInvoice === true };
+      const cogsAmount = normalizeMoneyAmount(
+        lineRows.reduce((s, l) => s + d(l.unitCost) * d(l.quantity), 0),
+      );
+
+      return {
+        invSaleId: invSale.id,
+        linkedSale,
+        postSaleLedger: data.createSalesInvoice === true,
+        cogsAmount,
+      };
     });
 
     if (linkedSale?.id && postSaleLedger) {
       await finalizeLinkedSaleLedger(userId, linkedSale.id);
     }
+    await ledgerPostingService.postInventoryCogs(
+      userId,
+      invSaleId,
+      cogsAmount,
+      new Date(),
+    );
 
     const sale = await prisma.inventorySale.findFirst({
       where: { id: invSaleId, userId },

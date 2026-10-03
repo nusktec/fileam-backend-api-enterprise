@@ -5,6 +5,12 @@ import { monthLabelFromKey } from "../../utils/lagosCalendar";
 import { FILING_TIMELINE_EVENTS } from "../../constants/filings";
 import { WORKSPACE_TIMELINE_EVENTS } from "../../constants/filingWorkspace";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
+import {
+  isFilingCompliant,
+  reopenPrematurelyClosedFilings,
+  requireSubmissionReference,
+  step8WorkspacePatch,
+} from "../../constants/filingStatusRules";
 import { copyCarryForwardOnSubmit } from "./filingCarryForwardService";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 
@@ -61,8 +67,8 @@ export const vatFilingService = {
         netVatPayable: frozen.netVatPayable ?? Number(existing.totalPayable),
         inputVatBroughtForward: frozen.inputVatBroughtForward ?? 0,
         frozen: true,
-        alreadyFiled: existing.submittedAt != null,
-        filingId: existing.submittedAt != null ? existing.id : null,
+        alreadyFiled: isFilingCompliant(existing),
+        filingId: existing.id,
         nilReturn: (frozen.netVatPayable ?? 0) === 0,
         breakdown: {
           outputVat: frozen.outputVat ?? 0,
@@ -85,8 +91,8 @@ export const vatFilingService = {
       salesInvoiceCount: figures.salesInvoiceCount,
       purchaseInvoiceCount: figures.purchaseInvoiceCount,
       rate: figures.rate,
-      alreadyFiled: existing?.submittedAt != null,
-      filingId: existing?.submittedAt != null ? existing.id : null,
+      alreadyFiled: existing ? isFilingCompliant(existing) : false,
+      filingId: existing?.id ?? null,
       nilReturn: figures.netVatPayable === 0,
       breakdown: {
         outputVat: figures.outputVat,
@@ -172,13 +178,26 @@ export const vatFilingService = {
       computation?: Record<string, unknown>;
     },
   ) {
+    await reopenPrematurelyClosedFilings(userId);
+    const submissionReference = requireSubmissionReference(
+      params.submissionReference,
+    );
     const filingDueDate =
       params.dueDate instanceof Date
         ? params.dueDate
         : new Date(params.dueDate);
-    const submittedAt = new Date();
-    const status = params.paymentStatus === "paid" ? "paid" : "pending";
-    const completedSteps = Array.from({ length: 8 }, (_, i) => i + 1);
+    const recordedAt = new Date();
+    const existing = await prisma.taxPayable.findUnique({
+      where: {
+        userId_taxType_periodYear_periodMonth: {
+          userId,
+          taxType: "VAT",
+          periodYear: params.periodYear,
+          periodMonth: params.periodMonth,
+        },
+      },
+    });
+    const step8 = step8WorkspacePatch(existing ?? undefined);
     const calc = await this.getCalculation(userId, params.periodYear, params.periodMonth);
     const comp = calc as {
       outputVat?: number;
@@ -211,14 +230,15 @@ export const vatFilingService = {
         penalties: new Decimal(0),
         totalPayable: new Decimal(params.amount),
         filingDueDate,
-        status,
-        submittedAt,
+        status: step8.status,
+        paymentStatus: step8.paymentStatus,
+        submittedAt: recordedAt,
         documentUrl: params.documentUrl ?? null,
         evidenceVaultId: params.evidenceVaultId ?? null,
         stateOfOperation: params.stateOfOperation ?? null,
         vatRegistrationNumber: params.vatRegistrationNumber ?? null,
         receiptUrl: params.receiptUrl ?? null,
-        submissionReference: params.submissionReference ?? null,
+        submissionReference,
         computation: {
           outputVat:
             computationPayload.outputVat ?? computationPayload.breakdown?.outputVat,
@@ -230,22 +250,21 @@ export const vatFilingService = {
             computationPayload.breakdown?.netVatPayable,
           inputVatBroughtForward: computationPayload.inputVatBroughtForward ?? 0,
         },
-        currentStep: 8,
-        completedSteps,
-        frozen: true,
-        frozenAt: submittedAt,
+        currentStep: step8.currentStep,
+        completedSteps: step8.completedSteps,
       },
       update: {
         amountDue: new Decimal(params.amount),
         totalPayable: new Decimal(params.amount),
-        submittedAt,
+        submittedAt: recordedAt,
         documentUrl: params.documentUrl ?? undefined,
         evidenceVaultId: params.evidenceVaultId ?? undefined,
         stateOfOperation: params.stateOfOperation ?? undefined,
         vatRegistrationNumber: params.vatRegistrationNumber ?? undefined,
         receiptUrl: params.receiptUrl ?? undefined,
-        status,
-        submissionReference: params.submissionReference ?? undefined,
+        status: step8.status,
+        paymentStatus: step8.paymentStatus,
+        submissionReference,
         computation: {
           outputVat:
             computationPayload.outputVat ?? computationPayload.breakdown?.outputVat,
@@ -257,10 +276,8 @@ export const vatFilingService = {
             computationPayload.breakdown?.netVatPayable,
           inputVatBroughtForward: computationPayload.inputVatBroughtForward ?? 0,
         },
-        currentStep: 8,
-        completedSteps,
-        frozen: true,
-        frozenAt: submittedAt,
+        currentStep: step8.currentStep,
+        completedSteps: step8.completedSteps,
       },
     });
 
@@ -277,17 +294,17 @@ export const vatFilingService = {
         taxPayableId: taxPayable.id,
         event: WORKSPACE_TIMELINE_EVENTS.SUBMITTED,
         description: "VAT return recorded",
-        eventDate: submittedAt,
+        eventDate: recordedAt,
       },
     });
 
     return {
       id: taxPayable.id,
-      submissionDate: submittedAt,
+      submissionDate: recordedAt,
       period: `${params.periodYear}-${String(params.periodMonth).padStart(2, "0")}`,
       amount: params.amount,
-      status: "submitted",
-      completionPercent: completionPercentFromStep(8),
+      status: "pending",
+      completionPercent: completionPercentFromStep(step8.currentStep),
     };
   },
 };

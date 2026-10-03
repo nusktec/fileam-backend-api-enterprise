@@ -12,6 +12,7 @@ import { vatFilingService } from "../services/vatFilingService";
 import { whtFilingService } from "../services/whtFilingService";
 import { upsertMinimalFilingDraft } from "../../services/genericFilingDraftService";
 import { submitUnifiedTaxFilingForUser } from "../services/unifiedTaxFilingSubmitService";
+import { HttpReplyError } from "../../utils/httpReplyError";
 
 function paramToString(v: string | string[] | undefined): string {
   if (v == null) return "";
@@ -208,7 +209,11 @@ export async function submitUnifiedTaxFiling(
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "Filing submitted", { taxType: result.taxType, data: result.data }));
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json(outJson(false, error.message, null));
+      return;
+    }
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to submit filing", null));

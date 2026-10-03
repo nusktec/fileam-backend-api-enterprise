@@ -42,7 +42,10 @@ export const submitPitFiling = async (req: IRequest, res: Response) => {
     ensureValid(req);
     const userId = getAuthUserId(req);
     const body = matchedData(req, { locations: ["body"], includeOptionals: true });
-    const data = await pitFilingService.submit(userId, body as Record<string, unknown>);
+    const data = await pitFilingService.submit(userId, {
+      ...(req.body ?? {}),
+      ...body,
+    } as Record<string, unknown>);
     res.status(200).json({ data });
   } catch (error) {
     if (replyError(res, error)) return;

@@ -20,6 +20,15 @@ import { pitFilingService } from "./pitFilingService";
 import { payrollService } from "./payrollService";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { collapseAnnualTaxPayables } from "./collapseAnnualTaxPayables";
+import { isFilingCompliant } from "../../constants/filingStatusRules";
+import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
+import {
+  compareMonthKeys,
+  currentMonthKey,
+  monthKeyFromDate,
+  nextMonthKey,
+} from "../../utils/lagosCalendar";
+import type { ApplicableTaxFlags } from "../../constants/taxPersona";
 
 const PAYMENT_BASE_URL =
   process.env.PAYMENT_BASE_URL || "https://pay.fileam.app";
@@ -177,7 +186,7 @@ async function upsertPayableRow(input: {
         0,
       )
     : 0;
-  const hasSubmission = existing?.submittedAt != null;
+  const hasSubmission = existing ? isFilingCompliant(existing) : false;
   if (
     hasSubmission &&
     (input.taxType === "PIT" || input.taxType === "CIT")
@@ -242,6 +251,55 @@ async function upsertPayableRow(input: {
   });
 }
 
+function monthKeyFromYearMonth(year: number, month: number): string {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+function monthsFromKeyThrough(
+  fromKey: string,
+  toKey: string,
+): Array<{ year: number; month: number }> {
+  const periods: Array<{ year: number; month: number }> = [];
+  let cursor = fromKey;
+  while (compareMonthKeys(cursor, toKey) <= 0) {
+    const [year, month] = cursor.split("-").map(Number);
+    periods.push({ year: year!, month: month! });
+    if (cursor === toKey) break;
+    cursor = nextMonthKey(cursor);
+  }
+  return periods;
+}
+
+function isLocalGovLevyTaxType(taxType: string): boolean {
+  const t = taxType.trim().toUpperCase();
+  return t === "LOCAL_GOV_LEVIES" || t === "LOCALGOVLEVIES";
+}
+
+function sumMonthlyTotalPayable(
+  rows: Array<{ periodYear: number; periodMonth: number; totalPayable: Decimal }>,
+): number {
+  return normalizeMoneyAmount(
+    rows.reduce((s, r) => s + decimalToNumber(r.totalPayable), 0),
+  );
+}
+
+/** One totalPayable per calendar year (highest periodMonth wins, so month 12 replaces earlier months). */
+function sumYearlyTotalPayableOnce(
+  rows: Array<{ periodYear: number; periodMonth: number; totalPayable: Decimal }>,
+): number {
+  const byYear = new Map<number, { month: number; amount: number }>();
+  for (const row of rows) {
+    const amount = decimalToNumber(row.totalPayable);
+    const current = byYear.get(row.periodYear);
+    if (!current || row.periodMonth >= current.month) {
+      byYear.set(row.periodYear, { month: row.periodMonth, amount });
+    }
+  }
+  let total = 0;
+  for (const entry of byYear.values()) total += entry.amount;
+  return normalizeMoneyAmount(total);
+}
+
 export const taxPayablesService = {
   /** Recompute stored payables for specific book periods (after sales/expenses change). */
   async syncPayablesForPeriods(
@@ -297,6 +355,118 @@ export const taxPayablesService = {
       periods.push({ year, month });
     }
     await this.syncPayablesForPeriods(userId, periods);
+  },
+
+  async getOwed(userId: string) {
+    const { taxPersonaGuidance } =
+      await taxComputationService.getPersonaPayloadForUser(userId);
+    const applicableTaxes: ApplicableTaxFlags =
+      taxPersonaGuidance.applicableTaxes;
+
+    const latestKey = currentMonthKey();
+    const [firstPayable, firstSale, firstExpense] = await Promise.all([
+      prisma.taxPayable.findFirst({
+        where: { userId },
+        orderBy: [{ periodYear: "asc" }, { periodMonth: "asc" }],
+        select: { periodYear: true, periodMonth: true },
+      }),
+      prisma.sale.findFirst({
+        where: liveSaleWhere(userId),
+        orderBy: { saleDate: "asc" },
+        select: { saleDate: true },
+      }),
+      prisma.expense.findFirst({
+        where: liveExpenseWhere(userId),
+        orderBy: { expenseDate: "asc" },
+        select: { expenseDate: true },
+      }),
+    ]);
+
+    const startKeys: string[] = [latestKey];
+    if (firstPayable) {
+      startKeys.push(
+        monthKeyFromYearMonth(firstPayable.periodYear, firstPayable.periodMonth),
+      );
+    }
+    if (firstSale?.saleDate) {
+      startKeys.push(monthKeyFromDate(firstSale.saleDate));
+    }
+    if (firstExpense?.expenseDate) {
+      startKeys.push(monthKeyFromDate(firstExpense.expenseDate));
+    }
+    startKeys.sort(compareMonthKeys);
+    const periods = monthsFromKeyThrough(startKeys[0]!, latestKey);
+
+    await this.syncPayablesForPeriods(userId, periods);
+    const years = [...new Set(periods.map((p) => p.year))];
+    for (const year of years) {
+      await this.syncPeriodPayables(userId, year, 12);
+    }
+    await collapseAnnualTaxPayables(userId);
+
+    const rows = await prisma.taxPayable.findMany({
+      where: { userId },
+      select: {
+        taxType: true,
+        periodYear: true,
+        periodMonth: true,
+        totalPayable: true,
+      },
+    });
+
+    const byType = (type: string) =>
+      rows.filter((r) => r.taxType.trim().toUpperCase() === type);
+
+    const totalVatOwed = applicableTaxes.vat
+      ? sumMonthlyTotalPayable(byType("VAT"))
+      : 0;
+    const totalWhtOwed = applicableTaxes.wht
+      ? sumMonthlyTotalPayable(byType("WHT"))
+      : 0;
+    const totalPayeOwed = applicableTaxes.paye
+      ? sumMonthlyTotalPayable(byType("PAYE"))
+      : 0;
+    const totalLocalGovLeviesOwed = applicableTaxes.localGovLevies
+      ? sumMonthlyTotalPayable(rows.filter((r) => isLocalGovLevyTaxType(r.taxType)))
+      : 0;
+    const totalCitOwed = applicableTaxes.cit
+      ? sumYearlyTotalPayableOnce(byType("CIT"))
+      : 0;
+    const totalPitOwed = applicableTaxes.pit
+      ? sumYearlyTotalPayableOnce(byType("PIT"))
+      : 0;
+
+    const totalOwed = normalizeMoneyAmount(
+      totalVatOwed +
+        totalPitOwed +
+        totalWhtOwed +
+        totalPayeOwed +
+        totalCitOwed +
+        totalLocalGovLeviesOwed,
+    );
+
+    let totalApplicableTaxOwed = 0;
+    if (applicableTaxes.vat) totalApplicableTaxOwed += totalVatOwed;
+    if (applicableTaxes.pit) totalApplicableTaxOwed += totalPitOwed;
+    if (applicableTaxes.wht) totalApplicableTaxOwed += totalWhtOwed;
+    if (applicableTaxes.paye) totalApplicableTaxOwed += totalPayeOwed;
+    if (applicableTaxes.cit) totalApplicableTaxOwed += totalCitOwed;
+    if (applicableTaxes.localGovLevies) {
+      totalApplicableTaxOwed += totalLocalGovLeviesOwed;
+    }
+    totalApplicableTaxOwed = normalizeMoneyAmount(totalApplicableTaxOwed);
+
+    return {
+      applicableTaxes,
+      totalVatOwed,
+      totalPitOwed,
+      totalWhtOwed,
+      totalPayeOwed,
+      totalCitOwed,
+      totalLocalGovLeviesOwed,
+      totalOwed,
+      totalApplicableTaxOwed,
+    };
   },
 
   async list(

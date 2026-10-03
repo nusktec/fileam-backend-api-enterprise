@@ -549,7 +549,7 @@ export const payersService = {
       notes?: string;
     },
   ) {
-    await findOwnedPayer(userId, payerId);
+    const payer = await findOwnedPayer(userId, payerId);
     const amount = normalizeMoneyAmount(body.amount);
     if (amount <= 0) {
       throw new HttpReplyError(400, "Amount must be greater than zero");
@@ -605,6 +605,8 @@ export const payersService = {
       paymentType: txn.paymentType,
       amount: d(txn.amount),
       date: txn.date,
+      purpose: txn.purpose,
+      incomeCategory: payer.category,
     });
 
     return mapTransactionRow(txn);

@@ -92,25 +92,39 @@ export const submitWhtFiling = async (
       periodYear,
       periodMonth,
       totalWht,
+      amount,
       dueDate,
       paymentStatus,
       receiptUrl,
       documentUrl,
       evidenceVaultId,
+      submissionReference,
     } = req.body ?? {};
-    if (periodYear == null || periodMonth == null || totalWht == null) {
+    if (periodYear == null || periodMonth == null) {
       res
         .status(HttpStatusCode.BAD_REQUEST)
-        .json(
-          outJson(false, "periodYear, periodMonth and totalWht required", null),
-        );
+        .json(outJson(false, "periodYear and periodMonth required", null));
       return;
+    }
+    let whtAmount =
+      totalWht != null
+        ? Number(totalWht)
+        : amount != null
+          ? Number(amount)
+          : NaN;
+    if (!Number.isFinite(whtAmount)) {
+      const sched = await whtFilingService.getSchedule(
+        userId,
+        Number(periodYear),
+        Number(periodMonth),
+      );
+      whtAmount = Number(sched.totalWht ?? 0);
     }
     const paid = paymentStatus === "paid" || paymentStatus === "Paid";
     const data = await whtFilingService.submit(userId, {
       periodYear: Number(periodYear),
       periodMonth: Number(periodMonth),
-      totalWht: Number(totalWht),
+      totalWht: whtAmount,
       dueDate: dueDate
         ? new Date(dueDate)
         : new Date(Number(periodYear), Number(periodMonth), 21),
@@ -118,11 +132,16 @@ export const submitWhtFiling = async (
       receiptUrl,
       documentUrl,
       evidenceVaultId,
+      submissionReference,
     });
     res
       .status(HttpStatusCode.OK)
       .json(outJson(true, "WHT filing submitted", data));
   } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json(outJson(false, error.message, null));
+      return;
+    }
     res
       .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
       .json(outJson(false, "Failed to submit WHT filing", null));

@@ -45,6 +45,11 @@ export type ExpenseLedgerRow = {
   paymentType: string;
   status: string;
   totalAmount: number | { toNumber?: () => number };
+  amount?: number | { toNumber?: () => number };
+  vatAmount?: number | { toNumber?: () => number } | null;
+  category?: string | null;
+  expenseType?: string | null;
+  purchaseKind?: string | null;
   invoiceAmountPaid?: unknown;
   expenseDate: Date;
   settlementBankCode?: string | null;
@@ -67,11 +72,30 @@ function recognitionChanged(
   ) {
     return true;
   }
-  if ("amount" in previous && "amount" in next) {
-    if (num(previous.amount) !== num(next.amount)) return true;
-    const pv = previous.vatAmount != null ? num(previous.vatAmount) : 0;
-    const nv = next.vatAmount != null ? num(next.vatAmount) : 0;
+  if ("amount" in previous && "amount" in next && !("category" in previous)) {
+    if (num(previous.amount as number | { toNumber?: () => number }) !==
+      num(next.amount as number | { toNumber?: () => number })) {
+      return true;
+    }
+    const salePrev = previous as SaleLedgerRow;
+    const saleNext = next as SaleLedgerRow;
+    const pv = salePrev.vatAmount != null ? num(salePrev.vatAmount) : 0;
+    const nv = saleNext.vatAmount != null ? num(saleNext.vatAmount) : 0;
     if (pv !== nv) return true;
+  }
+  if ("category" in previous || "category" in next) {
+    const prevExp = previous as ExpenseLedgerRow;
+    const nextExp = next as ExpenseLedgerRow;
+    if ((prevExp.amount != null) !== (nextExp.amount != null)) return true;
+    if (prevExp.amount != null && nextExp.amount != null) {
+      if (num(prevExp.amount) !== num(nextExp.amount)) return true;
+    }
+    const pv = prevExp.vatAmount != null ? num(prevExp.vatAmount) : 0;
+    const nv = nextExp.vatAmount != null ? num(nextExp.vatAmount) : 0;
+    if (pv !== nv) return true;
+    if ((prevExp.category ?? "") !== (nextExp.category ?? "")) return true;
+    if ((prevExp.expenseType ?? "") !== (nextExp.expenseType ?? "")) return true;
+    if ((prevExp.purchaseKind ?? "") !== (nextExp.purchaseKind ?? "")) return true;
   }
   // Invoice status (Pending/Partial/PAID) is derived from payments — not a recognition event.
   const invoiceLifecycle =
@@ -94,6 +118,34 @@ function isAppendOnlyInvoicePaymentChange(
   } catch {
     return false;
   }
+}
+
+async function removeByReference(
+  userId: string,
+  referenceType: string,
+  referenceId: string,
+  db: DbClient,
+): Promise<void> {
+  await ledgerService.deletePostedByReference(
+    userId,
+    referenceType,
+    referenceId,
+    db,
+  );
+}
+
+async function removeByReferencePrefix(
+  userId: string,
+  referenceType: string,
+  referenceIdPrefix: string,
+  db: DbClient,
+): Promise<void> {
+  await ledgerService.deletePostedByReferencePrefix(
+    userId,
+    referenceType,
+    referenceIdPrefix,
+    db,
+  );
 }
 
 async function reverseByReference(
@@ -209,12 +261,10 @@ export async function syncSaleLedgerAfterUpdate(
     isAsyncPaymentType(next.paymentType) && isSalePaidStatus(next.status);
 
   if (wasAsyncPaid && !isAsyncPaid) {
-    await reverseByReference(
+    await removeByReference(
       userId,
       LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
       `${previous.id}:confirm`,
-      `Reverse sale collection ${previous.id}`,
-      txnDate,
       db,
     );
   }
@@ -229,20 +279,16 @@ export async function syncSaleLedgerAfterUpdate(
 
   if (recognitionChanged(previous, next)) {
     if (isInvoicePaymentType(next.paymentType)) {
-      await reverseByReferencePrefix(
+      await removeByReferencePrefix(
         userId,
         LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
         `${previous.id}:`,
-        `Reverse sale collections ${previous.id}`,
-        txnDate,
         db,
       );
-      await reverseByReference(
+      await removeByReference(
         userId,
         LEDGER_REFERENCE_TYPES.SALE_RECOGNITION,
         previous.id,
-        `Reverse sale recognition ${previous.id}`,
-        txnDate,
         db,
       );
       await ledgerPostingService.postSaleRecognition(userId, next, db, {
@@ -252,12 +298,10 @@ export async function syncSaleLedgerAfterUpdate(
         await repostInvoiceSaleCollections(userId, next, nextPaid, db);
       }
     } else {
-      await reverseByReference(
+      await removeByReference(
         userId,
         LEDGER_REFERENCE_TYPES.SALE_RECOGNITION,
         previous.id,
-        `Reverse sale recognition ${previous.id}`,
-        txnDate,
         db,
       );
       await ledgerPostingService.postSaleRecognition(userId, next, db);
@@ -274,12 +318,10 @@ export async function syncSaleLedgerAfterUpdate(
         db,
       );
     } else {
-      await reverseByReferencePrefix(
+      await removeByReferencePrefix(
         userId,
         LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
         `${previous.id}:`,
-        `Reverse sale collections ${previous.id}`,
-        txnDate,
         db,
       );
       await repostInvoiceSaleCollections(userId, next, nextPaid, db);
@@ -301,12 +343,10 @@ export async function syncExpenseLedgerAfterUpdate(
     isAsyncPaymentType(next.paymentType) && isSalePaidStatus(next.status);
 
   if (wasAsyncPaid && !isAsyncPaid) {
-    await reverseByReference(
+    await removeByReference(
       userId,
       LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
       `${previous.id}:confirm`,
-      `Reverse expense payment ${previous.id}`,
-      txnDate,
       db,
     );
   }
@@ -321,20 +361,16 @@ export async function syncExpenseLedgerAfterUpdate(
 
   if (recognitionChanged(previous, next)) {
     if (isInvoicePaymentType(next.paymentType)) {
-      await reverseByReferencePrefix(
+      await removeByReferencePrefix(
         userId,
         LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
         `${previous.id}:`,
-        `Reverse expense payments ${previous.id}`,
-        txnDate,
         db,
       );
-      await reverseByReference(
+      await removeByReference(
         userId,
         LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
         previous.id,
-        `Reverse expense recognition ${previous.id}`,
-        txnDate,
         db,
       );
       await ledgerPostingService.postExpenseRecognition(userId, next, db, {
@@ -344,12 +380,10 @@ export async function syncExpenseLedgerAfterUpdate(
         await repostInvoiceExpensePayments(userId, next, nextPaid, db);
       }
     } else {
-      await reverseByReference(
+      await removeByReference(
         userId,
         LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
         previous.id,
-        `Reverse expense recognition ${previous.id}`,
-        txnDate,
         db,
       );
       await ledgerPostingService.postExpenseRecognition(userId, next, db);
@@ -366,17 +400,35 @@ export async function syncExpenseLedgerAfterUpdate(
         db,
       );
     } else {
-      await reverseByReferencePrefix(
+      await removeByReferencePrefix(
         userId,
         LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
         `${previous.id}:`,
-        `Reverse expense payments ${previous.id}`,
-        txnDate,
         db,
       );
       await repostInvoiceExpensePayments(userId, next, nextPaid, db);
     }
   }
+}
+
+/** Remove journals for a deleted sale (postings PDF: delete removes, do not reverse). */
+export async function removeSaleLedgerOnDelete(
+  userId: string,
+  sale: SaleLedgerRow,
+  db: DbClient = prisma,
+): Promise<void> {
+  await removeByReferencePrefix(
+    userId,
+    LEDGER_REFERENCE_TYPES.SALE_COLLECTION,
+    `${sale.id}:`,
+    db,
+  );
+  await removeByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.SALE_RECOGNITION,
+    sale.id,
+    db,
+  );
 }
 
 /** Reverse all ledger postings for a deleted sale. */
@@ -442,6 +494,26 @@ export async function reverseLoanReceivedLedgerOnUndo(
     liabilityId,
     `Undo loan received ${liabilityId}`,
     transactionDate,
+    db,
+  );
+}
+
+/** Remove journals for a deleted expense (postings PDF: delete removes, do not reverse). */
+export async function removeExpenseLedgerOnDelete(
+  userId: string,
+  expense: ExpenseLedgerRow,
+  db: DbClient = prisma,
+): Promise<void> {
+  await removeByReferencePrefix(
+    userId,
+    LEDGER_REFERENCE_TYPES.EXPENSE_PAYMENT,
+    `${expense.id}:`,
+    db,
+  );
+  await removeByReference(
+    userId,
+    LEDGER_REFERENCE_TYPES.EXPENSE_RECOGNITION,
+    expense.id,
     db,
   );
 }

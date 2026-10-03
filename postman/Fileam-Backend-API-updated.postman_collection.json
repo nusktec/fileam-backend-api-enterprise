@@ -2583,6 +2583,14 @@
               }
             },
             {
+              "name": "Owed taxes *",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables/owed",
+                "description": "No query params (period, page, limit, range ignored). Home screen uses data.totalApplicableTaxOwed. VAT/WHT/PAYE/levies = sum of totalPayable every month; CIT/PIT = one totalPayable per year. Flag false forces that tax total to 0. 200 even when the taxpayer owes nothing."
+              }
+            },
+            {
               "name": "Get payable *",
               "request": {
                 "method": "GET",

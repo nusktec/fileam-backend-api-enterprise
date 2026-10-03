@@ -192,6 +192,8 @@ function computePeriodTotals(
   let totalPaye = 0;
   let totalNhf = 0;
   let totalPension = 0;
+  let totalPensionEmployee = 0;
+  let totalPensionEmployer = 0;
   let applicableNhfCount = 0;
   let activeEmployeeCount = 0;
   const pfas = new Set<string>();
@@ -240,6 +242,8 @@ function computePeriodTotals(
     totalPaye += paye;
     totalNhf += nhf;
     totalPension += pensionEmp + pensionEr;
+    totalPensionEmployee += pensionEmp;
+    totalPensionEmployer += pensionEr;
     if (nhfApplicable && e.nhf !== false && nhf > 0) applicableNhfCount += 1;
     if (e.pfa?.trim()) pfas.add(e.pfa.trim());
 
@@ -274,6 +278,7 @@ function computePeriodTotals(
     totalPaye: round2(totalPaye),
     totalNhf: round2(totalNhf),
     totalPension: round2(totalPension),
+    totalPensionEmployer: round2(totalPensionEmployer),
     applicableNhfCount,
     activeEmployeeCount,
     totalNoOfPfas: pfas.size,
@@ -391,6 +396,17 @@ export const payrollService = {
         totals.primaryPfa,
       ),
     ]);
+
+    const periodEnd = new Date(Date.UTC(year, month, 0));
+    await ledgerPostingService.postSalaryAccrued(userId, `payroll:${key}`, {
+      salary: totals.totalPayroll,
+      paye: totals.totalPaye,
+      pension: totals.totalPension,
+      employerPension: totals.totalPensionEmployer,
+      nhf: settings.isNhfApplicable ? totals.totalNhf : 0,
+      netPay: totals.netPayout,
+      periodEnd,
+    });
 
     const statutoryObligations = [
       {

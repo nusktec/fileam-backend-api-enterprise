@@ -11,6 +11,21 @@ import {
   TAX_PERIOD_RANGES,
 } from "../../utils/taxPeriodQuery";
 
+export const getOwedTaxes = async (
+  req: IRequest,
+  res: Response,
+): Promise<void> => {
+  try {
+    const userId = getAuthUserId(req);
+    const data = await taxPayablesService.getOwed(userId);
+    res.status(HttpStatusCode.OK).json(outJson(true, "Owed taxes", data));
+  } catch (error) {
+    res
+      .status(HttpStatusCode.INTERNAL_SERVER_ERROR)
+      .json(outJson(false, "Failed to retrieve owed taxes"));
+  }
+};
+
 export const listPayables = async (
   req: IRequest,
   res: Response,

@@ -23,6 +23,7 @@ import {
 } from "../../constants/recordUndo";
 import { HttpReplyError } from "../../utils/httpReplyError";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
+import { beneficiaryGrossDebitAccount } from "../../constants/ledgerPostingRules";
 
 function d(v: Decimal | number | null | undefined): number {
   if (v == null) return 0;
@@ -510,6 +511,12 @@ export const beneficiariesService = {
           txn.id,
           grossAmount,
           date,
+          beneficiaryGrossDebitAccount({
+            beneficiaryType: beneficiary.beneficiaryType,
+            vendorCategory: beneficiary.vendorCategory,
+            partyType: beneficiary.partyType,
+            entryType: "INVOICE",
+          }),
         );
         await recomputeAndPersistBalances(beneficiaryId);
         const updated = await prisma.beneficiary.findUniqueOrThrow({
@@ -645,6 +652,12 @@ export const beneficiariesService = {
         whtAmount: amounts.whtAmount,
         date,
         invoiceId,
+        debitAccountCode: beneficiaryGrossDebitAccount({
+          beneficiaryType: beneficiary.beneficiaryType,
+          vendorCategory: beneficiary.vendorCategory,
+          partyType: beneficiary.partyType,
+          entryType: "PAYMENT",
+        }),
       });
 
       await recomputeAndPersistBalances(beneficiaryId);

@@ -31,7 +31,7 @@ import {
 } from "../../utils/dateRangeQuery";
 import { taxPayablesService } from "./taxPayablesService";
 import { ledgerPostingService } from "../../services/ledgerPostingService";
-import { syncSaleLedgerAfterUpdate, reverseSaleLedgerOnDelete } from "../../services/ledgerSyncService";
+import { syncSaleLedgerAfterUpdate, removeSaleLedgerOnDelete } from "../../services/ledgerSyncService";
 import {
   assertInvoiceNotOverpaid,
   assertInvoicePaymentsAppendOnly,
@@ -1135,7 +1135,7 @@ export const salesService = {
     const period = calendarPeriodFromDate(sale.saleDate);
 
     const deleted = await prisma.$transaction(async (tx) => {
-      await reverseSaleLedgerOnDelete(userId, toSaleLedgerRow(sale), tx);
+      await removeSaleLedgerOnDelete(userId, toSaleLedgerRow(sale), tx);
       const result = await tx.sale.deleteMany({
         where: { id: saleId, userId },
       });

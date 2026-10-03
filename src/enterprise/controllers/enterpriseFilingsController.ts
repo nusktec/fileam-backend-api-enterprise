@@ -24,6 +24,7 @@ import {
 import { filingsService } from "../../mobile/services/filingsService";
 import { filingTaxTypeService } from "../services/filingTaxTypeService";
 import { getTaxFilingConstants } from "../../services/taxFilingConstantsService";
+import { HttpReplyError } from "../../utils/httpReplyError";
 
 export async function getFilingsSummaryHandler(
   req: IRequest,
@@ -112,6 +113,7 @@ async function submitClientFilingReturnForType(
     evidenceVaultId?: string;
     stateOfOperation?: string;
     vatRegistrationNumber?: string;
+    submissionReference?: string;
   };
   try {
     const result = await createFiling(linkedUserId, {
@@ -127,13 +129,23 @@ async function submitClientFilingReturnForType(
       evidenceVaultId: data.evidenceVaultId,
       stateOfOperation: data.stateOfOperation,
       vatRegistrationNumber: data.vatRegistrationNumber,
+      submissionReference:
+        data.submissionReference ??
+        (req.body as { submissionReference?: string })?.submissionReference,
     });
     if (!result) {
       sendNotFound(res, "Failed to submit return");
       return;
     }
     sendCreated(res, successMessage, result);
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+      return;
+    }
     sendServerError(res, "Failed to submit return");
   }
 }
@@ -253,6 +265,7 @@ export async function createFilingHandler(
     evidenceVaultId?: string;
     stateOfOperation?: string;
     vatRegistrationNumber?: string;
+    submissionReference?: string;
   };
   const taxType = (data.taxType ?? "").trim().toUpperCase();
   try {
@@ -269,13 +282,23 @@ export async function createFilingHandler(
       evidenceVaultId: data.evidenceVaultId,
       stateOfOperation: data.stateOfOperation,
       vatRegistrationNumber: data.vatRegistrationNumber,
+      submissionReference:
+        data.submissionReference ??
+        (req.body as { submissionReference?: string })?.submissionReference,
     });
     if (!result) {
       sendNotFound(res, "Failed to create filing");
       return;
     }
     sendCreated(res, "Filing created", result);
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+      return;
+    }
     sendServerError(res, "Failed to create filing");
   }
 }
@@ -299,6 +322,7 @@ export async function submitClientVatReturnHandler(
     evidenceVaultId?: string;
     stateOfOperation?: string;
     vatRegistrationNumber?: string;
+    submissionReference?: string;
   };
   try {
     const result = await submitClientVatReturn(linkedUserId, {
@@ -313,13 +337,23 @@ export async function submitClientVatReturnHandler(
       evidenceVaultId: data.evidenceVaultId,
       stateOfOperation: data.stateOfOperation,
       vatRegistrationNumber: data.vatRegistrationNumber,
+      submissionReference:
+        data.submissionReference ??
+        (req.body as { submissionReference?: string })?.submissionReference,
     });
     if (!result) {
       sendNotFound(res, "Failed to submit VAT return");
       return;
     }
     sendCreated(res, "VAT return submitted", result);
-  } catch {
+  } catch (error) {
+    if (error instanceof HttpReplyError) {
+      res.status(error.statusCode).json({
+        success: false,
+        message: error.message,
+      });
+      return;
+    }
     sendServerError(res, "Failed to submit VAT return");
   }
 }

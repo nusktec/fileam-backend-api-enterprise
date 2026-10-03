@@ -4,6 +4,11 @@ import { monthDateRangeUtc } from "../../utils/dateRangeQuery";
 import { liveExpenseWhere, liveSaleWhere } from "../../utils/liveBookQuery";
 import { completionPercentFromStep } from "../../constants/filingWorkspace";
 import { collapseAnnualTaxPayables } from "./collapseAnnualTaxPayables";
+import {
+  deriveHubFilingStatus,
+  FILING_HUB_TAX_TYPES,
+  reopenPrematurelyClosedFilings,
+} from "../../constants/filingStatusRules";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
   if (d == null) return 0;
@@ -314,12 +319,18 @@ function buildMissingEvidenceBreakdown(
 }
 
 function deriveDisplayStatus(payable: {
+  taxType?: string;
   status: string;
   submittedAt: Date | null;
   filingDueDate: Date;
   totalPayable: number;
   totalPaid: number;
+  completedSteps?: unknown;
 }): FilingDisplayStatus {
+  const tax = (payable.taxType ?? "").trim().toUpperCase();
+  if ((FILING_HUB_TAX_TYPES as readonly string[]).includes(tax)) {
+    return deriveHubFilingStatus(payable);
+  }
   if (payable.status === "paid" || payable.status === "overpaid") return "paid";
   if (payable.totalPaid >= payable.totalPayable && payable.totalPayable > 0)
     return "paid";
@@ -375,6 +386,7 @@ export const filingsService = {
     }
 
     await collapseAnnualTaxPayables(userId);
+    await reopenPrematurelyClosedFilings(userId);
 
     const taxTypeFilter = filters?.taxType?.trim().toUpperCase();
     if (taxTypeFilter === "PIT" || taxTypeFilter === "CIT") {
@@ -516,11 +528,13 @@ export const filingsService = {
         0,
       );
       const displayStatus = deriveDisplayStatus({
+        taxType: p.taxType,
         status: p.status,
         submittedAt: p.submittedAt,
         filingDueDate: p.filingDueDate,
         totalPayable,
         totalPaid,
+        completedSteps: p.completedSteps,
       });
       const { completionPercent, completion } = buildFilingCompletion(
         {
@@ -623,11 +637,13 @@ export const filingsService = {
       0,
     );
     const displayStatus = deriveDisplayStatus({
+      taxType: p.taxType,
       status: p.status,
       submittedAt: p.submittedAt,
       filingDueDate: p.filingDueDate,
       totalPayable,
       totalPaid,
+      completedSteps: p.completedSteps,
     });
     const evidenceState = await fetchPeriodEvidenceCompliance(
       userId,

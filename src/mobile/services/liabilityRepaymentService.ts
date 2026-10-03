@@ -896,6 +896,13 @@ export const liabilityRegisterService = {
       return row;
     });
 
+    await ledgerPostingService.postLoanReceived(
+      userId,
+      created.id,
+      principal,
+      startDate,
+    );
+
     const schedule = await prisma.liabilityScheduleItem.findMany({
       where: { liabilityId: created.id },
       orderBy: { dueDate: "asc" },

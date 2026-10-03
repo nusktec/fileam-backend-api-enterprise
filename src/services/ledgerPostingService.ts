@@ -12,6 +12,7 @@ import {
   LEDGER_STATUS,
   type LedgerEntryDraft,
 } from "../constants/ledger";
+import { CHART_BY_CODE } from "../constants/chartOfAccounts";
 import {
   isCashPaymentType,
   isInvoicePaymentType,
@@ -36,11 +37,25 @@ import {
   saleCollectionDescription,
   saleRecognitionDescription,
 } from "../utils/ledgerEntryDescription";
+import {
+  expenseBalanceSheetKind,
+  fixedAssetLedgerCode,
+  isFinalWhtIncomeCategory,
+  isPayerIncomePurpose,
+  payerIncomeAccount,
+} from "../constants/ledgerPostingRules";
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
 function account(code: string, name?: string): { code: string; name: string } {
-  return { code, name: name ?? LEDGER_ACCOUNT_NAMES[code] ?? code };
+  return {
+    code,
+    name:
+      name ??
+      LEDGER_ACCOUNT_NAMES[code] ??
+      CHART_BY_CODE.get(code)?.name ??
+      code,
+  };
 }
 
 function line(
@@ -317,6 +332,11 @@ export const ledgerPostingService = {
       paymentType: string;
       status: string;
       totalAmount: number | { toNumber?: () => number };
+      amount?: number | { toNumber?: () => number };
+      vatAmount?: number | { toNumber?: () => number } | null;
+      category?: string | null;
+      expenseType?: string | null;
+      purchaseKind?: string | null;
       invoiceAmountPaid?: unknown;
       expenseDate: Date;
       settlementBankCode?: string | null;
@@ -330,6 +350,13 @@ export const ledgerPostingService = {
   ) {
     const total = normalizeMoneyAmount(Number(expense.totalAmount));
     if (total <= 0) return null;
+
+    const netExpense = normalizeMoneyAmount(
+      expense.amount != null ? Number(expense.amount) : total,
+    );
+    const inputVat = normalizeMoneyAmount(
+      expense.vatAmount != null ? Number(expense.vatAmount) : Math.max(0, total - netExpense),
+    );
 
     const paid = coerceInvoiceAmountPaid(expense.invoiceAmountPaid ?? 0);
     const isInvoice = isInvoicePaymentType(expense.paymentType);
@@ -352,13 +379,32 @@ export const ledgerPostingService = {
           db,
         );
 
+    const bsKind = expenseBalanceSheetKind(expense);
+    const debitAccount =
+      bsKind === "fixed_asset"
+        ? account(LEDGER_ACCOUNTS.FIXED_ASSET)
+        : bsKind === "loan_repayment"
+          ? account(LEDGER_ACCOUNTS.LOAN_LIABILITY)
+          : bsKind === "tax_payment"
+            ? account(LEDGER_ACCOUNTS.TAX_PAYABLE)
+            : account(LEDGER_ACCOUNTS.EXPENSE);
+
+    const debitAmount = bsKind ? total : netExpense;
+    const vatDebit = !bsKind && inputVat > 0 ? inputVat : 0;
+
     const entries = onCredit
       ? [
-          line(account(LEDGER_ACCOUNTS.EXPENSE), total, 0),
+          line(debitAccount, debitAmount, 0),
+          ...(vatDebit > 0
+            ? [line(account(LEDGER_ACCOUNTS.VAT_PAYABLE), vatDebit, 0)]
+            : []),
           line(account(LEDGER_ACCOUNTS.ACCOUNTS_PAYABLE), 0, total),
         ]
       : [
-          line(account(LEDGER_ACCOUNTS.EXPENSE), total, 0),
+          line(debitAccount, debitAmount, 0),
+          ...(vatDebit > 0
+            ? [line(account(LEDGER_ACCOUNTS.VAT_PAYABLE), vatDebit, 0)]
+            : []),
           line(paymentAsset!, 0, total),
         ];
 
@@ -451,7 +497,7 @@ export const ledgerPostingService = {
     );
   },
 
-  /** Inbound payer fee — cash or credit (mirrors sales). */
+  /** Inbound payer receipt — credit depends on purpose (not always revenue). */
   async postPayerRecognition(
     userId: string,
     txn: {
@@ -459,31 +505,69 @@ export const ledgerPostingService = {
       paymentType: string;
       amount: number;
       date: string;
+      purpose?: string;
+      incomeCategory?: string | null;
+      vatAmount?: number;
+      whtSuffered?: number;
     },
     db: DbClient = prisma,
   ) {
     const amount = normalizeMoneyAmount(txn.amount);
     if (amount <= 0) return null;
 
+    const purpose = txn.purpose ?? "SALES";
+    const vat = normalizeMoneyAmount(txn.vatAmount ?? 0);
+    const wht = normalizeMoneyAmount(txn.whtSuffered ?? 0);
     const onCredit = txn.paymentType === "Invoice";
-    const entries = onCredit
-      ? [
-          line(account(LEDGER_ACCOUNTS.CUSTOMER_AR), amount, 0),
-          line(account(LEDGER_ACCOUNTS.SALES_REVENUE), 0, amount),
-        ]
-      : [
-          line(
-            await resolvePaymentAssetAccount(
-              userId,
-              txn.paymentType,
-              null,
-              db,
-            ),
-            amount,
-            0,
-          ),
-          line(account(LEDGER_ACCOUNTS.SALES_REVENUE), 0, amount),
-        ];
+    const asset = onCredit
+      ? account(LEDGER_ACCOUNTS.CUSTOMER_AR)
+      : await resolvePaymentAssetAccount(userId, txn.paymentType, null, db);
+
+    const netAsset = normalizeMoneyAmount(Math.max(0, amount - wht));
+    const entries: LedgerEntryDraft[] = [];
+    if (netAsset > 0) entries.push(line(asset, netAsset, 0));
+
+    if (purpose === "LOAN_RECEIVED") {
+      entries.push(line(account(LEDGER_ACCOUNTS.LOAN_LIABILITY), 0, amount));
+    } else if (
+      purpose === "OWNER_CAPITAL_INTRODUCED" ||
+      purpose === "OTHER_RECEIPT"
+    ) {
+      entries.push(line(account(LEDGER_ACCOUNTS.OPENING_BALANCE), 0, amount));
+    } else if (purpose === "EMPLOYEE_DIRECTOR_REPAYMENT") {
+      entries.push(
+        line(account(LEDGER_ACCOUNTS.EMPLOYEE_ADVANCE_RECEIVABLE), 0, amount),
+      );
+    } else if (purpose === "VENDOR_REFUND") {
+      entries.push(
+        line(account(LEDGER_ACCOUNTS.VENDOR_REFUND_RECEIVABLE), 0, amount),
+      );
+    } else if (purpose === "TAX_REFUND") {
+      entries.push(
+        line(account(LEDGER_ACCOUNTS.TAX_REFUND_RECEIVABLE), 0, amount),
+      );
+    } else if (purpose === "ASSET_SALE") {
+      entries.push(line(account(LEDGER_ACCOUNTS.GAIN_ON_DISPOSAL), 0, amount));
+    } else if (isPayerIncomePurpose(purpose)) {
+      const income = payerIncomeAccount({
+        purpose,
+        incomeCategory: txn.incomeCategory,
+      });
+      const incomeAmount = normalizeMoneyAmount(Math.max(0, amount - vat));
+      if (incomeAmount > 0) entries.push(line(account(income.code), 0, incomeAmount));
+      if (vat > 0) {
+        entries.push(line(account(LEDGER_ACCOUNTS.VAT_PAYABLE), 0, vat));
+      }
+      if (wht > 0) {
+        if (isFinalWhtIncomeCategory(txn.incomeCategory)) {
+          entries.push(line(account(LEDGER_ACCOUNTS.TAX_EXPENSE), wht, 0));
+        } else {
+          entries.push(line(account(LEDGER_ACCOUNTS.WHT_TAX_CREDIT), wht, 0));
+        }
+      }
+    } else {
+      entries.push(line(account(LEDGER_ACCOUNTS.OPENING_BALANCE), 0, amount));
+    }
 
     const txDate = new Date(`${txn.date}T12:00:00.000Z`);
 
@@ -492,7 +576,7 @@ export const ledgerPostingService = {
         userId,
         referenceType: LEDGER_REFERENCE_TYPES.PAYER_RECOGNITION,
         referenceId: txn.id,
-        description: `Payer income ${txn.id}`,
+        description: `Payer ${purpose} ${txn.id}`,
         transactionDate: txDate,
         entries,
       },
@@ -537,12 +621,13 @@ export const ledgerPostingService = {
     );
   },
 
-  /** Beneficiary invoice — expense on credit */
+  /** Beneficiary invoice — debit the party account, AP for the gross. WHT is not posted. */
   async postBeneficiaryInvoice(
     userId: string,
     txnId: string,
     grossAmount: number,
     date: string,
+    debitAccountCode: string = LEDGER_ACCOUNTS.EXPENSE,
     db: DbClient = prisma,
   ) {
     const gross = normalizeMoneyAmount(grossAmount);
@@ -556,7 +641,7 @@ export const ledgerPostingService = {
         description: `Beneficiary invoice ${txnId}`,
         transactionDate: new Date(`${date}T12:00:00.000Z`),
         entries: [
-          line(account(LEDGER_ACCOUNTS.EXPENSE), gross, 0),
+          line(account(debitAccountCode), gross, 0),
           line(account(LEDGER_ACCOUNTS.ACCOUNTS_PAYABLE), 0, gross),
         ],
       },
@@ -577,6 +662,7 @@ export const ledgerPostingService = {
       whtAmount: number;
       date: string;
       invoiceId?: string | null;
+      debitAccountCode?: string;
     },
     db: DbClient = prisma,
   ) {
@@ -589,7 +675,8 @@ export const ledgerPostingService = {
     if (txn.invoiceId) {
       entries.push(line(account(LEDGER_ACCOUNTS.ACCOUNTS_PAYABLE), gross, 0));
     } else {
-      entries.push(line(account(LEDGER_ACCOUNTS.EXPENSE), gross, 0));
+      const debitCode = txn.debitAccountCode ?? LEDGER_ACCOUNTS.EXPENSE;
+      entries.push(line(account(debitCode), gross, 0));
     }
     if (net > 0) {
       entries.push(line(account(LEDGER_ACCOUNTS.BANK), 0, net));
@@ -705,9 +792,12 @@ export const ledgerPostingService = {
 
     const row = await db.asset.findUnique({
       where: { id: assetId },
-      select: { assetCode: true, assetName: true },
+      select: { assetCode: true, assetName: true, assetType: true },
     });
     const label = row?.assetCode || row?.assetName || assetId;
+    const assetCode = row?.assetType
+      ? fixedAssetLedgerCode(row.assetType)
+      : LEDGER_ACCOUNTS.FIXED_ASSET;
     return postOnce(
       {
         userId,
@@ -716,7 +806,7 @@ export const ledgerPostingService = {
         description: `Asset purchase — ${label}`,
         transactionDate: purchaseDate,
         entries: [
-          line(account(LEDGER_ACCOUNTS.FIXED_ASSET), amt, 0),
+          line(account(assetCode), amt, 0),
           line(account(LEDGER_ACCOUNTS.BANK), 0, amt),
         ],
       },
@@ -760,6 +850,9 @@ export const ledgerPostingService = {
       salary: number;
       paye: number;
       pension: number;
+      employerPension?: number;
+      nhf?: number;
+      netPay?: number;
       periodEnd: Date;
     },
     db: DbClient = prisma,
@@ -767,13 +860,24 @@ export const ledgerPostingService = {
     const salary = normalizeMoneyAmount(amounts.salary);
     const paye = normalizeMoneyAmount(amounts.paye);
     const pension = normalizeMoneyAmount(amounts.pension);
-    const total = salary + paye + pension;
+    const employerPension = normalizeMoneyAmount(amounts.employerPension ?? 0);
+    const nhf = normalizeMoneyAmount(amounts.nhf ?? 0);
+    const total = salary + employerPension;
     if (total <= 0) return null;
 
     const entries: LedgerEntryDraft[] = [
       line(account(LEDGER_ACCOUNTS.SALARY_EXPENSE), salary, 0),
     ];
-    const salaryNet = normalizeMoneyAmount(salary - paye - pension);
+    if (employerPension > 0) {
+      entries.push(
+        line(account(LEDGER_ACCOUNTS.EMPLOYER_PENSION_EXPENSE), employerPension, 0),
+      );
+    }
+    const salaryNet = normalizeMoneyAmount(
+      amounts.netPay != null
+        ? amounts.netPay
+        : salary - paye - Math.max(0, pension - employerPension) - nhf,
+    );
     if (salaryNet > 0) {
       entries.push(
         line(account(LEDGER_ACCOUNTS.SALARY_PAYABLE), 0, salaryNet),
@@ -784,6 +888,9 @@ export const ledgerPostingService = {
     }
     if (pension > 0) {
       entries.push(line(account(LEDGER_ACCOUNTS.PENSION_PAYABLE), 0, pension));
+    }
+    if (nhf > 0) {
+      entries.push(line(account(LEDGER_ACCOUNTS.NHF_PAYABLE), 0, nhf));
     }
 
     return postOnce(
@@ -816,7 +923,9 @@ export const ledgerPostingService = {
         ? account(LEDGER_ACCOUNTS.PAYE_PAYABLE)
         : obligationType === "PENSION"
           ? account(LEDGER_ACCOUNTS.PENSION_PAYABLE)
-          : account(LEDGER_ACCOUNTS.TAX_PAYABLE);
+          : obligationType === "NHF"
+            ? account(LEDGER_ACCOUNTS.NHF_PAYABLE)
+            : account(LEDGER_ACCOUNTS.TAX_PAYABLE);
 
     return postOnce(
       {
@@ -951,6 +1060,221 @@ export const ledgerPostingService = {
           line(account(LEDGER_ACCOUNTS.DEPRECIATION_EXPENSE), amt, 0),
           line(account(LEDGER_ACCOUNTS.ACCUMULATED_DEPRECIATION), 0, amt),
         ],
+      },
+      db,
+    );
+  },
+
+  /** Loan proceeds — Bank ↑, loan liability ↑. Not revenue. */
+  async postLoanReceived(
+    userId: string,
+    liabilityId: string,
+    amount: number,
+    receivedDate: Date,
+    db: DbClient = prisma,
+  ) {
+    const amt = normalizeMoneyAmount(amount);
+    if (amt <= 0) return null;
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.LOAN_RECEIVED,
+        referenceId: liabilityId,
+        description: `Loan received ${liabilityId}`,
+        transactionDate: receivedDate,
+        entries: [
+          line(account(LEDGER_ACCOUNTS.BANK), amt, 0),
+          line(account(LEDGER_ACCOUNTS.LOAN_LIABILITY), 0, amt),
+        ],
+      },
+      db,
+    );
+  },
+
+  async postInventoryOpening(
+    userId: string,
+    itemId: string,
+    amount: number,
+    transactionDate: Date,
+    db: DbClient = prisma,
+  ) {
+    const amt = normalizeMoneyAmount(amount);
+    if (amt <= 0) return null;
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.INVENTORY_OPENING,
+        referenceId: itemId,
+        description: `Opening inventory ${itemId}`,
+        transactionDate,
+        entries: [
+          line(account(LEDGER_ACCOUNTS.INVENTORY), amt, 0),
+          line(account(LEDGER_ACCOUNTS.OPENING_BALANCE), 0, amt),
+        ],
+      },
+      db,
+    );
+  },
+
+  async postInventoryStockIn(
+    userId: string,
+    movementId: string,
+    amount: number,
+    transactionDate: Date,
+    paid: boolean,
+    db: DbClient = prisma,
+  ) {
+    const amt = normalizeMoneyAmount(amount);
+    if (amt <= 0) return null;
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.INVENTORY_STOCK_IN,
+        referenceId: movementId,
+        description: `Inventory stock in ${movementId}`,
+        transactionDate,
+        entries: [
+          line(account(LEDGER_ACCOUNTS.INVENTORY), amt, 0),
+          line(
+            paid
+              ? account(LEDGER_ACCOUNTS.BANK)
+              : account(LEDGER_ACCOUNTS.ACCOUNTS_PAYABLE),
+            0,
+            amt,
+          ),
+        ],
+      },
+      db,
+    );
+  },
+
+  async postInventoryStockOut(
+    userId: string,
+    movementId: string,
+    amount: number,
+    transactionDate: Date,
+    db: DbClient = prisma,
+  ) {
+    const amt = normalizeMoneyAmount(amount);
+    if (amt <= 0) return null;
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.INVENTORY_STOCK_OUT,
+        referenceId: movementId,
+        description: `Inventory write-off ${movementId}`,
+        transactionDate,
+        entries: [
+          line(account(LEDGER_ACCOUNTS.INVENTORY_LOSS), amt, 0),
+          line(account(LEDGER_ACCOUNTS.INVENTORY), 0, amt),
+        ],
+      },
+      db,
+    );
+  },
+
+  async postInventoryCogs(
+    userId: string,
+    saleId: string,
+    amount: number,
+    transactionDate: Date,
+    db: DbClient = prisma,
+  ) {
+    const amt = normalizeMoneyAmount(amount);
+    if (amt <= 0) return null;
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.INVENTORY_COGS,
+        referenceId: saleId,
+        description: `Cost of goods sold ${saleId}`,
+        transactionDate,
+        entries: [
+          line(account(LEDGER_ACCOUNTS.COGS), amt, 0),
+          line(account(LEDGER_ACCOUNTS.INVENTORY), 0, amt),
+        ],
+      },
+      db,
+    );
+  },
+
+  async postPrepaymentPaid(
+    userId: string,
+    prepaymentId: string,
+    amount: number,
+    paymentDate: Date,
+    db: DbClient = prisma,
+  ) {
+    const amt = normalizeMoneyAmount(amount);
+    if (amt <= 0) return null;
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.PREPAYMENT_PAID,
+        referenceId: prepaymentId,
+        description: `Prepayment ${prepaymentId}`,
+        transactionDate: paymentDate,
+        entries: [
+          line(account(LEDGER_ACCOUNTS.PREPAYMENTS), amt, 0),
+          line(account(LEDGER_ACCOUNTS.BANK), 0, amt),
+        ],
+      },
+      db,
+    );
+  },
+
+  async postPrepaymentRecognition(
+    userId: string,
+    scheduleItemId: string,
+    amount: number,
+    recognitionDate: Date,
+    expenseAccountCode: string = LEDGER_ACCOUNTS.EXPENSE,
+    db: DbClient = prisma,
+  ) {
+    const amt = normalizeMoneyAmount(amount);
+    if (amt <= 0) return null;
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.PREPAYMENT_RECOGNITION,
+        referenceId: scheduleItemId,
+        description: `Prepayment recognition ${scheduleItemId}`,
+        transactionDate: recognitionDate,
+        entries: [
+          line(account(expenseAccountCode), amt, 0),
+          line(account(LEDGER_ACCOUNTS.PREPAYMENTS), 0, amt),
+        ],
+      },
+      db,
+    );
+  },
+
+  async postPrepaymentCancel(
+    userId: string,
+    prepaymentId: string,
+    remaining: number,
+    cancelDate: Date,
+    refunded: boolean,
+    db: DbClient = prisma,
+  ) {
+    const amt = normalizeMoneyAmount(remaining);
+    if (amt <= 0) return null;
+    return postOnce(
+      {
+        userId,
+        referenceType: LEDGER_REFERENCE_TYPES.PREPAYMENT_CANCEL,
+        referenceId: prepaymentId,
+        description: `Prepayment cancel ${prepaymentId}`,
+        transactionDate: cancelDate,
+        entries: refunded
+          ? [
+              line(account(LEDGER_ACCOUNTS.BANK), amt, 0),
+              line(account(LEDGER_ACCOUNTS.PREPAYMENTS), 0, amt),
+            ]
+          : [
+              line(account(LEDGER_ACCOUNTS.EXPENSE), amt, 0),
+              line(account(LEDGER_ACCOUNTS.PREPAYMENTS), 0, amt),
+            ],
       },
       db,
     );
