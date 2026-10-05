@@ -1,4 +1,6 @@
 /** Payroll statutory obligation types and status (Payroll & Employee Module API). */
+import { monthKeyFromDate } from "../utils/lagosCalendar";
+
 export const OBLIGATION_TYPE = {
   PAYE: "PAYE",
   NHF: "NHF",
@@ -33,7 +35,7 @@ export function payrollPeriodKey(year: number, month: number): string {
 }
 
 export function payrollPeriodKeyFromDate(d: Date): string {
-  return payrollPeriodKey(d.getUTCFullYear(), d.getUTCMonth() + 1);
+  return monthKeyFromDate(d);
 }
 
 export function currentPayrollPeriodKey(now = new Date()): string {

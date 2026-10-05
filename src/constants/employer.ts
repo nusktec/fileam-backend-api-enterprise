@@ -3,6 +3,7 @@ import {
   PIT_PROGRESSIVE_BRACKETS,
   computeProgressivePitFromChargeableIncome,
 } from "./pitTaxSchedule";
+import { nextMonthKey } from "../utils/lagosCalendar";
 
 export const EMPLOYER_TYPES = [
   "LIMITED_COMPANY",
@@ -274,6 +275,42 @@ export function resolveEmploymentStatus(
 
 export function formatTodayYmd(d = new Date()): string {
   return d.toISOString().slice(0, 10);
+}
+
+/** YYYY-MM of the employer's start month. */
+export function employerStartMonthKey(startDate: string): string {
+  return startDate.slice(0, 7);
+}
+
+/** Employer counts in a calendar month from startDate through endDate (inclusive). */
+export function employerActiveInMonth(
+  startDate: string,
+  endDate: string | null | undefined,
+  periodKey: string,
+): boolean {
+  const start = employerStartMonthKey(startDate);
+  const end = endDate ? endDate.slice(0, 7) : null;
+  if (periodKey < start) return false;
+  if (end && periodKey > end) return false;
+  return true;
+}
+
+/** Calendar months in `year` this employer is active (through year-end or endDate). */
+export function employerActiveMonthsInYear(
+  startDate: string,
+  endDate: string | null | undefined,
+  year: number,
+): string[] {
+  const months: string[] = [];
+  const yearStart = `${year}-01`;
+  const yearEnd = `${year}-12`;
+  let cursor = yearStart;
+  while (cursor <= yearEnd) {
+    if (employerActiveInMonth(startDate, endDate, cursor)) months.push(cursor);
+    if (cursor === yearEnd) break;
+    cursor = nextMonthKey(cursor);
+  }
+  return months;
 }
 
 export type EmployerTaxComputation = {

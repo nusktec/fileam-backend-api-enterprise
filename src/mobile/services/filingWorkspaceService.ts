@@ -34,6 +34,8 @@ import {
   refreshDocumentUrl,
 } from "./filingDocumentService";
 import { pitFilingService } from "./pitFilingService";
+import { earliestEmployerStartYear } from "./employersService";
+import { monthKeyFromDate } from "../../utils/lagosCalendar";
 import { runTaxGptValidation } from "./taxGptValidationService";
 import { vatFilingService } from "./vatFilingService";
 import { whtFilingService } from "./whtFilingService";
@@ -256,6 +258,41 @@ async function clearGeneratedDocuments(taxPayableId: string): Promise<void> {
   });
 }
 
+async function earliestPitYearForUser(userId: string): Promise<number | null> {
+  const [employerYear, employee] = await Promise.all([
+    earliestEmployerStartYear(userId),
+    prisma.employee.findFirst({
+      where: { userId },
+      orderBy: { startDate: "asc" },
+      select: { startDate: true },
+    }),
+  ]);
+  const years: number[] = [];
+  if (employerYear != null) years.push(employerYear);
+  if (employee?.startDate) {
+    const y = Number(monthKeyFromDate(employee.startDate).slice(0, 4));
+    if (Number.isFinite(y)) years.push(y);
+  }
+  if (years.length === 0) return null;
+  return Math.min(...years);
+}
+
+async function resolveWorkspacePeriod(
+  userId: string,
+  taxType: WorkspaceTaxType,
+  query: { periodYear?: number; periodMonth?: number },
+): Promise<{ periodYear: number; periodMonth: number }> {
+  const defaults = defaultWorkspacePeriod(taxType);
+  let periodYear = query.periodYear ?? defaults.periodYear;
+  let periodMonth = query.periodMonth ?? defaults.periodMonth;
+  if (taxType === "PIT" || taxType === "CIT") periodMonth = 12;
+  if (taxType === "PIT") {
+    const earliest = await earliestPitYearForUser(userId);
+    if (earliest != null && periodYear < earliest) periodYear = earliest;
+  }
+  return { periodYear, periodMonth };
+}
+
 export const filingWorkspaceService = {
   async getOrCreate(
     userId: string,
@@ -263,10 +300,11 @@ export const filingWorkspaceService = {
     query: { periodYear?: number; periodMonth?: number },
   ) {
     const taxType = taxTypeFromPath(path);
-    const defaults = defaultWorkspacePeriod(taxType);
-    const periodYear = query.periodYear ?? defaults.periodYear;
-    let periodMonth = query.periodMonth ?? defaults.periodMonth;
-    if (taxType === "PIT" || taxType === "CIT") periodMonth = 12;
+    const { periodYear, periodMonth } = await resolveWorkspacePeriod(
+      userId,
+      taxType,
+      query,
+    );
 
     await reopenPrematurelyClosedFilings(userId);
     let row = await findWorkspace(userId, taxType, periodYear, periodMonth);
@@ -613,10 +651,11 @@ export const filingWorkspaceService = {
     query: { periodYear?: number; periodMonth?: number },
   ) {
     const taxType = taxTypeFromPath(path);
-    const defaults = defaultWorkspacePeriod(taxType);
-    const periodYear = query.periodYear ?? defaults.periodYear;
-    let periodMonth = query.periodMonth ?? defaults.periodMonth;
-    if (taxType === "PIT" || taxType === "CIT") periodMonth = 12;
+    const { periodYear, periodMonth } = await resolveWorkspacePeriod(
+      userId,
+      taxType,
+      query,
+    );
 
     const row = await findWorkspace(userId, taxType, periodYear, periodMonth);
     if (!row) {
@@ -649,10 +688,11 @@ export const filingWorkspaceService = {
     query: { periodYear?: number; periodMonth?: number },
   ) {
     const taxType = taxTypeFromPath(path);
-    const defaults = defaultWorkspacePeriod(taxType);
-    const periodYear = query.periodYear ?? defaults.periodYear;
-    let periodMonth = query.periodMonth ?? defaults.periodMonth;
-    if (taxType === "PIT" || taxType === "CIT") periodMonth = 12;
+    const { periodYear, periodMonth } = await resolveWorkspacePeriod(
+      userId,
+      taxType,
+      query,
+    );
 
     const row = await findWorkspace(userId, taxType, periodYear, periodMonth);
     if (!row?.packageUrl) {

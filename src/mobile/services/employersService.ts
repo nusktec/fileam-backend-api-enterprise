@@ -8,6 +8,7 @@ import {
   DEFAULT_EMPLOYEE_PENSION_RATE,
   DEFAULT_EMPLOYER_PENSION_RATE,
   employerDocumentCategoryLabel,
+  employerActiveInMonth,
   formatTodayYmd,
   MAX_MONEY_NGN,
   normalizeEmployerDocumentKind,
@@ -370,8 +371,9 @@ function generateScheduledIncomeRows(
 function autoIncomeHistoryYears(startDate: string): string[] {
   const startYear = Number.parseInt(startDate.slice(0, 4), 10);
   const currentYear = new Date().getFullYear();
+  const fromYear = Number.isFinite(startYear) ? startYear : currentYear;
   const years: string[] = [];
-  for (let y = currentYear; y >= startYear; y--) {
+  for (let y = currentYear; y >= fromYear; y--) {
     years.push(String(y));
   }
   return years.length > 0 ? years : [String(currentYear)];
@@ -403,6 +405,25 @@ async function buildIncomeHistoryResponse(
     profile.employerType,
     profile.relationship,
   );
+  const startYear = Number.parseInt(row.startDate.slice(0, 4), 10);
+  if (Number.isFinite(startYear) && year < startYear) {
+    return {
+      year: String(year),
+      taxTreatment,
+      sourceTaxLabel:
+        taxTreatment === "PAYE"
+          ? "PAYE"
+          : taxTreatment === "WHT"
+            ? "WHT"
+            : "Tax",
+      totalGross: 0,
+      totalTax: 0,
+      totalPension: 0,
+      totalNet: 0,
+      availableYears: autoIncomeHistoryYears(row.startDate),
+      entries: [],
+    };
+  }
   const yearPrefix = String(year);
   const start = row.startDate.slice(0, 7);
   const endEmployment = row.endDate?.slice(0, 7) ?? null;
@@ -542,6 +563,47 @@ export async function sumPayeCreditForYear(
     year,
   );
   return history.totalTax;
+}
+
+export async function sumPayeForCalendarMonth(
+  userId: string,
+  year: number,
+  month: number,
+): Promise<number> {
+  const period = `${year}-${String(month).padStart(2, "0")}`;
+  const employers = await prisma.employer.findMany({ where: { userId } });
+  let total = 0;
+  for (const row of employers) {
+    const profile = profileFromRow(row);
+    const taxTreatment = resolveEmployerTaxTreatment(
+      profile.employerType,
+      profile.relationship,
+    );
+    if (taxTreatment !== "PAYE") continue;
+    if (!employerActiveInMonth(row.startDate, row.endDate, period)) continue;
+    const history = await buildIncomeHistoryResponse(
+      userId,
+      row.id,
+      row,
+      year,
+    );
+    const entry = history.entries.find((e) => e.period === period);
+    if (entry) total += entry.taxDeducted;
+  }
+  return normalizeMoneyAmount(total);
+}
+
+export async function earliestEmployerStartYear(
+  userId: string,
+): Promise<number | null> {
+  const row = await prisma.employer.findFirst({
+    where: { userId },
+    orderBy: { startDate: "asc" },
+    select: { startDate: true },
+  });
+  if (!row?.startDate) return null;
+  const year = Number.parseInt(row.startDate.slice(0, 4), 10);
+  return Number.isFinite(year) ? year : null;
 }
 
 export const employersService = {

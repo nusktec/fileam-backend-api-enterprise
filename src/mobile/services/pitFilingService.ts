@@ -2,7 +2,8 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import {
   computeAnnualPensionable,
-  computeAnnualIncome,
+  employerActiveMonthsInYear,
+  computeMonthlyIncome,
   DEFAULT_EMPLOYEE_PENSION_RATE,
   resolveEmployerTaxTreatment,
   type EmployerPaymentFrequency,
@@ -140,32 +141,56 @@ async function aggregatePitInputs(
   let employerWhtCredits = 0;
 
   const employers = await prisma.employer.findMany({ where: { userId } });
+  const personaPayload =
+    await taxComputationService.getPersonaPayloadForUser(userId);
+  const isPayeePersona =
+    personaPayload.taxPersonaGuidance.taxPersona === "PAYEE";
+
+  if (!isPayeePersona) {
   for (const row of employers) {
+    const activeMonths = employerActiveMonthsInYear(
+      row.startDate,
+      row.endDate,
+      year,
+    );
+    if (activeMonths.length === 0) continue;
+    if (
+      row.paymentFrequency === "ONE_OFF" &&
+      !activeMonths.includes(row.startDate.slice(0, 7))
+    ) {
+      continue;
+    }
+
     const profile = employerProfileFromRow(row);
     const taxTreatment = resolveEmployerTaxTreatment(
       profile.employerType,
       profile.relationship,
     );
-    const annualGross = computeAnnualIncome(profile);
+    const monthlyGross = computeMonthlyIncome(profile);
+    const months =
+      row.paymentFrequency === "ONE_OFF" ? 1 : activeMonths.length;
+    const periodGross = normalizeMoneyAmount(monthlyGross * months);
     const isContractor = profile.relationship === "CONTRACTOR";
     const minWageExempt =
       !isContractor &&
-      annualGross > 0 &&
-      annualGross / 12 <= PIT_MINIMUM_WAGE_MONTHLY_NGN;
+      monthlyGross > 0 &&
+      monthlyGross <= PIT_MINIMUM_WAGE_MONTHLY_NGN;
 
     if (minWageExempt) {
-      employmentExempt = normalizeMoneyAmount(employmentExempt + annualGross);
+      employmentExempt = normalizeMoneyAmount(employmentExempt + periodGross);
     } else {
       employmentTaxable = normalizeMoneyAmount(
-        employmentTaxable + annualGross,
+        employmentTaxable + periodGross,
       );
     }
 
     if (row.hasPension) {
       const pensionable = computeAnnualPensionable(profile);
       const rate = d(row.employeeRate ?? DEFAULT_EMPLOYEE_PENSION_RATE);
+      const annualPension = Math.round((pensionable * rate) / PERCENT);
       pensionContribution = normalizeMoneyAmount(
-        pensionContribution + Math.round((pensionable * rate) / PERCENT),
+        pensionContribution +
+          Math.round((annualPension * months) / 12),
       );
     }
 
@@ -183,12 +208,13 @@ async function aggregatePitInputs(
       const whtRate = 5;
       employerWhtCredits = normalizeMoneyAmount(
         employerWhtCredits +
-          Math.round((annualGross * whtRate) / PERCENT),
+          Math.round((periodGross * whtRate) / PERCENT),
       );
     }
   }
+  }
 
-  if (employers.length === 0) {
+  if (!isPayeePersona && employers.length === 0) {
     const { computeTotalMonthlyPayeForUser } = await import(
       "./employeesService"
     );

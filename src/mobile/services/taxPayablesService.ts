@@ -18,6 +18,7 @@ import { computeVatFigures, computeWhtFigures } from "./vatWhtOverviewService";
 import { citFilingService } from "./citFilingService";
 import { pitFilingService } from "./pitFilingService";
 import { payrollService } from "./payrollService";
+import { sumPayeForCalendarMonth } from "./employersService";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
 import { collapseAnnualTaxPayables } from "./collapseAnnualTaxPayables";
 import { isFilingCompliant } from "../../constants/filingStatusRules";
@@ -111,6 +112,9 @@ async function filingAmountsForPeriod(
   month: number,
 ): Promise<Array<{ taxType: TaxType; amountDue: number }>> {
   const periodKey = periodKeyForFigures(year, month);
+  const persona = await taxComputationService.getPersonaPayloadForUser(userId);
+  const isPayeePersona = persona.taxPersonaGuidance.taxPersona === "PAYEE";
+
   const [vat, wht, citPayable, pitPayable, payeDue] = await Promise.all([
     computeVatFigures(userId, periodKey)
       .then((f) => normalizeMoneyAmount(f.netVatPayable))
@@ -130,10 +134,12 @@ async function filingAmountsForPeriod(
         ),
       )
       .catch(() => 0),
-    payrollService
-      .getPayee(userId, periodKey)
-      .then((r) => normalizeMoneyAmount(r.summary.amountDue))
-      .catch(() => 0),
+    isPayeePersona
+      ? sumPayeForCalendarMonth(userId, year, month)
+      : payrollService
+          .getPayee(userId, periodKey)
+          .then((r) => normalizeMoneyAmount(r.summary.amountDue))
+          .catch(() => 0),
   ]);
 
   return [
@@ -377,6 +383,14 @@ export const taxPayablesService = {
       taxPersonaGuidance.applicableTaxes;
 
     const latestKey = currentMonthKey();
+    const isPayeePersona = taxPersonaGuidance.taxPersona === "PAYEE";
+    const firstEmployer = isPayeePersona
+      ? await prisma.employer.findFirst({
+          where: { userId },
+          orderBy: { startDate: "asc" },
+          select: { startDate: true },
+        })
+      : null;
     const [firstPayable, firstSale, firstExpense] = await Promise.all([
       prisma.taxPayable.findFirst({
         where: { userId },
@@ -396,10 +410,13 @@ export const taxPayablesService = {
     ]);
 
     const startKeys: string[] = [latestKey];
-    if (firstPayable) {
+    if (firstPayable && !isPayeePersona) {
       startKeys.push(
         monthKeyFromYearMonth(firstPayable.periodYear, firstPayable.periodMonth),
       );
+    }
+    if (firstEmployer?.startDate) {
+      startKeys.push(firstEmployer.startDate.slice(0, 7));
     }
     if (firstSale?.saleDate) {
       startKeys.push(monthKeyFromDate(firstSale.saleDate));
