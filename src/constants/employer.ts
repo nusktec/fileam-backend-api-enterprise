@@ -408,18 +408,18 @@ export function computeEmployerTaxComputation(
   let whtRate = 0;
 
   if (treatment === "PAYE") {
-    if (payeCredit > 0) {
-      sourceTax = payeCredit;
-    } else {
-      sourceTax = pitPayable;
-      sourceTaxIsEstimated = true;
-    }
+    const monthlyPaye =
+      months > 0 ? Math.round(pitPayable / months) : pitPayable;
+    sourceTax = monthlyPaye;
+    sourceTaxIsEstimated = payeCredit <= 0;
   } else if (treatment === "WHT") {
     whtRate = WHT_RATE_SERVICES_PERCENT;
     sourceTax = Math.round((annualGross * whtRate) / PERCENT);
   }
 
-  const netLiability = Math.max(0, pitPayable - sourceTax);
+  const annualSourceTax =
+    treatment === "PAYE" ? sourceTax * months : sourceTax;
+  const netLiability = Math.max(0, pitPayable - annualSourceTax);
   const effectiveRate =
     annualGross > 0
       ? Math.round((pitPayable / annualGross) * PERCENT * 1000) / 1000

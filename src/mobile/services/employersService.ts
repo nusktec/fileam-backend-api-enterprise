@@ -189,6 +189,9 @@ function mapEmployerRow(
 
   if (includeTaxComputation) {
     const taxComputation = computeEmployerTaxComputation(profile, payeCredit);
+    if (taxTreatment === "PAYE") {
+      base.payeCredit = taxComputation.sourceTax;
+    }
     base.taxComputation = {
       treatment: taxComputation.treatment,
       incomeKind: taxComputation.incomeKind,
@@ -759,7 +762,7 @@ export const employersService = {
       );
       if (taxTreatment === "PAYE") {
         totalPayeDeducted = normalizeMoneyAmount(
-          totalPayeDeducted + payeCredit,
+          totalPayeDeducted + (mapped.payeCredit as number),
         );
       }
     }
