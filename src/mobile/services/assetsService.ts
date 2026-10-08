@@ -672,30 +672,45 @@ function buildAssetListStatusFilter(
   return normalized;
 }
 
+function listItemUndoStatus(status: string): string {
+  const s = status.trim().toLowerCase();
+  if (s === RECORD_UNDO_STATUS.VOIDED || s === "void") return "VOIDED";
+  if (s === RECORD_UNDO_STATUS.REVERSED) return "REVERSED";
+  return status;
+}
+
 function buildAssetEventListStatusFilter(
   status?: string,
-): string | { notIn: string[] } {
+): string | { notIn: string[] } | { in: string[] } | undefined {
   const normalized = status?.trim() || "all";
   if (normalized === "all") {
-    return { notIn: [ASSET_EVENT_STATUS.REVERSED] };
+    return undefined;
+  }
+  if (
+    normalized === RECORD_UNDO_STATUS.VOIDED ||
+    normalized === "Voided" ||
+    normalized === "VOIDED"
+  ) {
+    return RECORD_UNDO_STATUS.VOIDED;
   }
   if (
     normalized === RECORD_UNDO_STATUS.REVERSED ||
-    normalized === "Reversed"
+    normalized === "Reversed" ||
+    normalized === "REVERSED"
   ) {
-    return ASSET_EVENT_STATUS.REVERSED;
+    return {
+      in: [ASSET_EVENT_STATUS.REVERSED, RECORD_UNDO_STATUS.REVERSED],
+    };
   }
   return ASSET_EVENT_STATUS.LIVE;
 }
 
 function buildAssetTransferListStatusFilter(
   status?: string,
-): string | { notIn: string[] } {
+): string | { notIn: string[] } | undefined {
   const normalized = status?.trim() || "all";
   if (normalized === "all") {
-    return {
-      notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
-    };
+    return undefined;
   }
   if (
     normalized === RECORD_UNDO_STATUS.VOIDED ||
@@ -1479,9 +1494,10 @@ export const assetsService = {
         notIn: [RECORD_UNDO_STATUS.VOIDED, RECORD_UNDO_STATUS.REVERSED],
       },
     };
+    const statusFilter = buildAssetTransferListStatusFilter(normalizedStatus);
     const listWhere = {
       ...baseWhere,
-      status: buildAssetTransferListStatusFilter(normalizedStatus),
+      ...(statusFilter != null ? { status: statusFilter } : {}),
     };
 
     const [rows, total, liveCount, counts] = await Promise.all([
@@ -1519,7 +1535,7 @@ export const assetsService = {
       assetName: t.asset.assetName,
       assetType: t.asset.assetType,
       transferType: t.transferType,
-      status: t.status,
+      status: listItemUndoStatus(t.status),
       fromLocation: t.fromLocation,
       toLocation: t.toLocation,
       transferDate: dateToIsoDate(t.transferDate),
@@ -1840,9 +1856,10 @@ export const assetsService = {
       ...baseWhere,
       status: { notIn: [ASSET_EVENT_STATUS.REVERSED] },
     };
+    const statusFilter = buildAssetEventListStatusFilter(normalizedStatus);
     const listWhere = {
       ...baseWhere,
-      status: buildAssetEventListStatusFilter(normalizedStatus),
+      ...(statusFilter != null ? { status: statusFilter } : {}),
     };
 
     const [rows, total, liveCount, agg, counts] = await Promise.all([
@@ -1885,7 +1902,7 @@ export const assetsService = {
       bookValue: d(s.bookValueAtSale),
       gainLossType: s.gainLossType,
       gainLossAmount: d(s.gainLossAmount),
-      status: s.status,
+      status: listItemUndoStatus(s.status),
       undo: mapUndoPayload(s),
     });
 
@@ -1896,6 +1913,7 @@ export const assetsService = {
       },
       counts: {
         all: liveCount,
+        voided: dbCount(RECORD_UNDO_STATUS.VOIDED),
         reversed: dbCount(ASSET_EVENT_STATUS.REVERSED),
       },
       sales: rows.map(mapSale),
@@ -2032,9 +2050,10 @@ export const assetsService = {
       ...baseWhere,
       status: { notIn: [ASSET_EVENT_STATUS.REVERSED] },
     };
+    const statusFilter = buildAssetEventListStatusFilter(normalizedStatus);
     const listWhere = {
       ...baseWhere,
-      status: buildAssetEventListStatusFilter(normalizedStatus),
+      ...(statusFilter != null ? { status: statusFilter } : {}),
     };
 
     const [rows, total, liveCount, agg, counts] = await Promise.all([
@@ -2076,7 +2095,7 @@ export const assetsService = {
       bookValueAtDisposal: d(r.bookValueAtDisposal),
       note: r.note,
       hasEvidence: Boolean(r.evidenceUrl),
-      status: r.status,
+      status: listItemUndoStatus(r.status),
       undo: mapUndoPayload(r),
     });
 
@@ -2089,6 +2108,7 @@ export const assetsService = {
       },
       counts: {
         all: liveCount,
+        voided: dbCount(RECORD_UNDO_STATUS.VOIDED),
         reversed: dbCount(ASSET_EVENT_STATUS.REVERSED),
       },
       disposals: rows.map(mapDisposal),
