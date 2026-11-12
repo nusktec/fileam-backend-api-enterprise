@@ -579,6 +579,16 @@ export const salesService = {
       calendarPeriodFromDate(saleDate),
     ]);
 
+    const { onMobileRecordsCreated } = await import(
+      "../../enterprise/features/services/mobileIngestHooks"
+    );
+    await onMobileRecordsCreated({
+      clientUserId: userId,
+      module: "Sales",
+      recordCount: 1,
+      description: `1 invoice received (${sale.invoiceNumber})`,
+    });
+
     return mapSaleSummary(sale);
   },
 
@@ -756,6 +766,16 @@ export const salesService = {
       ),
     ];
     await taxPayablesService.syncPayablesForPeriods(userId, periods);
+
+    const { onMobileRecordsCreated } = await import(
+      "../../enterprise/features/services/mobileIngestHooks"
+    );
+    await onMobileRecordsCreated({
+      clientUserId: userId,
+      module: "Sales",
+      recordCount: sales.length,
+      description: `${sales.length} invoices received`,
+    });
 
     return {
       created: sales.length,
@@ -974,6 +994,24 @@ export const salesService = {
 
     await taxPayablesService.syncPayablesForPeriods(userId, periodsToSync);
 
+    if (
+      data.category != null &&
+      (sale.category ?? "") !== data.category
+    ) {
+      const { onMobileClassificationEdit, RECORD_TYPES } = await import(
+        "../../enterprise/features/services/mobileIngestHooks"
+      );
+      await onMobileClassificationEdit({
+        clientUserId: userId,
+        module: "Sales",
+        recordType: RECORD_TYPES.SALE,
+        recordId: sale.id,
+        fieldLabel: "category",
+        previousValue: sale.category ?? "",
+        nextValue: data.category,
+      });
+    }
+
     return mapSaleSummary(updated);
   },
 
@@ -1144,6 +1182,19 @@ export const salesService = {
 
     if (deleted) {
       await taxPayablesService.syncPayablesForPeriods(userId, [period]);
+      const { onMobileRecordRemoved, AUDIT_CATEGORIES } = await import(
+        "../../enterprise/features/services/mobileIngestHooks"
+      );
+      await onMobileRecordRemoved({
+        clientUserId: userId,
+        actorUserId: userId,
+        txId: sale.invoiceNumber || sale.id,
+        amount: Number(sale.totalAmount),
+        category: AUDIT_CATEGORIES.INCOME,
+        transactionDate: sale.saleDate,
+        reason: "Hard delete",
+        removalKind: "deleted",
+      });
     }
     return deleted;
   },

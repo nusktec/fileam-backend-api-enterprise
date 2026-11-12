@@ -202,6 +202,21 @@ export const saleUndoService = {
 
     await taxPayablesService.syncPayablesForPeriods(userId, [period]);
 
+    const { onMobileRecordRemoved, AUDIT_CATEGORIES } = await import(
+      "../../enterprise/features/services/mobileIngestHooks"
+    );
+    await onMobileRecordRemoved({
+      clientUserId: userId,
+      actorUserId: userId,
+      txId: sale.invoiceNumber || sale.id,
+      amount: decimalToNumber(sale.totalAmount),
+      category: AUDIT_CATEGORIES.INCOME,
+      transactionDate: sale.saleDate,
+      reason,
+      removalKind:
+        action === RECORD_UNDO_ACTION.REVERSE ? "reset" : "deleted",
+    });
+
     const data = await salesService.getById(userId, updated.id);
     return {
       action,

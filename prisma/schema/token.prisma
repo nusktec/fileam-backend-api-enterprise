@@ -1,12 +1,17 @@
 model Token {
-  id        String   @id @default(uuid())
-  token     String
-  type      TokenType
-  userId    String?  @map("user_id")
-  expiresAt DateTime @map("expires_at")
-  status    Boolean  @default(false)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String    @id @default(uuid())
+  token        String
+  type         TokenType
+  userId       String?   @map("user_id")
+  expiresAt    DateTime  @map("expires_at")
+  status       Boolean   @default(false)
+  device       String?
+  location     String?
+  userAgent    String?   @map("user_agent")
+  ipAddress    String?   @map("ip_address")
+  lastActiveAt DateTime? @map("last_active_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

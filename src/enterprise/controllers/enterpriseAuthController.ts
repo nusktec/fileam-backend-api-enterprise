@@ -16,6 +16,11 @@ import { EmailVerificationService } from "../../services/emailVerificationServic
 import { prisma } from "../../config/database";
 import { generateConsultantOnboardingToken } from "../../utils/consultantOnboardingToken";
 import type { Prisma } from "@prisma/client";
+import {
+  clientIp,
+  deviceFromUserAgent,
+  locationFromIp,
+} from "../features/utils";
 
 const ENTERPRISE_FIRST_STEP = "company_creation";
 
@@ -62,9 +67,16 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const accessToken = generateAccessToken(user.id);
     const refreshToken = generateRefreshToken();
-    await saveRefreshToken(user.id, refreshToken);
+    const ua = req.headers["user-agent"];
+    const ip = clientIp(req);
+    const session = await saveRefreshToken(user.id, refreshToken, undefined, {
+      userAgent: typeof ua === "string" ? ua : null,
+      ipAddress: ip || null,
+      device: deviceFromUserAgent(typeof ua === "string" ? ua : null),
+      location: locationFromIp(ip),
+    });
+    const accessToken = generateAccessToken(user.id, session.id);
 
     const payload = authService.buildAuthUserPayload(user);
     const enterpriseComplete =
@@ -135,10 +147,25 @@ export const refreshToken = async (
       return;
     }
 
-    const newAccessToken = generateAccessToken(tokenRecord.user.id);
     const newRefreshToken = generateRefreshToken();
     await revokeRefreshToken(token, tokenRecord.user.id);
-    await saveRefreshToken(tokenRecord.user.id, newRefreshToken);
+    const ua = req.headers["user-agent"];
+    const ip = clientIp(req);
+    const session = await saveRefreshToken(
+      tokenRecord.user.id,
+      newRefreshToken,
+      undefined,
+      {
+        userAgent: typeof ua === "string" ? ua : null,
+        ipAddress: ip || null,
+        device: deviceFromUserAgent(typeof ua === "string" ? ua : null),
+        location: locationFromIp(ip),
+      },
+    );
+    const newAccessToken = generateAccessToken(
+      tokenRecord.user.id,
+      session.id,
+    );
 
     const userPayload = authService.buildAuthUserPayload(tokenRecord.user);
     const u = tokenRecord.user as {

@@ -408,6 +408,9 @@ export const enterpriseFinancialsService = {
       amount: decimalToNumber(t.amount),
       status: t.status,
       type: t.type,
+      pipelineStage: "IMPORTED",
+      createdById: null as string | null,
+      createdBy: null as { id: string; name: string } | null,
     }));
   },
 
@@ -466,6 +469,9 @@ export const enterpriseFinancialsService = {
         amount: decimalToNumber(t.amount),
         status: t.status,
         type: t.type,
+        pipelineStage: "IMPORTED",
+        createdById: null as string | null,
+        createdBy: null as { id: string; name: string } | null,
       })),
       total,
       page,

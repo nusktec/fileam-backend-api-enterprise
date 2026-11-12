@@ -92,6 +92,19 @@ const authHandler = ({ roles = [], permissions = [] }: AuthOptions = {}) => {
       }
 
       req.user = user as IRequest["user"];
+      if (decoded.sid) {
+        req.sessionId = decoded.sid;
+        void prisma.token
+          .updateMany({
+            where: {
+              id: decoded.sid,
+              userId: user.id,
+              type: "refresh",
+            },
+            data: { lastActiveAt: new Date() },
+          })
+          .catch(() => undefined);
+      }
 
       if (!roles.length && !permissions.length) {
         return next();

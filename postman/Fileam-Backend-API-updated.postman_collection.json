@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Fileam Backend API (Updated)",
-    "description": "Fileam Backend API. Payment & ledger (payment_and_account_movement_logic.pdf): Cash -> PAID on create, posts to Cash; Transfer/Card -> IN_PROGRESS on create (AR/AP only, no bank movement); confirm via PATCH .../payment-status with {\"status\":\"PAID\",\"bankCode\":\"...\"} (bankCode optional — omit to post to aggregate BANK ledger; when provided must be a registered bank account). Card without bankCode -> CARD_SETTLEMENT. Transfer without bankCode -> BANK. settlementBankCode returned on sales/expenses when set. invoiceAmountPaid = { total, items:[{amount,paymentType,bankCode?}] } — bankCode optional on all line types. Bulk sales/expenses: default Transfer -> PAID on create (posts to Bank). Single create: Cash -> PAID; Transfer/Card -> IN_PROGRESS; Invoice -> Pending. PATCH update syncs ledger (reverses confirm/collections when needed). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nPurchase / VAT tags (optional, additive): expenses accept purchaseOrigin (local|import|unknown, default unknown), purchaseKind (goods|inventory_item|service|fixed_asset, default service), vatTag (vatable|zero_rated|exempt). Sales accept vatTag. vatInclusive remains the boolean; vatTag on list/detail is the classification string (inferred vatable/exempt when omitted). GET /mobile/expenses/summary returns a full category breakdown (expanding list topCategories). GET /mobile/inventory/summary?start=YYYY-MM-DD&end=YYYY-MM-DD returns opening/closing rawMaterials, workInProgress, finishedGoods, total as decimal strings (NGN). Asset purchase/sale and inventory add/restock/sell sync into /expenses and /sales without a second cash/bank journal when the source already posted.\n\nTax filings (mobile): 12-step workspace on tax_payables — GET/PUT /filings/{vat|wht|pit|cit}/workspace, confirm-computation, validate (TaxGPT), generate-documents, package; POST /filings/{id}/complete (step 12). Pending workspaces appear in GET /filings with completionPercent from currentStep/12. PIT/CIT: POST /pit|cit/draft for reliefs/adjustments; calculation honours draft + frozen snapshot. VAT: inputVatBroughtForward from prior month credit; WHT schedule from beneficiary PAYMENT rows. Submit all types accepts submissionReference. Reports: PIT Return Summary, CIT Return Summary added. VAT/WHT monthly; PIT annual (due 31 Mar); CIT annual NTA 2025 (due 30 Jun, periodMonth=12). Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position — category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents — phone and TIN unique per user (409 DUPLICATE_CONTACT on duplicate). Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents — same phone/TIN uniqueness rules. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents — envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents — taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z — forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nPAYE (Universal Nigeria PAYE Formula 2026): AGI = 12×(basic+housing+transport+meal+otherAllowances+otherTaxableIncome); pension 8% on basic+housing+transport; NHF 2.5% of basic; NHIS monthly×12; rent relief MIN(20%×annualRent, ₦500k); otherAllowableDeductions (annual). Tax dashboard PAYE sums /employees first; employmentGrossSalaryMonthly is legacy fallback only.\n\nBusiness profile & tax eligibility: GET/PUT /mobile/user/business-profile — sector, totalFixedAssets, annualGrossTurnover (NGN JSON numbers), professionalService (boolean|null) or providesProfessionalServices (YES|NO|NOT_SURE), primaryBusinessActivity; partial PUT (omitted keys unchanged, JSON null clears). GET /mobile/user/tax-eligibility-profile — CIT/VAT classifications. CIT small/large inputs: fixed assets from registered assets on books when present, else signup totalFixedAssets; turnover from signup annualGrossTurnover until business is 12+ months old with sales/expense transactions, then trailing-12-month sales (eligibility) or annual sales for filing year (CIT calculation). taxEligibility.inputs.turnoverSource: profile | books | transactions. Onboarding POST …/step/business-details accepts same optional LTD/tax fields. Tax computation cit/vat blocks include citClassification and vatClassification from eligibility engine.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.",
+    "description": "Fileam Backend API. Payment & ledger (payment_and_account_movement_logic.pdf): Cash -> PAID on create, posts to Cash; Transfer/Card -> IN_PROGRESS on create (AR/AP only, no bank movement); confirm via PATCH .../payment-status with {\"status\":\"PAID\",\"bankCode\":\"...\"} (bankCode optional \u2014 omit to post to aggregate BANK ledger; when provided must be a registered bank account). Card without bankCode -> CARD_SETTLEMENT. Transfer without bankCode -> BANK. settlementBankCode returned on sales/expenses when set. invoiceAmountPaid = { total, items:[{amount,paymentType,bankCode?}] } \u2014 bankCode optional on all line types. Bulk sales/expenses: default Transfer -> PAID on create (posts to Bank). Single create: Cash -> PAID; Transfer/Card -> IN_PROGRESS; Invoice -> Pending. PATCH update syncs ledger (reverses confirm/collections when needed). VAT-inclusive: Base = Total / 1.075, VAT = Total - Base.\n\nPurchase / VAT tags (optional, additive): expenses accept purchaseOrigin (local|import|unknown, default unknown), purchaseKind (goods|inventory_item|service|fixed_asset, default service), vatTag (vatable|zero_rated|exempt). Sales accept vatTag. vatInclusive remains the boolean; vatTag on list/detail is the classification string (inferred vatable/exempt when omitted). GET /mobile/expenses/summary returns a full category breakdown (expanding list topCategories). GET /mobile/inventory/summary?start=YYYY-MM-DD&end=YYYY-MM-DD returns opening/closing rawMaterials, workInProgress, finishedGoods, total as decimal strings (NGN). Asset purchase/sale and inventory add/restock/sell sync into /expenses and /sales without a second cash/bank journal when the source already posted.\n\nTax filings (mobile): 12-step workspace on tax_payables \u2014 GET/PUT /filings/{vat|wht|pit|cit}/workspace, confirm-computation, validate (TaxGPT), generate-documents, package; POST /filings/{id}/complete (step 12). Pending workspaces appear in GET /filings with completionPercent from currentStep/12. PIT/CIT: POST /pit|cit/draft for reliefs/adjustments; calculation honours draft + frozen snapshot. VAT: inputVatBroughtForward from prior month credit; WHT schedule from beneficiary PAYMENT rows. Submit all types accepts submissionReference. Reports: PIT Return Summary, CIT Return Summary added. VAT/WHT monthly; PIT annual (due 31 Mar); CIT annual NTA 2025 (due 30 Jun, periodMonth=12). Beneficiaries outbound WHT ledger (7 routes under /mobile/beneficiaries). Filing list/detail returns computation snapshot for PIT/CIT; periodLabel is year-only for PIT/CIT.\n\nAssets summary: totalAssetValue = currentAssets + netNonCurrentAssets; non-current includes purchaseCost, accumulatedDepreciation, netNonCurrentAssets.\n\nFinancial Position: GET /mobile/financial-position \u2014 category names match Asset/Liability modules (non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others; current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans; no PPE / Intangible Assets / Payroll Payable rollups). Liability reporting (6): GET /mobile/liability/summary|dashboard|current-liabilities|non-current-liabilities|accounts-payable|cash-flow-impact. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Liability register: POST/GET /mobile/liabilities, GET /mobile/liabilities/{liabilityId}. Repayments: GET /mobile/liabilities/repayments (all), GET /mobile/liabilities/repayments/{repaymentId}, POST/GET /mobile/liabilities/{liabilityId}/repayments (per liability). AP = Invoice/Pay Later only (Salary excluded); tax outstanding after remittances; shared totals with financial-position.\n\nEvidence Vault categories: Sales-Transactions | Purchase-Invoices | Expense-Transactions | Assets | Payroll | Tax-Filings | Bank-Statement-Analysis | Accounts-Receivable | Accounts-Payable | Inventory-Transactions | Ledger-Watch-Findings. List returns totalDocuments; POST /documents uses linkedRecord (e.g. sale-{uuid}); uploadedBy is a string (optional on create; defaults to business name; auto evidence uses business name). GET /records/{category} for linkable records.\n\nCustomer Directory: POST/PATCH/GET /mobile/customers, GET /mobile/customers/dashboard, POST .../documents \u2014 phone and TIN unique per user (409 DUPLICATE_CONTACT on duplicate). Supplier Directory: POST/PATCH/GET /mobile/suppliers, GET /mobile/suppliers/dashboard, POST .../documents \u2014 same phone/TIN uniqueness rules. Payers (Customers & Payers PDF): POST/GET/PATCH /mobile/payers, transactions, receivables, invoice payments, documents \u2014 envelope { data }. Employers (PIT profile PDF): POST/GET/PATCH/DELETE /mobile/employers, GET .../income-history (auto-generated from remuneration; no manual POST), documents \u2014 taxComputation with NRS bands (no CRA). Beneficiaries (outbound WHT PDF): POST/GET/PATCH /mobile/beneficiaries, transactions, remit, documents. Directory linking: POST /mobile/sales, /mobile/expenses, /mobile/inventory/sell accept customer:{id,name} / supplier:{id,name}. Prepayments: POST/GET/PATCH /mobile/prepayments, assign-consultant, evidence, cancel; GET /mobile/assets/current-assets includes prepayments section. Enterprise Asset Management: /api/v1/enterprise/clients/:clientId/assets (pending, approve/return/expense, register, depreciation-schedule, history, reports, downloads).\n\nApp version (no auth): GET /mobile/app/version?platform=ios|android&version=x.y.z \u2014 forceUpdate when client is below MOBILE_*_MIN_VERSION; updateAvailable when below MOBILE_*_LATEST_VERSION. Configure via MOBILE_IOS_* / MOBILE_ANDROID_* / MOBILE_FORCE_UPDATE_MESSAGE env vars.\n\nPAYE (Universal Nigeria PAYE Formula 2026): AGI = 12\u00d7(basic+housing+transport+meal+otherAllowances+otherTaxableIncome); pension 8% on basic+housing+transport; NHF 2.5% of basic; NHIS monthly\u00d712; rent relief MIN(20%\u00d7annualRent, \u20a6500k); otherAllowableDeductions (annual). Tax dashboard PAYE sums /employees first; employmentGrossSalaryMonthly is legacy fallback only.\n\nBusiness profile & tax eligibility: GET/PUT /mobile/user/business-profile \u2014 sector, totalFixedAssets, annualGrossTurnover (NGN JSON numbers), professionalService (boolean|null) or providesProfessionalServices (YES|NO|NOT_SURE), primaryBusinessActivity; partial PUT (omitted keys unchanged, JSON null clears). GET /mobile/user/tax-eligibility-profile \u2014 CIT/VAT classifications. CIT small/large inputs: fixed assets from registered assets on books when present, else signup totalFixedAssets; turnover from signup annualGrossTurnover until business is 12+ months old with sales/expense transactions, then trailing-12-month sales (eligibility) or annual sales for filing year (CIT calculation). taxEligibility.inputs.turnoverSource: profile | books | transactions. Onboarding POST \u2026/step/business-details accepts same optional LTD/tax fields. Tax computation cit/vat blocks include citClassification and vatClassification from eligibility engine.\n\nPayroll, Assets, Liability, Financial Position and AI evidence-vault live under Mobile / AI Service.\n\nEnterprise Features Spec *: /enterprise/ledger, /sync/*, /transactions (+pipelineStage), /audit-trail, /health-score, /tax-optimizer/{snapshot,start,poll}, /tax-computation/:clientId/assumptions, /auth/sessions. Existing financials transactions also return pipelineStage.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -154,7 +154,7 @@
     {
       "key": "taxStatementYear",
       "value": "2026",
-      "description": "Calendar year of assessment for GET /ai/tax-statements (1 Jan–31 Dec)"
+      "description": "Calendar year of assessment for GET /ai/tax-statements (1 Jan\u201331 Dec)"
     },
     {
       "key": "taxStatementIncomeType",
@@ -334,7 +334,7 @@
     {
       "key": "filingPeriodMonth",
       "value": "7",
-      "description": "Workspace / VAT / WHT period month (1–12). PIT/CIT always use 12."
+      "description": "Workspace / VAT / WHT period month (1\u201312). PIT/CIT always use 12."
     },
     {
       "key": "workspaceTaxType",
@@ -349,12 +349,48 @@
     {
       "key": "appPlatform",
       "value": "ios",
-      "description": "ios or android — query param for GET /mobile/app/version"
+      "description": "ios or android \u2014 query param for GET /mobile/app/version"
     },
     {
       "key": "clientAppVersion",
       "value": "1.0.0",
       "description": "Client app semver for forced-update check (e.g. 1.0.0)"
+    },
+    {
+      "key": "ledgerYear",
+      "value": "2025"
+    },
+    {
+      "key": "ledgerMonth",
+      "value": "1"
+    },
+    {
+      "key": "accountCode",
+      "value": "1120"
+    },
+    {
+      "key": "pipelineTransactionId",
+      "value": ""
+    },
+    {
+      "key": "auditTrailId",
+      "value": ""
+    },
+    {
+      "key": "taxOptimizeJobId",
+      "value": ""
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "syncConflictId",
+      "value": ""
+    },
+    {
+      "key": "ledgerEntryId",
+      "value": ""
     }
   ],
   "event": [
@@ -515,7 +551,7 @@
         },
         {
           "name": "App",
-          "description": "Public mobile app config — no auth. Call on app launch before login.\n\nGET /mobile/app/version?platform=ios|android&version=x.y.z\n\n• forceUpdate — client below MOBILE_*_MIN_VERSION (block app)\n• updateAvailable — client below MOBILE_*_LATEST_VERSION (soft prompt)\n\nCollection vars: {{appPlatform}}, {{clientAppVersion}}. Omit platform to return both ios + android policies.",
+          "description": "Public mobile app config \u2014 no auth. Call on app launch before login.\n\nGET /mobile/app/version?platform=ios|android&version=x.y.z\n\n\u2022 forceUpdate \u2014 client below MOBILE_*_MIN_VERSION (block app)\n\u2022 updateAvailable \u2014 client below MOBILE_*_LATEST_VERSION (soft prompt)\n\nCollection vars: {{appPlatform}}, {{clientAppVersion}}. Omit platform to return both ios + android policies.",
           "item": [
             {
               "name": "Check app version **",
@@ -581,7 +617,7 @@
         },
         {
           "name": "Lookups",
-          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help, App — use whichever folder fits your flow.",
+          "description": "Shortcuts to read-only constants and option lists. Same URLs as requests under User *, Filings *, Onboarding *, Help, App \u2014 use whichever folder fits your flow.",
           "item": [
             {
               "name": "Tax filing constants *",
@@ -599,7 +635,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/constants",
-                "description": "taxTypes, capabilities, paymentStatuses, filingStatuses, reportTypes, period bounds. Duplicate of Filings * → Tax filing constants *."
+                "description": "taxTypes, capabilities, paymentStatuses, filingStatuses, reportTypes, period bounds. Duplicate of Filings * \u2192 Tax filing constants *."
               }
             },
             {
@@ -607,7 +643,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/contacts-and-types",
-                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, purchaseOrigins, purchaseKinds, vatTags, …). Duplicate of User * → Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
+                "description": "contacts[] + types (businessTypes, industries, currencies, vatTypes, expenseCategories, expenseTypes (suggested values for pickers; any string on expense), saleCategories, purchaseOrigins, purchaseKinds, vatTags, \u2026). Duplicate of User * \u2192 Contacts and types. Includes assetTypes, depreciationMethods, disposalReasons, transferTypes for Assets module."
               }
             },
             {
@@ -621,7 +657,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/profile",
-                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly (legacy PAYE fallback). Prefer Employees for PAYE. Duplicate of Onboarding * → Get profile *."
+                "description": "taxPersonaOptions, solopreneurRegistrationOptions, taxPersonaGuidance during onboarding. User payload may include employmentGrossSalaryMonthly (legacy PAYE fallback). Prefer Employees for PAYE. Duplicate of Onboarding * \u2192 Get profile *."
               }
             },
             {
@@ -637,7 +673,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/help/faqs",
-                "description": "categories + faqs. Optional query category. Duplicate of Help → Get FAQs."
+                "description": "categories + faqs. Optional query category. Duplicate of Help \u2192 Get FAQs."
               }
             },
             {
@@ -645,7 +681,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/app/version?platform={{appPlatform}}&version={{clientAppVersion}}",
-                "description": "No auth. Duplicate of App → Check app version. forceUpdate=true means block app launch."
+                "description": "No auth. Duplicate of App \u2192 Check app version. forceUpdate=true means block app launch."
               }
             }
           ]
@@ -746,7 +782,7 @@
                   "raw": "{\n  \"businessName\": \"Acme Consulting Ltd\",\n  \"tin\": \"12345678-0001\",\n  \"rcNumber\": \"RC123456\",\n  \"businessType\": \"Consulting\",\n  \"sector\": \"IT & Services\",\n  \"stateOfResidence\": \"Lagos\",\n  \"bankAccount\": \"Access Bank, 0123456789, Jane Doe\",\n  \"address\": \"22 Adeola Odeku St, Victoria Island\",\n  \"totalFixedAssets\": 80000000,\n  \"annualGrossTurnover\": 34000000,\n  \"professionalService\": false,\n  \"primaryBusinessActivity\": \"RETAIL_TRADING\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/business-profile",
-                "description": "Partial update. professionalService (boolean|null) or providesProfessionalServices (YES|NO|NOT_SURE) — both accepted; must agree if both sent. primaryBusinessActivity required when NOT_SURE. JSON null clears optional fields."
+                "description": "Partial update. professionalService (boolean|null) or providesProfessionalServices (YES|NO|NOT_SURE) \u2014 both accepted; must agree if both sent. primaryBusinessActivity required when NOT_SURE. JSON null clears optional fields."
               }
             },
             {
@@ -807,7 +843,7 @@
                   "raw": "{\"authorized\":true}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/consultant/filing-authorization",
-                "description": "Toggle authorized. Email sent to consultant when changing false→true."
+                "description": "Toggle authorized. Email sent to consultant when changing false\u2192true."
               }
             },
             {
@@ -1169,7 +1205,7 @@
                   "raw": "{\n  \"name\": \"Acme Consulting Ltd\",\n  \"businessIdNumber\": \"RC123456\",\n  \"tin\": \"12345678-0001\",\n  \"streetAddress\": \"22 Adeola Odeku St, Victoria Island\",\n  \"stateOfResidence\": \"Lagos\",\n  \"sector\": \"IT & Services\",\n  \"totalFixedAssets\": 80000000,\n  \"annualGrossTurnover\": 34000000,\n  \"professionalService\": false,\n  \"primaryBusinessActivity\": \"RETAIL_TRADING\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/onboarding/step/business-details",
-                "description": "Optional LTD + tax eligibility fields. professionalService (boolean) or providesProfessionalServices (YES|NO|NOT_SURE). When NOT_SURE, primaryBusinessActivity is required. Money fields: JSON numbers ≥ 0 NGN."
+                "description": "Optional LTD + tax eligibility fields. professionalService (boolean) or providesProfessionalServices (YES|NO|NOT_SURE). When NOT_SURE, primaryBusinessActivity is required. Money fields: JSON numbers \u2265 0 NGN."
               }
             },
             {
@@ -1268,7 +1304,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales?page=1&limit=20&status=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Paginated sales. Each row includes totalAmount, invoiceAmountPaid, amountPaid, outstandingBalance (totalAmount − paid), computed status, and vatTag (vatable|zero_rated|exempt). summary.totalIncome is ex-VAT (amount); summary.vatCollected is Output VAT. counts: paid, pending, partial, overdue, inProgress, cancelled. Filter status=all|PAID|IN_PROGRESS|Pending|Partial|Overdue|CANCELLED. Asset sales and inventory sells also appear here when synced."
+                "description": "Paginated sales. Each row includes totalAmount, invoiceAmountPaid, amountPaid, outstandingBalance (totalAmount \u2212 paid), computed status, and vatTag (vatable|zero_rated|exempt). summary.totalIncome is ex-VAT (amount); summary.vatCollected is Output VAT. counts: paid, pending, partial, overdue, inProgress, cancelled. Filter status=all|PAID|IN_PROGRESS|Pending|Partial|Overdue|CANCELLED. Asset sales and inventory sells also appear here when synced."
               },
               "event": [
                 {
@@ -1308,7 +1344,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Includes status (computed for Invoice sales), paymentType, totalAmount, invoiceAmountPaid, amountPaid, outstandingBalance (= totalAmount − amountPaid), vatTag (vatable|zero_rated|exempt), vatInclusive, vatableIncome, settlementBankCode, paymentConfirmedAt (ISO or null)."
+                "description": "Includes status (computed for Invoice sales), paymentType, totalAmount, invoiceAmountPaid, amountPaid, outstandingBalance (= totalAmount \u2212 amountPaid), vatTag (vatable|zero_rated|exempt), vatInclusive, vatableIncome, settlementBankCode, paymentConfirmedAt (ISO or null)."
               }
             },
             {
@@ -1339,11 +1375,11 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/download-invoice",
-                "description": "On-demand invoice PDF. Summary shows Invoice Total (original totalAmount), Amount Paid (invoiceAmountPaid.total), and Outstanding Balance (total − paid). Status on PDF is computed (Pending | Partial | PAID | Overdue). Re-download after each PATCH with invoiceAmountPaid to see updated balances."
+                "description": "On-demand invoice PDF. Summary shows Invoice Total (original totalAmount), Amount Paid (invoiceAmountPaid.total), and Outstanding Balance (total \u2212 paid). Status on PDF is computed (Pending | Partial | PAID | Overdue). Re-download after each PATCH with invoiceAmountPaid to see updated balances."
               }
             },
             {
-              "name": "Create sale (Cash — PAID) **",
+              "name": "Create sale (Cash \u2014 PAID) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1353,7 +1389,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Cash → invoiceAmountPaid.total = totalAmount → status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total − Base (e.g. 3000 → ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top. Optional vatTag: vatable|zero_rated|exempt (inferred from VAT flags when omitted). Prefer customer:{id,name} from Customer Directory when {{customerId}} is set.",
+                "description": "Cash \u2192 invoiceAmountPaid.total = totalAmount \u2192 status Paid. vatableIncome and vatInclusive are mutually exclusive. vatInclusive: Base = Total/(1+0.075), VAT = Total \u2212 Base (e.g. 3000 \u2192 ~2790.70 + 209.30). vatableIncome: amount is net; +7.5% VAT on top. Optional vatTag: vatable|zero_rated|exempt (inferred from VAT flags when omitted). Prefer customer:{id,name} from Customer Directory when {{customerId}} is set.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Walk-in cash sale\",\n  \"amount\": 25000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Cash\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"vatTag\": \"exempt\",\n  \"serviceIncome\": false,\n  \"customer\": {\n    \"id\": \"{{customerId}}\",\n    \"name\": \"John Doe\"\n  }\n}"
@@ -1372,7 +1408,7 @@
               ]
             },
             {
-              "name": "Create sale (Card — IN_PROGRESS) **",
+              "name": "Create sale (Card \u2014 IN_PROGRESS) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1401,7 +1437,7 @@
               ]
             },
             {
-              "name": "Create sale (Transfer — IN_PROGRESS) **",
+              "name": "Create sale (Transfer \u2014 IN_PROGRESS) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1411,7 +1447,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Transfer -> IN_PROGRESS (full amount in AR until confirm). Optional bankCode — posts to BANK:{bankCode} when set, else aggregate BANK on confirm.",
+                "description": "Transfer -> IN_PROGRESS (full amount in AR until confirm). Optional bankCode \u2014 posts to BANK:{bankCode} when set, else aggregate BANK on confirm.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Bank transfer sale\",\n  \"amount\": 50000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Product Sales\",\n  \"paymentType\": \"Transfer\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"invoiceDueDate\": \"2026-08-20\",\n  \"vatableIncome\": false,\n  \"vatInclusive\": false,\n  \"vatTag\": \"zero_rated\",\n  \"serviceIncome\": false,\n  \"customerName\": \"XYZ Ventures\"\n}"
@@ -1430,7 +1466,7 @@
               ]
             },
             {
-              "name": "Create sale (Invoice — Pending) **",
+              "name": "Create sale (Invoice \u2014 Pending) **",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1440,7 +1476,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales",
-                "description": "Invoice → status calculated: Pending, Partial, PAID, or Overdue from invoiceAmountPaid.total vs totalAmount + invoiceDueDate. After partial payments, GET sale and download-invoice show amountPaid and outstandingBalance.",
+                "description": "Invoice \u2192 status calculated: Pending, Partial, PAID, or Overdue from invoiceAmountPaid.total vs totalAmount + invoiceDueDate. After partial payments, GET sale and download-invoice show amountPaid and outstandingBalance.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"description\": \"Invoice billed sale\",\n  \"amount\": 75000,\n  \"date\": \"2026-07-13\",\n  \"category\": \"Services\",\n  \"paymentType\": \"Invoice\",\n  \"invoiceDueDate\": \"2026-08-15\",\n  \"vatableIncome\": true,\n  \"vatInclusive\": false,\n  \"vatTag\": \"vatable\",\n  \"serviceIncome\": true,\n  \"customerName\": \"ABC Limited\",\n  \"customerId\": \"cust-001\"\n}"
@@ -1472,7 +1508,7 @@
                 "description": "Bulk create: default Transfer -> PAID (posts to Bank). Explicit Cash -> PAID. Card -> IN_PROGRESS. Invoice rows keep calculated status. Optional bankCode and vatTag per item. Max 100 items.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive) — PAID\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"vatTag\": \"vatable\",\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk cash sale — PAID on create\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"vatTag\": \"exempt\",\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer sale (VAT inclusive) \u2014 PAID\",\n      \"amount\": 3000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": true,\n      \"vatTag\": \"vatable\",\n      \"serviceIncome\": true,\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Bulk cash sale \u2014 PAID on create\",\n      \"amount\": 25000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Services\",\n      \"paymentType\": \"Cash\",\n      \"vatableIncome\": false,\n      \"vatInclusive\": false,\n      \"vatTag\": \"exempt\",\n      \"customerName\": \"Acme Ltd\"\n    }\n  ]\n}"
                 }
               }
             },
@@ -1500,7 +1536,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}/mark-paid",
-                "description": "Invoice only: settles full invoice via Transfer collection. Requires settlement bank — sale must have settlementBankCode or pass bankCode query/body support via PATCH first. Sets paymentConfirmedAt."
+                "description": "Invoice only: settles full invoice via Transfer collection. Requires settlement bank \u2014 sale must have settlementBankCode or pass bankCode query/body support via PATCH first. Sets paymentConfirmedAt."
               }
             },
             {
@@ -1565,7 +1601,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/sales/{{saleId}}",
-                "description": "Append-only invoiceAmountPaid lines (include all prior items when adding a new payment). outstandingBalance on response = totalAmount − amountPaid. Then GET .../download-invoice to verify PDF totals. bankCode optional on Transfer/Card.",
+                "description": "Append-only invoiceAmountPaid lines (include all prior items when adding a new payment). outstandingBalance on response = totalAmount \u2212 amountPaid. Then GET .../download-invoice to verify PDF totals. bankCode optional on Transfer/Card.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"invoiceAmountPaid\": {\n    \"total\": 10000,\n    \"items\": [\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Transfer\",\n        \"bankCode\": \"{{bankCode}}\"\n      },\n      {\n        \"amount\": 5000,\n        \"paymentType\": \"Cash\"\n      }\n    ]\n  },\n  \"invoiceDueDate\": \"2026-09-01\"\n}"
@@ -1594,7 +1630,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Each expense row includes expenseType, purchaseOrigin (local|import|unknown), purchaseKind (goods|inventory_item|service|fixed_asset), vatTag (vatable|zero_rated|exempt), and vatInclusive. topCategories is a truncated view — use GET /expenses/summary for the full breakdown. Asset purchases and inventory add/restock also appear here when synced."
+                "description": "Each expense row includes expenseType, purchaseOrigin (local|import|unknown), purchaseKind (goods|inventory_item|service|fixed_asset), vatTag (vatable|zero_rated|exempt), and vatInclusive. topCategories is a truncated view \u2014 use GET /expenses/summary for the full breakdown. Asset purchases and inventory add/restock also appear here when synced."
               }
             },
             {
@@ -1602,7 +1638,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses/summary",
-                "description": "Complete category breakdown of live expenses (voided/reversed excluded). Returns summary { totalExpenses, vatClaimable, totalExpensesIncludingVat } plus categories[] with category, amount, amountIncludingVat, count, percentageOfTotal — expanding list topCategories."
+                "description": "Complete category breakdown of live expenses (voided/reversed excluded). Returns summary { totalExpenses, vatClaimable, totalExpensesIncludingVat } plus categories[] with category, amount, amountIncludingVat, count, percentageOfTotal \u2014 expanding list topCategories."
               }
             },
             {
@@ -1628,7 +1664,7 @@
               }
             },
             {
-              "name": "Create expense (Transfer — IN_PROGRESS) *",
+              "name": "Create expense (Transfer \u2014 IN_PROGRESS) *",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1642,11 +1678,11 @@
                   "raw": "{\n  \"description\": \"Office supplies\",\n  \"amount\": 15000,\n  \"date\": \"2026-02-21\",\n  \"category\": \"Other\",\n  \"expenseType\": \"OPEX\",\n  \"paymentType\": \"Transfer\",\n  \"bankCode\": \"{{bankCode}}\",\n  \"purchaseOrigin\": \"local\",\n  \"purchaseKind\": \"goods\",\n  \"vatTag\": \"exempt\",\n  \"supplierName\": \"Acme Supplies Ltd\",\n  \"supplierId\": \"sup-ext-001\",\n  \"vatInclusive\": false,\n  \"supplier\": {\n    \"id\": \"{{supplierId}}\",\n    \"name\": \"ABC Supplies\"\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/expenses",
-                "description": "Transfer -> IN_PROGRESS (AP until confirm). Optional bankCode — confirm posts to BANK or BANK:{bankCode}. Optional purchaseOrigin (local|import|unknown), purchaseKind (goods|inventory_item|service|fixed_asset), vatTag (vatable|zero_rated|exempt)."
+                "description": "Transfer -> IN_PROGRESS (AP until confirm). Optional bankCode \u2014 confirm posts to BANK or BANK:{bankCode}. Optional purchaseOrigin (local|import|unknown), purchaseKind (goods|inventory_item|service|fixed_asset), vatTag (vatable|zero_rated|exempt)."
               }
             },
             {
-              "name": "Create expense (Invoice — Pending) *",
+              "name": "Create expense (Invoice \u2014 Pending) *",
               "request": {
                 "method": "POST",
                 "header": [
@@ -1695,7 +1731,7 @@
                 "description": "Bulk create: default Transfer -> PAID (posts to Bank). Explicit Cash -> PAID. Card -> IN_PROGRESS. Invoice rows keep calculated status. Optional purchaseOrigin, purchaseKind, vatTag per item. Max 100 items.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer expense (VAT inclusive) — PAID\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatInclusive\": true,\n      \"purchaseOrigin\": \"local\",\n      \"purchaseKind\": \"service\",\n      \"vatTag\": \"vatable\",\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Ads — Cash PAID\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false,\n      \"purchaseOrigin\": \"unknown\",\n      \"purchaseKind\": \"service\",\n      \"vatTag\": \"exempt\"\n    },\n    {\n      \"description\": \"Vendor invoice (calculated status)\",\n      \"amount\": 30000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-15\",\n      \"invoiceAmountPaid\": {\n        \"total\": 5000,\n        \"items\": [\n          {\n            \"amount\": 5000,\n            \"paymentType\": \"Transfer\",\n            \"bankCode\": \"{{bankCode}}\"\n          }\n        ]\n      },\n      \"vatInclusive\": false,\n      \"purchaseOrigin\": \"import\",\n      \"purchaseKind\": \"goods\",\n      \"vatTag\": \"zero_rated\"\n    }\n  ]\n}"
+                  "raw": "{\n  \"items\": [\n    {\n      \"description\": \"Bulk transfer expense (VAT inclusive) \u2014 PAID\",\n      \"amount\": 15000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Transfer\",\n      \"bankCode\": \"{{bankCode}}\",\n      \"vatInclusive\": true,\n      \"purchaseOrigin\": \"local\",\n      \"purchaseKind\": \"service\",\n      \"vatTag\": \"vatable\",\n      \"invoiceDueDate\": \"2026-08-10\"\n    },\n    {\n      \"description\": \"Ads \u2014 Cash PAID\",\n      \"amount\": 20000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Marketing\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Cash\",\n      \"vatInclusive\": false,\n      \"purchaseOrigin\": \"unknown\",\n      \"purchaseKind\": \"service\",\n      \"vatTag\": \"exempt\"\n    },\n    {\n      \"description\": \"Vendor invoice (calculated status)\",\n      \"amount\": 30000,\n      \"date\": \"2026-07-24\",\n      \"category\": \"Other\",\n      \"expenseType\": \"OPEX\",\n      \"paymentType\": \"Invoice\",\n      \"invoiceDueDate\": \"2026-08-15\",\n      \"invoiceAmountPaid\": {\n        \"total\": 5000,\n        \"items\": [\n          {\n            \"amount\": 5000,\n            \"paymentType\": \"Transfer\",\n            \"bankCode\": \"{{bankCode}}\"\n          }\n        ]\n      },\n      \"vatInclusive\": false,\n      \"purchaseOrigin\": \"import\",\n      \"purchaseKind\": \"goods\",\n      \"vatTag\": \"zero_rated\"\n    }\n  ]\n}"
                 }
               }
             },
@@ -1790,7 +1826,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/summary?start={{inventoryPeriodStart}}&end={{inventoryPeriodEnd}}",
-                "description": "Historical inventory for a period. Required query: start, end (YYYY-MM-DD, inclusive). Response: period { from, to }, currency NGN, opening and closing each with rawMaterials, workInProgress, finishedGoods, total as decimal strings (e.g. \"400000.00\"). Category names matching raw material / WIP map to those buckets; all other items are finishedGoods. Valued at current purchaseCost × reconstructed quantity from movements."
+                "description": "Historical inventory for a period. Required query: start, end (YYYY-MM-DD, inclusive). Response: period { from, to }, currency NGN, opening and closing each with rawMaterials, workInProgress, finishedGoods, total as decimal strings (e.g. \"400000.00\"). Category names matching raw material / WIP map to those buckets; all other items are finishedGoods. Valued at current purchaseCost \u00d7 reconstructed quantity from movements."
               }
             },
             {
@@ -1942,7 +1978,7 @@
                 "method": "DELETE",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}",
-                "description": "Soft-deletes the product: remaining stock is written off (qty → 0), then the item is removed (hard delete) or soft-deleted (deletedAt) if it has inventory sale history. Excluded from GET /assets/current-assets inventory total immediately."
+                "description": "Soft-deletes the product: remaining stock is written off (qty \u2192 0), then the item is removed (hard delete) or soft-deleted (deletedAt) if it has inventory sale history. Excluded from GET /assets/current-assets inventory total immediately."
               }
             },
             {
@@ -1960,7 +1996,7 @@
                   "raw": "{\"quantity\":25,\"note\":\"Purchase order PO-1024\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/restock",
-                "description": "Adds quantity. Movement type RESTOCK. Returns updated item detail. Also syncs a COGS expense (qty × purchaseCost, purchaseKind inventory_item) on /expenses without a cash/bank journal."
+                "description": "Adds quantity. Movement type RESTOCK. Returns updated item detail. Also syncs a COGS expense (qty \u00d7 purchaseCost, purchaseKind inventory_item) on /expenses without a cash/bank journal."
               }
             },
             {
@@ -1989,7 +2025,7 @@
                   "raw": "{\n  \"direction\": \"in\",\n  \"quantity\": 2,\n  \"note\": \"Found in recount\",\n  \"createSalesInvoice\": true,\n  \"saleDate\": \"2026-03-29\",\n  \"saleCategory\": \"Other\",\n  \"invoiceDueDate\": \"2026-08-15\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "direction in + createSalesInvoice: true — books a mobile Sale at purchase cost × qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome. Optional invoiceDueDate on linked sale."
+                "description": "direction in + createSalesInvoice: true \u2014 books a mobile Sale at purchase cost \u00d7 qty. Response.data.linkedSale when present. Optional saleCategory (any string, max 255; default Other), paymentType, vatableIncome, serviceIncome. Optional invoiceDueDate on linked sale."
               }
             },
             {
@@ -2018,7 +2054,7 @@
                   "raw": "{\"direction\":\"out\",\"quantity\":1,\"note\":\"Shrinkage / damaged\",\"createSalesInvoice\":true,\"saleDate\":\"2026-03-29\",\"expenseCategory\":\"Other\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "direction out + createSalesInvoice: true — books a mobile Expense at purchase cost × qty (supplier from item if set). Response.data.linkedExpense. expenseCategory: any string (max 255); defaults to Other if omitted when booking."
+                "description": "direction out + createSalesInvoice: true \u2014 books a mobile Expense at purchase cost \u00d7 qty (supplier from item if set). Response.data.linkedExpense. expenseCategory: any string (max 255); defaults to Other if omitted when booking."
               }
             },
             {
@@ -2036,15 +2072,15 @@
                   "raw": "{\"direction\":\"in\",\"quantity\":1,\"note\":\"Silent correction\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/inventory/items/{{inventoryItemId}}/adjustment",
-                "description": "No createSalesInvoice — inventory movement only."
+                "description": "No createSalesInvoice \u2014 inventory movement only."
               }
             }
           ],
-          "description": "Inventory movements update quantity in real time. Current Assets inventory (GET /assets/current-assets or /financial-position) = sum of on-hand qty × purchaseCost. Linked sales accept invoiceDueDate (and VAT flags). Status follows sale invoiceAmountPaid rules."
+          "description": "Inventory movements update quantity in real time. Current Assets inventory (GET /assets/current-assets or /financial-position) = sum of on-hand qty \u00d7 purchaseCost. Linked sales accept invoiceDueDate (and VAT flags). Status follows sale invoiceAmountPaid rules."
         },
         {
           "name": "Assets **",
-          "description": "Fixed assets. Summary: totalAssetValue = currentAssets + netNonCurrentAssets (+ pendingCustomerReviews). Non-current: purchaseCost, accumulatedDepreciation, netNonCurrentAssets (total = NBV). Create requires depreciationMethod: STRAIGHT_LINE | REDUCING_BALANCE | UNIT_OF_PRODUCTION (legacy DECLINING_BALANCE / UNITS_OF_PRODUCTION accepted). STRAIGHT_LINE: usefulLife + residualValue; accumulated depreciation = 0 in purchase month, then monthly rate × completed calendar months from the month after purchase. REDUCING_BALANCE: usefulLife + depreciationRate + residualValue (same purchase-month grace). UNIT_OF_PRODUCTION: totalEstimatedUnit + unitProduced + residualValue. Book value never falls below residual.",
+          "description": "Fixed assets. Summary: totalAssetValue = currentAssets + netNonCurrentAssets (+ pendingCustomerReviews). Non-current: purchaseCost, accumulatedDepreciation, netNonCurrentAssets (total = NBV). Create requires depreciationMethod: STRAIGHT_LINE | REDUCING_BALANCE | UNIT_OF_PRODUCTION (legacy DECLINING_BALANCE / UNITS_OF_PRODUCTION accepted). STRAIGHT_LINE: usefulLife + residualValue; accumulated depreciation = 0 in purchase month, then monthly rate \u00d7 completed calendar months from the month after purchase. REDUCING_BALANCE: usefulLife + depreciationRate + residualValue (same purchase-month grace). UNIT_OF_PRODUCTION: totalEstimatedUnit + unitProduced + residualValue. Book value never falls below residual.",
           "item": [
             {
               "name": "Get assets summary **",
@@ -2070,7 +2106,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/current-assets",
-                "description": "cash, bankBalances, inventory (live on-hand qty × purchaseCost; active items only, excludes soft-deleted and zero-qty SKUs), accountsReceivable, prepayments. Inventory updates on sell, restock, adjustment in/out, and delete."
+                "description": "cash, bankBalances, inventory (live on-hand qty \u00d7 purchaseCost; active items only, excludes soft-deleted and zero-qty SKUs), accountsReceivable, prepayments. Inventory updates on sell, restock, adjustment in/out, and delete."
               }
             },
             {
@@ -2122,7 +2158,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/non-current-assets",
-                "description": "purchaseCost, accumulatedDepreciation, netNonCurrentAssets (= purchaseCost − accumulatedDepreciation). total = netNonCurrentAssets. All 8 assetTypes always returned (even total 0); nested assets use NBV."
+                "description": "purchaseCost, accumulatedDepreciation, netNonCurrentAssets (= purchaseCost \u2212 accumulatedDepreciation). total = netNonCurrentAssets. All 8 assetTypes always returned (even total 0); nested assets use NBV."
               }
             },
             {
@@ -2131,7 +2167,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/depreciation-amortization",
-                "description": "Per-asset depreciation schedule. STRAIGHT_LINE: monthlyDepreciation = annual charge ÷ 12; accumulatedDepreciation = 0 in purchase month, then monthly × completed months from next month. Also book value, remaining life, annual charge."
+                "description": "Per-asset depreciation schedule. STRAIGHT_LINE: monthlyDepreciation = annual charge \u00f7 12; accumulatedDepreciation = 0 in purchase month, then monthly \u00d7 completed months from next month. Also book value, remaining life, annual charge."
               }
             },
             {
@@ -2197,7 +2233,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets",
-                "description": "UNIT_OF_PRODUCTION: Per unit = (Cost - Residual) / totalEstimatedUnit; Period = per unit × unitProduced. Cumulative capped at Cost - Residual.",
+                "description": "UNIT_OF_PRODUCTION: Per unit = (Cost - Residual) / totalEstimatedUnit; Period = per unit \u00d7 unitProduced. Cumulative capped at Cost - Residual.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"assetType\": \"MACHINERY\",\n  \"assetName\": \"Production press\",\n  \"purchaseDate\": \"2026-01-01\",\n  \"purchaseCost\": 5000000,\n  \"depreciationMethod\": \"UNIT_OF_PRODUCTION\",\n  \"residualValue\": 500000,\n  \"totalEstimatedUnit\": 90000,\n  \"unitProduced\": 3500,\n  \"assignToConsultant\": false\n}"
@@ -2335,7 +2371,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/transfers/{{assetTransferId}}/approve",
-                "description": "PENDING → COMPLETED; updates asset.assetLocation to toLocation."
+                "description": "PENDING \u2192 COMPLETED; updates asset.assetLocation to toLocation."
               }
             },
             {
@@ -2344,7 +2380,7 @@
                 "method": "POST",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/transfers/{{assetTransferId}}/reject",
-                "description": "PENDING → CANCELLED."
+                "description": "PENDING \u2192 CANCELLED."
               }
             },
             {
@@ -2358,7 +2394,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/assets/sales",
-                "description": "Required: assetId, saleDate, salePrice, buyer. Server computes bookValue, gainLossType (GAIN|LOSS|BREAK_EVEN), gainLossAmount. Marks asset SOLD. Also syncs a /sales row (vatTag exempt) without a second sale journal — asset sale journals already posted.",
+                "description": "Required: assetId, saleDate, salePrice, buyer. Server computes bookValue, gainLossType (GAIN|LOSS|BREAK_EVEN), gainLossAmount. Marks asset SOLD. Also syncs a /sales row (vatTag exempt) without a second sale journal \u2014 asset sale journals already posted.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\"assetId\": \"{{assetId}}\", \"saleDate\": \"2026-07-09\", \"salePrice\": 9500000, \"buyer\": \"ABC Logistics Ltd\"}"
@@ -2548,14 +2584,14 @@
         },
         {
           "name": "Tax Computation *",
-          "description": "GET /mobile/tax-computation?period=YYYY-MM&range=month|quarter|year — book-period estimates. VAT/WHT/PAYE are period-specific. CIT/PIT periodAmount/summary use that month's profit only (month range) or sum of months in range (quarter/year). cit.annualizedProfit and pit.annualizedProfit are cumulative net profit across all calendar-year months with book activity (same value on every month tab — not monthlyProfit × 12). estimatedAnnualPit and cit.totalCitLiability derive from that cumulative figure.",
+          "description": "GET /mobile/tax-computation?period=YYYY-MM&range=month|quarter|year \u2014 book-period estimates. VAT/WHT/PAYE are period-specific. CIT/PIT periodAmount/summary use that month's profit only (month range) or sum of months in range (quarter/year). cit.annualizedProfit and pit.annualizedProfit are cumulative net profit across all calendar-year months with book activity (same value on every month tab \u2014 not monthlyProfit \u00d7 12). estimatedAnnualPit and cit.totalCitLiability derive from that cumulative figure.",
           "item": [
             {
               "name": "Get tax computation **",
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-computation?period=2026-02&range=month",
-                "description": "period=YYYY-MM (defaults to current month). range=month|quarter|year ending at period month. VAT/WHT/PAYE use the selected book period. For CIT/PIT on a single month: periodAmount = tax on that month's net profit only; annualizedProfit = cumulative YTD net profit for months with activity; estimatedAnnualPit / totalCitLiability from cumulative profit (never month × 12). Response period { year, month, range, monthsIncluded, label }. paye.derivedFrom: employees | profile_gross | none."
+                "description": "period=YYYY-MM (defaults to current month). range=month|quarter|year ending at period month. VAT/WHT/PAYE use the selected book period. For CIT/PIT on a single month: periodAmount = tax on that month's net profit only; annualizedProfit = cumulative YTD net profit for months with activity; estimatedAnnualPit / totalCitLiability from cumulative profit (never month \u00d7 12). Response period { year, month, range, monthsIncluded, label }. paye.derivedFrom: employees | profile_gross | none."
               }
             }
           ]
@@ -2579,7 +2615,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/tax-payables?page=1&limit=20&period={{bookPeriod}}&range=month&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Syncs books for filtered period before list. period=YYYY-MM + optional range=month|quarter|year (dateFrom/dateTo ignored when period set).\n\nBook period rules:\n• periodYear/periodMonth on each row = the book month (same as sale/expense dates), NOT the filing due date month.\n• filingDueDate for VAT/WHT/PAYE = 21st of the following month (Feb period → due Mar 21).\n• CIT/PIT rows use periodMonth 12 (annual) for the calendar year.\n\nResponse includes syncedBookPeriod { year, month } echoing the requested filter. Re-call after deploy to refresh rows that were stored with timezone-shifted dates."
+                "description": "Syncs books for filtered period before list. period=YYYY-MM + optional range=month|quarter|year (dateFrom/dateTo ignored when period set).\n\nBook period rules:\n\u2022 periodYear/periodMonth on each row = the book month (same as sale/expense dates), NOT the filing due date month.\n\u2022 filingDueDate for VAT/WHT/PAYE = 21st of the following month (Feb period \u2192 due Mar 21).\n\u2022 CIT/PIT rows use periodMonth 12 (annual) for the calendar year.\n\nResponse includes syncedBookPeriod { year, month } echoing the requested filter. Re-call after deploy to refresh rows that were stored with timezone-shifted dates."
               }
             },
             {
@@ -2770,7 +2806,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings?page=1&limit=20&status=all&period={{bookPeriod}}&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-                "description": "Includes pending in-progress workspaces and submitted/paid returns. status: all | pending | submitted | paid | overdue. completionPercent = round(currentStep/12*100) when workspace exists. Sorted: overdue → pending (dueDate asc) → submitted/paid (submittedDate desc). Each row: periodAttachmentGaps, missingEvidenceBreakdown (VAT/WHT monthly only)."
+                "description": "Includes pending in-progress workspaces and submitted/paid returns. status: all | pending | submitted | paid | overdue. completionPercent = round(currentStep/12*100) when workspace exists. Sorted: overdue \u2192 pending (dueDate asc) \u2192 submitted/paid (submittedDate desc). Each row: periodAttachmentGaps, missingEvidenceBreakdown (VAT/WHT monthly only)."
               }
             },
             {
@@ -2810,7 +2846,7 @@
                   "raw": "{\"rrr\":\"2508-1234-5678\",\"paymentReceiptUrl\":\"https://example.com/remita.pdf\",\"submissionProofUrl\":\"https://example.com/ack.pdf\"}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{filingId}}/complete",
-                "description": "Step 12 — marks filing paid when amount is 0 or RRR + receipt present."
+                "description": "Step 12 \u2014 marks filing paid when amount is 0 or RRR + receipt present."
               }
             },
             {
@@ -2883,7 +2919,7 @@
                   "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}}}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{workspaceTaxType}}/workspace/validate",
-                "description": "Step 2 — persists validation on workspace. Rule-based checks by default; set TAXGPT_API_URL env for external AI. Warnings do not block continue."
+                "description": "Step 2 \u2014 persists validation on workspace. Rule-based checks by default; set TAXGPT_API_URL env for external AI. Warnings do not block continue."
               }
             },
             {
@@ -2912,7 +2948,7 @@
                   "raw": "{\"periodYear\":{{filingPeriodYear}},\"periodMonth\":{{filingPeriodMonth}}}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/{{workspaceTaxType}}/workspace/generate-documents",
-                "description": "Generates PDFs from frozen snapshot → R2 presigned URLs. Document ids match app (form-002, self-assessment, wht-schedule, c08a, etc.). payment-proof unavailable until receipt uploaded."
+                "description": "Generates PDFs from frozen snapshot \u2192 R2 presigned URLs. Document ids match app (form-002, self-assessment, wht-schedule, c08a, etc.). payment-proof unavailable until receipt uploaded."
               }
             },
             {
@@ -2983,7 +3019,7 @@
                   "raw": "{\n  \"periodYear\": {{filingPeriodYear}},\n  \"periodMonth\": {{filingPeriodMonth}},\n  \"amount\": 284750,\n  \"dueDate\": \"2026-08-21\",\n  \"paymentStatus\": \"unpaid\",\n  \"stateOfOperation\": \"Lagos\",\n  \"vatRegistrationNumber\": \"12345678-0001\",\n  \"submissionReference\": \"NRS-VAT-2026-0001\",\n  \"computation\": {\n    \"outputVat\": 400000,\n    \"inputVatClaimable\": 115250,\n    \"netVatPayable\": 284750\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/vat/submit",
-                "description": "Step 8 — records return. amount must equal netVatPayable (±₦1). Nil: amount 0 still creates row. Sets status submitted, currentStep 8."
+                "description": "Step 8 \u2014 records return. amount must equal netVatPayable (\u00b1\u20a61). Nil: amount 0 still creates row. Sets status submitted, currentStep 8."
               }
             },
             {
@@ -3038,7 +3074,7 @@
                   "raw": "{\n  \"periodYear\": {{filingPeriodYear}},\n  \"periodMonth\": {{filingPeriodMonth}},\n  \"totalWht\": 312200,\n  \"dueDate\": \"2026-08-21\",\n  \"paymentStatus\": \"unpaid\",\n  \"submissionReference\": \"NRS-WHT-2026-0001\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/wht/submit",
-                "description": "totalWht must match sum of schedule whtDeducted (±₦1). Empty schedule + totalWht 0 allowed (nil return)."
+                "description": "totalWht must match sum of schedule whtDeducted (\u00b1\u20a61). Empty schedule + totalWht 0 allowed (nil return)."
               }
             },
             {
@@ -3064,11 +3100,11 @@
                   "raw": "{\"periodYear\":2025,\"payerFeesIncludedInSales\":true,\"reliefs\":{\"annualRent\":1800000,\"landlordName\":\"Adewale Johnson\",\"landlordContact\":\"08031234567\",\"propertyAddress\":\"12 Allen Avenue\",\"rentPeriodStart\":\"Jan 2025\",\"rentPeriodEnd\":\"Dec 2025\"},\"reliefsReviewed\":true}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/draft",
-                "description": "Persists NTA s.30 reliefs and income overrides. Does not freeze — use workspace confirm-computation for step 1."
+                "description": "Persists NTA s.30 reliefs and income overrides. Does not freeze \u2014 use workspace confirm-computation for step 1."
               }
             },
             {
-              "name": "PIT - Submit (worked example §13)",
+              "name": "PIT - Submit (worked example \u00a713)",
               "event": [
                 {
                   "listen": "test",
@@ -3094,7 +3130,7 @@
                   "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 150000,\n  \"dueDate\": \"2026-03-31\",\n  \"paymentStatus\": \"unpaid\",\n  \"submissionReference\": \"LAGOS-PIT-2025-0001\",\n  \"stateOfResidence\": \"Lagos\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"tradingProfit\": 2400000,\n    \"otherBusinessIncome\": 0,\n    \"otherPersonalIncome\": 3600000,\n    \"payerFees\": 0,\n    \"payerFeesIncludedInSales\": true,\n    \"grossIncome\": 6000000,\n    \"pensionContribution\": 288000,\n    \"nhfContribution\": 0,\n    \"nhisContribution\": 120000,\n    \"annualRent\": 1800000,\n    \"rentRelief\": 360000,\n    \"rentPeriodStart\": \"Jan 2025\",\n    \"rentPeriodEnd\": \"Dec 2025\",\n    \"landlordName\": \"Adewale Johnson\",\n    \"landlordContact\": \"08031234567\",\n    \"propertyAddress\": \"12 Allen Avenue, Ikeja, Lagos\",\n    \"lifeAssurance\": 80000,\n    \"mortgageInterest\": 0,\n    \"totalReliefs\": 848000,\n    \"chargeableIncome\": 5152000,\n    \"pitLiability\": 717360,\n    \"payeCredits\": 420000,\n    \"whtCredits\": 147360,\n    \"remainingPayable\": 150000,\n    \"minimumWageExempt\": false\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/pit/submit",
-                "description": "Step 8 — submissionReference required at workspace step 8. amount must match computation.remainingPayable (±₦1). Returns { id, status: submitted, completionPercent }."
+                "description": "Step 8 \u2014 submissionReference required at workspace step 8. amount must match computation.remainingPayable (\u00b1\u20a61). Returns { id, status: submitted, completionPercent }."
               }
             },
             {
@@ -3132,7 +3168,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/calculation?year={{filingYear}}",
-                "description": "Honours draft adjustments and prior-year carry (CA b/f, loss b/f, unused WHT). Returns priorYearCarry, frozen when workspace confirmed.\n\nCompany classification (computation.taxClassCode / isSmallCompany) uses inputs:\n• fixedAssetsSource profile — signup totalFixedAssets when no registered assets; books — sum of registered asset purchase costs.\n• turnoverSource profile — signup annualGrossTurnover when business is under 12 months OR has no sales/expense transactions; transactions — total sales (totalAmount) for the filing year once 12+ months with transactions.\n\ninputs object also returns profileTurnover, profileFixedAssets, booksTurnover, businessMonthsElapsed, usesTransactionTurnover for UI transparency. Submit must use turnover/fixedAssets/taxClassCode from this response."
+                "description": "Honours draft adjustments and prior-year carry (CA b/f, loss b/f, unused WHT). Returns priorYearCarry, frozen when workspace confirmed.\n\nCompany classification (computation.taxClassCode / isSmallCompany) uses inputs:\n\u2022 fixedAssetsSource profile \u2014 signup totalFixedAssets when no registered assets; books \u2014 sum of registered asset purchase costs.\n\u2022 turnoverSource profile \u2014 signup annualGrossTurnover when business is under 12 months OR has no sales/expense transactions; transactions \u2014 total sales (totalAmount) for the filing year once 12+ months with transactions.\n\ninputs object also returns profileTurnover, profileFixedAssets, booksTurnover, businessMonthsElapsed, usesTransactionTurnover for UI transparency. Submit must use turnover/fixedAssets/taxClassCode from this response."
               }
             },
             {
@@ -3153,7 +3189,7 @@
               }
             },
             {
-              "name": "CIT - Submit (worked example §13.1)",
+              "name": "CIT - Submit (worked example \u00a713.1)",
               "event": [
                 {
                   "listen": "test",
@@ -3179,11 +3215,11 @@
                   "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 5252000,\n  \"dueDate\": \"2026-06-30\",\n  \"paymentStatus\": \"unpaid\",\n  \"submissionReference\": \"FIRS-CIT-2025-0001\",\n  \"rcNumber\": \"RC123456\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"year\": 2025,\n    \"turnover\": 150000000,\n    \"fixedAssets\": 80000000,\n    \"taxClassCode\": \"C08A\",\n    \"taxClassLabel\": \"Large Company\",\n    \"isSmallCompany\": false,\n    \"accountingProfit\": 20000000,\n    \"depreciation\": 2000000,\n    \"fines\": 100000,\n    \"directorsPersonal\": 500000,\n    \"otherNonAllowable\": 200000,\n    \"totalAddBacks\": 2800000,\n    \"frankedDividends\": 1000000,\n    \"assessableProfit\": 21800000,\n    \"chargeableGains\": 300000,\n    \"capitalAllowancesAvailable\": 3000000,\n    \"capitalAllowancesClaimed\": 3000000,\n    \"unutilizedCapitalAllowances\": 0,\n    \"lossCarryForward\": 500000,\n    \"chargeableProfit\": 18600000,\n    \"citRate\": 30,\n    \"levyRate\": 4,\n    \"citAmount\": 5580000,\n    \"developmentLevy\": 872000,\n    \"grossCit\": 6452000,\n    \"whtCredits\": 1200000,\n    \"whtApplied\": 1200000,\n    \"unutilizedWhtCredits\": 0,\n    \"citPayable\": 5252000,\n    \"rcNumber\": \"RC123456\",\n    \"tin\": \"12345678-0001\",\n    \"companyName\": \"FileAm Limited\",\n    \"allowances\": [\n      {\n        \"id\": \"asset-uuid-1\",\n        \"name\": \"Toyota Hilux\",\n        \"category\": \"Motor Vehicles\",\n        \"cost\": 12000000,\n        \"annualRate\": 0.25,\n        \"claimedThisYear\": 3000000\n      }\n    ]\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/submit",
-                "description": "Step 8 large company C08A — citPayable ₦5,252,000. turnover/fixedAssets/taxClassCode must match GET .../cit/calculation for the same year (classification from profile or books per rules). priorYearCarry feeds next year defaults on submit. submissionReference persisted on workspace."
+                "description": "Step 8 large company C08A \u2014 citPayable \u20a65,252,000. turnover/fixedAssets/taxClassCode must match GET .../cit/calculation for the same year (classification from profile or books per rules). priorYearCarry feeds next year defaults on submit. submissionReference persisted on workspace."
               }
             },
             {
-              "name": "CIT - Submit small company nil (§13.2)",
+              "name": "CIT - Submit small company nil (\u00a713.2)",
               "event": [
                 {
                   "listen": "test",
@@ -3209,7 +3245,7 @@
                   "raw": "{\n  \"periodYear\": 2025,\n  \"periodMonth\": 12,\n  \"amount\": 0,\n  \"dueDate\": \"2026-06-30\",\n  \"paymentStatus\": \"unpaid\",\n  \"receiptUrl\": null,\n  \"documentUrl\": null,\n  \"evidenceVaultId\": null,\n  \"rcNumber\": \"RC123456\",\n  \"tin\": \"12345678-0001\",\n  \"computation\": {\n    \"year\": 2025,\n    \"turnover\": 80000000,\n    \"fixedAssets\": 50000000,\n    \"taxClassCode\": \"C08C\",\n    \"taxClassLabel\": \"Small Company\",\n    \"isSmallCompany\": true,\n    \"accountingProfit\": 20000000,\n    \"depreciation\": 2000000,\n    \"fines\": 100000,\n    \"directorsPersonal\": 500000,\n    \"otherNonAllowable\": 200000,\n    \"totalAddBacks\": 2800000,\n    \"frankedDividends\": 1000000,\n    \"assessableProfit\": 21800000,\n    \"chargeableGains\": 300000,\n    \"capitalAllowancesAvailable\": 3000000,\n    \"capitalAllowancesClaimed\": 3000000,\n    \"unutilizedCapitalAllowances\": 0,\n    \"lossCarryForward\": 500000,\n    \"chargeableProfit\": 18600000,\n    \"citRate\": 0,\n    \"levyRate\": 0,\n    \"citAmount\": 0,\n    \"developmentLevy\": 0,\n    \"grossCit\": 0,\n    \"whtCredits\": 1200000,\n    \"whtApplied\": 0,\n    \"unutilizedWhtCredits\": 1200000,\n    \"citPayable\": 0,\n    \"rcNumber\": \"RC123456\",\n    \"tin\": \"12345678-0001\",\n    \"companyName\": \"FileAm Limited\",\n    \"allowances\": []\n  }\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/filings/cit/submit",
-                "description": "Small company C08C — still file at citPayable 0. turnover ≤ ₦100m and fixed assets ≤ ₦250m (and not professional services). Use GET .../cit/calculation inputs — profile turnover/assets apply for businesses under 12 months or without transactions."
+                "description": "Small company C08C \u2014 still file at citPayable 0. turnover \u2264 \u20a6100m and fixed assets \u2264 \u20a6250m (and not professional services). Use GET .../cit/calculation inputs \u2014 profile turnover/assets apply for businesses under 12 months or without transactions."
               }
             },
             {
@@ -3354,7 +3390,7 @@
         },
         {
           "name": "Liability **",
-          "description": "Liability reporting over existing books (do not duplicate data).\n\nSix routes (spelling: liability):\n1. GET /mobile/liability/summary\n2. GET /mobile/liability/dashboard\n3. GET /mobile/liability/current-liabilities\n4. GET /mobile/liability/non-current-liabilities\n5. GET /mobile/liability/accounts-payable\n6. GET /mobile/liability/cash-flow-impact\n\nSources: AP ← Invoice/Pay Later (Salary excluded); Tax ← payables less remittances; Salaries ← unpaid Salary expenses; Pension/NHF ← pending payroll_obligations. Non-current loan balances ← Liability Register (/mobile/liabilities). Interest Payable / Short-Term Loan still stubbed at 0.\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID. Percentages use class totals; divide-by-zero → 0.",
+          "description": "Liability reporting over existing books (do not duplicate data).\n\nSix routes (spelling: liability):\n1. GET /mobile/liability/summary\n2. GET /mobile/liability/dashboard\n3. GET /mobile/liability/current-liabilities\n4. GET /mobile/liability/non-current-liabilities\n5. GET /mobile/liability/accounts-payable\n6. GET /mobile/liability/cash-flow-impact\n\nSources: AP \u2190 Invoice/Pay Later (Salary excluded); Tax \u2190 payables less remittances; Salaries \u2190 unpaid Salary expenses; Pension/NHF \u2190 pending payroll_obligations. Non-current loan balances \u2190 Liability Register (/mobile/liabilities). Interest Payable / Short-Term Loan still stubbed at 0.\n\nStatuses: OUTSTANDING | OVERDUE | ACTIVE | PARTIALLY_PAID | PAID. Percentages use class totals; divide-by-zero \u2192 0.",
           "item": [
             {
               "name": "Get liability summary **",
@@ -3369,7 +3405,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/dashboard",
-                "description": "Overview: summary (incl. overduePayable) + lightweight current/non-current category lists (name, amount, percentage) + cashFlowImpact. Full trees → current-liabilities / accounts-payable."
+                "description": "Overview: summary (incl. overduePayable) + lightweight current/non-current category lists (name, amount, percentage) + cashFlowImpact. Full trees \u2192 current-liabilities / accounts-payable."
               }
             },
             {
@@ -3393,7 +3429,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liability/accounts-payable",
-                "description": "AP detail only: name, amount, percentage, payables { summary, items, upcomingPayables, ageingAnalysis, suppliers, reports }. Each payable item includes amount (outstanding) in items[], upcomingPayables[], and suppliers[].payables[] — same amount wherever the payable appears."
+                "description": "AP detail only: name, amount, percentage, payables { summary, items, upcomingPayables, ageingAnalysis, suppliers, reports }. Each payable item includes amount (outstanding) in items[], upcomingPayables[], and suppliers[].payables[] \u2014 same amount wherever the payable appears."
               }
             },
             {
@@ -3408,7 +3444,7 @@
         },
         {
           "name": "Customer Directory **",
-          "description": "Customer Directory (PDF spec).\n\n• POST /mobile/customers\n• PATCH /mobile/customers/{customerId}\n• GET /mobile/customers/{customerId}\n• GET /mobile/customers/dashboard\n• POST /mobile/customers/{customerId}/documents\n\nUniqueness: phone and TIN must be unique among your customers (409 DUPLICATE_CONTACT on create or PATCH if another customer already uses the same phone or TIN).\n\nVariables: {{customerId}} (CUS-xxx), {{saleId}} for document upload.\nDocument types: SIGNED_QUOTATION, PURCHASE_ORDER, CONTRACT, DELIVERY_CONFIRMATION, CORRESPONDENCE, PAYMENT_CONFIRMATION.",
+          "description": "Customer Directory (PDF spec).\n\n\u2022 POST /mobile/customers\n\u2022 PATCH /mobile/customers/{customerId}\n\u2022 GET /mobile/customers/{customerId}\n\u2022 GET /mobile/customers/dashboard\n\u2022 POST /mobile/customers/{customerId}/documents\n\nUniqueness: phone and TIN must be unique among your customers (409 DUPLICATE_CONTACT on create or PATCH if another customer already uses the same phone or TIN).\n\nVariables: {{customerId}} (CUS-xxx), {{saleId}} for document upload.\nDocument types: SIGNED_QUOTATION, PURCHASE_ORDER, CONTRACT, DELIVERY_CONFIRMATION, CORRESPONDENCE, PAYMENT_CONFIRMATION.",
           "item": [
             {
               "name": "Create customer **",
@@ -3511,7 +3547,7 @@
         },
         {
           "name": "Supplier Directory **",
-          "description": "Supplier Directory (PDF spec).\n\n• POST /mobile/suppliers\n• PATCH /mobile/suppliers/{supplierId}\n• GET /mobile/suppliers/{supplierId}\n• GET /mobile/suppliers/dashboard\n• POST /mobile/suppliers/{supplierId}/documents\n\nUniqueness: phone and TIN must be unique among your suppliers (409 DUPLICATE_CONTACT on create or PATCH if another supplier already uses the same phone or TIN).\n\nVariables: {{supplierId}} (SUP-xxx), {{expenseId}} for document upload.\nDocument types: SUPPLIER_INVOICE, PAYMENT_RECEIPT, PURCHASE_ORDER, DELIVERY_NOTE, CONTRACT, WARRANTY_DOCUMENT.",
+          "description": "Supplier Directory (PDF spec).\n\n\u2022 POST /mobile/suppliers\n\u2022 PATCH /mobile/suppliers/{supplierId}\n\u2022 GET /mobile/suppliers/{supplierId}\n\u2022 GET /mobile/suppliers/dashboard\n\u2022 POST /mobile/suppliers/{supplierId}/documents\n\nUniqueness: phone and TIN must be unique among your suppliers (409 DUPLICATE_CONTACT on create or PATCH if another supplier already uses the same phone or TIN).\n\nVariables: {{supplierId}} (SUP-xxx), {{expenseId}} for document upload.\nDocument types: SUPPLIER_INVOICE, PAYMENT_RECEIPT, PURCHASE_ORDER, DELIVERY_NOTE, CONTRACT, WARRANTY_DOCUMENT.",
           "item": [
             {
               "name": "Create supplier **",
@@ -3614,7 +3650,7 @@
         },
         {
           "name": "Prepayments **",
-          "description": "Prepayments module (PDF spec).\n\n• POST /mobile/prepayments\n• GET /mobile/prepayments\n• GET /mobile/prepayments/{prepaymentId}\n• PATCH /mobile/prepayments/{prepaymentId}\n• POST .../assign-consultant\n• POST .../evidence\n• POST .../cancel\n\nRequires {{supplierId}} from Supplier Directory. Recognition auto-runs on list/get when due.\nGET /mobile/assets/current-assets includes prepayments { total, numberOfPrepayments, items[] }.",
+          "description": "Prepayments module (PDF spec).\n\n\u2022 POST /mobile/prepayments\n\u2022 GET /mobile/prepayments\n\u2022 GET /mobile/prepayments/{prepaymentId}\n\u2022 PATCH /mobile/prepayments/{prepaymentId}\n\u2022 POST .../assign-consultant\n\u2022 POST .../evidence\n\u2022 POST .../cancel\n\nRequires {{supplierId}} from Supplier Directory. Recognition auto-runs on list/get when due.\nGET /mobile/assets/current-assets includes prepayments { total, numberOfPrepayments, items[] }.",
           "item": [
             {
               "name": "Create prepayment **",
@@ -3753,7 +3789,7 @@
         },
         {
           "name": "Unit Attributions **",
-          "description": "PDF 3 — Unit attribution for UNIT_OF_PRODUCTION assets.\n\n• POST /mobile/unit-attributions\n• GET /mobile/unit-attributions\n• GET /mobile/unit-attributions/{id}\n• POST .../{id}/records\n• GET .../{id}/schedule\n\nRequires ACTIVE UNIT_OF_PRODUCTION asset (see GET /assets/units-of-production-eligible).",
+          "description": "PDF 3 \u2014 Unit attribution for UNIT_OF_PRODUCTION assets.\n\n\u2022 POST /mobile/unit-attributions\n\u2022 GET /mobile/unit-attributions\n\u2022 GET /mobile/unit-attributions/{id}\n\u2022 POST .../{id}/records\n\u2022 GET .../{id}/schedule\n\nRequires ACTIVE UNIT_OF_PRODUCTION asset (see GET /assets/units-of-production-eligible).",
           "item": [
             {
               "name": "Create unit attribution **",
@@ -3829,7 +3865,7 @@
         },
         {
           "name": "Receivables **",
-          "description": "PDF 4 — Accounts Receivable module.\n\nFive POST types + GET list/detail. Backend calculates outstanding balances.",
+          "description": "PDF 4 \u2014 Accounts Receivable module.\n\nFive POST types + GET list/detail. Backend calculates outstanding balances.",
           "item": [
             {
               "name": "Fixed asset sale on credit **",
@@ -3948,7 +3984,7 @@
         },
         {
           "name": "Payers **",
-          "description": "Customers & Payers module (PDF spec). Response envelope: { data: ... }.\n\n• POST /mobile/payers\n• GET /mobile/payers\n• GET /mobile/payers/{id}\n• PATCH /mobile/payers/{id}\n• POST .../transactions\n• GET .../transactions\n• GET .../receivables\n• POST .../transactions/{transactionId}/payments\n• POST/GET .../documents\n\nBackend-computed: totalAmount, arBalance, overdueAmount, status, lastTransactionDate. Invoice settlement: Cash | Transfer | Card only.",
+          "description": "Customers & Payers module (PDF spec). Response envelope: { data: ... }.\n\n\u2022 POST /mobile/payers\n\u2022 GET /mobile/payers\n\u2022 GET /mobile/payers/{id}\n\u2022 PATCH /mobile/payers/{id}\n\u2022 POST .../transactions\n\u2022 GET .../transactions\n\u2022 GET .../receivables\n\u2022 POST .../transactions/{transactionId}/payments\n\u2022 POST/GET .../documents\n\nBackend-computed: totalAmount, arBalance, overdueAmount, status, lastTransactionDate. Invoice settlement: Cash | Transfer | Card only.",
           "item": [
             {
               "name": "Create payer **",
@@ -4069,7 +4105,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/payers/{{payerId}}/transactions",
-                "description": "Immediate payment → status PAID.",
+                "description": "Immediate payment \u2192 status PAID.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"date\": \"2026-08-20\",\n  \"amount\": 250000,\n  \"paymentType\": \"Transfer\",\n  \"invoiceDueDate\": null,\n  \"purpose\": \"SALES\",\n  \"paymentReference\": \"TRX-1042\",\n  \"notes\": \"Retainer top-up\"\n}"
@@ -4155,7 +4191,7 @@
         },
         {
           "name": "Employers **",
-          "description": "Employer module for user PIT profile (PDF spec). Standard envelope { status, message, data }.\n\n• POST/GET/PATCH/DELETE /mobile/employers\n• GET .../income-history (auto-generated from remuneration + dates)\n• GET/POST/PATCH/DELETE .../documents\n\nBackend-computed: taxTreatment, incomeKind, monthlyIncome, annualIncome, payeCredit, whtRate, taxComputation (NRS bands, no CRA). Document slots seeded on create.",
+          "description": "Employer module for user PIT profile (PDF spec). Standard envelope { status, message, data }.\n\n\u2022 POST/GET/PATCH/DELETE /mobile/employers\n\u2022 GET .../income-history (auto-generated from remuneration + dates)\n\u2022 GET/POST/PATCH/DELETE .../documents\n\nBackend-computed: taxTreatment, incomeKind, monthlyIncome, annualIncome, payeCredit, whtRate, taxComputation (NRS bands, no CRA). Document slots seeded on create.",
           "item": [
             {
               "name": "Create employer (PAYE employee) **",
@@ -4168,7 +4204,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers",
-                "description": "LIMITED_COMPANY + FULL_TIME → PAYE. Seeds document slots. Sets {{employerId}}.",
+                "description": "LIMITED_COMPANY + FULL_TIME \u2192 PAYE. Seeds document slots. Sets {{employerId}}.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"employerType\": \"LIMITED_COMPANY\",\n  \"name\": \"NovaTech Systems Ltd\",\n  \"address\": \"12 Kofo Abayomi Street, Victoria Island, Lagos\",\n  \"relationship\": \"FULL_TIME\",\n  \"stateOfEmployment\": \"Lagos\",\n  \"startDate\": \"2022-01-01\",\n  \"paymentMethod\": \"BASIC_MONTHLY\",\n  \"paymentFrequency\": \"MONTHLY\",\n  \"basicSalary\": 900000,\n  \"hasPension\": true,\n  \"cacNumber\": \"RC-1234567\",\n  \"tin\": \"10234567-0001\",\n  \"email\": \"payroll@novatech.ng\",\n  \"phone\": \"08031234567\",\n  \"housingAllowance\": 350000,\n  \"transportAllowance\": 150000,\n  \"otherAllowances\": 100000,\n  \"bonuses\": 0,\n  \"commissions\": 0,\n  \"pensionStatus\": \"ACTIVE\",\n  \"rsaPin\": \"PEN123456789012\",\n  \"pfa\": \"Access ARM Pensions Limited\",\n  \"employeeRate\": 8,\n  \"employerRate\": 10\n}"
@@ -4198,7 +4234,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers",
-                "description": "LIMITED_COMPANY + CONTRACTOR → WHT 5%.",
+                "description": "LIMITED_COMPANY + CONTRACTOR \u2192 WHT 5%.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"employerType\": \"LIMITED_COMPANY\",\n  \"name\": \"Helios Partners Ltd\",\n  \"address\": \"18 Aguiyi Ironsi Street, Abuja\",\n  \"relationship\": \"CONTRACTOR\",\n  \"stateOfEmployment\": \"Abuja (FCT)\",\n  \"startDate\": \"2025-02-01\",\n  \"paymentMethod\": \"CUSTOM\",\n  \"paymentFrequency\": \"MONTHLY\",\n  \"basicSalary\": 800000,\n  \"hasPension\": false\n}"
@@ -4326,7 +4362,7 @@
                 "method": "DELETE",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employers/{{employerId}}/documents/{{employerDocumentId}}",
-                "description": "Required doc → clears url, status MISSING. Optional doc → row deleted."
+                "description": "Required doc \u2192 clears url, status MISSING. Optional doc \u2192 row deleted."
               }
             },
             {
@@ -4401,7 +4437,7 @@
                   "raw": "{\n  \"name\": \"Kano Steel Supplies Ltd\",\n  \"beneficiaryType\": \"VENDOR\",\n  \"vendorCategory\": \"PURCHASES\",\n  \"entityType\": \"CORPORATE\",\n  \"residency\": \"RESIDENT\",\n  \"whtApplicable\": true,\n  \"tin\": \"12345678-0001\",\n  \"phone\": \"+2348034567890\",\n  \"email\": \"accounts@kanosteel.ng\",\n  \"address\": \"12 Challawa Rd, Kano\",\n  \"bankName\": \"Access Bank\",\n  \"accountNumber\": \"0123456789\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/beneficiaries/{{beneficiaryId}}",
-                "description": "PATCH profile fields. WHT totals/outstanding are ledger-derived — not editable here."
+                "description": "PATCH profile fields. WHT totals/outstanding are ledger-derived \u2014 not editable here."
               }
             },
             {
@@ -4593,7 +4629,7 @@
         },
         {
           "name": "Liabilities Register & Repayments **",
-          "description": "Liability Register + Repayment History (matches live routes).\n\nRegister:\n• POST /mobile/liabilities\n• GET /mobile/liabilities?page&limit\n• GET /mobile/liabilities/{liabilityId}\n\nRepayments — global (register /repayments before /:liabilityId in router):\n• GET /mobile/liabilities/repayments?page&limit\n• GET /mobile/liabilities/repayments/{repaymentId}\n\nRepayments — per liability:\n• POST /mobile/liabilities/{liabilityId}/repayments\n• GET /mobile/liabilities/{liabilityId}/repayments?page&limit&dateFrom&dateTo&status&paymentSource&type\n\nVariables: {{liabilityId}} (LIAB-xxx), {{repaymentId}} (REP-xxx). Auth: Bearer {{accessToken}}.\nSuggested flow: Register (BANK_LOAN) → Create repayment → List all repayments → Get repayment by id → Get per-liability history.",
+          "description": "Liability Register + Repayment History (matches live routes).\n\nRegister:\n\u2022 POST /mobile/liabilities\n\u2022 GET /mobile/liabilities?page&limit\n\u2022 GET /mobile/liabilities/{liabilityId}\n\nRepayments \u2014 global (register /repayments before /:liabilityId in router):\n\u2022 GET /mobile/liabilities/repayments?page&limit\n\u2022 GET /mobile/liabilities/repayments/{repaymentId}\n\nRepayments \u2014 per liability:\n\u2022 POST /mobile/liabilities/{liabilityId}/repayments\n\u2022 GET /mobile/liabilities/{liabilityId}/repayments?page&limit&dateFrom&dateTo&status&paymentSource&type\n\nVariables: {{liabilityId}} (LIAB-xxx), {{repaymentId}} (REP-xxx). Auth: Bearer {{accessToken}}.\nSuggested flow: Register (BANK_LOAN) \u2192 Create repayment \u2192 List all repayments \u2192 Get repayment by id \u2192 Get per-liability history.",
           "item": [
             {
               "name": "Register",
@@ -4610,7 +4646,7 @@
                       }
                     ],
                     "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities",
-                    "description": "POST /mobile/liabilities — all shared fields required. BANK_LOAN also requires bankName, loanPurpose, collateral. Sets {{liabilityId}} from data.id (LIAB-xxx).",
+                    "description": "POST /mobile/liabilities \u2014 all shared fields required. BANK_LOAN also requires bankName, loanPurpose, collateral. Sets {{liabilityId}} from data.id (LIAB-xxx).",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"creditor\": \"Access Bank\",\n  \"principalAmount\": 5000000,\n  \"interestRate\": 18,\n  \"interestRateType\": \"ANNUAL\",\n  \"interestCalculationMethod\": \"REDUCING_BALANCE\",\n  \"startDate\": \"2026-08-01\",\n  \"maturityDate\": \"2028-08-01\",\n  \"repaymentFrequency\": \"MONTHLY\",\n  \"repaymentStructure\": \"AMORTIZED\",\n  \"note\": \"Loan for business expansion\",\n  \"evidenceUrl\": \"https://example.com/evidence\",\n  \"name\": \"Business Expansion Loan\",\n  \"liabilityType\": \"BANK_LOAN\",\n  \"bankName\": \"Access Bank\",\n  \"loanPurpose\": \"Business expansion\",\n  \"collateral\": \"Commercial property\"\n}"
@@ -4898,7 +4934,7 @@
                     "method": "GET",
                     "header": [],
                     "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/repayments?page=1&limit=20",
-                    "description": "GET /mobile/liabilities/repayments — repayment dashboard across all liabilities. summary: dueThisMonth, paidThisMonth, overdue, overdueCount. repayments[] dashboard items (id, liability{id,name,liabilityType}, repaymentType, repaymentAmount, principalAmount, interestAmount, balanceBeforeRepayment, balanceAfterRepayment, paymentStatus). Sets {{repaymentId}} from first row."
+                    "description": "GET /mobile/liabilities/repayments \u2014 repayment dashboard across all liabilities. summary: dueThisMonth, paidThisMonth, overdue, overdueCount. repayments[] dashboard items (id, liability{id,name,liabilityType}, repaymentType, repaymentAmount, principalAmount, interestAmount, balanceBeforeRepayment, balanceAfterRepayment, paymentStatus). Sets {{repaymentId}} from first row."
                   },
                   "event": [
                     {
@@ -4934,7 +4970,7 @@
                       }
                     ],
                     "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments",
-                    "description": "POST /mobile/liabilities/{liabilityId}/repayments. Body: amount, paymentDate, paymentSource (CASH|BANK), evidenceUrl optional. Sets {{repaymentId}}. Overpayment → errorCode REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE.",
+                    "description": "POST /mobile/liabilities/{liabilityId}/repayments. Body: amount, paymentDate, paymentSource (CASH|BANK), evidenceUrl optional. Sets {{repaymentId}}. Overpayment \u2192 errorCode REPAYMENT_EXCEEDS_OUTSTANDING_BALANCE.",
                     "body": {
                       "mode": "raw",
                       "raw": "{\n  \"amount\": 500000,\n  \"paymentDate\": \"2026-08-01\",\n  \"paymentSource\": \"BANK\",\n  \"evidenceUrl\": \"https://example.com/payment-proof.pdf\"\n}"
@@ -4959,7 +4995,7 @@
                     "method": "GET",
                     "header": [],
                     "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/liabilities/{{liabilityId}}/repayments?page=1&limit=20",
-                    "description": "GET /mobile/liabilities/{liabilityId}/repayments. Per-liability history + summary (totalRepayments, totalAmountPaid, totalPrincipalPaid, totalInterestPaid, lastPaymentDate). Filters: dateFrom, dateTo, status (COMPLETED|…), paymentSource, type (FULL_REPAYMENT|PARTIAL_REPAYMENT). Optional overdue block."
+                    "description": "GET /mobile/liabilities/{liabilityId}/repayments. Per-liability history + summary (totalRepayments, totalAmountPaid, totalPrincipalPaid, totalInterestPaid, lastPaymentDate). Filters: dateFrom, dateTo, status (COMPLETED|\u2026), paymentSource, type (FULL_REPAYMENT|PARTIAL_REPAYMENT). Optional overdue block."
                   }
                 }
               ]
@@ -4968,7 +5004,7 @@
         },
         {
           "name": "Financial Position **",
-          "description": "GET /mobile/financial-position — complete financial position for the mobile Financial Position screen. Backend owns all totals, percentages, and health metrics. Category names match Asset/Liability modules (no PPE/Intangible/Payroll Payable rollups). Non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others. Current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans.",
+          "description": "GET /mobile/financial-position \u2014 complete financial position for the mobile Financial Position screen. Backend owns all totals, percentages, and health metrics. Category names match Asset/Liability modules (no PPE/Intangible/Payroll Payable rollups). Non-current assets: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others. Current liabilities: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans.",
           "item": [
             {
               "name": "Get financial position **",
@@ -4976,7 +5012,7 @@
                 "method": "GET",
                 "header": [],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/financial-position",
-                "description": "Response data:\n• summary: asset|liability|equity { amount, percentage }, total (= total assets)\n• assets.currentAssets.items: Cash, Bank Balance, Inventory, Accounts Receivable\n• assets.nonCurrentAssets.items: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others (amounts from asset type NBV; zeros included)\n• liabilities.currentLiabilities.items: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans\n• liabilities.nonCurrentLiabilities.items: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings\n• equity.total = Assets − Liabilities\n• financialHealth: currentRatio, debtToAssetRatio %, equityRatio %, workingCapital\nDo not use Property, Plant & Equipment / Intangible Assets / Payroll Payable labels."
+                "description": "Response data:\n\u2022 summary: asset|liability|equity { amount, percentage }, total (= total assets)\n\u2022 assets.currentAssets.items: Cash, Bank Balance, Inventory, Accounts Receivable\n\u2022 assets.nonCurrentAssets.items: Vehicle, Computer & IT, Machinery, Furniture, Buildings, Software Licences, Land, Others (amounts from asset type NBV; zeros included)\n\u2022 liabilities.currentLiabilities.items: Accounts Payable, Tax Payable, Salaries Payable, Pension Payable, NHF Payable, Interest Payable, Short-term Loans\n\u2022 liabilities.nonCurrentLiabilities.items: Bank Loan, Director Loan, Shareholder Loan, Mortgage, Equipment Financing, Lease Liability, Convertible Loan, Other Long-term Borrowings\n\u2022 equity.total = Assets \u2212 Liabilities\n\u2022 financialHealth: currentRatio, debtToAssetRatio %, equityRatio %, workingCapital\nDo not use Property, Plant & Equipment / Intangible Assets / Payroll Payable labels."
               }
             }
           ]
@@ -4989,7 +5025,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/financial-overview?year={{overviewYear}}",
-                "description": "Annual summary for mobile home / What I Owe cards. Response data: year, currency (NGN), annualRevenue, annualExpense, netProfit (all ex-VAT — VAT not counted as revenue or profit), currentTaxLiability (unpaid payables for the year), potentialSavings (5% of liability, capped), taxLiabilityByType { VAT, WHT, … }, note. Syncs all 12 book months before computing liability. Omit year for current calendar year."
+                "description": "Annual summary for mobile home / What I Owe cards. Response data: year, currency (NGN), annualRevenue, annualExpense, netProfit (all ex-VAT \u2014 VAT not counted as revenue or profit), currentTaxLiability (unpaid payables for the year), potentialSavings (5% of liability, capped), taxLiabilityByType { VAT, WHT, \u2026 }, note. Syncs all 12 book months before computing liability. Omit year for current calendar year."
               }
             },
             {
@@ -4997,7 +5033,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/analytics/dashboard?period=2026-02&range=month",
-                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). expenses / operatingExpenses = book expenses (ex-VAT) + Salaries (employee monthly gross pay). netProfit = income − that total. expenseBreakdown includes category rows (ex-VAT) plus Salaries at gross. VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance. range=month|quarter|year."
+                "description": "kpis.income and profitAndLoss.revenue are ex-VAT (sale.amount, not totalAmount). expenses / operatingExpenses = book expenses (ex-VAT) + Salaries (employee monthly gross pay). netProfit = income \u2212 that total. expenseBreakdown includes category rows (ex-VAT) plus Salaries at gross. VAT appears in tax computation / payables, not in operating profit. Includes taxPersonaGuidance. range=month|quarter|year."
               }
             }
           ]
@@ -5048,7 +5084,7 @@
                   "raw": "{\n  \"url\": \"https://example.com/document/invoice-31.pdf\",\n  \"category\": \"Sales-Transactions\",\n  \"linkedRecord\": \"sale-67df9206-9dad-42cd-a2d1-b584df0b55b4\",\n  \"uploadedBy\": \"Ronald Gold\",\n  \"uploadedDate\": \"2026-05-26T10:30:00.000Z\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents",
-                "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string — if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
+                "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string \u2014 if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
               }
             },
             {
@@ -5066,7 +5102,7 @@
                   "raw": "{\n  \"url\": \"https://example.com/document/invoice-31.pdf\",\n  \"category\": \"Sales-Transactions\",\n  \"linkedRecord\": \"sale-67df9206-9dad-42cd-a2d1-b584df0b55b4\",\n  \"uploadedDate\": \"2026-05-26T10:30:00.000Z\"\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/evidence-vault/documents",
-                "description": "Same as create but omits uploadedBy — backend saves/returns the business name as a string."
+                "description": "Same as create but omits uploadedBy \u2014 backend saves/returns the business name as a string."
               }
             },
             {
@@ -5165,7 +5201,7 @@
                   "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"mealAllowance\": 0,\n  \"otherAllowances\": 0,\n  \"stateOfResidence\": \"Lagos\",\n  \"startDate\": \"2026-09-03\",\n  \"tin\": \"1234567890\",\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"annualHouseRent\": 2000000,\n  \"nhisHealthInsuranceMonthly\": 120000,\n  \"lifeAssurancePremiumMonthly\": 150000,\n  \"mortgageInterestMonthly\": 300000,\n  \"nhf\": true\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees",
-                "description": "Final POST contract. annualHouseRent is annual (not ×12). nhisHealthInsuranceMonthly, lifeAssurancePremiumMonthly, mortgageInterestMonthly are monthly (relief annualized ×12). 0 and false are valid."
+                "description": "Final POST contract. annualHouseRent is annual (not \u00d712). nhisHealthInsuranceMonthly, lifeAssurancePremiumMonthly, mortgageInterestMonthly are monthly (relief annualized \u00d712). 0 and false are valid."
               }
             },
             {
@@ -5201,7 +5237,7 @@
                   "raw": "{\n  \"fullName\": \"John Doe\",\n  \"jobTitle\": \"Developer\",\n  \"employmentType\": \"Full time\",\n  \"basicSalary\": 120000,\n  \"housingAllowance\": 30000,\n  \"transportAllowance\": 20000,\n  \"mealAllowance\": 0,\n  \"otherAllowances\": 0,\n  \"stateOfResidence\": \"Lagos\",\n  \"startDate\": \"2026-09-03\",\n  \"tin\": \"1234567890\",\n  \"pensionRsa\": \"PEN123456789\",\n  \"pfa\": \"Stanbic IBTC Pension\",\n  \"annualHouseRent\": 2000000,\n  \"nhisHealthInsuranceMonthly\": 120000,\n  \"lifeAssurancePremiumMonthly\": 0,\n  \"mortgageInterestMonthly\": 0,\n  \"nhf\": false\n}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/employees/{{employeeId}}",
-                "description": "Final PATCH contract — same field names as POST. Numeric 0 and boolean false must persist."
+                "description": "Final PATCH contract \u2014 same field names as POST. Numeric 0 and boolean false must persist."
               }
             },
             {
@@ -5224,7 +5260,7 @@
         },
         {
           "name": "Payroll **",
-          "description": "Payroll & statutory remittances under /mobile (Assets-style mount). GET /payroll summary; /payee, /nhf, /pension detail; PATCH /nhf/applicability (business-global). period=YYYY-MM — PAYE/NHF/pension/complianceCalendar only include employees active in that month (startDate month ≤ period). PAYE amounts use Universal Nigeria PAYE Formula 2026. Shared actions: POST /{payee|nhf|pension}/:period/{evidence|assign-consultant|mark-as-paid|pay}. Annual report is PDF stream.",
+          "description": "Payroll & statutory remittances under /mobile (Assets-style mount). GET /payroll summary; /payee, /nhf, /pension detail; PATCH /nhf/applicability (business-global). period=YYYY-MM \u2014 PAYE/NHF/pension/complianceCalendar only include employees active in that month (startDate month \u2264 period). PAYE amounts use Universal Nigeria PAYE Formula 2026. Shared actions: POST /{payee|nhf|pension}/:period/{evidence|assign-consultant|mark-as-paid|pay}. Annual report is PDF stream.",
           "item": [
             {
               "name": "GET payroll summary",
@@ -5685,9 +5721,9 @@
         }
       ]
     },
-        {
-          "name": "Enterprise",
-          "item": [
+    {
+      "name": "Enterprise",
+      "item": [
         {
           "name": "Health",
           "request": {
@@ -5916,6 +5952,36 @@
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/change-password"
               }
+            },
+            {
+              "name": "List sessions",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/sessions",
+                "description": "Active sessions for the authenticated consultant. Duplicate of Features Spec \u2192 Active Sessions."
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "var j=pm.response.json();",
+                      "var list=(j.data&&j.data.sessions)||[];",
+                      "var other=list.find(function(s){return !s.isCurrent;});",
+                      "if(j.status&&other){pm.collectionVariables.set('sessionId', other.id);}"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Revoke session",
+              "request": {
+                "method": "DELETE",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/sessions/{{sessionId}}",
+                "description": "Rejects revoking the current session."
+              }
             }
           ]
         },
@@ -5992,7 +6058,7 @@
                   "raw": "{\"firstName\":\"Jane\",\"lastName\":\"Doe\",\"organizationName\":\"Fileam Consulting\",\"taxPersona\":\"GIG_WORKER\",\"employmentGrossSalaryMonthly\":null}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/profile",
-                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (legacy PAYE fallback; number ≥ 0 or null to clear)."
+                "description": "Same validation as mobile PUT profile: optional employmentGrossSalaryMonthly (legacy PAYE fallback; number \u2265 0 or null to clear)."
               }
             },
             {
@@ -6424,7 +6490,7 @@
                       }
                     },
                     {
-                      "name": "Profit & Loss (defaults — current month)",
+                      "name": "Profit & Loss (defaults \u2014 current month)",
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-loss",
@@ -6436,7 +6502,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profit-loss?year={{plYear}}",
-                        "description": "year without month = Jan–Dec for that year."
+                        "description": "year without month = Jan\u2013Dec for that year."
                       }
                     },
                     {
@@ -6549,7 +6615,7 @@
                           "raw": "{\"description\":\"Consulting fee\",\"amount\":50000,\"type\":\"income\",\"date\":\"2026-02-23\",\"status\":\"Pending\",\"customerName\":\"Client Corp\",\"customerId\":\"cust-ent-001\"}"
                         },
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/transactions",
-                        "description": "Creates mobile Sale with paymentType Cash → status Paid by default (Invoice would be Pending)."
+                        "description": "Creates mobile Sale with paymentType Cash \u2192 status Paid by default (Invoice would be Pending)."
                       }
                     },
                     {
@@ -6941,7 +7007,7 @@
                           "raw": "{\"documentName\":\"Contract\",\"category\":\"Contracts\",\"fileUrl\":\"https://example.com/doc.pdf\"}"
                         },
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/upload",
-                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string — if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
+                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string \u2014 if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
                       }
                     },
                     {
@@ -6979,7 +7045,7 @@
                           "raw": "{\"clientName\":\"Client A\",\"clientAddress\":\"123 St\",\"clientEmail\":\"client@a.com\",\"totalAmount\":250750.25}"
                         },
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/evidence-vault/documents/{{documentId}}/convert-to-invoice",
-                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string — if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
+                        "description": "Required: url, category, linkedRecord (main record id e.g. sale-{uuid} from GET records). Optional: uploadedBy (string \u2014 if omitted, business name is saved), uploadedDate, name, fileSizeKb. Do NOT send linkedRecordDocumentId as the link. Responses return uploadedBy as a plain string (never an object). Idempotent on same category+linkedRecord+url."
                       }
                     },
                     {
@@ -7014,7 +7080,7 @@
                       "request": {
                         "method": "POST",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/{{assetId}}/approve",
-                        "description": "Transactional approve → register. Body: classification, useful_life_years, residual_value, depreciation_method (or amortisation_method for Software License), optional consultant_notes. Do not send classification Expense — use Classify as expense.",
+                        "description": "Transactional approve \u2192 register. Body: classification, useful_life_years, residual_value, depreciation_method (or amortisation_method for Software License), optional consultant_notes. Do not send classification Expense \u2014 use Classify as expense.",
                         "header": [
                           {
                             "key": "Content-Type",
@@ -7143,7 +7209,7 @@
                       }
                     }
                   ],
-                  "description": "Enterprise Asset Management under /enterprise/clients/:clientId/assets.\n\nFacade over mobile Asset + AssetHistory (clientId = linked mobile user).\n• GET /pending?status=pending|approved|returned\n• GET /pending/:assetId\n• POST /:assetId/approve — classification + useful_life_years + residual_value + depreciation/amortisation_method (do NOT use Expense here)\n• POST /:assetId/return — body { reason }\n• POST /:assetId/expense — classify as expense (excluded from register)\n• GET|PATCH /register[/:assetId] — NBV fields server-computed; PATCH requires reason_for_change\n• GET /register/export?format=pdf|excel\n• GET /:assetId/depreciation-schedule\n• GET /history?asset_id=&event_type=&page=&per_page=\n• POST /reports/generate — report_type + format\n• GET /downloads/:downloadId\nnotification_sent is always false until a push queue exists."
+                  "description": "Enterprise Asset Management under /enterprise/clients/:clientId/assets.\n\nFacade over mobile Asset + AssetHistory (clientId = linked mobile user).\n\u2022 GET /pending?status=pending|approved|returned\n\u2022 GET /pending/:assetId\n\u2022 POST /:assetId/approve \u2014 classification + useful_life_years + residual_value + depreciation/amortisation_method (do NOT use Expense here)\n\u2022 POST /:assetId/return \u2014 body { reason }\n\u2022 POST /:assetId/expense \u2014 classify as expense (excluded from register)\n\u2022 GET|PATCH /register[/:assetId] \u2014 NBV fields server-computed; PATCH requires reason_for_change\n\u2022 GET /register/export?format=pdf|excel\n\u2022 GET /:assetId/depreciation-schedule\n\u2022 GET /history?asset_id=&event_type=&page=&per_page=\n\u2022 POST /reports/generate \u2014 report_type + format\n\u2022 GET /downloads/:downloadId\nnotification_sent is always false until a push queue exists."
                 },
                 {
                   "name": "Filings *",
@@ -7239,7 +7305,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings?page=1&limit=20&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}&status=",
-                        "description": "Optional status filters tax_payables.status. Same response shape as mobile filings list — includes missingEvidenceBreakdown (sale/expense rows missing invoice or receipt proof). Test script sets {{filingId}} from first row."
+                        "description": "Optional status filters tax_payables.status. Same response shape as mobile filings list \u2014 includes missingEvidenceBreakdown (sale/expense rows missing invoice or receipt proof). Test script sets {{filingId}} from first row."
                       }
                     },
                     {
@@ -7247,7 +7313,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}",
-                        "description": "Linked-client view — same payload as mobile GET /filings/:id (timeline, completion, missingEvidenceBreakdown, periodAttachmentGap counts). TaxPayable id = {{filingId}}. 404 if filing not found for client."
+                        "description": "Linked-client view \u2014 same payload as mobile GET /filings/:id (timeline, completion, missingEvidenceBreakdown, periodAttachmentGap counts). TaxPayable id = {{filingId}}. 404 if filing not found for client."
                       }
                     },
                     {
@@ -7446,7 +7512,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/reports/paye",
-                        "description": "PAYE computation report for client employees. Uses Universal Nigeria PAYE Formula 2026 (pension on B+H+T, NHF on basic, NHIS monthly×12, rent relief, otherAllowableDeductions)."
+                        "description": "PAYE computation report for client employees. Uses Universal Nigeria PAYE Formula 2026 (pension on B+H+T, NHF on basic, NHIS monthly\u00d712, rent relief, otherAllowableDeductions)."
                       }
                     },
                     {
@@ -7461,6 +7527,332 @@
               ]
             }
           ]
+        },
+        {
+          "name": "Features Spec *",
+          "item": [
+            {
+              "name": "General Ledger",
+              "item": [
+                {
+                  "name": "Get ledger",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/ledger?clientId={{clientId}}&year={{ledgerYear}}&month={{ledgerMonth}}",
+                    "description": "Finalized journal balances grouped by Assets/Liabilities/Income/Expenses. Only FINALIZED pipeline entries. Returns opening, debits, credits, integrityCheckedAt, evidenceGaps."
+                  }
+                },
+                {
+                  "name": "Get ledger account entries",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/ledger/accounts/{{accountCode}}/entries?clientId={{clientId}}&year={{ledgerYear}}&month={{ledgerMonth}}&page=1&limit=50",
+                    "description": "Drill into a single account's journal entries for the period."
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json();",
+                          "if(j.status&&j.data&&j.data.entries&&j.data.entries[0]){pm.collectionVariables.set('ledgerEntryId', j.data.entries[0].id);}"
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "Mobile Sync",
+              "item": [
+                {
+                  "name": "Sync status",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/sync/status?clientId={{clientId}}",
+                    "description": "Summary stats: lastSyncAt, receivedToday, pendingReview, conflicts, evidenceMatchedCount/evidenceTotal."
+                  }
+                },
+                {
+                  "name": "Sync activity",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/sync/activity?clientId={{clientId}}&page=1&limit=20",
+                    "description": "Timestamped feed of incoming sync events."
+                  }
+                },
+                {
+                  "name": "Sync conflicts",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/sync/conflicts?clientId={{clientId}}",
+                    "description": "Unresolved classification conflicts."
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json();",
+                          "var list=(j.data&&j.data.conflicts)||[];",
+                          "if(j.status&&list[0]){pm.collectionVariables.set('syncConflictId', list[0].id);}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Sync pull",
+                  "request": {
+                    "method": "POST",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/sync/pull",
+                    "description": "Trigger a manual sync pull from mobile records.",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\"clientId\":\"{{clientId}}\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Transaction Pipeline",
+              "item": [
+                {
+                  "name": "List transactions (with pipelineStage)",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/transactions?clientId={{clientId}}&page=1&limit=50",
+                    "description": "Sales + expenses with pipelineStage (default IMPORTED)."
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json();",
+                          "var list=(j.data&&j.data.transactions)||[];",
+                          "if(j.status&&list[0]){pm.collectionVariables.set('pipelineTransactionId', list[0].id);}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Advance pipeline stage",
+                  "request": {
+                    "method": "PATCH",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/transactions/{{pipelineTransactionId}}/stage?clientId={{clientId}}",
+                    "description": "Body stage: REVIEWED | ADJUSTED | FINALIZED. Cannot go back to IMPORTED. FINALIZED requires evidence matched + ledger confirmed (422 otherwise).",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\"stage\":\"REVIEWED\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Audit Trail",
+              "item": [
+                {
+                  "name": "List audit trail",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/audit-trail?clientId={{clientId}}&type=&highRisk=&page=1&limit=50&search=",
+                    "description": "Deleted/reset events. Omit clientId for all consultant clients. Filters: type=deleted|reset, highRisk=true, search."
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json();",
+                          "var list=(j.data&&j.data.items)||[];",
+                          "if(j.status&&list[0]){pm.collectionVariables.set('auditTrailId', list[0].id);}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Review audit item",
+                  "request": {
+                    "method": "PATCH",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/audit-trail/{{auditTrailId}}/review",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\"note\":\"Verified with client \u2014 duplicate entry confirmed.\"}"
+                    }
+                  }
+                },
+                {
+                  "name": "Flag audit item",
+                  "request": {
+                    "method": "PATCH",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/audit-trail/{{auditTrailId}}/flag",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\"note\":\"Potential fraud \u2014 escalating to senior partner.\"}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Business Health Score",
+              "item": [
+                {
+                  "name": "Get health score",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/health-score?clientId={{clientId}}&year={{ledgerYear}}",
+                    "description": "Weighted composite 0\u2013100 across 6 components. Bands: healthy 80\u2013100, stable 60\u201379, at-risk 40\u201359, failing 0\u201339."
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Tax Optimizer",
+              "item": [
+                {
+                  "name": "Snapshot",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/tax-optimizer/snapshot?clientId={{clientId}}&year={{ledgerYear}}",
+                    "description": "Lightweight pre-analysis figures for intro/results screens."
+                  }
+                },
+                {
+                  "name": "Start analysis job",
+                  "request": {
+                    "method": "POST",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/tax-optimizer/start",
+                    "description": "startTaxOptimize \u2014 returns jobId; poll until completed.",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\"clientId\":\"{{clientId}}\",\"year\":{{ledgerYear}}}"
+                    }
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json();",
+                          "if(j.status&&j.data&&j.data.jobId){pm.collectionVariables.set('taxOptimizeJobId', j.data.jobId);}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Poll analysis job",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/tax-optimizer/poll?clientId={{clientId}}&jobId={{taxOptimizeJobId}}",
+                    "description": "pollTaxOptimize \u2014 status pending|running|completed|failed + result when done."
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Tax Assumptions",
+              "item": [
+                {
+                  "name": "Update tax assumptions (partial)",
+                  "request": {
+                    "method": "PATCH",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/tax-computation/{{clientId}}/assumptions",
+                    "description": "Partial update. vatRegistrationStatus: registered|not-registered|exempt. applicationCitRate typically 20 or 30.",
+                    "header": [
+                      {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                      }
+                    ],
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\"vatRegistrationStatus\":\"registered\",\"applicationCitRate\":30,\"msmeExemptionEligible\":false}"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Active Sessions",
+              "item": [
+                {
+                  "name": "List sessions",
+                  "request": {
+                    "method": "GET",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/sessions",
+                    "description": "Active refresh sessions. isCurrent is true for the session that issued the current access token (JWT sid)."
+                  },
+                  "event": [
+                    {
+                      "listen": "test",
+                      "script": {
+                        "type": "text/javascript",
+                        "exec": [
+                          "var j=pm.response.json();",
+                          "var list=(j.data&&j.data.sessions)||[];",
+                          "var other=list.find(function(s){return !s.isCurrent;});",
+                          "if(j.status&&other){pm.collectionVariables.set('sessionId', other.id);}",
+                          "else if(j.status&&list[0]){pm.collectionVariables.set('sessionId', list[0].id);}"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "name": "Revoke session",
+                  "request": {
+                    "method": "DELETE",
+                    "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/sessions/{{sessionId}}",
+                    "description": "Cannot revoke the current session \u2014 use logout instead."
+                  }
+                }
+              ]
+            }
+          ],
+          "description": "Enterprise v2 missing-backend feature APIs under /api/v1/enterprise (ledger, sync, pipeline, audit trail, health score, tax optimizer, sessions, tax assumptions). Set clientId via Enterprise \u2192 Clients \u2192 List. ledgerYear/ledgerMonth default to current period."
         },
         {
           "name": "Invites",
@@ -7518,7 +7910,7 @@
         },
         {
           "name": "Lookups",
-          "description": "Read-only lists for forms and filings. Same URLs as Profile / Clients → Filings where duplicated — use either entry.",
+          "description": "Read-only lists for forms and filings. Same URLs as Profile / Clients \u2192 Filings where duplicated \u2014 use either entry.",
           "item": [
             {
               "name": "Contacts and types",
@@ -7547,7 +7939,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/constants",
-                "description": "Requires {{clientId}} (linked mobile user UUID). Same payload as mobile GET /mobile/filings/constants. Duplicate of Clients → Client :clientId → Filings * → Filings constants *."
+                "description": "Requires {{clientId}} (linked mobile user UUID). Same payload as mobile GET /mobile/filings/constants. Duplicate of Clients \u2192 Client :clientId \u2192 Filings * \u2192 Filings constants *."
               }
             },
             {
@@ -7566,7 +7958,7 @@
               "request": {
                 "method": "GET",
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/tax-types",
-                "description": "Active filing codes for this client. Duplicate of Clients → Filings * → List filing tax types *."
+                "description": "Active filing codes for this client. Duplicate of Clients \u2192 Filings * \u2192 List filing tax types *."
               }
             }
           ]
@@ -7902,7 +8294,7 @@
               }
             ],
             "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/evidence-vault/documents?category=all&dateFrom={{listDateFrom}}&dateTo={{listDateTo}}",
-            "description": "AI Service list. Same document shape as mobile vault: totalDocuments, documents[] with linkedRecord / uploadedBy (string — business name for auto evidence), categoryCounts."
+            "description": "AI Service list. Same document shape as mobile vault: totalDocuments, documents[] with linkedRecord / uploadedBy (string \u2014 business name for auto evidence), categoryCounts."
           }
         },
         {
@@ -7959,7 +8351,7 @@
                   }
                 ],
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/ai/tax-statements?incomeType={{taxStatementIncomeType}}&year={{taxStatementYear}}",
-                "description": "Read-only persona tax statement. incomeType: PAYEE | REMOTE_WORKER | GIG_WORKER | TRADER | SOLOPRENEUR. year is the calendar year of assessment (1 Jan–31 Dec). Envelope { status, message, data }. Does not change filings or records."
+                "description": "Read-only persona tax statement. incomeType: PAYEE | REMOTE_WORKER | GIG_WORKER | TRADER | SOLOPRENEUR. year is the calendar year of assessment (1 Jan\u201331 Dec). Envelope { status, message, data }. Does not change filings or records."
               }
             },
             {

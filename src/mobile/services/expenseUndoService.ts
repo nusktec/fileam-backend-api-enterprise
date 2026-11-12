@@ -136,6 +136,21 @@ export const expenseUndoService = {
 
     await taxPayablesService.syncPayablesForPeriods(userId, [period]);
 
+    const { onMobileRecordRemoved, AUDIT_CATEGORIES } = await import(
+      "../../enterprise/features/services/mobileIngestHooks"
+    );
+    await onMobileRecordRemoved({
+      clientUserId: userId,
+      actorUserId: userId,
+      txId: expense.expenseNumber || expense.id,
+      amount: Number(expense.totalAmount),
+      category: AUDIT_CATEGORIES.EXPENSE,
+      transactionDate: expense.expenseDate,
+      reason,
+      removalKind:
+        action === RECORD_UNDO_ACTION.REVERSE ? "reset" : "deleted",
+    });
+
     const data = await expensesService.getById(userId, expenseId);
     return {
       action,

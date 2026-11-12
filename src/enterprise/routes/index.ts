@@ -43,6 +43,7 @@ import { validations as userValidations } from "../../middlewares/validations/us
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireClientId } from "../middlewares/requireClientId";
 import { requireEnterpriseOnboardingComplete } from "../middlewares/requireEnterpriseOnboardingComplete";
+import enterpriseFeaturesRoutes from "../features/routes";
 
 const router = express.Router();
 
@@ -51,6 +52,8 @@ router.get("/business-profile/types", getBusinessTypes);
 router.get("/business-profile/industries", getIndustries);
 
 router.use("/auth", enterpriseAuthRoutes);
+/** Enterprise v2 missing-backend feature APIs (ledger, sync, pipeline, audit, health, sessions). */
+router.use(enterpriseFeaturesRoutes);
 
 router.get("/profile", authenticate(), getProfile);
 router.put(

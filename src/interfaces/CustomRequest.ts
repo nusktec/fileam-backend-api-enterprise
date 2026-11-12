@@ -36,6 +36,8 @@ export interface IRequest extends Request {
   clientId?: string;
   linkedUserId?: string;
   aiClientId?: string;
+  /** Active refresh-token session id from access JWT `sid`. */
+  sessionId?: string;
   onboardingPayload?: OnboardingTokenPayload;
   consultantOnboardingSession?: ConsultantOnboardingSession;
   pagination?: PaginationInfo;

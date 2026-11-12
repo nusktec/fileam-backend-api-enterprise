@@ -39,7 +39,7 @@ export async function getClientTransactions(
     expenseWhere.expenseDate = { ...r };
   }
 
-  const [sales, expenses] = await Promise.all([
+  const [sales, expenses, pipelineRows] = await Promise.all([
     prisma.sale.findMany({
       where: saleWhere,
       orderBy: [{ saleDate: order }, { createdAt: order }],
@@ -50,7 +50,15 @@ export async function getClientTransactions(
       orderBy: [{ expenseDate: order }, { createdAt: order }],
       include: { createdBy: { select: { id: true, firstName: true, lastName: true } } },
     }),
+    prisma.enterprisePipelineStage.findMany({
+      where: { clientUserId: userId },
+      select: { recordType: true, recordId: true, pipelineStage: true },
+    }),
   ]);
+
+  const stageByKey = new Map(
+    pipelineRows.map((r) => [`${r.recordType}:${r.recordId}`, r.pipelineStage]),
+  );
 
   const items = [
     ...sales.map((s) => ({
@@ -60,6 +68,7 @@ export async function getClientTransactions(
       amount: decimalToNumber(s.totalAmount),
       status: s.status,
       type: "income",
+      pipelineStage: stageByKey.get(`sale:${s.id}`) ?? "IMPORTED",
       customerName: s.customerName ?? null,
       customerId: s.customerId ?? null,
       createdById: s.createdById ?? s.userId,
@@ -74,6 +83,7 @@ export async function getClientTransactions(
       amount: -decimalToNumber(e.totalAmount),
       status: "Recorded",
       type: "expense",
+      pipelineStage: stageByKey.get(`expense:${e.id}`) ?? "IMPORTED",
       supplierName: e.supplierName ?? null,
       supplierId: e.supplierId ?? null,
       createdById: e.createdById ?? e.userId,

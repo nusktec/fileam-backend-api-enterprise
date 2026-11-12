@@ -626,6 +626,16 @@ export const expensesService = {
       calendarPeriodFromDate(expenseDate),
     ]);
 
+    const { onMobileRecordsCreated } = await import(
+      "../../enterprise/features/services/mobileIngestHooks"
+    );
+    await onMobileRecordsCreated({
+      clientUserId: userId,
+      module: "Expenses",
+      recordCount: 1,
+      description: `1 expense received (${expense.expenseNumber})`,
+    });
+
     return {
       id: expense.id,
       expenseNumber: expense.expenseNumber,
@@ -840,6 +850,16 @@ export const expensesService = {
       ),
     ];
     await taxPayablesService.syncPayablesForPeriods(userId, periods);
+
+    const { onMobileRecordsCreated } = await import(
+      "../../enterprise/features/services/mobileIngestHooks"
+    );
+    await onMobileRecordsCreated({
+      clientUserId: userId,
+      module: "Expenses",
+      recordCount: expenses.length,
+      description: `${expenses.length} expenses received`,
+    });
 
     return {
       created: expenses.length,
@@ -1112,6 +1132,24 @@ export const expensesService = {
 
     await taxPayablesService.syncPayablesForPeriods(userId, periodsToSync);
 
+    if (
+      data.category != null &&
+      expense.category !== data.category
+    ) {
+      const { onMobileClassificationEdit, RECORD_TYPES } = await import(
+        "../../enterprise/features/services/mobileIngestHooks"
+      );
+      await onMobileClassificationEdit({
+        clientUserId: userId,
+        module: "Expenses",
+        recordType: RECORD_TYPES.EXPENSE,
+        recordId: expense.id,
+        fieldLabel: "category",
+        previousValue: expense.category,
+        nextValue: data.category,
+      });
+    }
+
     return mapExpenseListItem(updated);
   },
 
@@ -1226,6 +1264,19 @@ export const expensesService = {
 
     if (deleted) {
       await taxPayablesService.syncPayablesForPeriods(userId, [period]);
+      const { onMobileRecordRemoved, AUDIT_CATEGORIES } = await import(
+        "../../enterprise/features/services/mobileIngestHooks"
+      );
+      await onMobileRecordRemoved({
+        clientUserId: userId,
+        actorUserId: userId,
+        txId: expense.expenseNumber || expense.id,
+        amount: Number(expense.totalAmount),
+        category: AUDIT_CATEGORIES.EXPENSE,
+        transactionDate: expense.expenseDate,
+        reason: "Hard delete",
+        removalKind: "deleted",
+      });
     }
     return deleted;
   },

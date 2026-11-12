@@ -1,0 +1,125 @@
+/** Enterprise v2 feature-spec models (ledger UI, sync, pipeline, audit, tax assumptions). */
+
+model EnterprisePipelineStage {
+  id              String   @id @default(uuid())
+  clientUserId    String   @map("client_user_id")
+  recordType      String   @map("record_type")
+  recordId        String   @map("record_id")
+  pipelineStage   String   @default("IMPORTED") @map("pipeline_stage")
+  evidenceMatched Boolean  @default(false) @map("evidence_matched")
+  ledgerConfirmed Boolean  @default(false) @map("ledger_confirmed")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([recordType, recordId])
+  @@index([clientUserId])
+  @@map("enterprise_pipeline_stages")
+}
+
+model EnterpriseSyncState {
+  id           String    @id @default(uuid())
+  clientUserId String    @unique @map("client_user_id")
+  lastSyncAt   DateTime? @map("last_sync_at")
+  syncStatus   String    @default("active") @map("sync_status")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("enterprise_sync_states")
+}
+
+model EnterpriseSyncActivity {
+  id           String   @id @default(uuid())
+  clientUserId String   @map("client_user_id")
+  module       String
+  description  String
+  recordCount  Int      @default(0) @map("record_count")
+  hasConflict  Boolean  @default(false) @map("has_conflict")
+  badge        String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([clientUserId, createdAt])
+  @@map("enterprise_sync_activities")
+}
+
+model EnterpriseSyncConflict {
+  id              String    @id @default(uuid())
+  clientUserId    String    @map("client_user_id")
+  module          String
+  recordId        String    @map("record_id")
+  description     String
+  mobileValue     String    @map("mobile_value")
+  enterpriseValue String    @map("enterprise_value")
+  status          String    @default("unresolved")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  resolvedAt      DateTime? @map("resolved_at")
+
+  @@index([clientUserId, status])
+  @@map("enterprise_sync_conflicts")
+}
+
+model EnterpriseAuditTrailEvent {
+  id              String    @id @default(uuid())
+  txId            String    @map("tx_id")
+  clientUserId    String    @map("client_user_id")
+  clientName      String    @map("client_name")
+  amount          Decimal   @db.Decimal(14, 2)
+  actor           String
+  actorType       String    @map("actor_type")
+  type            String
+  highRisk        Boolean   @default(false) @map("high_risk")
+  reason          String?
+  category        String
+  transactionDate DateTime  @map("transaction_date") @db.Date
+  reviewed        Boolean   @default(false)
+  reviewedBy      String?   @map("reviewed_by")
+  reviewNote      String?   @map("review_note")
+  reviewedAt      DateTime? @map("reviewed_at")
+  flagged         Boolean   @default(false)
+  flaggedAt       DateTime? @map("flagged_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@index([clientUserId, createdAt])
+  @@index([type])
+  @@index([highRisk])
+  @@map("enterprise_audit_trail_events")
+}
+
+model ClientTaxAssumptions {
+  id                    String   @id @default(uuid())
+  clientUserId          String   @unique @map("client_user_id")
+  companyId             String?  @map("company_id")
+  vatRegistrationStatus String   @default("not-registered") @map("vat_registration_status")
+  applicationCitRate    Int      @default(30) @map("application_cit_rate")
+  msmeExemptionEligible Boolean  @default(false) @map("msme_exemption_eligible")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("client_tax_assumptions")
+}
+
+model EnterpriseLedgerIntegrityCheck {
+  id           String   @id @default(uuid())
+  clientUserId String   @map("client_user_id")
+  year         Int
+  month        Int
+  checkedAt    DateTime @default(now()) @map("checked_at")
+  evidenceGaps Int      @default(0) @map("evidence_gaps")
+
+  @@unique([clientUserId, year, month])
+  @@map("enterprise_ledger_integrity_checks")
+}
+
+model EnterpriseTaxOptimizeJob {
+  id           String    @id @default(uuid())
+  clientUserId String    @map("client_user_id")
+  year         Int
+  status       String    @default("pending")
+  result       Json?
+  error        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  completedAt  DateTime? @map("completed_at")
+
+  @@index([clientUserId, createdAt])
+  @@map("enterprise_tax_optimize_jobs")
+}
