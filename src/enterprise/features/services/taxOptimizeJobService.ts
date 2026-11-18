@@ -15,37 +15,8 @@ async function runJob(jobId: string, clientUserId: string, year: number) {
       year,
     );
 
-    const strategies = [
-      {
-        id: "expense-deductions",
-        title: "Maximize deductible expenses",
-        estimatedSaving: Math.round(snapshot.potentialSavings * 0.35),
-      },
-      {
-        id: "cit-rate",
-        title: "Optimize applicable CIT rate / MSME relief",
-        estimatedSaving: Math.round(snapshot.potentialSavings * 0.25),
-      },
-      {
-        id: "vat-timing",
-        title: "VAT registration timing",
-        estimatedSaving: Math.round(snapshot.potentialSavings * 0.15),
-      },
-      {
-        id: "capital-allowance",
-        title: "Capital allowance planning",
-        estimatedSaving: Math.round(snapshot.potentialSavings * 0.15),
-      },
-      {
-        id: "income-reclass",
-        title: "Income reclassification opportunities",
-        estimatedSaving: Math.round(snapshot.potentialSavings * 0.1),
-      },
-    ].slice(0, Math.max(1, snapshot.totalStrategies));
-
     const result = {
       ...snapshot,
-      strategies,
       analysisComplete: true,
     };
 

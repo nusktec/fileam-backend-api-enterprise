@@ -6,6 +6,7 @@ import enterpriseEvidenceVaultRoutes from "./enterpriseEvidenceVaultRoutes";
 import enterpriseFilingsRoutes from "./enterpriseFilingsRoutes";
 import enterpriseReportsRoutes from "./enterpriseReportsRoutes";
 import enterpriseAssetsRoutes from "./enterpriseAssetsRoutes";
+import { classifyBankStatement } from "../controllers/specBacklogController";
 import {
   putClientBusinessProfile,
   putClientContact,
@@ -37,6 +38,7 @@ router.put(
 
 router.use("/business-profile", enterpriseBusinessProfileRoutes);
 router.use("/", enterpriseTaxComputationRoutes);
+router.post("/bank-statement/classify-all", classifyBankStatement);
 router.use("/financials", enterpriseFinancialsRoutes);
 router.use("/evidence-vault", enterpriseEvidenceVaultRoutes);
 router.use("/filings", enterpriseFilingsRoutes);

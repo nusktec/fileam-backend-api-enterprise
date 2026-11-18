@@ -1,0 +1,18 @@
+/** Mobile Transaction Assistant auto-export settings. One row per user. */
+model TransactionAssistantAutoExport {
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  autoExportOn        Boolean  @default(false) @map("auto_export_on")
+  missingEvidence     Boolean  @default(true) @map("missing_evidence")
+  uncategorised       Boolean  @default(false)
+  unknownCounterparty Boolean  @default(false) @map("unknown_counterparty")
+  unusualAmounts      Boolean  @default(true) @map("unusual_amounts")
+  unmatchedPayments   Boolean  @default(false) @map("unmatched_payments")
+  defaultNote         String   @default("") @map("default_note") @db.VarChar(500)
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transaction_assistant_auto_exports")
+}

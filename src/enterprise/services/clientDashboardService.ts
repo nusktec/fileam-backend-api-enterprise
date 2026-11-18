@@ -1,6 +1,7 @@
 import { Decimal } from "@prisma/client/runtime/library";
 import { prisma } from "../../config/database";
 import { PERCENT } from "../../constants/percentages";
+import { storedClientCitRate } from "./clientCitRate";
 import { buildTaxPersonaGuidancePayload } from "../../constants/taxPersona";
 
 function decimalToNumber(d: Decimal | null | undefined): number {
@@ -143,8 +144,9 @@ export async function getClientDashboard(linkedUserId: string) {
     breakdown.VAT = comp.vat.netVatPayable;
   }
   if (taxConfig?.cit ?? true) {
-    const citPayable =
-      Math.max(0, summary.netProfit) * (comp.cit.citRate / PERCENT);
+    const storedRate = await storedClientCitRate({ clientUserId: linkedUserId });
+    const citRate = storedRate ?? comp.cit.citRate;
+    const citPayable = Math.max(0, summary.netProfit) * (citRate / PERCENT);
     breakdown.CIT = citPayable;
   }
   if (taxConfig?.wht ?? true) {

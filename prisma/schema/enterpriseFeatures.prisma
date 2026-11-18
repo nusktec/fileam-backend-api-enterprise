@@ -109,6 +109,23 @@ model EnterpriseLedgerIntegrityCheck {
   @@map("enterprise_ledger_integrity_checks")
 }
 
+model EnterpriseFilingPreparationStep {
+  id            String    @id @default(uuid())
+  filingId      String    @map("filing_id")
+  clientUserId  String    @map("client_user_id")
+  stepId        Int       @map("step_id")
+  status        String    @default("pending")
+  note          String?
+  fileUrl       String?   @map("file_url")
+  completedAt   DateTime? @map("completed_at")
+  completedBy   String?   @map("completed_by")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@unique([filingId, stepId])
+  @@index([clientUserId])
+  @@map("enterprise_filing_preparation_steps")
+}
+
 model EnterpriseTaxOptimizeJob {
   id           String    @id @default(uuid())
   clientUserId String    @map("client_user_id")

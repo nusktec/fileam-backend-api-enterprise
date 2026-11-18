@@ -53,18 +53,6 @@ export const ENTERPRISE_POTENTIAL_TAX_SAVINGS_WEEKLY_RATE = 0.2;
 export const ENTERPRISE_POTENTIAL_TAX_SAVINGS_WEEKLY_CAP_NGN = 100_000;
 
 /**
- * Enterprise `getBalanceSheet` mock splits (fractions of income / expenses — not tax rates).
- * Replace with real accounting when available.
- */
-export const BALANCE_SHEET_MOCK_CURRENT_ASSETS_OF_INCOME = 0.3;
-export const BALANCE_SHEET_MOCK_FIXED_ASSETS_OF_INCOME = 0.2;
-/** Sum of the two asset fractions above (total assets placeholder). */
-export const BALANCE_SHEET_MOCK_TOTAL_ASSETS_OF_INCOME =
-  BALANCE_SHEET_MOCK_CURRENT_ASSETS_OF_INCOME +
-  BALANCE_SHEET_MOCK_FIXED_ASSETS_OF_INCOME;
-export const BALANCE_SHEET_MOCK_LIABILITIES_OF_EXPENSE = 0.2;
-
-/**
  * CIT in this API is modeled on **annual** profit (mobile preview annualizes monthly profit).
  * Override when `CIT_INDUSTRY_EXCEPTION_CATEGORIES` contains a transaction line category.
  */

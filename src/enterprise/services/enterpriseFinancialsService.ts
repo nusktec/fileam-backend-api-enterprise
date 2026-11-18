@@ -1,11 +1,8 @@
 import { prisma } from "../../config/database";
+import { buildLedgerBalanceSheet } from "./ledgerBalanceSheet";
 import type { Prisma } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import {
-  BALANCE_SHEET_MOCK_CURRENT_ASSETS_OF_INCOME,
-  BALANCE_SHEET_MOCK_FIXED_ASSETS_OF_INCOME,
-  BALANCE_SHEET_MOCK_LIABILITIES_OF_EXPENSE,
-  BALANCE_SHEET_MOCK_TOTAL_ASSETS_OF_INCOME,
   CIT_INDUSTRY_EXCEPTION_CATEGORIES,
   KPI_PERCENT_ROUNDING_FACTOR,
   PERCENT,
@@ -580,6 +577,15 @@ export const enterpriseFinancialsService = {
           CIT_INDUSTRY_EXCEPTION_CATEGORIES.length === 0
             ? "CIT is modeled annually from profit; add categories to CIT_INDUSTRY_EXCEPTION_CATEGORIES for industry-specific rules."
             : `Industry categories flagged for non-default CIT: ${CIT_INDUSTRY_EXCEPTION_CATEGORIES.join(", ")}`,
+        taxgptInsights: [
+          {
+            type: gaps.salesWithoutInvoiceOrVaultAttachment || gaps.expensesWithoutReceipt ? "alert" : "insight",
+            text:
+              gaps.salesWithoutInvoiceOrVaultAttachment || gaps.expensesWithoutReceipt
+                ? "Some income or expense lines are missing evidence. Attach invoices and receipts before relying on this P&L for tax."
+                : "Revenue and expenses in this period are backed by recorded books.",
+          },
+        ],
       };
     }
 
@@ -607,6 +613,12 @@ export const enterpriseFinancialsService = {
         note: "Attachment gaps require a linked mobile client (sales/expense records).",
       },
       citNote: ent.formulas.citNote,
+      taxgptInsights: [
+        {
+          type: "insight" as const,
+          text: "Profit and loss is drawn from enterprise transactions for this period.",
+        },
+      ],
     };
   },
 
@@ -616,27 +628,38 @@ export const enterpriseFinancialsService = {
     month?: number,
     linkedUserId?: string,
   ) {
-    const summary = linkedUserId
-      ? await (await import("./clientDataHelper")).getClientFinancialSummary(linkedUserId)
-      : await this.getSummary(companyId);
-    if (!summary) return null;
     const y = year ?? new Date().getFullYear();
+    const m = month ?? new Date().getMonth() + 1;
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const asOfDate = new Date(Date.UTC(y, m - 1, lastDay));
+    const asOf = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+    if (!linkedUserId) {
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { id: true },
+      });
+      if (!company) return null;
+    }
+
+    const balances = await buildLedgerBalanceSheet(
+      linkedUserId ?? null,
+      asOfDate,
+    );
     return {
       period: { year: y, month: month ?? undefined },
-      assets: {
-        currentAssets:
-          summary.totalIncome * BALANCE_SHEET_MOCK_CURRENT_ASSETS_OF_INCOME,
-        fixedAssets:
-          summary.totalIncome * BALANCE_SHEET_MOCK_FIXED_ASSETS_OF_INCOME,
-        total: summary.totalIncome * BALANCE_SHEET_MOCK_TOTAL_ASSETS_OF_INCOME,
-      },
-      liabilities: {
-        currentLiabilities:
-          summary.totalExpenses * BALANCE_SHEET_MOCK_LIABILITIES_OF_EXPENSE,
-        longTermLiabilities: 0,
-        total: summary.totalExpenses * BALANCE_SHEET_MOCK_LIABILITIES_OF_EXPENSE,
-      },
-      equity: summary.netProfit,
+      asOf,
+      ...balances,
+      taxgptInsights: [
+        {
+          type: linkedUserId ? ("insight" as const) : ("alert" as const),
+          text: linkedUserId
+            ? balances.balanceCheck.balanced
+              ? "Balances are the posted ledger totals at the as-of date. Assets and liabilities balance against equity."
+              : `The ledger is out of balance by ${balances.balanceCheck.difference}. Review unbalanced journals before relying on this report.`
+            : "This company has no linked mobile client, so no ledger exists. Balances are zero until a client ledger is linked.",
+        },
+      ],
     };
   },
 

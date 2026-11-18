@@ -37,6 +37,10 @@ export const featuresAuditTrailService = {
       page?: unknown;
       limit?: unknown;
       search?: string;
+      module?: string;
+      actor?: string;
+      dateFrom?: string;
+      dateTo?: string;
     },
   ) {
     const page = parsePositiveInt(opts.page, 1);
@@ -64,6 +68,8 @@ export const featuresAuditTrailService = {
       clientUserId: { in: string[] };
       type?: string;
       highRisk?: boolean;
+      actor?: { contains: string; mode: "insensitive" };
+      createdAt?: { gte?: Date; lte?: Date };
       OR?: Array<Record<string, unknown>>;
     } = {
       clientUserId: { in: clientFilter.length ? clientFilter : ["__none__"] },
@@ -72,6 +78,18 @@ export const featuresAuditTrailService = {
       where.type = opts.type;
     }
     if (opts.highRisk === true) where.highRisk = true;
+    if (opts.module && opts.module !== "transactions") {
+      return { items: [], pagination: { total: 0, page, limit } };
+    }
+    if (opts.actor?.trim()) {
+      where.actor = { contains: opts.actor.trim(), mode: "insensitive" };
+    }
+    if (opts.dateFrom || opts.dateTo) {
+      where.createdAt = {
+        ...(opts.dateFrom ? { gte: new Date(opts.dateFrom) } : {}),
+        ...(opts.dateTo ? { lte: new Date(opts.dateTo) } : {}),
+      };
+    }
     if (opts.search?.trim()) {
       const q = opts.search.trim();
       where.OR = [
@@ -106,6 +124,7 @@ export const featuresAuditTrailService = {
         highRisk: r.highRisk,
         reason: r.reason,
         category: r.category,
+        module: "transactions",
         transactionDate: formatYmd(r.transactionDate),
         reviewed: r.reviewed,
         reviewedBy: r.reviewedBy,

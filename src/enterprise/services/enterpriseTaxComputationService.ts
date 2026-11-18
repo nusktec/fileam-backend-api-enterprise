@@ -3,11 +3,11 @@ import { Decimal } from "@prisma/client/runtime/library";
 import {
   PERCENT,
   WHT_RATE_SERVICES_PERCENT,
-  CIT_RATE_STANDARD_PERCENT,
   VAT_TURNOVER_THRESHOLD_NGN,
 } from "../../constants/percentages";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
 import { normalizeMoneyAmount } from "../../utils/monetaryAmount";
+import { clientApplicationCitRate, storedClientCitRate } from "./clientCitRate";
 
 const VAT_TYPES = ["Standard Rate", "Reduced Rate", "Zero Rate", "Exempt"];
 const VAT_PERIODS = ["Monthly", "Quarterly", "Annual"];
@@ -282,9 +282,13 @@ export const enterpriseTaxComputationService = {
         : null,
     ]);
     const vatStatus = (business?.vatStatus ?? thresholdStatus?.status ?? "below").toLowerCase();
+    const applicationCitRate = await clientApplicationCitRate({
+      clientUserId: linkedUserId,
+      companyId,
+    });
     return {
       vatRegistrationStatus: vatStatus === "registered" ? "Registered" : "Unregistered",
-      applicationCitRate: 30,
+      applicationCitRate,
       msmeExemptionEligible: "No" as const,
       pioneerTaxStatus: "Not Applicable" as const,
     };
@@ -438,7 +442,10 @@ export const enterpriseTaxComputationService = {
 
       if (taxConfig?.cit ?? true) {
         const taxableProfit = Math.max(0, summary.netProfit);
-        const citRate = comp.cit.citRate;
+        const storedRate = await storedClientCitRate({
+          clientUserId: linkedUserId,
+        });
+        const citRate = storedRate ?? comp.cit.citRate;
         result.cit = {
           enabled: true,
           taxableProfit,
@@ -506,7 +513,7 @@ export const enterpriseTaxComputationService = {
 
       if (taxConfig?.cit ?? true) {
         const taxableProfit = Math.max(0, summary.netProfit);
-        const citRate = CIT_RATE_STANDARD_PERCENT;
+        const citRate = await clientApplicationCitRate({ companyId });
         result.cit = {
           enabled: true,
           taxableProfit,
@@ -655,13 +662,23 @@ export const enterpriseTaxComputationService = {
       const comp = await taxComputationService.getForPeriod(linkedUserId, y, m);
       const summary = await getClientFinancialSummary(linkedUserId);
       const taxableProfit = Math.max(0, summary.netProfit);
+      const storedRate = await storedClientCitRate({
+        clientUserId: linkedUserId,
+      });
+      const citRate = storedRate ?? comp.cit.citRate;
+      const estimatedAnnualCit =
+        storedRate == null
+          ? comp.cit.estimatedAnnualCit
+          : comp.cit.citRate > 0
+            ? comp.cit.estimatedAnnualCit * (storedRate / comp.cit.citRate)
+            : Math.max(0, comp.cit.annualizedProfit) * (storedRate / PERCENT);
       return {
         period: comp.period,
         monthlyProfit: comp.cit.monthlyProfit,
         annualizedProfit: comp.cit.annualizedProfit,
         taxableProfit,
-        citRate: comp.cit.citRate,
-        estimatedAnnualCit: comp.cit.estimatedAnnualCit,
+        citRate,
+        estimatedAnnualCit,
         citThreshold: comp.cit.citThreshold,
         percentOfThreshold: comp.cit.percentOfThreshold,
       };
@@ -671,7 +688,7 @@ export const enterpriseTaxComputationService = {
     const summary = await enterpriseFinancialsService.getSummary(companyId);
     if (!summary) return null;
     const taxableProfit = Math.max(0, summary.netProfit);
-    const citRate = CIT_RATE_STANDARD_PERCENT;
+    const citRate = await clientApplicationCitRate({ companyId });
     return {
       period: { year: y, month: m, label: `${new Date(y, m - 1).toLocaleString("default", { month: "long" })} ${y}` },
       monthlyProfit: summary.netProfit,

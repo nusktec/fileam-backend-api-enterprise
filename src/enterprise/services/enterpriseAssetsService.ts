@@ -139,10 +139,29 @@ function mapSubmission(asset: NonNullable<AssetRow>, returnReason: string | null
     submitted_at: asset.createdAt.toISOString(),
     evidence_attached: evidence,
     owner_notes: asset.additionalNote,
-    status,
+    reviewStatus: status,
+    status:
+      status === "returned"
+        ? "returned_for_clarification"
+        : status === "approved"
+          ? "active"
+          : "pending_review",
     return_reason: status === "returned" ? returnReason : null,
     returned_at:
       status === "returned" ? asset.updatedAt.toISOString() : null,
+    type: asset.assetType,
+    costPrice: d(asset.purchaseCost),
+    acquisitionDate: dateIso(asset.purchaseDate),
+    usefulLifeYears: asset.usefulLife,
+    depreciationMethod: asset.depreciationMethod ?? "STRAIGHT_LINE",
+    accumulatedDepreciation: 0,
+    netBookValue: d(asset.purchaseCost),
+    capitalAllowanceRate:
+      asset.depreciationRate != null ? d(asset.depreciationRate) / 100 : null,
+    capitalAllowanceAmount: null as number | null,
+    evidenceFileUrl: asset.evidenceUrl ?? asset.evidenceUrls?.[0] ?? null,
+    reviewedBy: status === "approved" ? "Consultant" : null,
+    reviewedAt: status === "approved" ? asset.updatedAt.toISOString() : null,
   };
 }
 
@@ -167,6 +186,22 @@ function mapRegisteredListItem(asset: NonNullable<AssetRow>) {
         : 0,
     accumulated_depreciation: dep.accumulatedDepreciation,
     status: registeredStatus(asset, dep.bookValue),
+    type: asset.assetType,
+    costPrice: cost,
+    acquisitionDate: dateIso(asset.purchaseDate),
+    usefulLifeYears: asset.usefulLife,
+    depreciationMethod: asset.depreciationMethod ?? "STRAIGHT_LINE",
+    accumulatedDepreciation: dep.accumulatedDepreciation,
+    netBookValue: dep.bookValue,
+    capitalAllowanceRate:
+      asset.depreciationRate != null ? d(asset.depreciationRate) / 100 : null,
+    capitalAllowanceAmount:
+      asset.depreciationRate != null
+        ? normalizeMoneyAmount(cost * (d(asset.depreciationRate) / 100))
+        : null,
+    evidenceFileUrl: asset.evidenceUrl ?? asset.evidenceUrls?.[0] ?? null,
+    reviewedBy: "Consultant",
+    reviewedAt: asset.updatedAt.toISOString(),
   };
 }
 
@@ -447,7 +482,18 @@ export const enterpriseAssetsService = {
       else if (status === "returned") returned += 1;
       else approved += 1;
 
-      if (filters?.status && filters.status !== status) continue;
+      if (
+        filters?.status &&
+        filters.status !== status &&
+        !(
+          (filters.status === "pending_review" && status === "pending") ||
+          (filters.status === "returned_for_clarification" &&
+            status === "returned") ||
+          (filters.status === "active" && status === "approved")
+        )
+      ) {
+        continue;
+      }
       // pending list includes all review-pipeline assets; filter optional
       if (!filters?.status && status === "approved" && !isPendingReviewAsset(a)) {
         // still include approved in summary but list defaults to all when no filter
@@ -460,7 +506,14 @@ export const enterpriseAssetsService = {
 
     let list = mapped;
     if (filters?.status) {
-      list = mapped.filter((m) => m.status === filters.status);
+      const wanted = filters.status;
+      list = mapped.filter(
+        (m) =>
+          m.status === wanted ||
+          m.reviewStatus === wanted ||
+          (wanted === "pending" && m.status === "pending_review") ||
+          (wanted === "returned" && m.status === "returned_for_clarification"),
+      );
     }
 
     return {
@@ -469,6 +522,14 @@ export const enterpriseAssetsService = {
         returned,
         approved,
         total: awaiting + returned + approved,
+        totalAssets: list.length,
+        totalCostPrice: normalizeMoneyAmount(
+          list.reduce((s, a) => s + a.costPrice, 0),
+        ),
+        totalNBV: normalizeMoneyAmount(
+          list.reduce((s, a) => s + a.netBookValue, 0),
+        ),
+        pendingReviews: awaiting,
       },
       assets: list,
     };
@@ -768,6 +829,10 @@ export const enterpriseAssetsService = {
         total_nbv: totalNbv,
         accumulated_depreciation: accumulated,
         asset_count: mapped.length,
+        totalAssets: mapped.length,
+        totalCostPrice: totalCost,
+        totalNBV: totalNbv,
+        pendingReviews: 0,
       },
       assets: mapped.map(
         ({ accumulated_depreciation: _a, ...rest }) => rest,
@@ -1113,5 +1178,51 @@ export const enterpriseAssetsService = {
       filename: pdf.filename,
       expires_at,
     };
+  },
+
+  async review(
+    userId: string,
+    clientId: string,
+    assetId: string,
+    consultantUserId: string,
+    body: {
+      decision?: string;
+      assetType?: string;
+      depreciationMethod?: string;
+      usefulLifeYears?: number;
+      capitalAllowanceRate?: number;
+      reviewerNote?: string;
+      returnReason?: string | null;
+    },
+  ) {
+    const decision = String(body.decision ?? "").trim();
+    if (decision === "returned_for_clarification") {
+      return this.returnToOwner(
+        userId,
+        clientId,
+        assetId,
+        consultantUserId,
+        body.returnReason || body.reviewerNote || "Returned for clarification",
+      );
+    }
+    if (decision !== "approved") {
+      throw new HttpReplyError(
+        422,
+        'decision must be "approved" or "returned_for_clarification"',
+      );
+    }
+    const classification =
+      (body.assetType && ASSET_TYPE_TO_CLASSIFICATION[body.assetType]) ||
+      body.assetType ||
+      "Other Asset";
+    const method =
+      INTERNAL_DEP_METHOD_TO_ENTERPRISE[body.depreciationMethod ?? ""] ??
+      "straight-line";
+    return this.approve(userId, clientId, assetId, consultantUserId, {
+      classification,
+      useful_life_years: body.usefulLifeYears,
+      depreciation_method: method,
+      consultant_notes: body.reviewerNote,
+    });
   },
 };

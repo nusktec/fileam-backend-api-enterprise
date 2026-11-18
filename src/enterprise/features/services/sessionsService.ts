@@ -18,7 +18,7 @@ export const featuresSessionsService = {
       sessions: sessions.map((s) => ({
         id: s.id,
         device: s.device || deviceFromUserAgent(s.userAgent),
-        location: s.location || locationFromIp(s.ipAddress),
+        location: s.location ?? locationFromIp(s.ipAddress),
         lastActiveAt: (s.lastActiveAt ?? s.updatedAt).toISOString(),
         createdAt: s.createdAt.toISOString(),
         isCurrent: Boolean(currentSessionId && s.id === currentSessionId),

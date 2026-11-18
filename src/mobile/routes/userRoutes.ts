@@ -12,6 +12,10 @@ import {
   patchConsultantFilingAuthorization,
   revokeConsultant,
 } from "../controllers/userController";
+import {
+  getAutoExport,
+  patchAutoExport,
+} from "../controllers/transactionAssistantController";
 import { authenticate } from "../../middlewares/auth/authMiddleware";
 import { requireOnboardingComplete } from "../../middlewares/requireOnboardingComplete";
 import { validations } from "../../middlewares/validations/userValidation";
@@ -38,6 +42,12 @@ router.put(
   updateNotificationSettings,
 );
 router.get("/consultant", getConsultant);
+router.get("/transaction-assistant/auto-export", getAutoExport);
+router.patch(
+  "/transaction-assistant/auto-export",
+  express.json(),
+  patchAutoExport,
+);
 router.patch(
   "/consultant/filing-authorization",
   express.json(),

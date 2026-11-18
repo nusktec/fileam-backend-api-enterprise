@@ -215,6 +215,11 @@
       "description": "Asset UUID from create/list"
     },
     {
+      "key": "analysisId",
+      "value": "",
+      "description": "Bank statement analysis id for classify-all"
+    },
+    {
       "key": "assetCode",
       "value": "",
       "description": "Display code e.g. AST-0001"
@@ -807,6 +812,50 @@
                   "raw": "{\"taxDeadline\":true,\"filingConfirmations\":true,\"weeklySummary\":true,\"filingReminders\":true,\"payersNotifications\":true,\"complianceUpdates\":false,\"twoFactorEnabled\":false}"
                 },
                 "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/notification-settings"
+              }
+            },
+            {
+              "name": "Get transaction assistant auto-export",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/transaction-assistant/auto-export",
+                "description": "Settings plus consultant person (id, firstName, lastName, email, organizationName, phone). consultant is null when nobody is assigned. Defaults: autoExportOn false, missingEvidence true, uncategorised false, unknownCounterparty false, unusualAmounts true, unmatchedPayments false, defaultNote empty."
+              }
+            },
+            {
+              "name": "Update transaction assistant auto-export",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"autoExportOn\": true\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/transaction-assistant/auto-export",
+                "description": "Partial update. Send only changed fields. Switches are booleans. defaultNote is a string up to 500 characters; empty string clears it. 400 when autoExportOn is true and consultant is null, or the body fails validation. 403 when the user has no business. Response matches GET."
+              }
+            },
+            {
+              "name": "Update transaction assistant default note",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"defaultNote\": \"Please review and advise on classification before month-end.\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v{{apiVersion}}/mobile/user/transaction-assistant/auto-export",
+                "description": "Saves the default note only. Empty string clears the note."
               }
             },
             {
@@ -6302,7 +6351,25 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/dashboard",
-                        "description": "Includes taxPersonaGuidance for linked mobile client."
+                        "description": "Includes taxPersonaGuidance for linked mobile client. CIT uses the client's stored applicationCitRate when tax assumptions exist."
+                      }
+                    },
+                    {
+                      "name": "Classify bank statement",
+                      "request": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"analysisId\": \"{{analysisId}}\"\n}"
+                        },
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/bank-statement/classify-all",
+                        "description": "analysisId must match a Bank-Statement-Analysis Evidence Vault document for the client (id, documentId, evidenceVaultId, or linkedRecordDocumentId). Returns 404 when no match. Classifies sales linked by evidenceVaultId or linkedRecord sale-{id}, and expenses linked by receiptUrl or linkedRecord expense-{id}. Status complete. Totals are zero when nothing is linked."
                       }
                     },
                     {
@@ -6525,7 +6592,8 @@
                       "name": "Balance sheet",
                       "request": {
                         "method": "GET",
-                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/balance-sheet?year=2026"
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/balance-sheet?year=2026",
+                        "description": "Built from posted ledger balances as of the period end. Assets and liabilities are ledger net balances (not income-based estimates). equity.shareCapital is the net credit of Share Capital and Owner Capital entries (0 until one is posted). equity.retainedEarnings is cumulative income less expenses to the as-of date. balanceCheck.difference must be 0. Unlinked companies have no ledger and return zeros."
                       }
                     },
                     {
@@ -6533,7 +6601,7 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/cash-flow?dateFrom=&dateTo=",
-                        "description": "Linked mobile client books only. Same date rules as P&L: omit dateFrom/dateTo for current month; or preset=thisYear; or custom YYYY-MM-DD. operating/investing/financing buckets; netCashPosition = sum of section totals; outflows negative."
+                        "description": "Linked mobile client books only. Same date rules as P&L. Opening and closing cash are ledger cash and bank balances. Section lines are posted cash journals classified by the other side of the entry (fixed assets = investing, loans and equity = financing, everything else = operating). netCashPosition equals closingCash minus openingCash. A remainder is reported as Other cash movements."
                       }
                     },
                     {
@@ -6572,6 +6640,32 @@
                       "request": {
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profitability/expense-breakdown?year=2026"
+                      }
+                    },
+                    {
+                      "name": "Profitability overview",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profitability/overview?year={{plYear}}",
+                        "description": "Year overview. Revenue is recorded sales. Cost of sales is expenses with expenseType COGS. Operating expenses are expenseType OPEX. Salaries (breakdown only, not deducted again) are ledger accounts 6110 and 6120. Depreciation and amortisation are ledger accounts 6240 and 6250, deducted after EBITDA. Interest is ledger account 7110 and is not also inside operating expenses. ebitda = gross profit less operating expenses. operatingMargin uses ebit. returnOnEquity = net profit / year-end ledger equity (n/a when equity is 0). healthScore comes from the health score page and can be null. taxExpense and citRate use the stored applicationCitRate (30 when no assumptions row exists)."
+                      }
+                    },
+                    {
+                      "name": "Profitability simulate",
+                      "request": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"baselinePeriod\": \"{{plYear}}\",\n  \"adjustments\": [\n    { \"lineItem\": \"Revenue\", \"changeType\": \"percentage\", \"value\": 10 },\n    { \"lineItem\": \"Cost of Sales\", \"changeType\": \"absolute\", \"value\": -50000 }\n  ]\n}"
+                        },
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/financials/profitability/simulate",
+                        "description": "lineItem: Revenue, Cost of Sales, Operating Expenses, Depreciation & Amortisation, Interest, Tax. changeType: percentage or absolute. Cost of sales is expenses with expenseType COGS. Operating expenses are expenseType OPEX. Interest is ledger account 7110. Depreciation is ledger accounts 6240 and 6250."
                       }
                     },
                     {
@@ -7094,6 +7188,24 @@
                       }
                     },
                     {
+                      "name": "Review asset",
+                      "request": {
+                        "method": "POST",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"decision\": \"approved\",\n  \"assetType\": \"Vehicle\",\n  \"usefulLifeYears\": 5,\n  \"depreciationMethod\": \"straight-line\",\n  \"reviewerNote\": \"Approved after document review\"\n}"
+                        },
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/assets/{{assetId}}/review",
+                        "description": "decision: approved | returned_for_clarification. Return uses returnReason or reviewerNote. Approve maps assetType to a classification and calls the same approve path."
+                      }
+                    },
+                    {
                       "name": "Return to owner **",
                       "request": {
                         "method": "POST",
@@ -7314,6 +7426,32 @@
                         "method": "GET",
                         "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}",
                         "description": "Linked-client view \u2014 same payload as mobile GET /filings/:id (timeline, completion, missingEvidenceBreakdown, periodAttachmentGap counts). TaxPayable id = {{filingId}}. 404 if filing not found for client."
+                      }
+                    },
+                    {
+                      "name": "Get filing steps",
+                      "request": {
+                        "method": "GET",
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}/steps",
+                        "description": "Nine preparation steps (1 Validation \u2026 9 Portal). Unsaved steps are pending. overallProgress is the percent of steps marked complete."
+                      }
+                    },
+                    {
+                      "name": "Update filing step",
+                      "request": {
+                        "method": "PATCH",
+                        "header": [
+                          {
+                            "key": "Content-Type",
+                            "value": "application/json"
+                          }
+                        ],
+                        "body": {
+                          "mode": "raw",
+                          "raw": "{\n  \"status\": \"complete\",\n  \"note\": \"Validation passed\",\n  \"fileUrl\": \"https://example.com/validation.pdf\"\n}"
+                        },
+                        "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/clients/{{clientId}}/filings/{{filingId}}/steps/1",
+                        "description": "stepId is 1\u20139. status complete or in_progress. completedBy is the consultant name when status is complete."
                       }
                     },
                     {
@@ -7736,7 +7874,7 @@
                   "request": {
                     "method": "GET",
                     "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/health-score?clientId={{clientId}}&year={{ledgerYear}}",
-                    "description": "Weighted composite 0\u2013100 across 6 components. Bands: healthy 80\u2013100, stable 60\u201379, at-risk 40\u201359, failing 0\u201339."
+                    "description": "Page score is the weighted sum of five components: Revenue Growth 0.25, Expense Control 0.20, Tax Compliance 0.25, Cash Flow 0.15, Evidence Quality 0.15. A component with no data has score null and status not-available; its weight is removed and the rest are renormalized. Revenue Growth is year-over-year sales: 50 is flat, each percent of growth adds 1 point, capped at 100, and is null when the prior year has no sales. Evidence Quality is the share of sales with a vault document and expenses with a receipt. score can be null. legacyComponents keeps the older six-component scores. overallScore and category still use those six: healthy 80-100, stable 60-79, at-risk 40-59, failing 0-39."
                   }
                 }
               ]
@@ -7749,7 +7887,7 @@
                   "request": {
                     "method": "GET",
                     "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/tax-optimizer/snapshot?clientId={{clientId}}&year={{ledgerYear}}",
-                    "description": "Lightweight pre-analysis figures for intro/results screens."
+                    "description": "annualRevenue and annualExpenses from sales and expenses. deductibleExpenses is the sum of expenses with isDeductible true. citRate is the stored applicationCitRate, or 30 when no assumptions row exists. currentTaxLiability is filed CIT payables when any exist, otherwise taxable profit (revenue minus deductible expenses) times citRate. potentialSavings is the current tax only when msmeExemptionEligible is true; otherwise 0. strategies lists that MSME saving or is empty. newTaxLiability is current tax minus potential savings."
                   }
                 },
                 {
@@ -7787,7 +7925,7 @@
                   "request": {
                     "method": "GET",
                     "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/tax-optimizer/poll?clientId={{clientId}}&jobId={{taxOptimizeJobId}}",
-                    "description": "pollTaxOptimize \u2014 status pending|running|completed|failed + result when done."
+                    "description": "status is pending, running, completed, or failed. When completed, result is the snapshot plus analysisComplete true. strategies are only those with a computed saving (MSME exemption). There is no percentage split of a guessed saving."
                   }
                 }
               ]
@@ -7823,7 +7961,7 @@
                   "request": {
                     "method": "GET",
                     "url": "{{baseUrl}}/api/v{{apiVersion}}/enterprise/auth/sessions",
-                    "description": "Active refresh sessions. isCurrent is true for the session that issued the current access token (JWT sid)."
+                    "description": "Active refresh sessions. isCurrent is true for the session that issued the current access token (JWT sid). location is the stored value, or null when none was stored. The API does not look up a city from the IP address."
                   },
                   "event": [
                     {

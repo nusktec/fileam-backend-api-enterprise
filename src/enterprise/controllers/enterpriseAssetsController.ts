@@ -116,6 +116,22 @@ export async function returnAsset(req: IRequest, res: Response) {
   }
 }
 
+export async function reviewAsset(req: IRequest, res: Response) {
+  try {
+    const data = await enterpriseAssetsService.review(
+      linkedUserId(req),
+      clientId(req),
+      param(req, "assetId"),
+      consultantId(req),
+      req.body ?? {},
+    );
+    sendResult(res, "Asset review recorded", data);
+  } catch (e) {
+    if (replyError(res, e)) return;
+    sendServerError(res, "Failed to review asset");
+  }
+}
+
 export async function expenseAsset(req: IRequest, res: Response) {
   try {
     const data = await enterpriseAssetsService.classifyAsExpense(

@@ -1,5 +1,12 @@
 import { prisma } from "../../../config/database";
+import { PERCENT } from "../../../constants/percentages";
 import { decimalToNumber } from "../utils";
+
+export type TaxOptimizeStrategy = {
+  id: string;
+  title: string;
+  estimatedSaving: number;
+};
 
 export const featuresTaxOptimizerService = {
   async getSnapshot(clientUserId: string, year?: number) {
@@ -40,42 +47,43 @@ export const featuresTaxOptimizerService = {
       0,
     );
 
-    const citRate = (assumptions?.applicationCitRate ?? 30) / 100;
-    const taxableProfit = Math.max(0, annualRevenue - annualExpenses);
-    let currentTaxLiability = taxPayables.reduce(
-      (s, t) => s + decimalToNumber(t.totalPayable),
-      0,
-    );
-    if (currentTaxLiability <= 0) {
-      currentTaxLiability = Math.round(taxableProfit * citRate);
-    }
-
+    const citRatePercent = assumptions?.applicationCitRate ?? 30;
+    const citRate = citRatePercent / PERCENT;
     const deductibleExpenses = expenses
       .filter((e) => e.isDeductible)
       .reduce((s, e) => s + decimalToNumber(e.totalAmount), 0);
-    const strategies: string[] = [];
-    if (assumptions?.msmeExemptionEligible) strategies.push("msme");
-    if (deductibleExpenses > 0) strategies.push("deductions");
-    if ((assumptions?.vatRegistrationStatus ?? "not-registered") !== "registered") {
-      strategies.push("vat-timing");
-    }
-    if (citRate > 0.2) strategies.push("cit-rate");
-    if (annualExpenses / Math.max(annualRevenue, 1) > 0.5) {
-      strategies.push("expense-reclass");
+    const taxableProfit = Math.max(0, annualRevenue - deductibleExpenses);
+    const computedTax = Math.round(taxableProfit * citRate);
+    const filedTax = taxPayables
+      .filter((t) => t.taxType === "CIT")
+      .reduce((s, t) => s + decimalToNumber(t.totalPayable), 0);
+    const currentTaxLiability = filedTax > 0 ? Math.round(filedTax) : computedTax;
+
+    const strategies: TaxOptimizeStrategy[] = [];
+    if (assumptions?.msmeExemptionEligible && currentTaxLiability > 0) {
+      strategies.push({
+        id: "msme",
+        title: "MSME exemption",
+        estimatedSaving: currentTaxLiability,
+      });
     }
 
-    const potentialSavings = Math.round(
-      currentTaxLiability * Math.min(0.35, 0.05 * Math.max(strategies.length, 1)),
+    const potentialSavings = strategies.reduce(
+      (s, strategy) => s + strategy.estimatedSaving,
+      0,
     );
     const newTaxLiability = Math.max(0, currentTaxLiability - potentialSavings);
 
     return {
       annualRevenue: Math.round(annualRevenue),
       annualExpenses: Math.round(annualExpenses),
-      currentTaxLiability: Math.round(currentTaxLiability),
+      deductibleExpenses: Math.round(deductibleExpenses),
+      citRate: citRatePercent,
+      currentTaxLiability,
       potentialSavings,
       newTaxLiability,
-      totalStrategies: Math.max(strategies.length, 1),
+      totalStrategies: strategies.length,
+      strategies,
     };
   },
 };

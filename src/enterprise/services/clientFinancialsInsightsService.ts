@@ -6,7 +6,14 @@ import {
   VAT_TURNOVER_THRESHOLD_NGN,
 } from "../../constants/percentages";
 import { WHT_RATE_TABLE } from "../../constants/beneficiary";
-import { estimateCitFromBooks } from "../../constants/citFiling";
+import { estimateCitFromBooks, roundCitNaira } from "../../constants/citFiling";
+import {
+  chartNetByCode,
+  chartSum,
+  ledgerCashFlow,
+  ledgerNetByRawCode,
+} from "./ledgerBalanceSheet";
+import { storedClientCitRate } from "./clientCitRate";
 import { ASSET_ON_BOOKS_STATUSES } from "../../constants/assets";
 import { estimateAnnualPersonalIncomeTaxNg } from "../../constants/pitComputation";
 import {
@@ -36,26 +43,6 @@ function formatNgnShort(n: number): string {
 
 function norm(s: string | null | undefined): string {
   return (s ?? "").trim().toLowerCase();
-}
-
-function expenseBucket(
-  category: string | null | undefined,
-  description: string,
-): "salary" | "tax" | "inventory" | "rent" | "utility" | "marketing" | "investing" | "operating" {
-  const c = norm(category);
-  const d = norm(description);
-  const hay = `${c} ${d}`;
-  if (/(equipment|machinery|vehicle|capital\s*exp|fixed\s*asset)/i.test(hay))
-    return "investing";
-  if (/(salary|payroll|staff|wage|benefit)/i.test(hay)) return "salary";
-  if (/(vat|wht|withhold|tax\s*pay|firs|remittance)/i.test(hay)) return "tax";
-  if (/(inventory|cogs|stock|suppl(y|ies)|goods|materials|purchase)/i.test(hay))
-    return "inventory";
-  if (/(rent|lease)/i.test(hay)) return "rent";
-  if (/(utility|utilities|power|electric|energy|water|internet)/i.test(hay))
-    return "utility";
-  if (/(marketing|advert|ads|promo)/i.test(hay)) return "marketing";
-  return "operating";
 }
 
 function vatFilingDueIso(periodYear: number, periodMonth1Based: number): string {
@@ -125,129 +112,94 @@ export async function getClientCashFlow(
   query: { dateFrom?: string; dateTo?: string; preset?: string },
 ) {
   const { start, end } = resolveInsightsDateRange(query);
-
-  const [sales, expenses] = await Promise.all([
-    prisma.sale.findMany({
-      where: { userId: linkedUserId, saleDate: { gte: start, lte: end } },
-    }),
-    prisma.expense.findMany({
-      where: { userId: linkedUserId, expenseDate: { gte: start, lte: end } },
-    }),
-  ]);
-
-  const customerPayments = sales.reduce(
-    (s, x) => s + decimalToNumber(x.totalAmount),
-    0,
+  const dayBeforeStart = new Date(
+    Date.UTC(start.getFullYear(), start.getMonth(), start.getDate() - 1),
   );
+  const endDay = new Date(
+    Date.UTC(end.getFullYear(), end.getMonth(), end.getDate()),
+  );
+  const [openingRaw, closingRaw] = await Promise.all([
+    ledgerNetByRawCode(linkedUserId, { to: dayBeforeStart }),
+    ledgerNetByRawCode(linkedUserId, { to: endDay }),
+  ]);
+  const cashAt = (raw: Map<string, number>) => {
+    const { chart } = chartNetByCode(raw);
+    return normalizeMoneyAmount(chartSum(chart, ["1110", "1120"]));
+  };
+  const openingCash = cashAt(openingRaw);
+  const closingCash = cashAt(closingRaw);
 
-  let supplier = 0;
-  let salary = 0;
-  let tax = 0;
-  let operating = 0;
-  let investingOut = 0;
-  let investingIn = 0;
-
-  for (const e of expenses) {
-    const amt = decimalToNumber(e.totalAmount);
-    const b = expenseBucket(e.category, e.description);
-    switch (b) {
-      case "inventory":
-        supplier += amt;
-        break;
-      case "salary":
-        salary += amt;
-        break;
-      case "tax":
-        tax += amt;
-        break;
-      case "investing":
-        investingOut += amt;
-        break;
-      case "rent":
-      case "utility":
-      case "marketing":
-      case "operating":
-        operating += amt;
-        break;
-      default:
-        operating += amt;
-    }
-  }
-
-  const operatingItems = [
-    {
-      label: "Customer Payments",
-      description: "Cash received from sales",
-      amount: Math.round(customerPayments),
-    },
-    {
-      label: "Supplier Payments",
-      description: "Inventory and supplies",
-      amount: supplier > 0 ? -Math.round(supplier) : 0,
-    },
-    {
-      label: "Salary Payments",
-      description: "Staff salaries and benefits",
-      amount: salary > 0 ? -Math.round(salary) : 0,
-    },
-    {
-      label: "Operating Expenses",
-      description: "Rent, utilities, software, and other operating costs",
-      amount: operating > 0 ? -Math.round(operating) : 0,
-    },
-    {
-      label: "Tax Payments",
-      description: "VAT, WHT, and other tax remittances recorded as expenses",
-      amount: tax > 0 ? -Math.round(tax) : 0,
-    },
-  ];
-
-  const operatingTotal = operatingItems.reduce((s, i) => s + i.amount, 0);
-
-  const investingItems: Array<{
-    label: string;
-    description: string;
-    amount: number;
-  }> = [];
-  if (investingOut > 0) {
-    investingItems.push({
-      label: "Equipment Purchases",
-      description: "Machinery, vehicles, and capital items (from expense labels)",
-      amount: -Math.round(investingOut),
-    });
-  }
-  if (investingIn > 0) {
-    investingItems.push({
-      label: "Asset Sales",
-      description: "Proceeds from disposal of assets (when tracked)",
-      amount: Math.round(investingIn),
+  const flowStart = new Date(
+    Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()),
+  );
+  const movements = await ledgerCashFlow(linkedUserId, flowStart, endDay);
+  const operatingItems = [...movements.operating];
+  const investingItems = movements.investing;
+  const financingItems = movements.financing;
+  const classified = normalizeMoneyAmount(
+    [...operatingItems, ...investingItems, ...financingItems].reduce(
+      (sum, item) => sum + item.amount,
+      0,
+    ),
+  );
+  const cashChange = normalizeMoneyAmount(closingCash - openingCash);
+  const unclassified = normalizeMoneyAmount(cashChange - classified);
+  if (unclassified !== 0) {
+    operatingItems.push({
+      label: "Other cash movements",
+      description:
+        "Change in cash and bank that is not tied to a classified journal line",
+      amount: unclassified,
     });
   }
 
-  const investingTotal = investingItems.reduce((s, i) => s + i.amount, 0);
-
-  const financingItems: Array<{
-    label: string;
-    description: string;
-    amount: number;
-  }> = [];
-  const financingTotal = 0;
-
-  const netCashPosition = Math.round(
+  const operatingTotal = operatingItems.reduce((sum, item) => sum + item.amount, 0);
+  const investingTotal = investingItems.reduce((sum, item) => sum + item.amount, 0);
+  const financingTotal = financingItems.reduce((sum, item) => sum + item.amount, 0);
+  const netCashPosition = normalizeMoneyAmount(
     operatingTotal + investingTotal + financingTotal,
   );
 
   const insight =
-    netCashPosition >= 0
-      ? `Operating movement of ${formatNgnShort(operatingTotal)} across the selected period; net cash position ${formatNgnShort(netCashPosition)} after investing (${formatNgnShort(investingTotal)}). Financing flows are not modeled from books until loan/owner records exist.`
-      : `Net cash used in the period totals ${formatNgnShort(Math.abs(netCashPosition))}; review supplier, salary, and tax outflows against customer receipts.`;
+    unclassified === 0
+      ? `Cash and bank moved by ${formatNgnShort(netCashPosition)} in the period, from ${formatNgnShort(openingCash)} to ${formatNgnShort(closingCash)}.`
+      : `Classified journals explain ${formatNgnShort(classified)} of the ${formatNgnShort(cashChange)} change in cash and bank. The remainder is reported as other cash movements.`;
+
+  const netProfit = operatingTotal;
+  const periodLabel = start.toLocaleString("en-GB", {
+    month: "long",
+    year: "numeric",
+  });
 
   return {
     insight,
-    operating: { total: operatingTotal, items: operatingItems },
-    investing: { total: investingTotal, items: investingItems },
-    financing: { total: financingTotal, items: financingItems },
+    operating: {
+      total: operatingTotal,
+      items: operatingItems,
+      netProfit,
+      adjustments: operatingItems.map((item) => ({
+        name: item.label,
+        amount: item.amount,
+      })),
+      netCashFromOperating: operatingTotal,
+    },
+    investing: {
+      total: investingTotal,
+      items: investingItems,
+      netCashFromInvesting: investingTotal,
+    },
+    financing: {
+      total: financingTotal,
+      items: financingItems,
+      netCashFromFinancing: financingTotal,
+    },
     netCashPosition,
+    period: periodLabel,
+    netChangeInCash: normalizeMoneyAmount(closingCash - openingCash),
+    openingCash,
+    closingCash,
+    cashSource: "ledger" as const,
+    taxgptInsights: [{ type: "insight" as const, text: insight }],
   };
 }
 
@@ -331,13 +283,27 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
     (s, x) => s + decimalToNumber(x.purchaseCost),
     0,
   );
-  const citEstimate = estimateCitFromBooks({
+  const booksCit = estimateCitFromBooks({
     annualizedTurnover: totalIncome,
     annualizedProfit: taxableProfit,
     fixedAssets: fixedAssetsProxy,
     businessType: business?.businessType,
     sector: business?.sector,
   });
+  const storedCitRate = await storedClientCitRate({
+    clientUserId: linkedUserId,
+  });
+  const citRate = storedCitRate ?? booksCit.citRate;
+  const estimatedAnnualCit =
+    storedCitRate == null
+      ? booksCit.estimatedAnnualCit
+      : roundCitNaira(booksCit.assessableProfitProxy * (storedCitRate / PERCENT));
+  const citEstimate = {
+    ...booksCit,
+    citRate,
+    estimatedAnnualCit,
+    totalCitLiability: estimatedAnnualCit + booksCit.developmentLevy,
+  };
   const citLiability = citEstimate.totalCitLiability;
   const whtRentRate = WHT_RATE_TABLE.RENT.corporate;
 
@@ -525,10 +491,29 @@ export async function getClientTaxLiability(linkedUserId: string, year: number) 
       ? `Book expenses of about ${formatNgnShort(deductibleApprox)} reduce taxable profit before CIT/PIT estimates. VAT/WHT follow sales and service bases in-range.`
       : `Limited expense records in ${y}; tax estimates lean on declared revenue and defaults — add categorized expenses for tighter liability views.`;
 
+  const breakdown = sections.map((sec) => ({
+    taxType: sec.label.split("(")[1]?.replace(")", "").trim() || sec.label,
+    description: sec.label,
+    amount: sec.total,
+    dueDate: sec.dueDate,
+    status: sec.dueDateStatus === "overdue" ? "overdue" : "pending",
+  }));
+  const soon = breakdown.find((row) => row.status === "pending" && row.dueDate);
   return {
     insight,
     total,
+    totalLiability: total,
+    period: String(y),
+    breakdown,
     sections,
+    taxgptInsights: [
+      {
+        type: (soon ? "alert" : "insight") as "alert" | "insight",
+        text: soon
+          ? `${soon.description} of ₦${soon.amount.toLocaleString("en-NG")} is due ${soon.dueDate}. Ensure remittance is initiated.`
+          : insight,
+      },
+    ],
     note: "All tax calculations are indicative estimates from mobile sales and expense books (FIRS-aligned rates where modeled). Reconcile filings, thresholds, and exemptions with a tax adviser before payment.",
   };
 }
@@ -630,11 +615,45 @@ export async function getClientRevenueAnalytics(
       ? `${topLabel} represents about ${topShare}% of revenue in this range; category mix below shows where growth is concentrated.`
       : "No sales in this period — widen the date range or record income to populate revenue analytics.";
 
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const trendEnd = new Date(end);
+  const trend: Array<{ month: string; revenue: number }> = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(trendEnd.getFullYear(), trendEnd.getMonth() - i, 1);
+    const mStart = new Date(d.getFullYear(), d.getMonth(), 1);
+    const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+    const revenue = Math.round(
+      sales
+        .filter((s) => {
+          const t = s.saleDate.getTime();
+          return t >= mStart.getTime() && t <= mEnd.getTime();
+        })
+        .reduce((sum, s) => sum + decimalToNumber(s.totalAmount), 0),
+    );
+    trend.push({
+      month: `${monthNames[d.getMonth()]} ${d.getFullYear()}`,
+      revenue,
+    });
+  }
+
   return {
     insight,
     total,
+    period: end.toLocaleString("en-GB", { month: "long", year: "numeric" }),
+    totalRevenue: total,
+    bySource: categories.map((c) => ({
+      source: c.label,
+      amount: c.amount,
+      percent: total > 0 ? Math.round((c.amount / total) * 1000) / 10 : 0,
+    })),
+    trend,
     categories,
-    topCustomers,
+    topCustomers: topCustomers.map((c) => ({
+      ...c,
+      name: c.name,
+      amount: c.revenue,
+      invoiceCount: c.transactions,
+    })),
     topStreams,
   };
 }
@@ -685,10 +704,20 @@ export async function getClientExpenseIntelligence(
     prevByCat[c] = (prevByCat[c] ?? 0) + decimalToNumber(e.totalAmount);
   }
 
+  const nonDeductibleCats = new Set<string>();
+  for (const e of expenses) {
+    const label = `${e.category} ${e.description}`.toLowerCase();
+    if (/penalt|fine|non-deduct/.test(label)) {
+      nonDeductibleCats.add(e.category?.trim() || "Other");
+    }
+  }
   const categories = Object.entries(byCat)
     .map(([label, amount]) => ({
       label,
+      category: label,
       amount: Math.round(amount),
+      percent: total > 0 ? Math.round((amount / total) * 1000) / 10 : 0,
+      deductible: !nonDeductibleCats.has(label),
       changePercent: changePercent(amount, prevByCat[label] ?? 0),
     }))
     .sort((a, b) => b.amount - a.amount);
@@ -767,9 +796,34 @@ export async function getClientExpenseIntelligence(
         ? `Total expenses ${formatNgnShort(total)} in range; largest categories are listed below with period-over-period change where a prior window exists.`
         : "No expenses in this period — widen the date range to see trends.";
 
+  const nonDeductibleTotal = categories
+    .filter((c) => !c.deductible)
+    .reduce((s, c) => s + c.amount, 0);
   return {
     alert,
     total,
+    period: end.toLocaleString("en-GB", { month: "long", year: "numeric" }),
+    totalExpenses: total,
+    byCategory: categories,
+    nonDeductibleTotal,
+    nonDeductiblePercent:
+      total > 0 ? Math.round((nonDeductibleTotal / total) * 1000) / 10 : 0,
+    trend: monthlyTrend.map((row) => ({
+      month: row.month,
+      expenses: row.amount,
+    })),
+    taxgptAlerts:
+      nonDeductibleTotal > 0
+        ? [
+            {
+              type: "alert" as const,
+              headline: `Non-deductible items at ${total > 0 ? Math.round((nonDeductibleTotal / total) * 1000) / 10 : 0}% of expenses`,
+              body: `Non-deductible amounts of ₦${nonDeductibleTotal.toLocaleString("en-NG")} are not deductible under CITA and inflate the effective tax rate.`,
+              suggestedAction:
+                "Review underlying notices and consider an adjustment in Tax Computation.",
+            },
+          ]
+        : [],
     categories,
     monthlyTrend,
     topVendors,

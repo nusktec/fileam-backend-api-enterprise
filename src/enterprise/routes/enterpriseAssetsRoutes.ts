@@ -4,6 +4,7 @@ import {
   getPendingAsset,
   approveAsset,
   returnAsset,
+  reviewAsset,
   expenseAsset,
   listRegister,
   getRegisterAsset,
@@ -31,6 +32,7 @@ router.get("/downloads/:downloadId", downloadAssetFile);
 
 router.get("/:assetId/depreciation-schedule", getDepreciationSchedule);
 router.post("/:assetId/approve", approveAsset);
+router.post("/:assetId/review", reviewAsset);
 router.post("/:assetId/return", returnAsset);
 router.post("/:assetId/expense", expenseAsset);
 

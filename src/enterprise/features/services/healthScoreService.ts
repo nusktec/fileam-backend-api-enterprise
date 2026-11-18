@@ -1,10 +1,14 @@
 import { prisma } from "../../../config/database";
 import { HEALTH_WEIGHTS } from "../constants";
+import { PERCENT } from "../../../constants/percentages";
 import {
   clampScore,
   decimalToNumber,
   healthCategory,
 } from "../utils";
+
+/** Revenue Growth score when growth is 0%. Each +1% growth adds 1 point, capped at 100. */
+const REVENUE_GROWTH_NEUTRAL_SCORE = 50;
 
 function componentStatus(score: number): "healthy" | "stable" | "at-risk" | "failing" {
   return healthCategory(score);
@@ -14,16 +18,18 @@ export const featuresHealthScoreService = {
   async getScore(clientUserId: string, year?: number) {
     const y = year && Number.isFinite(year) ? year : new Date().getUTCFullYear();
     const start = new Date(Date.UTC(y, 0, 1));
-    const end = new Date(Date.UTC(y, 11, 31));
+    const end = new Date(Date.UTC(y, 11, 31, 23, 59, 59, 999));
+    const priorStart = new Date(Date.UTC(y - 1, 0, 1));
+    const priorEnd = new Date(Date.UTC(y - 1, 11, 31, 23, 59, 59, 999));
 
-    const [sales, expenses, filingsOutstanding] = await Promise.all([
+    const [sales, expenses, priorSales, filingsOutstanding] = await Promise.all([
       prisma.sale.findMany({
         where: {
           userId: clientUserId,
           undoAt: null,
           saleDate: { gte: start, lte: end },
         },
-        select: { totalAmount: true, saleDate: true },
+        select: { totalAmount: true, saleDate: true, evidenceVaultId: true },
       }),
       prisma.expense.findMany({
         where: {
@@ -31,7 +37,15 @@ export const featuresHealthScoreService = {
           undoAt: null,
           expenseDate: { gte: start, lte: end },
         },
-        select: { totalAmount: true },
+        select: { totalAmount: true, receiptUrl: true },
+      }),
+      prisma.sale.aggregate({
+        where: {
+          userId: clientUserId,
+          undoAt: null,
+          saleDate: { gte: priorStart, lte: priorEnd },
+        },
+        _sum: { totalAmount: true },
       }),
       prisma.taxPayable.count({
         where: {
@@ -176,11 +190,97 @@ export const featuresHealthScoreService = {
       components.reduce((s, c) => s + c.score * c.weight, 0),
     );
 
+    const evidencedCount =
+      sales.filter((x) => Boolean(x.evidenceVaultId)).length +
+      expenses.filter((x) => Boolean(x.receiptUrl)).length;
+    const recordCount = sales.length + expenses.length;
+    const evidenceQualityScore =
+      recordCount > 0
+        ? clampScore((evidencedCount / recordCount) * PERCENT)
+        : null;
+
+    const priorRevenue = decimalToNumber(priorSales._sum.totalAmount);
+    const revenueGrowthPct =
+      priorRevenue > 0 ? ((revenue - priorRevenue) / priorRevenue) * PERCENT : null;
+    const revenueGrowthScore =
+      revenueGrowthPct == null
+        ? null
+        : clampScore(REVENUE_GROWTH_NEUTRAL_SCORE + revenueGrowthPct);
+
+    const rawPageComponents = [
+      { name: "Revenue Growth", score: revenueGrowthScore, weight: 0.25 },
+      { name: "Expense Control", score: expenseControlScore, weight: 0.2 },
+      { name: "Tax Compliance", score: taxComplianceScore, weight: 0.25 },
+      { name: "Cash Flow", score: cashFlowScore, weight: 0.15 },
+      { name: "Evidence Quality", score: evidenceQualityScore, weight: 0.15 },
+    ];
+    const availableWeight = rawPageComponents
+      .filter((c) => c.score != null)
+      .reduce((s, c) => s + c.weight, 0);
+    const pageComponents = rawPageComponents.map((c) => {
+      const effectiveWeight =
+        c.score == null || availableWeight === 0
+          ? null
+          : c.weight / availableWeight;
+      const contribution =
+        c.score == null || effectiveWeight == null
+          ? null
+          : Math.round(c.score * effectiveWeight * 10) / 10;
+      return {
+        name: c.name,
+        score: c.score,
+        weight: c.weight,
+        effectiveWeight:
+          effectiveWeight == null ? null : Number(effectiveWeight.toFixed(4)),
+        contribution,
+        status:
+          c.score == null
+            ? "not-available"
+            : c.score >= 90
+              ? "excellent"
+              : c.score >= 75
+                ? "good"
+                : "attention",
+      };
+    });
+    const availableComponents = pageComponents.filter((c) => c.score != null);
+    const score =
+      availableComponents.length > 0
+        ? clampScore(
+            availableComponents.reduce(
+              (s, c) => s + (c.contribution ?? 0),
+              0,
+            ),
+          )
+        : null;
+    const weakest = [...availableComponents].sort(
+      (a, b) => (a.score ?? 0) - (b.score ?? 0),
+    )[0];
+
     return {
       overallScore,
+      score,
+      trend: net >= 0 ? "improving" : "declining",
+      revenueGrowthPct:
+        revenueGrowthPct == null ? null : Number(revenueGrowthPct.toFixed(1)),
+      priorYearRevenue: Math.round(priorRevenue),
       category: healthCategory(overallScore),
       computedAt: new Date().toISOString(),
-      components,
+      components: pageComponents,
+      legacyComponents: components,
+      recommendedActions: weakest
+        ? [
+            {
+              priority: (weakest.score ?? 0) < 70 ? "high" : "medium",
+              category: weakest.name,
+              title: `Improve ${weakest.name}`,
+              description: `${weakest.name} is the lowest weighted component at ${weakest.score}.`,
+              impactPoints: Math.max(1, Math.round((80 - (weakest.score ?? 0)) / 5)),
+            },
+          ]
+        : [],
+      calculationNarrative:
+        "Five weighted components from live sales, expenses, tax payables, and evidence coverage. Evidence Quality is the share of sales with a vault document and expenses with a receipt. Revenue Growth is year-over-year sales change; 50 means flat, +50% or more scores 100. A component with no data is marked not-available and its weight is removed from the composite.",
     };
   },
 };

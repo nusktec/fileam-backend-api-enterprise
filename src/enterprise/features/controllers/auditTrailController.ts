@@ -37,6 +37,10 @@ export async function listAuditTrail(
       page: req.query.page,
       limit: req.query.limit,
       search: req.query.search ? String(req.query.search) : undefined,
+      module: req.query.module ? String(req.query.module) : undefined,
+      actor: req.query.actor ? String(req.query.actor) : undefined,
+      dateFrom: req.query.dateFrom ? String(req.query.dateFrom) : undefined,
+      dateTo: req.query.dateTo ? String(req.query.dateTo) : undefined,
     });
     sendResult(res, "Audit trail", data);
   } catch (error) {

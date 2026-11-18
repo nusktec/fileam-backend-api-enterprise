@@ -91,4 +91,5 @@ model User {
   payers                 Payer[]
   employers              Employer[]
   beneficiaries          Beneficiary[]
+  transactionAssistantAutoExport TransactionAssistantAutoExport?
 }

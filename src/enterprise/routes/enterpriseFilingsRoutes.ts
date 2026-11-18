@@ -17,6 +17,10 @@ import {
   listFilingTaxTypesHandler,
   updateFilingTaxTypesHandler,
 } from "../controllers/enterpriseFilingsController";
+import {
+  getFilingSteps,
+  patchFilingStep,
+} from "../controllers/specBacklogController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 
 const router = express.Router({ mergeParams: true });
@@ -34,6 +38,16 @@ router.put(
 router.get("/constants", getFilingsConstantsHandler);
 router.get("/returns", getTaxReturnsHandler);
 // Before GET "/" so paths like /:filingId/report are not swallowed by less-specific handlers on some stacks.
+router.get(
+  "/:filingId/steps",
+  ...enterpriseValidations.validateFilingIdParam,
+  getFilingSteps,
+);
+router.patch(
+  "/:filingId/steps/:stepId",
+  ...enterpriseValidations.validateFilingIdParam,
+  patchFilingStep,
+);
 router.get(
   "/:filingId/report",
   ...enterpriseValidations.validateFilingIdParam,

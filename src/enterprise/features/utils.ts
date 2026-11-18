@@ -79,11 +79,13 @@ export function deviceFromUserAgent(ua?: string | null): string {
   return `${browser} on ${os}`;
 }
 
-export function locationFromIp(ip?: string | null): string {
-  if (!ip || ip === "::1" || ip.startsWith("127.") || ip === "localhost") {
-    return "Lagos, Nigeria";
-  }
-  return "Lagos, Nigeria";
+/**
+ * No IP geolocation source is configured, so the location is unknown.
+ * Returns null rather than a guessed place.
+ */
+export function locationFromIp(ip?: string | null): string | null {
+  void ip;
+  return null;
 }
 
 export function clientIp(req: {

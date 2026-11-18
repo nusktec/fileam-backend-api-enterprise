@@ -34,6 +34,10 @@ import {
   listInvoices,
   createInvoice,
 } from "../controllers/enterpriseFinancialsController";
+import {
+  getProfitabilityOverview,
+  simulateProfitability,
+} from "../controllers/specBacklogController";
 import { enterpriseValidations } from "../../middlewares/validations/enterpriseValidation";
 import { withPagination } from "../../middlewares/paginationMiddleware";
 
@@ -52,6 +56,8 @@ router.get("/expense-intelligence", getClientExpenseIntelligenceInsight);
 router.get("/balance-sheet", getBalanceSheet);
 router.get("/profit-analysis/trend", getProfitTrend);
 router.get("/profit-analysis/expense-breakdown", getExpenseBreakdown);
+router.get("/profitability/overview", getProfitabilityOverview);
+router.post("/profitability/simulate", simulateProfitability);
 router.get("/profitability/trends", getProfitTrend);
 router.get("/profitability/expense-breakdown", getExpenseBreakdown);
 router.get("/cash-flow/monthly", getMonthlyCashFlow);
